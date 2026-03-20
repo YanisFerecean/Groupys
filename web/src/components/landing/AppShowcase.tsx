@@ -8,7 +8,7 @@ const highlights = [
       "Custom background, banner, colored username — and an Album of the Week that says more about you than any bio.",
   },
   {
-    title: "Rate Every Track",
+    title: "Rate Every Album",
     description:
       "Go song by song through any album. Build a personal record of everything you've heard and how it made you feel.",
   },

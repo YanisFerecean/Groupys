@@ -5,6 +5,8 @@ const links = [
   { label: "Google Play", href: "#" },
 ];
 
+const legalLinks = [{ label: "Privacy Policy", href: "/privacy" }];
+
 export default function Footer() {
   return (
     <footer className="w-full py-12 px-8 bg-slate-100 mt-20">
@@ -21,8 +23,19 @@ export default function Footer() {
             </a>
           ))}
         </div>
-        <div className="text-slate-500 text-sm tracking-wide">
-          © 2024 Groupys. All rights reserved.
+        <div className="flex items-center gap-6">
+          {legalLinks.map((link) => (
+            <a
+              key={link.label}
+              href={link.href}
+              className="text-slate-500 text-sm tracking-wide hover:text-primary transition-colors"
+            >
+              {link.label}
+            </a>
+          ))}
+          <span className="text-slate-500 text-sm tracking-wide">
+            © 2026 Groupys. All rights reserved.
+          </span>
         </div>
       </div>
     </footer>
