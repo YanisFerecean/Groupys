@@ -92,6 +92,19 @@ jobs:
       - name: Normalize image owner
         run: echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
 
+      - name: Prepare remote deploy directory
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        with:
+          host: ${{ secrets.VM88_HOST }}
+          username: ${{ secrets.VM88_USER }}
+          key: ${{ secrets.VM88_SSH_PRIVATE_KEY }}
+          envs: DEPLOY_PATH
+          script: |
+            set -eu
+            mkdir -p "$DEPLOY_PATH/docker"
+
       - name: Upload production compose assets
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -99,7 +112,8 @@ jobs:
           username: ${{ secrets.VM88_USER }}
           key: ${{ secrets.VM88_SSH_PRIVATE_KEY }}
           source: docker/docker-compose.prod.yaml
-          target: ${{ secrets.DEPLOY_PATH }}
+          target: ${{ secrets.DEPLOY_PATH }}/docker
+          strip_components: 1
 
       - name: Deploy on server
         uses: appleboy/ssh-action@v1.0.3
