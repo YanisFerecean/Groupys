@@ -92,6 +92,19 @@ jobs:
       - name: Normalize image owner
         run: echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
 
+      - name: Prepare remote deploy directory
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        with:
+          host: ${{ secrets.VM88_HOST }}
+          username: ${{ secrets.VM88_USER }}
+          key: ${{ secrets.VM88_SSH_PRIVATE_KEY }}
+          envs: DEPLOY_PATH
+          script: |
+            set -eu
+            mkdir -p "$DEPLOY_PATH/docker"
+
       - name: Upload production compose assets
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -99,7 +112,8 @@ jobs:
           username: ${{ secrets.VM88_USER }}
           key: ${{ secrets.VM88_SSH_PRIVATE_KEY }}
           source: docker/docker-compose.prod.yaml
-          target: ${{ secrets.DEPLOY_PATH }}
+          target: ${{ secrets.DEPLOY_PATH }}/docker
+          strip_components: 1
 
       - name: Deploy on server
         uses: appleboy/ssh-action@v1.0.3
@@ -108,7 +122,6 @@ jobs:
           REGISTRY_USERNAME: ${{ github.actor }}
           REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
           WEB_IMAGE: ghcr.io/${{ env.OWNER_LC }}/${{ env.WEB_IMAGE_NAME }}:${{ github.sha }}
-          WEB_HOST: ${{ secrets.VM88_HOST }}
           NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
           CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
@@ -118,7 +131,7 @@ jobs:
           host: ${{ secrets.VM88_HOST }}
           username: ${{ secrets.VM88_USER }}
           key: ${{ secrets.VM88_SSH_PRIVATE_KEY }}
-          envs: DEPLOY_PATH,REGISTRY_USERNAME,REGISTRY_PASSWORD,WEB_IMAGE,WEB_HOST,NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,CLERK_SECRET_KEY,LASTFM_API_KEY,SPOTIFY_CLIENT_ID,SPOTIFY_CLIENT_SECRET
+          envs: DEPLOY_PATH,REGISTRY_USERNAME,REGISTRY_PASSWORD,WEB_IMAGE,NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,CLERK_SECRET_KEY,LASTFM_API_KEY,SPOTIFY_CLIENT_ID,SPOTIFY_CLIENT_SECRET
           script: |
             set -eu
 
@@ -128,13 +141,10 @@ jobs:
             fi
 
             mkdir -p "$DEPLOY_PATH/docker"
-            docker network inspect proxy_default >/dev/null 2>&1 || docker network create proxy_default
 
             cat > "$DEPLOY_PATH/docker/.env.prod" <<EOF
             WEB_IMAGE=$WEB_IMAGE
-            WEB_HOST=$WEB_HOST
             WEB_PORT=3000
-            TRAEFIK_CERTRESOLVER=default
             NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
             CLERK_SECRET_KEY=$CLERK_SECRET_KEY
             LASTFM_API_KEY=$LASTFM_API_KEY
