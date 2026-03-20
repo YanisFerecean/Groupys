@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy | Groupys",
+  title: "Privacy Policy",
   description: "How Groupys collects, uses, and protects your personal data.",
+  alternates: { canonical: "https://groupys.app/privacy" },
+  robots: { index: true, follow: false },
 };
 
 const EFFECTIVE_DATE = "20 March 2026";
