@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
 
 export default function NavBar() {
@@ -42,6 +43,12 @@ export default function NavBar() {
             </SignUpButton>
           </Show>
           <Show when="signed-in">
+            <Link
+              href="/profile"
+              className="px-6 py-2 bg-primary text-on-primary rounded-full font-bold scale-95 duration-200 ease-in-out hover:scale-100 transition-transform"
+            >
+              My Profile
+            </Link>
             <UserButton />
           </Show>
         </div>
@@ -92,6 +99,15 @@ export default function NavBar() {
                   Get Started
                 </button>
               </SignUpButton>
+            </Show>
+            <Show when="signed-in">
+              <Link
+                href="/profile"
+                className="w-full py-3 bg-primary text-on-primary rounded-full font-bold text-center hover:opacity-90 transition-opacity"
+                onClick={() => setMobileOpen(false)}
+              >
+                My Profile
+              </Link>
             </Show>
           </div>
         </div>
