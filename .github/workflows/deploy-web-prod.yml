@@ -1,0 +1,172 @@
+name: Deploy Web Production
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "web/**"
+      - "docker/docker-compose.prod.yaml"
+      - ".github/workflows/deploy-web-prod.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-web-prod-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  NODE_VERSION: "20"
+  WEB_IMAGE_NAME: groupys-web
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: web
+
+      - name: Lint web app
+        run: npm run lint
+        working-directory: web
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Normalize image owner
+        run: echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push web image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./web
+          file: ./web/Dockerfile
+          push: true
+          cache-from: type=gha,scope=groupys-web
+          cache-to: type=gha,mode=max,ignore-error=true,scope=groupys-web
+          build-args: |
+            NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          tags: |
+            ghcr.io/${{ env.OWNER_LC }}/${{ env.WEB_IMAGE_NAME }}:${{ github.sha }}
+            ghcr.io/${{ env.OWNER_LC }}/${{ env.WEB_IMAGE_NAME }}:latest
+
+      - name: Build summary
+        run: |
+          {
+            echo "## Web Build Summary"
+            echo ""
+            echo "- Node version: ${{ env.NODE_VERSION }}"
+            echo "- Image: ghcr.io/${OWNER_LC}/${WEB_IMAGE_NAME}:${GITHUB_SHA}"
+            echo "- Host: ${{ secrets.VM88_HOST }}"
+            echo "- Deploy path: ${{ secrets.DEPLOY_PATH }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    runs-on: ubuntu-24.04
+    needs: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Normalize image owner
+        run: echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+
+      - name: Upload production compose assets
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VM88_HOST }}
+          username: ${{ secrets.VM88_USER }}
+          key: ${{ secrets.VM88_SSH_PRIVATE_KEY }}
+          source: docker/docker-compose.prod.yaml
+          target: ${{ secrets.DEPLOY_PATH }}
+
+      - name: Deploy on server
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          REGISTRY_USERNAME: ${{ github.actor }}
+          REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          WEB_IMAGE: ghcr.io/${{ env.OWNER_LC }}/${{ env.WEB_IMAGE_NAME }}:${{ github.sha }}
+          WEB_HOST: ${{ secrets.VM88_HOST }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+          SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+        with:
+          host: ${{ secrets.VM88_HOST }}
+          username: ${{ secrets.VM88_USER }}
+          key: ${{ secrets.VM88_SSH_PRIVATE_KEY }}
+          envs: DEPLOY_PATH,REGISTRY_USERNAME,REGISTRY_PASSWORD,WEB_IMAGE,WEB_HOST,NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,CLERK_SECRET_KEY,LASTFM_API_KEY,SPOTIFY_CLIENT_ID,SPOTIFY_CLIENT_SECRET
+          script: |
+            set -eu
+
+            if ! command -v docker >/dev/null 2>&1; then
+              echo "Docker is required on the server."
+              exit 1
+            fi
+
+            mkdir -p "$DEPLOY_PATH/docker"
+            docker network inspect proxy_default >/dev/null 2>&1 || docker network create proxy_default
+
+            cat > "$DEPLOY_PATH/docker/.env.prod" <<EOF
+            WEB_IMAGE=$WEB_IMAGE
+            WEB_HOST=$WEB_HOST
+            WEB_PORT=3000
+            TRAEFIK_CERTRESOLVER=default
+            NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+            CLERK_SECRET_KEY=$CLERK_SECRET_KEY
+            LASTFM_API_KEY=$LASTFM_API_KEY
+            SPOTIFY_CLIENT_ID=$SPOTIFY_CLIENT_ID
+            SPOTIFY_CLIENT_SECRET=$SPOTIFY_CLIENT_SECRET
+            EOF
+
+            echo "$REGISTRY_PASSWORD" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
+            docker compose --env-file "$DEPLOY_PATH/docker/.env.prod" -f "$DEPLOY_PATH/docker/docker-compose.prod.yaml" pull
+            docker compose --env-file "$DEPLOY_PATH/docker/.env.prod" -f "$DEPLOY_PATH/docker/docker-compose.prod.yaml" up -d --remove-orphans
+
+            APP_URL="http://127.0.0.1:3000"
+            for i in $(seq 1 30); do
+              if docker compose --env-file "$DEPLOY_PATH/docker/.env.prod" -f "$DEPLOY_PATH/docker/docker-compose.prod.yaml" exec -T groupys-web sh -lc "wget -qO- '$APP_URL' >/dev/null 2>&1"; then
+                echo "Deployment healthy at $APP_URL"
+                exit 0
+              fi
+              echo "Waiting for app startup... ($i/30)"
+              sleep 2
+            done
+
+            echo "Application did not become healthy at $APP_URL"
+            docker compose --env-file "$DEPLOY_PATH/docker/.env.prod" -f "$DEPLOY_PATH/docker/docker-compose.prod.yaml" logs --tail=80 groupys-web || true
+            exit 1
+
+      - name: Deploy summary
+        run: |
+          {
+            echo "## Web Deploy Summary"
+            echo ""
+            echo "- Host: ${{ secrets.VM88_HOST }}"
+            echo "- User: ${{ secrets.VM88_USER }}"
+            echo "- Image: ghcr.io/${{ env.OWNER_LC }}/${{ env.WEB_IMAGE_NAME }}:${{ github.sha }}"
+            echo "- Deploy path: ${{ secrets.DEPLOY_PATH }}"
+          } >> "$GITHUB_STEP_SUMMARY"
