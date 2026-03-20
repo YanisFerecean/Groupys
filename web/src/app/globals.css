@@ -5,7 +5,55 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --color-background: var(--background);
+  /* Coda design tokens */
+  --color-primary: #ba002b;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #e5183b;
+  --color-on-primary-container: #fffbff;
+  --color-primary-fixed: #ffdad9;
+  --color-primary-fixed-dim: #ffb3b2;
+  --color-on-primary-fixed: #410008;
+  --color-on-primary-fixed-variant: #92001f;
+  --color-secondary: #ab323b;
+  --color-on-secondary: #ffffff;
+  --color-secondary-container: #ff7075;
+  --color-on-secondary-container: #710116;
+  --color-secondary-fixed: #ffdad9;
+  --color-secondary-fixed-dim: #ffb3b2;
+  --color-on-secondary-fixed: #410008;
+  --color-on-secondary-fixed-variant: #8a1926;
+  --color-tertiary: #00685c;
+  --color-on-tertiary: #ffffff;
+  --color-tertiary-container: #008374;
+  --color-on-tertiary-container: #f4fffb;
+  --color-tertiary-fixed: #86f6e2;
+  --color-tertiary-fixed-dim: #69d9c6;
+  --color-on-tertiary-fixed: #00201b;
+  --color-on-tertiary-fixed-variant: #005046;
+  --color-surface: #f9f9fb;
+  --color-surface-bright: #f9f9fb;
+  --color-surface-dim: #d9dadc;
+  --color-surface-tint: #bf002c;
+  --color-surface-variant: #e2e2e4;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f3f3f5;
+  --color-surface-container: #eeeef0;
+  --color-surface-container-high: #e8e8ea;
+  --color-surface-container-highest: #e2e2e4;
+  --color-on-surface: #1a1c1d;
+  --color-on-surface-variant: #5d3f3f;
+  --color-outline: #916e6e;
+  --color-outline-variant: #e6bdbc;
+  --color-background: #f9f9fb;
+  --color-on-background: #1a1c1d;
+  --color-inverse-surface: #2f3132;
+  --color-inverse-on-surface: #f0f0f2;
+  --color-inverse-primary: #ffb3b2;
+  --color-error: #ba1a1a;
+  --color-on-error: #ffffff;
+  --color-error-container: #ffdad6;
+  --color-on-error-container: #93000a;
+
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
   --font-mono: var(--font-geist-mono);
@@ -31,9 +79,6 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-muted: var(--muted);
   --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
@@ -54,8 +99,8 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
+  --primary: #ba002b;
+  --primary-foreground: #ffffff;
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
@@ -125,5 +170,23 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+@layer utilities {
+  .text-display-lg {
+    font-size: 3.5rem;
+    line-height: 1;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+  }
+
+  .glass-nav {
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+
+  .material-symbols-outlined {
+    font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
   }
 }

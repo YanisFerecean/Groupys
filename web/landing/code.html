@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Coda | Your Music, Re-imagined</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-primary-container": "#fffbff",
+              "primary-fixed-dim": "#ffb3b2",
+              "surface-variant": "#e2e2e4",
+              "tertiary-container": "#008374",
+              "on-secondary": "#ffffff",
+              "tertiary-fixed-dim": "#69d9c6",
+              "surface-container-high": "#e8e8ea",
+              "tertiary-fixed": "#86f6e2",
+              "surface-container": "#eeeef0",
+              "primary-fixed": "#ffdad9",
+              "surface-bright": "#f9f9fb",
+              "outline": "#916e6e",
+              "on-tertiary-fixed": "#00201b",
+              "inverse-on-surface": "#f0f0f2",
+              "on-primary-fixed-variant": "#92001f",
+              "error-container": "#ffdad6",
+              "primary-container": "#e5183b",
+              "error": "#ba1a1a",
+              "on-secondary-fixed-variant": "#8a1926",
+              "on-secondary-container": "#710116",
+              "on-tertiary-container": "#f4fffb",
+              "on-surface": "#1a1c1d",
+              "inverse-surface": "#2f3132",
+              "surface-tint": "#bf002c",
+              "surface-container-highest": "#e2e2e4",
+              "secondary-fixed-dim": "#ffb3b2",
+              "secondary": "#ab323b",
+              "on-tertiary": "#ffffff",
+              "outline-variant": "#e6bdbc",
+              "background": "#f9f9fb",
+              "surface": "#f9f9fb",
+              "surface-container-low": "#f3f3f5",
+              "primary": "#ba002b",
+              "on-surface-variant": "#5d3f3f",
+              "on-error": "#ffffff",
+              "surface-dim": "#d9dadc",
+              "on-tertiary-fixed-variant": "#005046",
+              "on-secondary-fixed": "#410008",
+              "surface-container-lowest": "#ffffff",
+              "secondary-fixed": "#ffdad9",
+              "on-primary-fixed": "#410008",
+              "on-primary": "#ffffff",
+              "on-error-container": "#93000a",
+              "tertiary": "#00685c",
+              "on-background": "#1a1c1d",
+              "secondary-container": "#ff7075",
+              "inverse-primary": "#ffb3b2"
+            },
+            fontFamily: {
+              "headline": ["Inter"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-nav {
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .text-display-lg {
+            font-size: 3.5rem;
+            line-height: 1;
+            font-weight: 800;
+            letter-spacing: -0.04em;
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="bg-surface text-on-surface selection:bg-primary-fixed selection:text-on-primary-fixed">
+<!-- TopNavBar (Shared Component Execution) -->
+<nav class="fixed top-0 w-full z-50 bg-slate-50/70 dark:bg-slate-900/70 backdrop-blur-xl">
+<div class="max-w-7xl mx-auto px-8 py-6 flex justify-between items-center">
+<div class="text-2xl font-black tracking-tighter text-slate-900 dark:text-slate-50">Coda</div>
+<div class="hidden md:flex items-center gap-10">
+<a class="text-slate-600 dark:text-slate-400 font-medium hover:text-red-600 dark:hover:text-red-400 transition-colors duration-300" href="#">Features</a>
+<a class="text-slate-600 dark:text-slate-400 font-medium hover:text-red-600 dark:hover:text-red-400 transition-colors duration-300" href="#">Community</a>
+<a class="text-slate-600 dark:text-slate-400 font-medium hover:text-red-600 dark:hover:text-red-400 transition-colors duration-300" href="#">Pricing</a>
+</div>
+<div class="flex items-center gap-4">
+<button class="px-5 py-2 text-slate-600 dark:text-slate-400 font-medium hover:text-slate-900 transition-all">Login</button>
+<button class="px-6 py-2 bg-primary text-on-primary rounded-full font-bold scale-95 duration-200 ease-in-out hover:scale-100 transition-transform">Get Started</button>
+</div>
+</div>
+</nav>
+<main class="pt-32">
+<!-- Hero Section -->
+<section class="max-w-7xl mx-auto px-8 mb-32 grid grid-cols-1 lg:grid-cols-12 gap-16 items-center">
+<div class="lg:col-span-6 space-y-8">
+<h1 class="text-display-lg text-on-surface">
+                    Your Music,<br/>Re-imagined.
+                </h1>
+<p class="text-xl text-on-surface-variant max-w-lg leading-relaxed">
+                    Discover your sonic DNA and connect with a community of high-fidelity curators.
+                </p>
+<div class="flex flex-wrap gap-4 pt-4">
+<button class="px-8 py-4 bg-primary text-on-primary rounded-full font-bold text-lg hover:shadow-xl hover:shadow-primary/20 transition-all">
+                        Get Started
+                    </button>
+<button class="px-8 py-4 bg-surface-container-high text-on-surface rounded-full font-bold text-lg hover:bg-surface-container-highest transition-all">
+                        Explore the Feed
+                    </button>
+</div>
+</div>
+<div class="lg:col-span-6 relative">
+<div class="relative rounded-[2.5rem] overflow-hidden bg-surface-container-low aspect-square shadow-2xl">
+<img alt="Coda Discovery Map UI" class="w-full h-full object-cover opacity-90" data-alt="Abstract colorful mesh gradient representing music discovery map" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDU1JkKqTTI32EON1PXWd7F5UVlGF4CNSVedCJH5tUZJixYHxkZK27Yyq_a4YumZmYZo2TnNYZ5fJg8gBnCCiawx4h91DMswnemtj2WQjt12l_azzNBEERzJve--ie5M5uUe2Uq0s4dd1x5JbavVp6HcDdOvSbamO2G2mjXmjGkHgi_2X1psQyQzNOuKgNobsmlz4jc6z9kn5FH9IYNlc-iu2_0t7Zp0IJaNli0-jZwvWenG6MwnbFLNnOwWk4RQYnEteNF2uL84Lk"/>
+<div class="absolute inset-0 flex items-center justify-center p-8">
+<div class="w-full h-full glass-nav rounded-3xl border border-white/20 p-6 flex flex-col justify-between">
+<div class="flex justify-between items-start">
+<div class="bg-white/90 p-3 rounded-2xl shadow-sm">
+<span class="material-symbols-outlined text-primary" data-icon="location_on">location_on</span>
+</div>
+<div class="bg-white/90 px-4 py-2 rounded-full shadow-sm text-sm font-bold flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+                                    Live in Tokyo
+                                </div>
+</div>
+<div class="space-y-4">
+<div class="bg-white/95 p-4 rounded-2xl shadow-lg transform translate-x-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-slate-200">
+<img alt="Curator Profile" class="w-full h-full object-cover rounded-full" data-alt="Portrait of a young music curator" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAkpclHoGjz5wY5yadVHRVWCoT-Cd7ZSB6USQMIlZTZeowEUyyeEVE8DSrpyzds0ayxfu9GSyXOJZbMvzbNPLoRJ3TLN31hynK5Dm2qB4feOmGGfo7H1Sb7uJifAXnfR6O06QwAZvn7ctg8DLxD_v-__DHbroQLJFUm1kLzLEI4-Cg1Ha7_ZIYBCYSX4A_75DdD9rIzP2kUZl_SD-4puWVt3JHLil8DzE4MZCjneB0eyaX_UTE3mUD_4AkC_6TfBulXCBvgLIdRgyE"/>
+</div>
+<div>
+<p class="font-bold text-sm">Hana Sato</p>
+<p class="text-xs text-on-surface-variant">Listening to: City Pop Classics</p>
+</div>
+</div>
+</div>
+<div class="bg-white/95 p-4 rounded-2xl shadow-lg transform -translate-x-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-slate-200">
+<img alt="Curator Profile" class="w-full h-full object-cover rounded-full" data-alt="Portrait of a male music enthusiast" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDszPpmADE3mzvd3KOi82uO25kvBpDH9nAXiXLFDN812az0bQF7W1_1X0x9N954QkwRSiuB1qIp5QwHRZrzbXuzWV0S_zj6xaYwizhxTgvPF5YbCeEvBIiSvaUmC8qmrRd98Z5uANyGz8pc_6pgqpmTDy3De1YnJUHBE5mRLjm7ZPND5FAQ7TFKH0T19SToaul-a1F0EbxKlHA-RvlF2ECIIoDSao0g9HnApRDqN-3ImR2V5-BqLtbO78Tzr0T3VybpJSZy1JWnZGw"/>
+</div>
+<div>
+<p class="font-bold text-sm">Kenji Chen</p>
+<p class="text-xs text-on-surface-variant">98% Vibe Match</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Abstract decorative shapes -->
+<div class="absolute -z-10 -top-10 -right-10 w-64 h-64 bg-primary/5 rounded-full blur-3xl"></div>
+<div class="absolute -z-10 -bottom-10 -left-10 w-64 h-64 bg-secondary/5 rounded-full blur-3xl"></div>
+</div>
+</section>
+<!-- Features Section -->
+<section class="bg-surface-container-low py-32">
+<div class="max-w-7xl mx-auto px-8">
+<div class="mb-20">
+<h2 class="text-3xl font-bold mb-4">Redefining Social Sound</h2>
+<p class="text-on-surface-variant max-w-md">Experience music through a new lens of discovery and connection.</p>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+<div class="bg-surface-container-lowest p-10 rounded-[2rem] hover:transform hover:-translate-y-2 transition-all duration-300">
+<div class="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center mb-8">
+<span class="material-symbols-outlined text-primary text-3xl" data-icon="forum">forum</span>
+</div>
+<h3 class="text-xl font-bold mb-4">Community Feed</h3>
+<p class="text-on-surface-variant leading-relaxed mb-6">Join the conversation. Engage in deep-dive discussions about albums and tracks with a curated community.</p>
+<a class="text-primary font-bold inline-flex items-center gap-2 group" href="#">
+                            Learn more <span class="material-symbols-outlined text-sm transition-transform group-hover:translate-x-1" data-icon="arrow_forward">arrow_forward</span>
+</a>
+</div>
+<div class="bg-surface-container-lowest p-10 rounded-[2rem] hover:transform hover:-translate-y-2 transition-all duration-300 shadow-sm">
+<div class="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center mb-8">
+<span class="material-symbols-outlined text-primary text-3xl" data-icon="map">map</span>
+</div>
+<h3 class="text-xl font-bold mb-4">Discovery Map</h3>
+<p class="text-on-surface-variant leading-relaxed mb-6">Find your vibe-mates. A friendship-first spatial discovery tool that connects you based on acoustic similarity.</p>
+<a class="text-primary font-bold inline-flex items-center gap-2 group" href="#">
+                            View the Map <span class="material-symbols-outlined text-sm transition-transform group-hover:translate-x-1" data-icon="arrow_forward">arrow_forward</span>
+</a>
+</div>
+<div class="bg-surface-container-lowest p-10 rounded-[2rem] hover:transform hover:-translate-y-2 transition-all duration-300">
+<div class="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center mb-8">
+<span class="material-symbols-outlined text-primary text-3xl" data-icon="auto_stories">auto_stories</span>
+</div>
+<h3 class="text-xl font-bold mb-4">Weekly Check-in</h3>
+<p class="text-on-surface-variant leading-relaxed mb-6">Reflect on your sound. Curated weekly music diaries that track your evolving taste and listening milestones.</p>
+<a class="text-primary font-bold inline-flex items-center gap-2 group" href="#">
+                            See Examples <span class="material-symbols-outlined text-sm transition-transform group-hover:translate-x-1" data-icon="arrow_forward">arrow_forward</span>
+</a>
+</div>
+</div>
+</div>
+</section>
+<!-- App Showcase -->
+<section class="py-40 overflow-hidden">
+<div class="max-w-7xl mx-auto px-8 grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
+<div class="relative flex justify-center lg:justify-start">
+<!-- Mobile Mockup 1 -->
+<div class="relative z-20 w-[280px] h-[580px] bg-on-surface rounded-[3rem] p-3 shadow-2xl overflow-hidden border-4 border-surface-container-high">
+<div class="w-full h-full bg-white rounded-[2.5rem] overflow-hidden">
+<img alt="Mobile App Interface" class="w-full h-full object-cover" data-alt="Coda mobile app interface showing music player" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAkpclHoGjz5wY5yadVHRVWCoT-Cd7ZSB6USQMIlZTZeowEUyyeEVE8DSrpyzds0ayxfu9GSyXOJZbMvzbNPLoRJ3TLN31hynK5Dm2qB4feOmGGfo7H1Sb7uJifAXnfR6O06QwAZvn7ctg8DLxD_v-__DHbroQLJFUm1kLzLEI4-Cg1Ha7_ZIYBCYSX4A_75DdD9rIzP2kUZl_SD-4puWVt3JHLil8DzE4MZCjneB0eyaX_UTE3mUD_4AkC_6TfBulXCBvgLIdRgyE"/>
+</div>
+</div>
+<!-- Mobile Mockup 2 -->
+<div class="absolute z-10 top-20 -right-4 lg:right-10 w-[280px] h-[580px] bg-on-surface rounded-[3rem] p-3 shadow-2xl overflow-hidden border-4 border-surface-container-high opacity-80 scale-90">
+<div class="w-full h-full bg-white rounded-[2.5rem] overflow-hidden">
+<img alt="Mobile App Community" class="w-full h-full object-cover" data-alt="Coda mobile app interface showing discovery feed" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAkpclHoGjz5wY5yadVHRVWCoT-Cd7ZSB6USQMIlZTZeowEUyyeEVE8DSrpyzds0ayxfu9GSyXOJZbMvzbNPLoRJ3TLN31hynK5Dm2qB4feOmGGfo7H1Sb7uJifAXnfR6O06QwAZvn7ctg8DLxD_v-__DHbroQLJFUm1kLzLEI4-Cg1Ha7_ZIYBCYSX4A_75DdD9rIzP2kUZl_SD-4puWVt3JHLil8DzE4MZCjneB0eyaX_UTE3mUD_4AkC_6TfBulXCBvgLIdRgyE"/>
+</div>
+</div>
+</div>
+<div class="space-y-10">
+<span class="label-sm bg-primary/10 text-primary px-4 py-2 rounded-full font-bold tracking-widest text-xs">MOBILE EXPERIENCE</span>
+<h2 class="text-5xl font-extrabold tracking-tight leading-tight">High-fidelity curation in your pocket.</h2>
+<p class="text-xl text-on-surface-variant leading-relaxed">
+                        The Coda mobile experience is designed for the focused listener. No algorithmic fluff, just pure human curation and high-fidelity sound.
+                    </p>
+<div class="space-y-6">
+<div class="flex items-start gap-4">
+<span class="material-symbols-outlined text-primary mt-1" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<div>
+<h4 class="font-bold">Lossless Streaming</h4>
+<p class="text-on-surface-variant">Experience every detail of the recording.</p>
+</div>
+</div>
+<div class="flex items-start gap-4">
+<span class="material-symbols-outlined text-primary mt-1" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<div>
+<h4 class="font-bold">Spatial Map Integration</h4>
+<p class="text-on-surface-variant">Find local curators and exclusive drops.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Social Proof / Curator Spotlights -->
+<section class="py-32 border-t border-surface-container">
+<div class="max-w-7xl mx-auto px-8">
+<div class="text-center mb-20">
+<h2 class="text-3xl font-bold mb-4">Curator Spotlights</h2>
+<p class="text-on-surface-variant">The minds shaping the sound of Coda.</p>
+</div>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-8">
+<div class="text-center group">
+<div class="aspect-square rounded-full overflow-hidden mb-6 ring-offset-4 ring-transparent group-hover:ring-primary/20 ring-4 transition-all duration-500">
+<img alt="Artist profile" class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500" data-alt="Minimalist headshot of a creative professional" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAkpclHoGjz5wY5yadVHRVWCoT-Cd7ZSB6USQMIlZTZeowEUyyeEVE8DSrpyzds0ayxfu9GSyXOJZbMvzbNPLoRJ3TLN31hynK5Dm2qB4feOmGGfo7H1Sb7uJifAXnfR6O06QwAZvn7ctg8DLxD_v-__DHbroQLJFUm1kLzLEI4-Cg1Ha7_ZIYBCYSX4A_75DdD9rIzP2kUZl_SD-4puWVt3JHLil8DzE4MZCjneB0eyaX_UTE3mUD_4AkC_6TfBulXCBvgLIdRgyE"/>
+</div>
+<h4 class="font-bold">Julian V.</h4>
+<p class="text-xs text-on-surface-variant uppercase tracking-widest font-semibold mt-1">Analog Enthusiast</p>
+</div>
+<div class="text-center group">
+<div class="aspect-square rounded-full overflow-hidden mb-6 ring-offset-4 ring-transparent group-hover:ring-primary/20 ring-4 transition-all duration-500">
+<img alt="Artist profile" class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500" data-alt="Portrait of an electronic music artist" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAkpclHoGjz5wY5yadVHRVWCoT-Cd7ZSB6USQMIlZTZeowEUyyeEVE8DSrpyzds0ayxfu9GSyXOJZbMvzbNPLoRJ3TLN31hynK5Dm2qB4feOmGGfo7H1Sb7uJifAXnfR6O06QwAZvn7ctg8DLxD_v-__DHbroQLJFUm1kLzLEI4-Cg1Ha7_ZIYBCYSX4A_75DdD9rIzP2kUZl_SD-4puWVt3JHLil8DzE4MZCjneB0eyaX_UTE3mUD_4AkC_6TfBulXCBvgLIdRgyE"/>
+</div>
+<h4 class="font-bold">Amara Okafor</h4>
+<p class="text-xs text-on-surface-variant uppercase tracking-widest font-semibold mt-1">Deep House Curator</p>
+</div>
+<div class="text-center group">
+<div class="aspect-square rounded-full overflow-hidden mb-6 ring-offset-4 ring-transparent group-hover:ring-primary/20 ring-4 transition-all duration-500">
+<img alt="Artist profile" class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500" data-alt="Portrait of a jazz music expert" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAkpclHoGjz5wY5yadVHRVWCoT-Cd7ZSB6USQMIlZTZeowEUyyeEVE8DSrpyzds0ayxfu9GSyXOJZbMvzbNPLoRJ3TLN31hynK5Dm2qB4feOmGGfo7H1Sb7uJifAXnfR6O06QwAZvn7ctg8DLxD_v-__DHbroQLJFUm1kLzLEI4-Cg1Ha7_ZIYBCYSX4A_75DdD9rIzP2kUZl_SD-4puWVt3JHLil8DzE4MZCjneB0eyaX_UTE3mUD_4AkC_6TfBulXCBvgLIdRgyE"/>
+</div>
+<h4 class="font-bold">Marcus Thorne</h4>
+<p class="text-xs text-on-surface-variant uppercase tracking-widest font-semibold mt-1">Jazz Historian</p>
+</div>
+<div class="text-center group">
+<div class="aspect-square rounded-full overflow-hidden mb-6 ring-offset-4 ring-transparent group-hover:ring-primary/20 ring-4 transition-all duration-500">
+<img alt="Artist profile" class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500" data-alt="Portrait of a global sound curator" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD_D-KLFT3KYVaRJsv9Hh_9WKfdwVFL3N1vMQoSU1yYwgO_w4OVpyeGSGocU2WFfU4sNwWpMVZ4EU7PuCe9smOYVyz2I70YdUinF4-Qr-oeqLZZOoBs-2GjyD5DmxAAnDXy8xManEgd_hFruZRZ8_7xScxLnldUZZ8XPoTpOANK7zHDRdw6_KsLh6F2LQfR53gL4MCkaJWWz-nD45EnT-X8MP9m3OeleMEVzANgxB04qsqVJ2g1VAqWlVPhOvAGXOcxBzoMhI1vXFc"/>
+</div>
+<h4 class="font-bold">Elena Rossi</h4>
+<p class="text-xs text-on-surface-variant uppercase tracking-widest font-semibold mt-1">Global Sounds</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Final CTA -->
+<section class="py-32 px-8">
+<div class="max-w-5xl mx-auto bg-primary text-on-primary rounded-[3rem] p-16 md:p-24 text-center relative overflow-hidden">
+<!-- Abstract BG pattern -->
+<div class="absolute top-0 right-0 w-96 h-96 bg-white/5 rounded-full -mr-48 -mt-48 blur-3xl"></div>
+<div class="absolute bottom-0 left-0 w-96 h-96 bg-white/5 rounded-full -ml-48 -mb-48 blur-3xl"></div>
+<div class="relative z-10 space-y-8">
+<h2 class="text-5xl font-extrabold tracking-tight">Join the High-Fidelity Community.</h2>
+<p class="text-xl text-white/80 max-w-2xl mx-auto">
+                        Coda is currently in private beta. Join thousands of curators in re-imagining the digital music experience.
+                    </p>
+<div class="pt-8">
+<button class="px-10 py-5 bg-white text-primary rounded-full font-bold text-xl hover:scale-105 transition-transform shadow-xl shadow-black/10">
+                            Download Coda
+                        </button>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer (Shared Component Execution) -->
+<footer class="w-full py-12 px-8 bg-slate-50 dark:bg-slate-950 mt-20 tonal-shift bg-slate-100 dark:bg-slate-900">
+<div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
+<div class="text-xl font-black text-slate-900 dark:text-slate-50">Coda</div>
+<div class="flex gap-8">
+<a class="text-slate-500 dark:text-slate-400 text-sm tracking-wide hover:text-slate-900 dark:hover:text-slate-100 transition-all opacity-80 hover:opacity-100" href="#">Instagram</a>
+<a class="text-slate-500 dark:text-slate-400 text-sm tracking-wide hover:text-slate-900 dark:hover:text-slate-100 transition-all opacity-80 hover:opacity-100" href="#">Twitter</a>
+<a class="text-slate-500 dark:text-slate-400 text-sm tracking-wide hover:text-slate-900 dark:hover:text-slate-100 transition-all opacity-80 hover:opacity-100" href="#">App Store</a>
+<a class="text-slate-500 dark:text-slate-400 text-sm tracking-wide hover:text-slate-900 dark:hover:text-slate-100 transition-all opacity-80 hover:opacity-100" href="#">Google Play</a>
+</div>
+<div class="text-slate-500 dark:text-slate-400 text-sm tracking-wide">
+                © 2024 Coda Music. All rights reserved.
+            </div>
+</div>
+</footer>
+</body></html>
