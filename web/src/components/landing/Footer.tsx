@@ -9,8 +9,8 @@ const legalLinks = [{ label: "Privacy Policy", href: "/privacy" }];
 
 export default function Footer() {
   return (
-    <footer className="w-full py-12 px-8 bg-slate-100 mt-20">
-      <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
+    <footer className="w-full py-12 px-6 sm:px-8 bg-slate-100 mt-16 md:mt-20">
+      <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6 md:gap-8">
         <div className="text-xl font-black text-primary">Groupys</div>
         <div className="flex gap-8">
           {links.map((link) => (

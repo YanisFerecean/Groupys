@@ -175,8 +175,8 @@
 
 @layer utilities {
   .text-display-lg {
-    font-size: 3.5rem;
-    line-height: 1;
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    line-height: 1.05;
     font-weight: 800;
     letter-spacing: -0.04em;
   }

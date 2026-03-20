@@ -8,9 +8,53 @@ const inter = Inter({
   subsets: ["latin"],
 });
 
+const BASE_URL = "https://groupys.app";
+
 export const metadata: Metadata = {
-  title: "Groupys | Your Music, Re-imagined",
-  description: "Discover your sonic DNA and connect with a community of high-fidelity curators.",
+  metadataBase: new URL(BASE_URL),
+  title: {
+    default: "Groupys – Music is better together",
+    template: "%s | Groupys",
+  },
+  description:
+    "Groupys is a community-based music platform. Join music communities, match with people who share your taste, rate albums, and share weekly check-ins.",
+  keywords: [
+    "music community",
+    "music social network",
+    "album ratings",
+    "music discovery",
+    "taste match",
+    "weekly check-in",
+    "music app",
+  ],
+  authors: [{ name: "Groupys" }],
+  creator: "Groupys",
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true },
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: BASE_URL,
+    siteName: "Groupys",
+    title: "Groupys – Music is better together",
+    description:
+      "Join music communities, match with people who share your taste, rate albums, and share weekly check-ins.",
+    images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "Groupys" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Groupys – Music is better together",
+    description:
+      "Join music communities, match with people who share your taste, rate albums, and share weekly check-ins.",
+    images: ["/og-image.png"],
+    creator: "@groupysapp",
+  },
+  alternates: {
+    canonical: BASE_URL,
+  },
 };
 
 export default function RootLayout({

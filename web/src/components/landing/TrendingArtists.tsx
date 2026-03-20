@@ -11,9 +11,9 @@ export default async function TrendingArtists() {
   }
 
   return (
-    <section className="py-32 border-t border-surface-container" id="trending">
-      <div className="max-w-7xl mx-auto px-8">
-        <div className="text-center mb-20">
+    <section className="py-20 md:py-32 border-t border-surface-container" id="trending">
+      <div className="max-w-7xl mx-auto px-6 sm:px-8">
+        <div className="text-center mb-12 md:mb-20">
           <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full font-bold tracking-widest text-xs uppercase mb-6">
             <span className="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
             Live from Last.fm
