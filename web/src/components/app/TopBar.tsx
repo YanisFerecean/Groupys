@@ -4,9 +4,10 @@ import { UserButton } from "@clerk/nextjs";
 
 interface TopBarProps {
   onMenuClick?: () => void;
+  onSearchClick?: () => void;
 }
 
-export default function TopBar({ onMenuClick }: TopBarProps) {
+export default function TopBar({ onMenuClick, onSearchClick }: TopBarProps) {
   return (
     <header className="fixed top-0 right-0 left-0 lg:left-64 h-16 lg:h-20 z-40 bg-surface/80 backdrop-blur-xl border-b border-surface-container">
       <div className="flex items-center justify-between px-4 lg:px-12 h-full">
@@ -19,16 +20,17 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
         </button>
 
         {/* Search */}
-        <div className="flex items-center gap-3 bg-surface-container-high px-4 py-2.5 rounded-full w-full max-w-96 hover:opacity-80 transition-opacity">
+        <button
+          onClick={onSearchClick}
+          className="flex items-center gap-3 bg-surface-container-high px-4 py-2.5 rounded-full w-full max-w-96 hover:bg-surface-container transition-colors text-left cursor-pointer"
+        >
           <span className="material-symbols-outlined text-on-surface-variant text-xl">
             search
           </span>
-          <input
-            className="bg-transparent border-none focus:outline-none text-sm font-semibold w-full placeholder:text-on-surface-variant/60"
-            placeholder="Search your collection..."
-            type="text"
-          />
-        </div>
+          <span className="text-sm font-semibold text-on-surface-variant/60">
+            Search artists, albums, or tracks...
+          </span>
+        </button>
 
         {/* Actions */}
         <div className="flex items-center gap-4 lg:gap-6">

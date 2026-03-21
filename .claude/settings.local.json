@@ -9,7 +9,16 @@
       "Bash(echo $JAVA_HOME)",
       "Bash(npm run:*)",
       "Bash(find C:/Uni/Projects/groupys-web-app/web/src/app/api -type f -name *.ts -o -name *.tsx)",
-      "Bash(ls C:/Uni/Projects/groupys-web-app/backend/quarkus-groupys/mvnw*)"
+      "Bash(ls C:/Uni/Projects/groupys-web-app/backend/quarkus-groupys/mvnw*)",
+      "Bash(npx next:*)",
+      "Bash(find . -path ./web -prune -o -type f \\\\\\(-name *discover* -o -name *Discover* -o -name *exploration* -o -name *Exploration* \\\\\\) -print)",
+      "Bash(xargs grep:*)",
+      "Bash(xargs cat:*)",
+      "Bash(git -C \"/c/Uni/Projects/groupys-web-app\" log --oneline --all)",
+      "Bash(find /c/Uni/Projects/groupys-web-app/mobile -type f -name *ost* -o -name *Post*)",
+      "Bash(grep -r \"upload\\\\|storage\\\\|file\\\\|bucket\" /c/Uni/Projects/groupys-web-app/backend/quarkus-groupys/src/main/java --include=*.java)",
+      "Bash(find /c/Uni/Projects/groupys-web-app/web/src -type f -name *post* -o -name *Post*)",
+      "Bash(npm install:*)"
     ]
   }
 }

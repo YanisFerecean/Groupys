@@ -160,6 +160,7 @@ export async function createBackendUser(data: {
   username: string;
   displayName?: string;
   bio?: string;
+  profileImage?: string;
 }): Promise<BackendUser> {
   const res = await fetch(`${API_URL}/users`, {
     method: "POST",
@@ -192,6 +193,7 @@ export async function updateBackendUser(
     bannerUrl: data.bannerUrl ?? null,
     accentColor: data.accentColor ?? null,
     nameColor: data.nameColor ?? null,
+    profileImage: data.profileImage ?? null,
     widgets: widgets.length ? JSON.stringify(widgets) : null,
   };
 

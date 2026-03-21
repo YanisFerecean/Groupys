@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CODA | High-Fidelity Feed</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "surface": "#f9f9fb",
+            "error": "#ba1a1a",
+            "surface-container": "#eeeef0",
+            "on-error-container": "#93000a",
+            "surface-dim": "#d9dadc",
+            "primary-fixed": "#ffdad9",
+            "on-error": "#ffffff",
+            "tertiary-fixed": "#86f6e2",
+            "surface-container-highest": "#e2e2e4",
+            "secondary": "#ab323b",
+            "outline-variant": "#e6bdbc",
+            "on-tertiary-container": "#f4fffb",
+            "on-tertiary": "#ffffff",
+            "secondary-container": "#ff7075",
+            "tertiary": "#00685c",
+            "surface-container-high": "#e8e8ea",
+            "surface-variant": "#e2e2e4",
+            "error-container": "#ffdad6",
+            "primary-fixed-dim": "#ffb3b2",
+            "on-surface": "#1a1c1d",
+            "on-primary": "#ffffff",
+            "inverse-primary": "#ffb3b2",
+            "on-primary-fixed-variant": "#92001f",
+            "on-secondary-fixed": "#410008",
+            "inverse-surface": "#2f3132",
+            "outline": "#916e6e",
+            "on-primary-container": "#fffbff",
+            "on-background": "#1a1c1d",
+            "surface-tint": "#bf002c",
+            "secondary-fixed-dim": "#ffb3b2",
+            "inverse-on-surface": "#f0f0f2",
+            "tertiary-fixed-dim": "#69d9c6",
+            "surface-bright": "#f9f9fb",
+            "surface-container-low": "#f3f3f5",
+            "surface-container-lowest": "#ffffff",
+            "primary": "#ba002b",
+            "on-secondary": "#ffffff",
+            "on-secondary-container": "#710116",
+            "on-primary-fixed": "#410008",
+            "on-surface-variant": "#5d3f3f",
+            "on-tertiary-fixed": "#00201b",
+            "secondary-fixed": "#ffdad9",
+            "background": "#f9f9fb",
+            "primary-container": "#e5183b",
+            "on-tertiary-fixed-variant": "#005046",
+            "tertiary-container": "#008374",
+            "on-secondary-fixed-variant": "#8a1926"
+          },
+          fontFamily: {
+            "headline": ["Inter"],
+            "body": ["Inter"],
+            "label": ["Inter"]
+          },
+          borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+        },
+      },
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+    body { font-family: 'Inter', sans-serif; }
+    .glass-nav {
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #e2e2e4;
+      border-radius: 10px;
+    }
+  </style>
+</head>
+<body class="bg-surface text-on-surface selection:bg-primary-fixed">
+<!-- Left SideNavBar (Shared Component) -->
+<aside class="h-screen w-64 fixed left-0 top-0 border-r-0 bg-[#f9f9fb] dark:bg-slate-900 z-50">
+<div class="flex flex-col h-full p-6">
+<div class="mb-8">
+<h1 class="text-3xl font-extrabold tracking-tighter text-[#ba002b] dark:text-[#fa2d48]">CODA</h1>
+<p class="text-[10px] uppercase tracking-widest font-bold text-slate-400 mt-1">High-Fidelity</p>
+</div>
+<nav class="space-y-2 flex-1">
+<a class="flex items-center gap-3 px-6 py-3 text-[#ba002b] dark:text-[#fa2d48] font-bold bg-white/50 dark:bg-slate-800/50 rounded-lg scale-95 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="rss_feed">rss_feed</span>
+<span>Feed</span>
+</a>
+<a class="flex items-center gap-3 px-6 py-3 text-slate-500 dark:text-slate-400 font-medium hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="explore">explore</span>
+<span>Discover</span>
+</a>
+<a class="flex items-center gap-3 px-6 py-3 text-slate-500 dark:text-slate-400 font-medium hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="favorite">favorite</span>
+<span>Match</span>
+</a>
+<a class="flex items-center gap-3 px-6 py-3 text-slate-500 dark:text-slate-400 font-medium hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="person_outline">person_outline</span>
+<span>Profile</span>
+</a>
+</nav>
+<div class="mt-auto pt-6 border-t border-surface-container-highest">
+<div class="flex items-center gap-3 px-2">
+<div class="w-10 h-10 rounded-full bg-surface-container-high overflow-hidden">
+<img alt="Profile" data-alt="Close up portrait of a male user" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCnDqC4S1p5-5Mztpm53ybLQU3AZwVKrOBY3xr203tWuNoH44sEFqcKXhRyJoLo5GWFn_y5Vch_qc4VfHvpTUR6BYisL7QRVisEMpyb73qfmENBxviZBBRzV0yXIwO_ysFuZ3hVqxrJT7caFxV49-t6fUktzvEsqHyqXh2Plue-L3SxXZqitdmxXf1UCGd96gRiI-jXKowuKXiJ14jqkcH3Je8XI96tpPaDG01Dfv0s884toDA2NnuCDkb7FAE6JmLH0oPYC-HbmUA"/>
+</div>
+<div>
+<p class="text-sm font-bold">Alex Rivers</p>
+<p class="text-xs text-slate-500">Pro Member</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Visual Separation -->
+<div class="absolute right-0 top-0 bg-[#e2e2e4] dark:bg-slate-800 w-[1px] h-full"></div>
+</aside>
+<!-- TopNavBar (Shared Component) -->
+<header class="fixed top-0 right-0 left-64 h-20 z-40 bg-[#f9f9fb]/70 dark:bg-slate-900/70 backdrop-blur-xl">
+<div class="flex items-center justify-between px-12 w-full h-full">
+<div class="relative w-96">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xl" data-icon="search">search</span>
+<input class="w-full bg-surface-container-high border-none rounded-full py-2.5 pl-12 pr-4 text-sm focus:ring-2 focus:ring-[#ba002b]/20 transition-all placeholder:text-slate-400" placeholder="Search artists, albums, or community..." type="text"/>
+</div>
+<div class="flex items-center gap-6">
+<button class="text-slate-500 hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="text-slate-500 hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+<button class="bg-primary text-white px-6 py-2 rounded-full text-sm font-bold hover:opacity-90 transition-opacity">
+          Post Track
+        </button>
+</div>
+</div>
+</header>
+<!-- Main Content Layout -->
+<main class="ml-64 pt-20 flex">
+<!-- Central Feed (Column 2) -->
+<section class="flex-1 max-w-4xl px-12 py-12 custom-scrollbar overflow-y-auto">
+<header class="mb-16">
+<h2 class="text-5xl font-extrabold tracking-tighter mb-2">Community Feed</h2>
+<div class="flex gap-4">
+<span class="text-primary font-bold text-sm">Recently Shared</span>
+<span class="text-slate-400 font-medium text-sm hover:text-slate-600 cursor-pointer">Popular</span>
+<span class="text-slate-400 font-medium text-sm hover:text-slate-600 cursor-pointer">Friends</span>
+</div>
+</header>
+<!-- Editorial Post Card 1 -->
+<article class="mb-20">
+<div class="relative group cursor-pointer overflow-hidden rounded-3xl bg-surface-container-lowest transition-all hover:translate-y-[-4px]">
+<div class="aspect-[16/9] w-full overflow-hidden">
+<img alt="Cover Art" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" data-alt="Abstract vibrant neon music album cover art" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAciZasGtUjXtNOahafoGfr1BKm5LpNtILIq770t46XxTHiZknbvtPJJSxrPKIzzqMnX27uaKKYN3TZgXaXUDWxTqoXlNOXsOKgfsLlmj6NZcZQCuRrnWZjDicujL9N1pR8gMy79xxBjq-Dlb1_XZYc-ZXMtFF0tlOjgBrcsf7QWPhkzLcAdoYq7k_JtKaxU_zJNbLabww3CyW-0MzZzG8C5P8QNa6ywUsj7XgOUsL_RTkXkoSCuNtDOZ4IovBZGPMzXMKl3pCCpeg"/>
+<!-- Play Overlay -->
+<div class="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+<div class="w-20 h-20 bg-white/90 rounded-full flex items-center justify-center text-primary shadow-xl">
+<span class="material-symbols-outlined text-4xl" data-icon="play_arrow" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</div>
+</div>
+</div>
+<div class="p-8">
+<div class="flex justify-between items-start mb-4">
+<div>
+<h3 class="text-4xl font-extrabold tracking-tight leading-none mb-2">Midnight City Visions</h3>
+<p class="text-xl text-slate-500 font-medium">Digital Nomads — <span class="text-primary">Neon Horizon EP</span></p>
+</div>
+<div class="flex items-center gap-2">
+<span class="text-xs font-bold uppercase tracking-widest text-slate-400">Hi-Res Lossless</span>
+<span class="material-symbols-outlined text-primary" data-icon="verified" style="font-variation-settings: 'FILL' 1;">verified</span>
+</div>
+</div>
+<div class="flex items-center gap-6 mt-8 pt-6 border-t border-surface-container">
+<div class="flex items-center gap-2 text-slate-500 hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="favorite">favorite</span>
+<span class="text-sm font-bold">1.2k</span>
+</div>
+<div class="flex items-center gap-2 text-slate-500 hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined" data-icon="chat_bubble_outline">chat_bubble_outline</span>
+<span class="text-sm font-bold">84</span>
+</div>
+<div class="flex items-center gap-2 text-slate-500 hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined" data-icon="ios_share">ios_share</span>
+</div>
+<div class="ml-auto flex -space-x-3">
+<img alt="u1" class="w-8 h-8 rounded-full border-2 border-white" data-alt="Portrait of a young woman" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDq6Oqa72dPOJBR6gwlIXFGOaSGEwxAkknvho9AWe-NoPb7Jl0hvcq9cf-tHGW7JifDAubv6Jvf7f6p3B5LdbJZpMCz7jmFtcTIsrVFpKlft2TrFHly7yD_F1gyEsp1fNfkg6FnvxOVcW9cxRROIa_r_KxJ5o2YMLleliD7sACISWXRvXXTlM4QeqwppD4XwZaKyWWk4kc34Y5hy0XFzIvi5E8a0ITUD251_QsZVZsPB-MMtzuVvXNpX4j2UBTlhysSp2xHAS7-Ahw"/>
+<img alt="u2" class="w-8 h-8 rounded-full border-2 border-white" data-alt="Portrait of a man smiling" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBYVfE97IrD6EwsZH4y-giG6uzhqMCUjt5b4zqGdBaiscbFZmugTZEXOSWxbClmuJ7IHDp6VyVv6Ov6BPClRsAQztKnuKxE22ZKrJvfdgkgmsIua8aTjGyXmEtt7C88khz5wxnLrud55qO9mZFrWkvWR1vUGk8Nqu0ih2Yfi4H1eGwuZNhAswZ7qs7Ew_7bin-wv24csGq_dDvzP_iTRCVMAUTBpMOuhXYNsOAZUz3_3AZvgXta_tpi3cdPmzxAFYSbpVVpfIPV8MI"/>
+<div class="w-8 h-8 rounded-full border-2 border-white bg-surface-container-high flex items-center justify-center text-[10px] font-bold">+12</div>
+</div>
+</div>
+</div>
+</div>
+</article>
+<!-- Editorial Post Card 2 -->
+<article class="mb-20">
+<div class="grid grid-cols-12 gap-8 items-center">
+<div class="col-span-5 aspect-square rounded-2xl overflow-hidden shadow-2xl transition-transform hover:rotate-2">
+<img alt="Artist photo" class="w-full h-full object-cover" data-alt="DJ performing at a high-end minimalist stage" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCpYMWSz5jDzjEGbfQlpUPesNWWMtYDU7hz_lOawe-2olPjFl7zyDLQ4bpTVY_IlMGmNebYRegxgvXLrOINh6r6adG6Ez9mlK-ObLKezv0dhB8MNuZXXVwPxMPhf7n_sJsk1XNFplBSE3TxlFy5xE57kM3QX1gKXNHvpXK78uU4v17mdTX3jdx0N9IsTfsM8nf_1xkRQUzCeAxiOvgrlw7h52D41IO3IZA9d9ByHf2_nDNqbi19QLL5VL8CohQDElAZRdeayg1l5V0"/>
+</div>
+<div class="col-span-7 py-4">
+<span class="text-primary font-bold text-xs uppercase tracking-[0.2em] mb-4 block">New Collective Drop</span>
+<h3 class="text-3xl font-extrabold tracking-tight mb-4">Atmospheric Textures in Modern Jazz</h3>
+<p class="text-slate-600 leading-relaxed mb-6 font-medium">Curated by <span class="text-on-surface font-bold">The Echo Chamber</span>. A deep dive into the 2024 minimalist revival from the streets of Tokyo to the clubs of Berlin.</p>
+<div class="flex items-center gap-4">
+<button class="bg-surface-container-highest px-6 py-3 rounded-full text-sm font-bold flex items-center gap-2 hover:bg-surface-dim transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="playlist_add">playlist_add</span>
+                        Save Playlist
+                    </button>
+<button class="text-primary font-bold text-sm underline underline-offset-8">Read Editorial</button>
+</div>
+</div>
+</div>
+</article>
+</section>
+<!-- Right Sidebar (Column 3) -->
+<aside class="w-80 h-[calc(100vh-5rem)] sticky top-20 border-l border-surface-container-highest px-8 py-12 flex flex-col gap-12 overflow-y-auto">
+<!-- Trending Section -->
+<div>
+<h4 class="text-sm font-bold uppercase tracking-widest text-slate-400 mb-6">Trending Now</h4>
+<div class="space-y-6">
+<div class="flex items-center gap-4 group cursor-pointer">
+<span class="text-2xl font-black text-surface-container-highest group-hover:text-primary transition-colors">01</span>
+<div>
+<p class="text-sm font-bold leading-none mb-1">Velvet Thunder</p>
+<p class="text-xs text-slate-500">M83 x Tame Impala</p>
+</div>
+</div>
+<div class="flex items-center gap-4 group cursor-pointer">
+<span class="text-2xl font-black text-surface-container-highest group-hover:text-primary transition-colors">02</span>
+<div>
+<p class="text-sm font-bold leading-none mb-1">Synthesized Soul</p>
+<p class="text-xs text-slate-500">Kaytranada</p>
+</div>
+</div>
+<div class="flex items-center gap-4 group cursor-pointer">
+<span class="text-2xl font-black text-surface-container-highest group-hover:text-primary transition-colors">03</span>
+<div>
+<p class="text-sm font-bold leading-none mb-1">Acoustic Dreams</p>
+<p class="text-xs text-slate-500">Phoebe Bridgers</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Community Stats / Bento Small -->
+<div class="bg-surface-container-low rounded-3xl p-6">
+<h4 class="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Your Circle</h4>
+<div class="grid grid-cols-2 gap-3">
+<div class="bg-white p-4 rounded-2xl">
+<p class="text-[10px] text-slate-400 font-bold uppercase">Active</p>
+<p class="text-xl font-black text-primary">14</p>
+</div>
+<div class="bg-white p-4 rounded-2xl">
+<p class="text-[10px] text-slate-400 font-bold uppercase">New Matches</p>
+<p class="text-xl font-black">08</p>
+</div>
+</div>
+<button class="w-full mt-4 py-3 text-xs font-bold text-slate-500 border border-slate-200 rounded-full hover:bg-white transition-colors">
+          View All Friends
+        </button>
+</div>
+<!-- Ad/Promotion Bento -->
+<div class="relative rounded-3xl overflow-hidden aspect-[4/5] bg-primary group cursor-pointer">
+<img alt="Event" class="absolute inset-0 w-full h-full object-cover opacity-60 mix-blend-overlay transition-transform duration-700 group-hover:scale-110" data-alt="Musician playing guitar under dramatic stage lights" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBboFpZ0S5FoB_GALBWtiR1VUg7hn3F_m8rmGkaw52VuuuIdQX5dzv76jwXYMrMI22Q9xZT2nYLNYxfzux68QCDliNL2iHkhm5rNBhWVkTN9OmJ0_NRR7tG5AIFnvn_KwypuR0i55WnB-EYiTe_TQdf6ReMx1P8GJ-440FLdwDMRSssAGdV-NvfXvsVuUW7wgCLl9hdQDf1GfBZBPIu-aSelq7OuyMIkqc1jlDidCgjSACtKuTRdQFV_l0JB2rxACr1o1JG5WGrnd0"/>
+<div class="absolute bottom-0 left-0 p-6 text-white">
+<span class="inline-block bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest mb-3">Live Session</span>
+<h5 class="text-2xl font-black leading-tight mb-2">CODA Studio Sessions: NYC</h5>
+<p class="text-sm opacity-90 font-medium">Join the waitlist for the exclusive rooftop vinyl night.</p>
+</div>
+</div>
+</aside>
+</main>
+<!-- Player Bar (Floating Glassmorphism) -->
+<footer class="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-5xl h-20 glass-nav bg-white/70 rounded-full shadow-2xl z-50 px-8 flex items-center justify-between border border-white/40">
+<div class="flex items-center gap-4 w-1/4">
+<div class="w-12 h-12 rounded-lg overflow-hidden bg-surface-container">
+<img alt="Current Track" data-alt="Dynamic purple and blue light streaks" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC4dalE-m5UgPAG_VQzCzYuLXGpI56sIb1PQPddDr69vbPfiG-LzMZmUgRMW6JvBTSF8kyOzteRzsIJJFrjSIU9XloU3hqAUNWw3Fik4C85E4etzMSp8700XBcCFVpr5dEEQe3K_YKs0hNvWcJm08Fo_3okRc-8ulV3SWEQ5FdF0Jxqf-Q0EKdAuLRmu1ZiXjW-ALc_llMP6U3gd-VkbtrcmbvYVluVVYgf0aZvhlnlGPePM_CP7ANfbKfz-2RfXNqIPcY8y3rFCGY"/>
+</div>
+<div>
+<p class="text-sm font-bold leading-none">Midnight City Visions</p>
+<p class="text-xs text-slate-500">Digital Nomads</p>
+</div>
+</div>
+<div class="flex flex-col items-center gap-1 flex-1">
+<div class="flex items-center gap-6">
+<button class="text-slate-400 hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined" data-icon="shuffle">shuffle</span>
+</button>
+<button class="text-on-surface hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-3xl" data-icon="skip_previous">skip_previous</span>
+</button>
+<button class="w-12 h-12 bg-primary text-white rounded-full flex items-center justify-center hover:scale-105 transition-transform">
+<span class="material-symbols-outlined text-3xl" data-icon="pause" style="font-variation-settings: 'FILL' 1;">pause</span>
+</button>
+<button class="text-on-surface hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-3xl" data-icon="skip_next">skip_next</span>
+</button>
+<button class="text-slate-400 hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined" data-icon="repeat">repeat</span>
+</button>
+</div>
+<div class="w-full max-w-md flex items-center gap-3">
+<span class="text-[10px] font-bold text-slate-400">2:45</span>
+<div class="flex-1 h-1 bg-slate-200 rounded-full overflow-hidden">
+<div class="w-[65%] h-full bg-primary"></div>
+</div>
+<span class="text-[10px] font-bold text-slate-400">4:12</span>
+</div>
+</div>
+<div class="flex items-center justify-end gap-4 w-1/4">
+<span class="material-symbols-outlined text-slate-500" data-icon="volume_up">volume_up</span>
+<div class="w-24 h-1 bg-slate-200 rounded-full overflow-hidden">
+<div class="w-[80%] h-full bg-slate-600"></div>
+</div>
+<span class="material-symbols-outlined text-slate-500" data-icon="queue_music">queue_music</span>
+</div>
+</footer>
+</body></html>
