@@ -13,6 +13,9 @@ You can run your application in dev mode that enables live coding using:
 ```
 
 > **_NOTE:_**  Quarkus now ships with a Dev UI, which is available in dev mode only at <http://localhost:8080/q/dev/>.
+> Quarkus loads local secrets from `.env` in the project root during dev mode.
+> Only the JAX-RS resource endpoints under `src/main/java/com/groupys/resource` require `Authorization: Bearer <jwt>`.
+> Quarkus Dev UI and other non-resource endpoints remain accessible in dev mode.
 
 ## Packaging and running the application
 

@@ -4,6 +4,7 @@ import com.groupys.dto.ArtistResDto;
 import com.groupys.dto.TopAlbumResDto;
 import com.groupys.dto.TopTrackResDto;
 import com.groupys.service.ChartService;
+import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.GET;
@@ -11,11 +12,14 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
+import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 
 import java.util.List;
 
 @Path("/charts")
+@Authenticated
 @Produces(MediaType.APPLICATION_JSON)
+@SecurityRequirement(name = "bearerAuth")
 public class ChartResource {
 
     @Inject
