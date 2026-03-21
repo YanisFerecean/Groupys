@@ -1,3 +1,5 @@
+import { resolveArtistImage } from "./deezer";
+
 const BASE_URL = "https://ws.audioscrobbler.com/2.0";
 
 export interface LastFmArtist {
@@ -23,25 +25,6 @@ interface LastFmChartResponse {
   };
 }
 
-interface DeezerSearchResponse {
-  data?: { picture_xl?: string; picture_big?: string }[];
-}
-
-/** Resolve an artist photo via Deezer's free search API (no key required). */
-async function resolveImage(artistName: string): Promise<string | null> {
-  try {
-    const res = await fetch(
-      `https://api.deezer.com/search/artist?q=${encodeURIComponent(artistName)}&limit=1`,
-      { next: { revalidate: 86400 } }
-    );
-    if (!res.ok) return null;
-    const data = (await res.json()) as DeezerSearchResponse;
-    return data.data?.[0]?.picture_xl ?? data.data?.[0]?.picture_big ?? null;
-  } catch {
-    return null;
-  }
-}
-
 export async function getTopArtists(count = 4): Promise<LastFmArtist[]> {
   const apiKey = process.env.LASTFM_API_KEY;
   if (!apiKey) throw new Error("Missing LASTFM_API_KEY");
@@ -56,7 +39,7 @@ export async function getTopArtists(count = 4): Promise<LastFmArtist[]> {
   const raw = data.artists.artist.slice(0, count);
 
   // Resolve images in parallel
-  const images = await Promise.all(raw.map((a) => resolveImage(a.name)));
+  const images = await Promise.all(raw.map((a) => resolveArtistImage(a.name)));
 
   return raw.map((a, i) => ({
     name: a.name,

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
+import UserSync from "@/components/UserSync";
 import "./globals.css";
 
 const inter = Inter({
@@ -71,7 +72,10 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col">
-        <ClerkProvider>{children}</ClerkProvider>
+        <ClerkProvider>
+          <UserSync />
+          {children}
+        </ClerkProvider>
       </body>
     </html>
   );

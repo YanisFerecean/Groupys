@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(./mvnw compile:*)",
+      "Bash(ls mvnw*)",
+      "Bash(mvn compile:*)",
+      "Bash(where mvn:*)",
+      "Bash(echo $JAVA_HOME)",
+      "Bash(npm run:*)",
+      "Bash(find C:/Uni/Projects/groupys-web-app/web/src/app/api -type f -name *.ts -o -name *.tsx)",
+      "Bash(ls C:/Uni/Projects/groupys-web-app/backend/quarkus-groupys/mvnw*)"
+    ]
+  }
+}

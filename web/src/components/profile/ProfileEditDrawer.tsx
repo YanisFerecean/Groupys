@@ -21,13 +21,13 @@ import MusicSearchInput from "./MusicSearchInput";
 import type { TrackResult, ArtistResult, AlbumResult } from "./MusicSearchInput";
 import { COUNTRIES } from "@/lib/countries";
 
-// ── Clerk error parser ──────────────────────────────────────────────────────
+// ── Error parsers ───────────────────────────────────────────────────────────
 
 interface ClerkAPIError {
   errors?: { message?: string; longMessage?: string; code?: string }[];
 }
 
-function parseClerkError(err: unknown, field: string): string {
+function parseClerkError(err: unknown): string {
   const clerkErr = err as ClerkAPIError;
   if (clerkErr?.errors?.length) {
     const first = clerkErr.errors[0];
@@ -43,10 +43,10 @@ function parseClerkError(err: unknown, field: string): string {
     if (first.code === "form_param_too_long") {
       return "Too long — must be 64 characters or fewer.";
     }
-    return first.longMessage ?? first.message ?? `Failed to update ${field}.`;
+    return first.longMessage ?? first.message ?? "Failed to update username.";
   }
   if (err instanceof Error) return err.message;
-  return `Failed to update ${field}. Please try again.`;
+  return "Something went wrong. Please try again.";
 }
 
 // ── Props ───────────────────────────────────────────────────────────────────
@@ -108,8 +108,7 @@ export default function ProfileEditDrawer({
       try {
         await onUpdateUsername(username.trim());
       } catch (err: unknown) {
-        const message = parseClerkError(err, "username");
-        setErrors((prev) => ({ ...prev, username: message }));
+        setErrors((prev) => ({ ...prev, username: parseClerkError(err) }));
         return;
       }
     }
@@ -118,16 +117,14 @@ export default function ProfileEditDrawer({
       try {
         await onRemoveProfileImage();
       } catch (err: unknown) {
-        const message = parseClerkError(err, "avatar");
-        setErrors((prev) => ({ ...prev, avatar: message }));
+        setErrors((prev) => ({ ...prev, avatar: parseClerkError(err) }));
         return;
       }
     } else if (pendingAvatarFile) {
       try {
         await onUpdateProfileImage(pendingAvatarFile);
       } catch (err: unknown) {
-        const message = parseClerkError(err, "avatar");
-        setErrors((prev) => ({ ...prev, avatar: message }));
+        setErrors((prev) => ({ ...prev, avatar: parseClerkError(err) }));
         return;
       }
     }
@@ -135,7 +132,8 @@ export default function ProfileEditDrawer({
     try {
       await onSave(form);
     } catch (err: unknown) {
-      const message = parseClerkError(err, "profile");
+      const message =
+        err instanceof Error ? err.message : "Failed to save profile.";
       setErrors((prev) => ({ ...prev, general: message }));
       return;
     }

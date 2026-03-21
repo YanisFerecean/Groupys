@@ -14,12 +14,13 @@ export default function ProfileView() {
     updateUsername,
     updateProfileImage,
     removeProfileImage,
+    isLoaded,
     isSaving,
   } = useProfileCustomization();
   const { user } = useUser();
   const [isEditing, setIsEditing] = useState(false);
 
-  if (!user) return null;
+  if (!user || !isLoaded) return null;
 
   const clerkName = user.fullName ?? user.username ?? "Music Fan";
   const memberYear = new Date(user.createdAt!).getFullYear();

@@ -8,7 +8,9 @@
       "Bash(ls -la /c/Uni/Projects/groupys-web-app/web/.env*)",
       "Bash(npx:*)",
       "WebSearch",
-      "WebFetch(domain:clerk.com)"
+      "WebFetch(domain:clerk.com)",
+      "Bash(ls -la *.config.* *.json)",
+      "Bash(grep -r \"NEXT_PUBLIC_API_URL\\\\|API_URL\" /c/Uni/Projects/groupys-web-app/web --include=*.ts --include=*.tsx --include=*.env*)"
     ]
   }
 }
