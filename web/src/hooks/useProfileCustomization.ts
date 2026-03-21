@@ -39,6 +39,7 @@ export function useProfileCustomization() {
             clerkId: user.id,
             username: user.username ?? user.id,
             displayName: user.fullName ?? undefined,
+            profileImage: user.imageUrl ?? undefined,
           });
         }
 

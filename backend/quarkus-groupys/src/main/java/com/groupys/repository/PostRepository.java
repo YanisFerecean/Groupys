@@ -17,4 +17,9 @@ public class PostRepository implements PanacheRepositoryBase<Post, UUID> {
     public List<Post> findByAuthor(UUID authorId) {
         return find("author.id", io.quarkus.panache.common.Sort.descending("createdAt"), authorId).list();
     }
+
+    public List<Post> findByCommunities(List<UUID> communityIds) {
+        if (communityIds.isEmpty()) return List.of();
+        return find("community.id in ?1 order by createdAt desc", communityIds).list();
+    }
 }

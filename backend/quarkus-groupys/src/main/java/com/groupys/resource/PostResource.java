@@ -41,9 +41,21 @@ public class PostResource {
     JsonWebToken jwt;
 
     @GET
+    @Path("/feed")
+    public List<PostResDto> getFeed() {
+        return postService.getFeed(jwt.getSubject());
+    }
+
+    @GET
+    @Path("/{id}")
+    public PostResDto getById(@PathParam("id") UUID id) {
+        return postService.getById(id, jwt.getSubject());
+    }
+
+    @GET
     @Path("/community/{communityId}")
     public List<PostResDto> getByCommunity(@PathParam("communityId") UUID communityId) {
-        return postService.getByCommunity(communityId);
+        return postService.getByCommunity(communityId, jwt.getSubject());
     }
 
     @POST
@@ -73,6 +85,13 @@ public class PostResource {
         return Response.status(Response.Status.CREATED).entity(created).build();
     }
 
+    @POST
+    @Path("/{id}/react")
+    @Consumes(MediaType.APPLICATION_JSON)
+    public PostResDto react(@PathParam("id") UUID id, ReactionRequest request) {
+        return postService.react(id, request.type(), jwt.getSubject());
+    }
+
     @DELETE
     @Path("/{id}")
     public Response delete(@PathParam("id") UUID id) {
@@ -98,4 +117,6 @@ public class PostResource {
             throw new NotFoundException("Media not found");
         }
     }
+
+    public record ReactionRequest(String type) {}
 }

@@ -38,11 +38,16 @@ interface PostRes {
   mediaUrl: string | null;
   mediaType: string | null;
   communityId: string;
+  communityName: string;
   authorId: string;
   authorUsername: string;
   authorDisplayName: string;
   authorProfileImage: string;
   createdAt: string;
+  likeCount: number;
+  dislikeCount: number;
+  userReaction: "like" | "dislike" | null;
+  commentCount: number;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -165,29 +170,39 @@ function AuthMedia({
   return <img src={blobUrl} alt="Post media" className={className} />;
 }
 
-function PostCard({ post }: { post: PostRes }) {
+function PostCard({
+  post,
+  onReact,
+}: {
+  post: PostRes;
+  onReact: (postId: string, type: "like" | "dislike") => void;
+}) {
+  const router = useRouter();
   const isImage = post.mediaType?.startsWith("image/");
   const isVideo = post.mediaType?.startsWith("video/");
 
   return (
     <div className="bg-surface-container-lowest/65 border border-white/80 rounded-2xl overflow-hidden shadow-sm">
       {/* Author header */}
-      <div className="flex items-center gap-3 px-4 pt-4 pb-2">
+      <div
+        className="flex items-center gap-3 px-4 pt-4 pb-2 cursor-pointer"
+        onClick={() => router.push(`/profile/${post.authorUsername}`)}
+      >
         {post.authorProfileImage ? (
           <img
             src={post.authorProfileImage}
             alt={post.authorDisplayName || post.authorUsername}
-            className="w-9 h-9 rounded-full object-cover"
+            className="w-9 h-9 shrink-0 rounded-full object-cover"
           />
         ) : (
-          <div className="w-9 h-9 rounded-full bg-surface-container-high flex items-center justify-center">
+          <div className="w-9 h-9 shrink-0 rounded-full bg-surface-container-high flex items-center justify-center">
             <span className="material-symbols-outlined text-on-surface-variant/40 text-sm">
               person
             </span>
           </div>
         )}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-on-surface truncate">
+          <p className="text-sm font-semibold text-on-surface truncate hover:text-primary transition-colors">
             {post.authorDisplayName || post.authorUsername}
           </p>
           <p className="text-xs text-on-surface-variant">
@@ -196,30 +211,88 @@ function PostCard({ post }: { post: PostRes }) {
         </div>
       </div>
 
-      {/* Content */}
+      {/* Content (truncated) */}
       {post.content && (
-        <p className="text-sm text-on-surface leading-relaxed px-4 pb-3">
+        <p
+          className="text-sm text-on-surface leading-relaxed px-4 pb-3 line-clamp-3 cursor-pointer"
+          onClick={() => router.push(`/discover/post/${post.id}`)}
+        >
           {post.content}
         </p>
       )}
 
       {/* Media */}
       {post.mediaUrl && isImage && (
-        <AuthMedia
-          src={`${API_URL}${post.mediaUrl.replace(/^\/api/, "")}`}
-          type="image"
-          className="w-full max-h-[500px] object-cover"
-        />
+        <div className="px-4 pb-3">
+          <AuthMedia
+            src={`${API_URL}${post.mediaUrl.replace(/^\/api/, "")}`}
+            type="image"
+            className="w-full rounded-xl"
+          />
+        </div>
       )}
       {post.mediaUrl && isVideo && (
-        <AuthMedia
-          src={`${API_URL}${post.mediaUrl.replace(/^\/api/, "")}`}
-          type="video"
-          className="w-full max-h-[500px]"
-        />
+        <div className="px-4 pb-3">
+          <AuthMedia
+            src={`${API_URL}${post.mediaUrl.replace(/^\/api/, "")}`}
+            type="video"
+            className="w-full rounded-xl"
+          />
+        </div>
       )}
 
-      <div className="h-3" />
+      {/* Reaction bar */}
+      <div className="flex items-center gap-1 px-3 py-2 border-t border-surface-container-high/50">
+        <button
+          onClick={() => onReact(post.id, "like")}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+            post.userReaction === "like"
+              ? "bg-primary/15 text-primary"
+              : "text-on-surface-variant hover:bg-surface-container-high"
+          }`}
+        >
+          <span
+            className="material-symbols-outlined text-base"
+            style={{
+              fontVariationSettings:
+                post.userReaction === "like" ? "'FILL' 1" : "'FILL' 0",
+            }}
+          >
+            thumb_up
+          </span>
+          {post.likeCount > 0 && post.likeCount}
+        </button>
+
+        <button
+          onClick={() => onReact(post.id, "dislike")}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+            post.userReaction === "dislike"
+              ? "bg-error/15 text-error"
+              : "text-on-surface-variant hover:bg-surface-container-high"
+          }`}
+        >
+          <span
+            className="material-symbols-outlined text-base"
+            style={{
+              fontVariationSettings:
+                post.userReaction === "dislike" ? "'FILL' 1" : "'FILL' 0",
+            }}
+          >
+            thumb_down
+          </span>
+          {post.dislikeCount > 0 && post.dislikeCount}
+        </button>
+
+        <button
+          onClick={() => router.push(`/discover/post/${post.id}`)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-on-surface-variant hover:bg-surface-container-high transition-colors ml-auto"
+        >
+          <span className="material-symbols-outlined text-base">
+            chat_bubble_outline
+          </span>
+          {post.commentCount > 0 ? post.commentCount : ""} Comment{post.commentCount !== 1 ? "s" : ""}
+        </button>
+      </div>
     </div>
   );
 }
@@ -444,6 +517,30 @@ export default function CommunityDetail({ id }: { id: string }) {
     [id, getToken],
   );
 
+  const handleReact = useCallback(
+    async (postId: string, type: "like" | "dislike") => {
+      try {
+        const token = await getToken();
+        const res = await fetch(`${API_URL}/posts/${postId}/react`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ type }),
+        });
+        if (!res.ok) throw new Error("Failed to react");
+        const updated: PostRes = await res.json();
+        setPosts((prev) =>
+          prev.map((p) => (p.id === postId ? updated : p)),
+        );
+      } catch (err) {
+        console.error("React error:", err);
+      }
+    },
+    [getToken],
+  );
+
   const heroGradient = community
     ? HERO_COLORS[
         community.id
@@ -632,7 +729,7 @@ export default function CommunityDetail({ id }: { id: string }) {
           ) : (
             <div className="space-y-3">
               {posts.map((post) => (
-                <PostCard key={post.id} post={post} />
+                <PostCard key={post.id} post={post} onReact={handleReact} />
               ))}
             </div>
           )}

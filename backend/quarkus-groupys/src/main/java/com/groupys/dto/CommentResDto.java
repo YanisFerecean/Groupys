@@ -1,15 +1,14 @@
 package com.groupys.dto;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
-public record PostResDto(
+public record CommentResDto(
         UUID id,
         String content,
-        String mediaUrl,
-        String mediaType,
-        UUID communityId,
-        String communityName,
+        UUID postId,
+        UUID parentCommentId,
         UUID authorId,
         String authorUsername,
         String authorDisplayName,
@@ -18,6 +17,6 @@ public record PostResDto(
         long likeCount,
         long dislikeCount,
         String userReaction,
-        long commentCount
+        List<CommentResDto> replies
 ) {
 }

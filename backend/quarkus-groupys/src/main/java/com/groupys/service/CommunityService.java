@@ -36,6 +36,14 @@ public class CommunityService {
     @Inject
     ArtistRepository artistRepository;
 
+    public List<CommunityResDto> getJoinedCommunities(String clerkId) {
+        User user = userRepository.findByClerkId(clerkId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        return communityMemberRepository.findByUser(user.id).stream()
+                .map(m -> CommunityUtil.toDto(m.community))
+                .toList();
+    }
+
     public List<CommunityResDto> listAll() {
         return communityRepository.listAll().stream()
                 .map(CommunityUtil::toDto)

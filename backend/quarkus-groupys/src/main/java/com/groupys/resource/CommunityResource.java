@@ -37,6 +37,12 @@ public class CommunityResource {
     }
 
     @GET
+    @Path("/mine")
+    public List<CommunityResDto> getMine() {
+        return communityService.getJoinedCommunities(jwt.getSubject());
+    }
+
+    @GET
     @Path("/{id}")
     public CommunityResDto getById(@PathParam("id") UUID id) {
         return communityService.getById(id);
