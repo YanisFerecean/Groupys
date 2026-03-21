@@ -1,0 +1,40 @@
+package com.groupys.resource;
+
+import com.groupys.dto.AlbumResDto;
+import com.groupys.service.AlbumService;
+import jakarta.inject.Inject;
+import jakarta.ws.rs.DefaultValue;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
+
+import java.util.List;
+
+@Path("/albums")
+@Produces(MediaType.APPLICATION_JSON)
+public class AlbumResource {
+
+    @Inject
+    AlbumService albumService;
+
+    @GET
+    @Path("/search")
+    public List<AlbumResDto> search(@QueryParam("q") String query,
+                                    @DefaultValue("5") @QueryParam("limit") int limit) {
+        return albumService.search(query, limit);
+    }
+
+    @GET
+    @Path("/{id}")
+    public Response getById(@PathParam("id") Long id) {
+        AlbumResDto album = albumService.getById(id);
+        if (album == null) {
+            return Response.status(Response.Status.NOT_FOUND).build();
+        }
+        return Response.ok(album).build();
+    }
+}
