@@ -11,14 +11,18 @@ import com.groupys.dto.lastfm.LastFmTagAlbumsResponse;
 import com.groupys.dto.lastfm.LastFmTopArtistsResponse;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Supplier;
 
 @ApplicationScoped
 public class ChartService {
+
+    private static final Logger LOG = Logger.getLogger(ChartService.class);
 
     @Inject
     @RestClient
@@ -31,8 +35,10 @@ public class ChartService {
     String lastfmApiKey;
 
     public List<TopTrackResDto> getGlobalTopTracks() {
-        LastFmChartTracksResponse response = lastFmClient.getChartTopTracks(
-                "chart.gettoptracks", lastfmApiKey, "json");
+        LastFmChartTracksResponse response = fetchLastFmResponse(
+                "chart.gettoptracks",
+                () -> lastFmClient.getChartTopTracks("chart.gettoptracks", lastfmApiKey, "json")
+        );
 
         if (response == null || response.tracks() == null || response.tracks().tracks() == null) {
             return Collections.emptyList();
@@ -50,8 +56,10 @@ public class ChartService {
     }
 
     public List<TopTrackResDto> getTopTracksByCountry(String country) {
-        LastFmGeoTracksResponse response = lastFmClient.getGeoTopTracks(
-                "geo.gettoptracks", country, lastfmApiKey, "json");
+        LastFmGeoTracksResponse response = fetchLastFmResponse(
+                "geo.gettoptracks",
+                () -> lastFmClient.getGeoTopTracks("geo.gettoptracks", country, lastfmApiKey, "json")
+        );
 
         if (response == null || response.tracks() == null || response.tracks().tracks() == null) {
             return Collections.emptyList();
@@ -69,8 +77,10 @@ public class ChartService {
     }
 
     public List<ArtistResDto> getGlobalTopArtists() {
-        LastFmChartArtistsResponse response = lastFmClient.getChartTopArtists(
-                "chart.gettopartists", lastfmApiKey, "json");
+        LastFmChartArtistsResponse response = fetchLastFmResponse(
+                "chart.gettopartists",
+                () -> lastFmClient.getChartTopArtists("chart.gettopartists", lastfmApiKey, "json")
+        );
 
         if (response == null || response.artists() == null || response.artists().artists() == null) {
             return Collections.emptyList();
@@ -84,8 +94,10 @@ public class ChartService {
     }
 
     public List<ArtistResDto> getTopArtistsByCountry(String country) {
-        LastFmTopArtistsResponse response = lastFmClient.getTopArtists(
-                "geo.gettopartists", country, lastfmApiKey, "json");
+        LastFmTopArtistsResponse response = fetchLastFmResponse(
+                "geo.gettopartists",
+                () -> lastFmClient.getTopArtists("geo.gettopartists", country, lastfmApiKey, "json")
+        );
 
         if (response == null || response.topartists() == null || response.topartists().artists() == null) {
             return Collections.emptyList();
@@ -103,8 +115,10 @@ public class ChartService {
     }
 
     public List<TopAlbumResDto> getTopAlbumsByTag(String tag) {
-        LastFmTagAlbumsResponse response = lastFmClient.getTagTopAlbums(
-                "tag.gettopalbums", tag, lastfmApiKey, "json");
+        LastFmTagAlbumsResponse response = fetchLastFmResponse(
+                "tag.gettopalbums",
+                () -> lastFmClient.getTagTopAlbums("tag.gettopalbums", tag, lastfmApiKey, "json")
+        );
 
         if (response == null || response.albums() == null || response.albums().albums() == null) {
             return Collections.emptyList();
@@ -122,5 +136,14 @@ public class ChartService {
     private Long parseLong(String value) {
         if (value == null || value.isBlank()) return null;
         return Long.parseLong(value);
+    }
+
+    private <T> T fetchLastFmResponse(String operation, Supplier<T> supplier) {
+        try {
+            return supplier.get();
+        } catch (RuntimeException e) {
+            LOG.warnf("Last.fm request failed for %s: %s", operation, e.getMessage());
+            return null;
+        }
     }
 }
