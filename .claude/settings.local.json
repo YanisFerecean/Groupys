@@ -16,7 +16,9 @@
       "Bash(xargs cat:*)",
       "Bash(git -C \"/c/Uni/Projects/groupys-web-app\" log --oneline --all)",
       "Bash(find /c/Uni/Projects/groupys-web-app/mobile -type f -name *ost* -o -name *Post*)",
-      "Bash(grep -r \"upload\\\\|storage\\\\|file\\\\|bucket\" /c/Uni/Projects/groupys-web-app/backend/quarkus-groupys/src/main/java --include=*.java)"
+      "Bash(grep -r \"upload\\\\|storage\\\\|file\\\\|bucket\" /c/Uni/Projects/groupys-web-app/backend/quarkus-groupys/src/main/java --include=*.java)",
+      "Bash(find /c/Uni/Projects/groupys-web-app/web/src -type f -name *post* -o -name *Post*)",
+      "Bash(npm install:*)"
     ]
   }
 }

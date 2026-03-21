@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
+import MarkdownContent from "@/components/ui/MarkdownContent";
+import AuthMedia from "@/components/ui/AuthMedia";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
 
@@ -39,60 +41,6 @@ function timeAgo(dateStr: string): string {
   return "just now";
 }
 
-// ── AuthMedia ────────────────────────────────────────────────────────────────
-
-function AuthMedia({
-  src,
-  type,
-  className,
-}: {
-  src: string;
-  type: "image" | "video";
-  className?: string;
-}) {
-  const { getToken } = useAuth();
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    let revoke: string | null = null;
-    (async () => {
-      try {
-        const token = await getToken();
-        const res = await fetch(src, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) return;
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        revoke = url;
-        setBlobUrl(url);
-      } catch {
-        // ignore
-      }
-    })();
-    return () => {
-      if (revoke) URL.revokeObjectURL(revoke);
-    };
-  }, [src, getToken]);
-
-  if (!blobUrl) {
-    return (
-      <div
-        className={`bg-surface-container-high flex items-center justify-center ${className}`}
-      >
-        <span className="material-symbols-outlined text-on-surface-variant/30 text-2xl animate-pulse">
-          image
-        </span>
-      </div>
-    );
-  }
-
-  if (type === "video") {
-    return <video src={blobUrl} controls className={className} />;
-  }
-
-  return <img src={blobUrl} alt="Post media" className={className} />;
-}
 
 // ── FeedPostCard ─────────────────────────────────────────────────────────────
 
@@ -106,6 +54,7 @@ function FeedPostCard({
   const router = useRouter();
   const isImage = post.mediaType?.startsWith("image/");
   const isVideo = post.mediaType?.startsWith("video/");
+  const isAudio = post.mediaType?.startsWith("audio/");
 
   return (
     <div className="bg-surface-container-lowest/65 border border-white/80 rounded-2xl overflow-hidden shadow-sm">
@@ -155,12 +104,16 @@ function FeedPostCard({
 
       {/* Content (truncated) */}
       {post.content && (
-        <p
-          className="text-sm text-on-surface leading-relaxed px-4 pb-3 line-clamp-3 cursor-pointer"
+        <div
+          className="px-4 pb-3 cursor-pointer"
           onClick={() => router.push(`/discover/post/${post.id}`)}
         >
-          {post.content}
-        </p>
+          <MarkdownContent
+            content={post.content}
+            truncate
+            className="text-on-surface"
+          />
+        </div>
       )}
 
       {/* Media */}
@@ -179,6 +132,14 @@ function FeedPostCard({
             src={`${API_URL}${post.mediaUrl.replace(/^\/api/, "")}`}
             type="video"
             className="w-full rounded-xl"
+          />
+        </div>
+      )}
+      {post.mediaUrl && isAudio && (
+        <div className="px-4 pb-3">
+          <AuthMedia
+            src={`${API_URL}${post.mediaUrl.replace(/^\/api/, "")}`}
+            type="audio"
           />
         </div>
       )}

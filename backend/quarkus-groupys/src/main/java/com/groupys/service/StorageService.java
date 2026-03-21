@@ -4,6 +4,7 @@ import io.minio.BucketExistsArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
+import io.minio.RemoveObjectArgs;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -39,6 +40,22 @@ public class StorageService {
             return "/api/posts/media/" + key;
         } catch (Exception e) {
             throw new RuntimeException("Failed to upload file", e);
+        }
+    }
+
+    public void delete(String mediaUrl) {
+        if (mediaUrl == null || mediaUrl.isBlank()) return;
+        try {
+            // mediaUrl is like "/api/posts/media/<key>"
+            String key = mediaUrl.substring(mediaUrl.lastIndexOf('/') + 1);
+            minioClient.removeObject(
+                    RemoveObjectArgs.builder()
+                            .bucket(BUCKET)
+                            .object(key)
+                            .build());
+        } catch (Exception e) {
+            // Log but don't fail the delete operation
+            System.err.println("Failed to delete media from storage: " + e.getMessage());
         }
     }
 }

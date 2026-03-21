@@ -38,6 +38,9 @@ public class PostService {
     @Inject
     CommentService commentService;
 
+    @Inject
+    StorageService storageService;
+
     public List<PostResDto> getFeed(String clerkId) {
         User user = userRepository.findByClerkId(clerkId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
@@ -114,11 +117,17 @@ public class PostService {
                 .orElseThrow(() -> new NotFoundException("Post not found"));
         User user = userRepository.findByClerkId(clerkId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
-        if (!post.author.id.equals(user.id)) {
-            throw new jakarta.ws.rs.ForbiddenException("Not the author");
+        boolean isAuthor = post.author.id.equals(user.id);
+        boolean isCommunityOwner = post.community.createdBy != null
+                && post.community.createdBy.id.equals(user.id);
+        if (!isAuthor && !isCommunityOwner) {
+            throw new jakarta.ws.rs.ForbiddenException("Not authorized to delete this post");
         }
         commentService.deleteAllByPost(postId);
         postReactionRepository.delete("post.id", postId);
+        if (post.mediaUrl != null) {
+            storageService.delete(post.mediaUrl);
+        }
         postRepository.delete(post);
     }
 

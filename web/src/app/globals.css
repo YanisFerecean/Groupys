@@ -191,6 +191,147 @@
   }
 }
 
+/* Tiptap editor */
+.prose-editor {
+  font-size: 0.875rem;
+  line-height: 1.625;
+}
+.prose-editor p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--color-outline);
+  pointer-events: none;
+  height: 0;
+}
+.prose-editor h1 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  margin: 0.25rem 0;
+}
+.prose-editor h2 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin: 0.25rem 0;
+}
+.prose-editor h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0.2rem 0;
+}
+.prose-editor strong {
+  font-weight: 700;
+}
+.prose-editor em {
+  font-style: italic;
+}
+.prose-editor s {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+.prose-editor code {
+  font-size: 0.8rem;
+  background: var(--color-surface-container-high);
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.25rem;
+}
+.prose-editor blockquote {
+  border-left: 3px solid var(--color-primary);
+  padding-left: 0.75rem;
+  margin: 0.25rem 0;
+  opacity: 0.85;
+}
+.prose-editor ul {
+  list-style-type: disc;
+  padding-left: 1.25rem;
+  margin: 0.15rem 0;
+}
+.prose-editor ol {
+  list-style-type: decimal;
+  padding-left: 1.25rem;
+  margin: 0.15rem 0;
+}
+.prose-editor p {
+  margin: 0.15rem 0;
+}
+.tiptap:focus {
+  outline: none;
+}
+
+/* Post markdown prose */
+.prose-post {
+  font-size: 0.875rem;
+  line-height: 1.625;
+}
+.prose-post h1 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  margin: 0.5rem 0;
+}
+.prose-post h2 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin: 0.5rem 0;
+}
+.prose-post h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0.4rem 0;
+}
+.prose-post strong {
+  font-weight: 700;
+}
+.prose-post em {
+  font-style: italic;
+}
+.prose-post del {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+.prose-post code {
+  font-size: 0.8rem;
+  background: var(--color-surface-container-high);
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.25rem;
+}
+.prose-post pre {
+  background: var(--color-surface-container-high);
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  overflow-x: auto;
+  margin: 0.5rem 0;
+}
+.prose-post pre code {
+  background: none;
+  padding: 0;
+}
+.prose-post blockquote {
+  border-left: 3px solid var(--color-primary);
+  padding-left: 0.75rem;
+  margin: 0.5rem 0;
+  opacity: 0.85;
+}
+.prose-post ul {
+  list-style-type: disc;
+  padding-left: 1.25rem;
+  margin: 0.25rem 0;
+}
+.prose-post ol {
+  list-style-type: decimal;
+  padding-left: 1.25rem;
+  margin: 0.25rem 0;
+}
+.prose-post a {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+.prose-post p {
+  margin: 0.25rem 0;
+}
+.prose-post hr {
+  border-color: var(--color-surface-container-high);
+  margin: 0.75rem 0;
+}
+
 @keyframes equalize {
   0% {
     height: 4px;
