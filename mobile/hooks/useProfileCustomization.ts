@@ -1,5 +1,5 @@
+import { useCallback, useEffect, useState } from 'react'
 import { useAuth, useUser } from '@clerk/expo'
-import { useState, useCallback, useEffect, useRef } from 'react'
 import type { ProfileCustomization } from '@/models/ProfileCustomization'
 import {
   fetchUserByClerkId,
@@ -13,27 +13,14 @@ import { hasUsername } from '@/lib/auth'
 export function useProfileCustomization() {
   const { getToken, isLoaded: isAuthLoaded } = useAuth()
   const { user, isLoaded } = useUser()
-  const [isSaving, setIsSaving] = useState(false)
-  const [profile, setProfile] = useState<ProfileCustomization>({})
+
   const [backendUser, setBackendUser] = useState<BackendUser | null>(null)
-  const [isProfileLoaded, setIsProfileLoaded] = useState(false)
-  const fetchedRef = useRef<string | null>(null)
+  const [fetching, setFetching] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
-    if (!isLoaded || !isAuthLoaded) return
-
-    if (!user || !hasUsername(user)) {
-      fetchedRef.current = null
-      setBackendUser(null)
-      setProfile({})
-      setIsProfileLoaded(true)
-      return
-    }
-
-    const fetchKey = `${user.id}:${user.username}`
-    if (fetchedRef.current === fetchKey) return
-    fetchedRef.current = fetchKey
-    setIsProfileLoaded(false)
+    if (!isLoaded || !isAuthLoaded || !user || !hasUsername(user)) return
+    let cancelled = false
 
     ;(async () => {
       try {
@@ -56,25 +43,26 @@ export function useProfileCustomization() {
           )
         }
 
-        setBackendUser(bu)
-        setProfile(backendUserToProfile(bu))
+        if (!cancelled) setBackendUser(bu)
       } catch (err) {
-        console.error('Failed to load profile:', err)
+        console.error('Failed to fetch profile:', err)
       } finally {
-        setIsProfileLoaded(true)
+        if (!cancelled) setFetching(false)
       }
     })()
-  }, [getToken, isAuthLoaded, isLoaded, user])
+
+    return () => { cancelled = true }
+  }, [isLoaded, isAuthLoaded, user, getToken])
 
   const updateProfile = useCallback(
     async (partial: Partial<ProfileCustomization>) => {
-      if (!backendUser) return
+      if (!backendUser) throw new Error('No backend user')
       setIsSaving(true)
       try {
         const token = await getToken()
         const updated = await updateBackendUser(backendUser.id, partial, token)
         setBackendUser(updated)
-        setProfile(backendUserToProfile(updated))
+        return updated
       } finally {
         setIsSaving(false)
       }
@@ -83,10 +71,10 @@ export function useProfileCustomization() {
   )
 
   return {
-    profile,
+    profile: backendUser ? backendUserToProfile(backendUser) : ({} as ProfileCustomization),
     backendUser,
     updateProfile,
-    isLoaded: isLoaded && isProfileLoaded,
+    isLoaded: isLoaded && isAuthLoaded && !fetching,
     isSaving,
   }
 }
