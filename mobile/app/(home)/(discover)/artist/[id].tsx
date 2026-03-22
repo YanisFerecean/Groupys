@@ -18,7 +18,7 @@ import { Audio, AVPlaybackStatus } from 'expo-av'
 import { apiFetch } from '@/lib/api'
 import { Colors } from '@/constants/colors'
 import type { ArtistRes as ChartArtist } from '@/models/ArtistRes'
-import type { ArtistTopTrack } from '@/models/ArtistTopTrack'
+import type { TrackRes } from '@/models/TrackRes'
 import CommunityCard from '@/components/discover/CommunityCard'
 import type { Community } from '@/models/Community'
 
@@ -117,7 +117,7 @@ function TrackRow({
   isLoading,
   onPress,
 }: {
-  track: ArtistTopTrack
+  track: TrackRes
   index: number
   isPlaying: boolean
   isLoading: boolean
@@ -231,8 +231,9 @@ export default function ArtistScreen() {
   const insets = useSafeAreaInsets()
 
   const [artist, setArtist] = useState<ChartArtist | null>(null)
-  const [tracks, setTracks] = useState<ArtistTopTrack[]>([])
+  const [tracks, setTracks] = useState<TrackRes[]>([])
   const [loading, setLoading] = useState(true)
+  const [tracksLoading, setTracksLoading] = useState(true)
   const [expanded, setExpanded] = useState(false)
   const [communitiesExpanded, setCommunitiesExpanded] = useState(false)
 
@@ -242,9 +243,8 @@ export default function ArtistScreen() {
 
   const fadeAnim = useRef(new Animated.Value(0)).current
   const slideAnim = useRef(new Animated.Value(24)).current
-  const expandAnim = useRef(new Animated.Value(0)).current
 
-  // Fetch data
+  // Fetch artist + top tracks
   useEffect(() => {
     if (!id) return
     let cancelled = false
@@ -253,7 +253,10 @@ export default function ArtistScreen() {
         const token = await getToken()
         const [artistData, tracksData] = await Promise.all([
           apiFetch<ChartArtist>(`/artists/${id}`, token),
-          apiFetch<ArtistTopTrack[]>(`/artists/${id}/top-tracks?limit=5`, token),
+          apiFetch<TrackRes[]>(`/artists/${id}/top-tracks?limit=5`, token).catch((err) => {
+            console.error('Failed to fetch top tracks:', err)
+            return [] as TrackRes[]
+          }),
         ])
         if (!cancelled) {
           setArtist(artistData)
@@ -262,7 +265,10 @@ export default function ArtistScreen() {
       } catch (err) {
         console.error('Failed to fetch artist:', err)
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) {
+          setLoading(false)
+          setTracksLoading(false)
+        }
       }
     })()
     return () => { cancelled = true }
@@ -278,15 +284,6 @@ export default function ArtistScreen() {
     }
   }, [loading, fadeAnim, slideAnim])
 
-  // Expand animation
-  useEffect(() => {
-    Animated.timing(expandAnim, {
-      toValue: expanded ? 1 : 0,
-      duration: 280,
-      useNativeDriver: true,
-    }).start()
-  }, [expanded, expandAnim])
-
   // Stop & unload sound on unmount
   useEffect(() => {
     return () => {
@@ -295,7 +292,7 @@ export default function ArtistScreen() {
   }, [])
 
   const handleTrackPress = useCallback(
-    async (track: ArtistTopTrack) => {
+    async (track: TrackRes) => {
       // Tap playing track → stop
       if (playingId === track.id) {
         await soundRef.current?.stopAsync()
@@ -313,7 +310,7 @@ export default function ArtistScreen() {
         setPlayingId(null)
       }
 
-      if (!track.preview) return
+      if (!track.preview || !track.preview.startsWith('http')) return
 
       setLoadingId(track.id)
       try {
@@ -352,7 +349,7 @@ export default function ArtistScreen() {
     <View className="flex-1 bg-surface">
       {/* Back button */}
       <TouchableOpacity
-        onPress={() => router.back()}
+        onPress={() => router.navigate('/(home)/(discover)')}
         className="absolute z-10 left-5 items-center justify-center w-9 h-9 rounded-full bg-black/30"
         style={{ top: insets.top + 8 }}
       >
@@ -442,18 +439,34 @@ export default function ArtistScreen() {
             </View>
 
             {/* Top Tracks */}
-            {tracks.length > 0 && (
-              <View className="px-5 pt-6">
-                <View className="flex-row items-center justify-between mb-1">
-                  <Text className="text-on-surface font-bold text-base">Top Tracks</Text>
-                  {canExpand && (
-                    <TouchableOpacity onPress={() => setExpanded((e) => !e)}>
-                      <Text className="text-primary text-sm font-semibold">
-                        {expanded ? 'Show less' : 'Show more'}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
+            <View className="px-5 pt-6">
+              <View className="flex-row items-center justify-between mb-1">
+                <Text className="text-on-surface font-bold text-base">Top Tracks</Text>
+                {canExpand && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      LayoutAnimation.configureNext(
+                        LayoutAnimation.create(280, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity)
+                      )
+                      setExpanded((e) => !e)
+                    }}
+                  >
+                    <Text className="text-primary text-sm font-semibold">
+                      {expanded ? 'Show less' : 'Show more'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {tracksLoading ? (
+                <View className="items-center py-8">
+                  <Text className="text-on-surface-variant text-sm">Loading tracks...</Text>
                 </View>
+              ) : tracks.length === 0 ? (
+                <View className="items-center py-8">
+                  <Text className="text-on-surface-variant text-sm">No tracks available</Text>
+                </View>
+              ) : (
                 <View className="mt-1">
                   {visibleTracks.map((track, i) => (
                     <TrackRow
@@ -466,8 +479,8 @@ export default function ArtistScreen() {
                     />
                   ))}
                 </View>
-              </View>
-            )}
+              )}
+            </View>
 
             {/* Bio */}
             {artist.summary ? (
