@@ -1,6 +1,6 @@
 "use client";
 
-import { useUser, useReverification } from "@clerk/nextjs";
+import { useAuth, useUser, useReverification } from "@clerk/nextjs";
 import { useState, useCallback, useEffect, useRef } from "react";
 import type { ProfileCustomization } from "@/types/profile";
 import {
@@ -11,6 +11,7 @@ import {
 } from "@/lib/api";
 
 export function useProfileCustomization() {
+  const { getToken, isLoaded: isAuthLoaded } = useAuth();
   const { user, isLoaded } = useUser();
   const [isSaving, setIsSaving] = useState(false);
   const [profile, setProfile] = useState<ProfileCustomization>({});
@@ -20,17 +21,18 @@ export function useProfileCustomization() {
 
   // Fetch or create backend user when Clerk user is available
   useEffect(() => {
-    if (!isLoaded || !user || fetchedRef.current) return;
+    if (!isLoaded || !isAuthLoaded || !user || fetchedRef.current) return;
     fetchedRef.current = true;
 
     (async () => {
       try {
-        let backendUser = await fetchUserByClerkId(user.id);
+        const token = await getToken();
+        let backendUser = await fetchUserByClerkId(user.id, token);
 
         // UserSync may not have finished yet — retry once after a short delay
         if (!backendUser) {
           await new Promise((r) => setTimeout(r, 1000));
-          backendUser = await fetchUserByClerkId(user.id);
+          backendUser = await fetchUserByClerkId(user.id, token);
         }
 
         // Fallback: create inline if UserSync still hasn't run
@@ -39,7 +41,7 @@ export function useProfileCustomization() {
             clerkId: user.id,
             username: user.username ?? user.id,
             displayName: user.fullName ?? undefined,
-          });
+          }, token);
         }
 
         setBackendUserId(backendUser.id);
@@ -50,20 +52,21 @@ export function useProfileCustomization() {
         setIsProfileLoaded(true);
       }
     })();
-  }, [isLoaded, user]);
+  }, [getToken, isAuthLoaded, isLoaded, user]);
 
   const updateProfile = useCallback(
     async (partial: Partial<ProfileCustomization>) => {
       if (!backendUserId) return;
       setIsSaving(true);
       try {
-        const updated = await updateBackendUser(backendUserId, partial);
+        const token = await getToken();
+        const updated = await updateBackendUser(backendUserId, partial, token);
         setProfile(backendUserToProfile(updated));
       } finally {
         setIsSaving(false);
       }
     },
-    [backendUserId],
+    [backendUserId, getToken],
   );
 
   // Wrapped with useReverification — Clerk auto-shows a verification modal
