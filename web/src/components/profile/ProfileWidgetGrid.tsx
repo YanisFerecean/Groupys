@@ -6,13 +6,14 @@ import TopArtistsWidget from "./widgets/TopArtistsWidget";
 
 interface ProfileWidgetGridProps {
   profile: ProfileCustomization;
+  spotifyConnected?: boolean;
 }
 
-export default function ProfileWidgetGrid({ profile }: ProfileWidgetGridProps) {
+export default function ProfileWidgetGrid({ profile, spotifyConnected }: ProfileWidgetGridProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 px-6 md:px-12 py-10">
       <TopAlbumsWidget albums={profile.topAlbums} containerColor={profile.albumsContainerColor} />
-      <CurrentlyListeningWidget track={profile.currentlyListening} />
+      <CurrentlyListeningWidget track={profile.currentlyListening} spotifyConnected={spotifyConnected} />
       <TopSongsWidget songs={profile.topSongs} containerColor={profile.songsContainerColor} />
       <TopArtistsWidget artists={profile.topArtists} containerColor={profile.artistsContainerColor} />
     </div>

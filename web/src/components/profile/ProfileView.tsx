@@ -1,11 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useProfileCustomization } from "@/hooks/useProfileCustomization";
 import { useUser } from "@clerk/nextjs";
 import ProfileHeader from "./ProfileHeader";
 import ProfileWidgetGrid from "./ProfileWidgetGrid";
 import ProfileEditDrawer from "./ProfileEditDrawer";
+
+function useSpotifyCallback() {
+  const searchParams = useSearchParams();
+  const spotifyParam = searchParams.get("spotify");
+  return spotifyParam === "connected"
+    ? "connected"
+    : spotifyParam === "error"
+      ? "error"
+      : null;
+}
 
 export default function ProfileView() {
   const {
@@ -16,9 +27,24 @@ export default function ProfileView() {
     removeProfileImage,
     isLoaded,
     isSaving,
+    spotifyConnected,
+    setSpotifyConnected,
   } = useProfileCustomization();
   const { user } = useUser();
-  const [isEditing, setIsEditing] = useState(false);
+  const router = useRouter();
+  const spotifyCallback = useSpotifyCallback();
+
+  // Open the editor drawer when arriving from Spotify OAuth callback
+  const [isEditing, setIsEditing] = useState(spotifyCallback === "connected");
+
+  // Mark spotify as connected & clean up URL param
+  useEffect(() => {
+    if (!spotifyCallback) return;
+    if (spotifyCallback === "connected") {
+      setSpotifyConnected(true);
+    }
+    router.replace("/profile", { scroll: false });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!user || !isLoaded) return null;
 
@@ -42,7 +68,7 @@ export default function ProfileView() {
         onEditClick={() => setIsEditing(true)}
       />
 
-      <ProfileWidgetGrid profile={profile} />
+      <ProfileWidgetGrid profile={profile} spotifyConnected={spotifyConnected} />
 
       <ProfileEditDrawer
         open={isEditing}
@@ -55,6 +81,7 @@ export default function ProfileView() {
         onUpdateProfileImage={updateProfileImage}
         onRemoveProfileImage={removeProfileImage}
         isSaving={isSaving}
+        spotifyConnected={spotifyConnected}
       />
     </div>
   );

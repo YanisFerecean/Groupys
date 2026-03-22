@@ -5,9 +5,10 @@ import { UserButton } from "@clerk/nextjs";
 interface TopBarProps {
   onMenuClick?: () => void;
   onSearchClick?: () => void;
+  onSettingsClick?: () => void;
 }
 
-export default function TopBar({ onMenuClick, onSearchClick }: TopBarProps) {
+export default function TopBar({ onMenuClick, onSearchClick, onSettingsClick }: TopBarProps) {
   return (
     <header className="fixed top-0 right-0 left-0 lg:left-64 h-16 lg:h-20 z-40 bg-surface/80 backdrop-blur-xl border-b border-surface-container">
       <div className="flex items-center justify-between px-4 lg:px-12 h-full">
@@ -34,7 +35,10 @@ export default function TopBar({ onMenuClick, onSearchClick }: TopBarProps) {
 
         {/* Actions */}
         <div className="flex items-center gap-4 lg:gap-6">
-          <button className="hidden sm:block text-slate-500 hover:text-slate-800 transition-colors">
+          <button
+            onClick={onSettingsClick}
+            className="hidden sm:block text-slate-500 hover:text-slate-800 transition-colors"
+          >
             <span className="material-symbols-outlined">settings</span>
           </button>
           <button className="text-slate-500 hover:text-slate-800 transition-colors">

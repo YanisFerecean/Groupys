@@ -24,6 +24,7 @@ export interface BackendUser {
   profileImage: string | null;
   widgets: string | null;
   dateJoined: string;
+  spotifyConnected: boolean;
 }
 
 // ── Widget ↔ ProfileCustomization conversion ───────────────────────────────

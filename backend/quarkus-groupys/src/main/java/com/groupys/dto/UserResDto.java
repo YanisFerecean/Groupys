@@ -15,6 +15,7 @@ public record UserResDto(
         String nameColor,
         String profileImage,
         String widgets,
-        Instant dateJoined
+        Instant dateJoined,
+        boolean spotifyConnected
 ) {
 }
