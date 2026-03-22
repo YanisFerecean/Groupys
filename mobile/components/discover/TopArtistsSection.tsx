@@ -4,6 +4,7 @@ import * as Haptics from 'expo-haptics'
 import { useAuth } from '@clerk/expo'
 import { router } from 'expo-router'
 import { apiFetch } from '@/lib/api'
+import { useTrendingArtistsStore } from '@/stores/useTrendingArtistsStore'
 import type { ArtistRes as ChartArtist } from '@/models/ArtistRes'
 
 export type { ChartArtist }
@@ -117,24 +118,11 @@ export function TopArtistsSkeleton() {
 export function useTopArtists() {
   const { getToken } = useAuth()
   const [expanded, setExpanded] = useState(false)
-  const [artists, setArtists] = useState<ChartArtist[]>([])
-  const [loading, setLoading] = useState(true)
+  const { artists, loading, fetchArtists } = useTrendingArtistsStore()
 
   useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const token = await getToken()
-        const data = await apiFetch<ChartArtist[]>('/charts/artists/global', token)
-        if (!cancelled) setArtists(data.slice(0, 6))
-      } catch (err) {
-        console.error('Failed to fetch top artists:', err)
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    })()
-    return () => { cancelled = true }
-  }, [getToken])
+    getToken().then((token) => fetchArtists(token))
+  }, [getToken, fetchArtists])
 
   const toggleExpand = useCallback(() => {
     setExpanded((prev) => !prev)
