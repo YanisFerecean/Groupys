@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useUser } from "@clerk/nextjs";
+import { useAuth, useUser } from "@clerk/nextjs";
 import SideNav from "@/components/app/SideNav";
 import TopBar from "@/components/app/TopBar";
 import SearchOverlay from "@/components/discover/SearchOverlay";
@@ -13,15 +13,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [spotifyConnected, setSpotifyConnected] = useState(false);
+  const { getToken, isLoaded: isAuthLoaded, isSignedIn } = useAuth();
   const { user, isLoaded } = useUser();
 
   // Load spotify connection status from backend
   useEffect(() => {
-    if (!isLoaded || !user) return;
-    fetchUserByClerkId(user.id).then((bu) => {
-      if (bu) setSpotifyConnected(bu.spotifyConnected);
+    if (!isLoaded || !isAuthLoaded || !isSignedIn || !user) return;
+    getToken().then((token) => {
+      fetchUserByClerkId(user.id, token).then((bu) => {
+        if (bu) setSpotifyConnected(bu.spotifyConnected);
+      });
     });
-  }, [isLoaded, user]);
+  }, [isLoaded, isAuthLoaded, isSignedIn, user, getToken]);
 
   const handleSpotifyDisconnected = useCallback(() => {
     setSpotifyConnected(false);

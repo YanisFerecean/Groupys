@@ -11,7 +11,7 @@ import {
 } from "@/lib/api";
 
 export function useProfileCustomization() {
-  const { getToken, isLoaded: isAuthLoaded } = useAuth();
+  const { getToken, isLoaded: isAuthLoaded, isSignedIn } = useAuth();
   const { user, isLoaded } = useUser();
   const [isSaving, setIsSaving] = useState(false);
   const [profile, setProfile] = useState<ProfileCustomization>({});
@@ -22,7 +22,7 @@ export function useProfileCustomization() {
 
   // Fetch or create backend user when Clerk user is available
   useEffect(() => {
-    if (!isLoaded || !isAuthLoaded || !user || fetchedRef.current) return;
+    if (!isLoaded || !isAuthLoaded || !isSignedIn || !user || fetchedRef.current) return;
     fetchedRef.current = true;
 
     (async () => {
@@ -43,7 +43,7 @@ export function useProfileCustomization() {
             username: user.username ?? user.id,
             displayName: user.fullName ?? undefined,
             profileImage: user.imageUrl ?? undefined,
-          });
+          }, token);
         }
 
         setBackendUserId(backendUser.id);
@@ -55,7 +55,7 @@ export function useProfileCustomization() {
         setIsProfileLoaded(true);
       }
     })();
-  }, [getToken, isAuthLoaded, isLoaded, user]);
+  }, [getToken, isAuthLoaded, isSignedIn, isLoaded, user]);
 
   const updateProfile = useCallback(
     async (partial: Partial<ProfileCustomization>) => {

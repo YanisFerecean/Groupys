@@ -9,12 +9,12 @@ import {
 } from "@/lib/api";
 
 export default function UserSync() {
-  const { getToken, isLoaded: isAuthLoaded } = useAuth();
+  const { getToken, isLoaded: isAuthLoaded, isSignedIn } = useAuth();
   const { user, isLoaded } = useUser();
   const syncedRef = useRef(false);
 
   useEffect(() => {
-    if (!isLoaded || !isAuthLoaded || !user || syncedRef.current) return;
+    if (!isLoaded || !isAuthLoaded || !isSignedIn || !user || syncedRef.current) return;
     syncedRef.current = true;
 
     (async () => {
@@ -43,7 +43,7 @@ export default function UserSync() {
         console.error("Failed to sync user to backend:", err);
       }
     })();
-  }, [getToken, isAuthLoaded, isLoaded, user]);
+  }, [getToken, isAuthLoaded, isSignedIn, isLoaded, user]);
 
   return null;
 }
