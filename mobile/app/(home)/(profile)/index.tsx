@@ -1,18 +1,22 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'expo-router'
 import { ScrollView, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useUser } from '@clerk/expo'
+import { useAuth, useUser } from '@clerk/expo'
 import { Ionicons } from '@expo/vector-icons'
 import * as ImagePicker from 'expo-image-picker'
 import { Colors } from '@/constants/colors'
 import { useProfileCustomization } from '@/hooks/useProfileCustomization'
+import type { ProfileCustomization } from '@/models/ProfileCustomization'
 import ProfileHeader from '@/components/profile/ProfileHeader'
 import TopAlbumsWidget from '@/components/profile/widgets/TopAlbumsWidget'
 import TopSongsWidget from '@/components/profile/widgets/TopSongsWidget'
 import TopArtistsWidget from '@/components/profile/widgets/TopArtistsWidget'
 import CurrentlyListeningWidget from '@/components/profile/widgets/CurrentlyListeningWidget'
 import EditProfileModal from '@/components/profile/EditProfileModal'
+import FeedPostCard from '@/components/feed/FeedPostCard'
+import { fetchMyPosts } from '@/lib/api'
+import type { PostResDto } from '@/models/PostRes'
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets()
@@ -21,6 +25,32 @@ export default function ProfileScreen() {
   const { profile, backendUser, updateProfile, isLoaded, isSaving } = useProfileCustomization()
   const [editOpen, setEditOpen] = useState(false)
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
+
+  // My posts
+  const [myPosts, setMyPosts] = useState<PostResDto[]>([])
+  const [loadingPosts, setLoadingPosts] = useState(true)
+  const { getToken } = useAuth()
+
+  useEffect(() => {
+    if (!isLoaded) return
+    const fetchPosts = async () => {
+      try {
+        const token = await getToken()
+        if (!token) return
+        const data = await fetchMyPosts(token)
+        setMyPosts(data)
+      } catch (err) {
+        console.error('Failed to fetch my posts:', err)
+      } finally {
+        setLoadingPosts(false)
+      }
+    }
+    fetchPosts()
+  }, [isLoaded, getToken])
+
+  const handleSaveProfile = async (data: Partial<ProfileCustomization>) => {
+    await updateProfile(data)
+  }
 
   const displayName =
     profile.displayName ?? user?.fullName ?? user?.username ?? 'Music Fan'
@@ -149,6 +179,35 @@ export default function ProfileScreen() {
                 </View>
               </View>
             )}
+
+            {/* My Posts */}
+            <View className="px-5 pt-10 pb-4">
+              <Text className="text-on-surface font-bold text-base mb-4">My Posts</Text>
+              {loadingPosts ? (
+                <View className="py-8 items-center">
+                  <ActivityIndicator size="small" color={Colors.primary} />
+                </View>
+              ) : myPosts.length === 0 ? (
+                <View className="py-12 items-center bg-surface-container-low rounded-2xl border border-surface-container-high">
+                  <Ionicons name="newspaper-outline" size={32} color={Colors.onSurfaceVariant} />
+                  <Text className="text-on-surface-variant text-sm mt-2">No posts yet</Text>
+                </View>
+              ) : (
+                <View>
+                  {myPosts.map((post) => (
+                    <FeedPostCard
+                      key={post.id}
+                      post={post}
+                      onPostUpdated={(updated) =>
+                        setMyPosts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+                      }
+                      communityRoute="/(home)/(profile)/community"
+                      postRoute="/(home)/(profile)/post"
+                    />
+                  ))}
+                </View>
+              )}
+            </View>
           </>
         )}
       </ScrollView>
@@ -158,7 +217,7 @@ export default function ProfileScreen() {
         onClose={() => setEditOpen(false)}
         profile={profile}
         isSaving={isSaving}
-        onSave={updateProfile}
+        onSave={handleSaveProfile}
         onAvatarPress={handleAvatarPress}
         isUploadingAvatar={isUploadingAvatar}
         avatarUrl={user?.imageUrl ?? null}
