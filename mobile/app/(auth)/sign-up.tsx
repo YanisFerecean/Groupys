@@ -1,176 +1,287 @@
-import { useSignUp } from '@clerk/expo'
-import { Link, useRouter } from 'expo-router'
+import { useAuth, useSignUp } from '@clerk/expo'
+import { useRouter } from 'expo-router'
 import { useState } from 'react'
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native'
+import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native'
+import AuthScaffold from '@/components/auth/AuthScaffold'
+import AuthTextField from '@/components/auth/AuthTextField'
 import SSOButtons from '@/components/auth/SSOButtons'
+import FullscreenSpinner from '@/components/ui/FullscreenSpinner'
+import { Colors } from '@/constants/colors'
+import {
+  normalizeEmailAddress,
+  normalizeUsername,
+  validateEmailAddress,
+  validatePassword,
+  validateUsername,
+} from '@/lib/auth'
+import { getClerkErrorMessage, getFirstErrorMessage } from '@/lib/clerk'
+
+type SignUpLocalErrors = {
+  code?: string | null
+  emailAddress?: string | null
+  password?: string | null
+  username?: string | null
+}
 
 export default function SignUpScreen() {
-  const { signUp, setActive, isLoaded } = useSignUp()
   const router = useRouter()
+  const { signUp, errors, fetchStatus } = useSignUp()
+  const { isSignedIn } = useAuth()
 
-  const [email, setEmail] = useState('')
+  const [emailAddress, setEmailAddress] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [code, setCode] = useState('')
-  const [pendingVerification, setPendingVerification] = useState(false)
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
+  const [localErrors, setLocalErrors] = useState<SignUpLocalErrors>({})
 
-  async function handleSignUp() {
-    if (!isLoaded) return
-    setLoading(true)
-    setError('')
+  const isBusy = fetchStatus === 'fetching'
+  const isVerifyingEmail =
+    signUp.status === 'missing_requirements' &&
+    signUp.unverifiedFields.includes('email_address') &&
+    signUp.missingFields.length === 0
+
+  const emailError = localErrors.emailAddress ?? errors.fields.emailAddress?.message ?? null
+  const usernameError = localErrors.username ?? errors.fields.username?.message ?? null
+  const passwordError = localErrors.password ?? errors.fields.password?.message ?? null
+  const codeError = localErrors.code ?? errors.fields.code?.message ?? null
+  const globalError =
+    formError ??
+    getFirstErrorMessage(
+      errors,
+      isVerifyingEmail
+        ? ['code', 'captcha']
+        : ['emailAddress', 'username', 'password', 'captcha'],
+      null,
+    )
+
+  if (signUp.status === 'complete' || isSignedIn) {
+    return <FullscreenSpinner />
+  }
+
+  async function finalizeSignUp() {
     try {
-      await signUp.create({ emailAddress: email, password })
-      await signUp.prepareEmailAddressVerification({ strategy: 'email_code' })
-      setPendingVerification(true)
-    } catch (err: any) {
-      setError(err.errors?.[0]?.message ?? 'Sign up failed')
-    } finally {
-      setLoading(false)
+      const { error } = await signUp.finalize()
+
+      if (error) {
+        setFormError(getClerkErrorMessage(error, 'We could not finish creating your account.'))
+      }
+    } catch (err) {
+      setFormError(getClerkErrorMessage(err, 'We could not finish creating your account.'))
+    }
+  }
+
+  async function handleSubmit() {
+    const nextErrors: SignUpLocalErrors = {
+      emailAddress: validateEmailAddress(emailAddress),
+      username: validateUsername(normalizeUsername(username)),
+      password: validatePassword(password),
+      code: null,
+    }
+
+    setLocalErrors(nextErrors)
+    setFormError(null)
+
+    if (nextErrors.emailAddress || nextErrors.username || nextErrors.password) {
+      return
+    }
+
+    const { error } = await signUp.password({
+      emailAddress: normalizeEmailAddress(emailAddress),
+      username: normalizeUsername(username),
+      password,
+    })
+
+    if (error) {
+      setFormError(getClerkErrorMessage(error, 'We could not start your sign-up.'))
+      return
+    }
+
+    const { error: sendCodeError } = await signUp.verifications.sendEmailCode()
+
+    if (sendCodeError) {
+      setFormError(getClerkErrorMessage(sendCodeError, 'We could not send a verification code.'))
     }
   }
 
   async function handleVerify() {
-    if (!isLoaded) return
-    setLoading(true)
-    setError('')
-    try {
-      const result = await signUp.attemptEmailAddressVerification({ code })
-      if (result.status === 'complete') {
-        await setActive({ session: result.createdSessionId })
-        router.replace('/(home)')
-      }
-    } catch (err: any) {
-      setError(err.errors?.[0]?.message ?? 'Verification failed')
-    } finally {
-      setLoading(false)
+    const nextError = code.trim() ? null : 'Verification code is required.'
+
+    setLocalErrors((current) => ({
+      ...current,
+      code: nextError,
+    }))
+    setFormError(null)
+
+    if (nextError) {
+      return
+    }
+
+    const { error } = await signUp.verifications.verifyEmailCode({
+      code: code.trim(),
+    })
+
+    if (error) {
+      setFormError(getClerkErrorMessage(error, 'We could not verify your email.'))
+      return
+    }
+
+    if (signUp.status === 'complete') {
+      await finalizeSignUp()
+      return
+    }
+
+    setFormError('We could not finish verifying your email. Please try again.')
+  }
+
+  async function handleResendCode() {
+    setFormError(null)
+
+    const { error } = await signUp.verifications.sendEmailCode()
+
+    if (error) {
+      setFormError(getClerkErrorMessage(error, 'We could not send a new verification code.'))
     }
   }
 
-  if (pendingVerification) {
-    return (
-      <KeyboardAvoidingView
-        className="flex-1 bg-white dark:bg-black"
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <View className="flex-1 justify-center px-6">
-          <Text className="mb-2 text-3xl font-bold text-gray-900 dark:text-white">
-            Check your email
-          </Text>
-          <Text className="mb-8 text-gray-500 dark:text-gray-400">
-            We sent a verification code to {email}
-          </Text>
-
-          {error ? (
-            <Text className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
-              {error}
-            </Text>
-          ) : null}
-
-          <TextInput
-            className="mb-6 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3.5 text-center text-2xl tracking-widest text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-            placeholder="000000"
-            placeholderTextColor="#9ca3af"
-            value={code}
-            onChangeText={setCode}
-            keyboardType="number-pad"
-            maxLength={6}
-          />
-
-          <TouchableOpacity
-            className="items-center rounded-xl bg-primary py-4 active:opacity-90"
-            onPress={handleVerify}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text className="text-base font-semibold text-white">Verify email</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
-    )
+  async function handleStartOver() {
+    await signUp.reset()
+    setCode('')
+    setFormError(null)
+    setLocalErrors({})
   }
 
   return (
-    <KeyboardAvoidingView
-      className="flex-1 bg-white dark:bg-black"
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView
-        className="flex-1"
-        contentContainerClassName="flex-1 justify-center px-6"
-        keyboardShouldPersistTaps="handled"
-      >
-        <Text className="mb-8 text-3xl font-bold text-gray-900 dark:text-white">Create account</Text>
-
-        {error ? (
-          <Text className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
-            {error}
+    <AuthScaffold
+      title={isVerifyingEmail ? 'Verify email' : 'Create account'}
+      subtitle={
+        isVerifyingEmail
+          ? 'Enter the code Clerk emailed you to activate your account and open a session.'
+          : 'Start with email and password, then lock in the public username your profile will use.'
+      }
+      footer={
+        <View className="items-center">
+          <Text className="text-sm text-on-surface-variant">
+            Already have an account?{' '}
+            <Text className="font-semibold text-primary" onPress={() => router.push('/sign-in')}>
+              Sign in
+            </Text>
           </Text>
-        ) : null}
-
-        {/* SSO Buttons */}
-        <SSOButtons onError={setError} />
-
-        {/* Divider */}
-        <View className="my-6 flex-row items-center gap-3">
-          <View className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
-          <Text className="text-sm text-gray-400">or</Text>
-          <View className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
         </View>
+      }
+    >
+      {!isVerifyingEmail ? (
+        <>
+          <SSOButtons mode="sign-up" />
 
-        {/* Email/Password */}
-        <TextInput
-          className="mb-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3.5 text-base text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-          placeholder="Email"
-          placeholderTextColor="#9ca3af"
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          autoComplete="email"
-        />
+          <View className="my-5 flex-row items-center gap-3">
+            <View className="h-px flex-1 bg-outline-variant" />
+            <Text className="text-xs font-medium text-on-surface-variant">OR</Text>
+            <View className="h-px flex-1 bg-outline-variant" />
+          </View>
+        </>
+      ) : null}
 
-        <TextInput
-          className="mb-6 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3.5 text-base text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-          placeholder="Password"
-          placeholderTextColor="#9ca3af"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          autoComplete="new-password"
-        />
-
-        <TouchableOpacity
-          className="items-center rounded-xl bg-primary py-4 active:opacity-90"
-          onPress={handleSignUp}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text className="text-base font-semibold text-white">Create account</Text>
-          )}
-        </TouchableOpacity>
-
-        <View className="mt-6 flex-row justify-center">
-          <Text className="text-gray-500 dark:text-gray-400">Already have an account? </Text>
-          <Link href="/(auth)/sign-in">
-            <Text className="font-semibold text-primary">Sign in</Text>
-          </Link>
+      {globalError ? (
+        <View className="mb-5 rounded-2xl bg-red-50 px-4 py-3">
+          <Text className="text-sm text-red-600">{globalError}</Text>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      ) : null}
+
+      {isVerifyingEmail ? (
+        <>
+          <AuthTextField
+            label="Verification code"
+            error={codeError}
+            value={code}
+            onChangeText={setCode}
+            autoCapitalize="none"
+            autoComplete="one-time-code"
+            keyboardType="number-pad"
+            textContentType="oneTimeCode"
+            placeholder="Enter the code from your email"
+          />
+
+          <TouchableOpacity
+            className="mt-2 items-center rounded-2xl bg-primary py-4 active:opacity-90"
+            onPress={handleVerify}
+            disabled={isBusy}
+          >
+            {isBusy ? (
+              <ActivityIndicator color={Colors.onPrimary} />
+            ) : (
+              <Text className="text-base font-semibold text-on-primary">Verify and continue</Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            className="mt-3 items-center rounded-2xl bg-surface-container-high py-4 active:opacity-90"
+            onPress={handleResendCode}
+            disabled={isBusy}
+          >
+            <Text className="text-base font-semibold text-on-surface">Send a new code</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            className="mt-4 items-center py-2"
+            onPress={handleStartOver}
+            disabled={isBusy}
+          >
+            <Text className="text-sm font-semibold text-primary">Start over</Text>
+          </TouchableOpacity>
+        </>
+      ) : (
+        <>
+          <AuthTextField
+            label="Email address"
+            error={emailError}
+            value={emailAddress}
+            onChangeText={setEmailAddress}
+            autoCapitalize="none"
+            autoComplete="email"
+            keyboardType="email-address"
+            textContentType="emailAddress"
+            placeholder="you@example.com"
+          />
+
+          <AuthTextField
+            label="Username"
+            error={usernameError}
+            value={username}
+            onChangeText={setUsername}
+            autoCapitalize="none"
+            autoComplete="username-new"
+            textContentType="username"
+            placeholder="your public handle"
+          />
+
+          <AuthTextField
+            label="Password"
+            error={passwordError}
+            value={password}
+            onChangeText={setPassword}
+            autoCapitalize="none"
+            autoComplete="password-new"
+            secureTextEntry
+            textContentType="newPassword"
+            placeholder="Create a strong password"
+          />
+
+          <TouchableOpacity
+            className="mt-2 items-center rounded-2xl bg-primary py-4 active:opacity-90"
+            onPress={handleSubmit}
+            disabled={isBusy}
+          >
+            {isBusy ? (
+              <ActivityIndicator color={Colors.onPrimary} />
+            ) : (
+              <Text className="text-base font-semibold text-on-primary">Create account</Text>
+            )}
+          </TouchableOpacity>
+
+          <View nativeID="clerk-captcha" />
+        </>
+      )}
+    </AuthScaffold>
   )
 }
