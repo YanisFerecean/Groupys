@@ -2,7 +2,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
 import { useAuth, useUser } from '@clerk/expo'
 import { BlurView } from 'expo-blur'
 import { Redirect, Tabs } from 'expo-router'
-import { StyleSheet } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 import FullscreenSpinner from '@/components/ui/FullscreenSpinner'
 import { Colors } from '@/constants/colors'
 import { hasUsername } from '@/lib/auth'
@@ -57,6 +57,25 @@ export default function HomeLayout() {
           ),
         }}
       />
+        <Tabs.Screen
+            name="create-post"
+            options={{
+                tabBarStyle: { display: 'none' },
+                tabBarIcon: ({ color, size }) => (
+                    <View style={{
+                        backgroundColor: Colors.primary,
+                        width: 48,
+                        height: 48,
+                        borderRadius: 24,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginBottom: 4,
+                    }}>
+                        <Ionicons name="add" size={32} color="#fff" />
+                    </View>
+                ),
+            }}
+        />
       <Tabs.Screen
         name="(match)"
         options={{
@@ -65,6 +84,7 @@ export default function HomeLayout() {
           ),
         }}
       />
+
       <Tabs.Screen
         name="(profile)"
         options={{
