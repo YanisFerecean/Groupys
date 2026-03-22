@@ -98,9 +98,8 @@ export default function ProfileHeader({
 
       {/* Avatar + info */}
       <View className="px-5">
-        {/* Avatar row */}
-        <View className="flex-row items-end justify-between -mt-10 mb-3">
-          {/* Avatar with camera overlay */}
+        {/* Avatar centered */}
+        <View className="items-center -mt-10 mb-3">
           <TouchableOpacity
             onPress={onAvatarPress}
             activeOpacity={onAvatarPress ? 0.8 : 1}
@@ -139,11 +138,8 @@ export default function ProfileHeader({
           {/* Edit button */}
           <TouchableOpacity
             onPress={onEditPress}
-            className="flex-row items-center gap-1.5 px-4 py-2 rounded-2xl border"
-            style={{ 
-              borderColor: accentColor, 
-              backgroundColor: 'rgba(0,0,0,0.03)' // Very subtle overlay
-            }}
+            className="flex-row items-center gap-1.5 px-4 py-2 rounded-2xl mt-3"
+            style={{ backgroundColor: accentColor + '18' }}
           >
             <Ionicons name="pencil-sharp" size={14} color={accentColor} />
             <Text className="text-sm font-bold" style={{ color: accentColor }}>
