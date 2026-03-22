@@ -34,7 +34,7 @@ export default function LandingScreen() {
       <View className="gap-3 mt-8">
         <TouchableOpacity
           className="items-center rounded-2xl bg-primary py-4 active:opacity-90"
-          onPress={() => router.push('/(auth)/sign-up')}
+          onPress={() => router.push('./sign-up')}
         >
           <Text className="text-base font-semibold text-white">
             Get Started
@@ -42,7 +42,7 @@ export default function LandingScreen() {
         </TouchableOpacity>
         <TouchableOpacity
           className="items-center rounded-2xl bg-surface-container-high py-4 active:opacity-90"
-          onPress={() => router.push('/(auth)/sign-in')}
+          onPress={() => router.push('/sign-in')}
         >
           <Text className="text-base font-semibold text-on-surface">
             Login
