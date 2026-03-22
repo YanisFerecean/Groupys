@@ -16,7 +16,7 @@ export default function TopAlbumsWidget({ albums, containerColor }: TopAlbumsWid
       className="rounded-3xl p-5 gap-4"
       style={{ backgroundColor: containerColor ?? '#eeeef0' }}
     >
-      <Text className="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-1">
+      <Text className="text-sm font-extrabold uppercase tracking-widest text-on-surface-variant mb-1">
         Top Albums
       </Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
@@ -39,9 +39,6 @@ export default function TopAlbumsWidget({ albums, containerColor }: TopAlbumsWid
             <View className="absolute bottom-0 left-0 right-0 p-3">
               <Text className="text-white font-bold text-sm" numberOfLines={1}>
                 {album.title}
-              </Text>
-              <Text className="text-white/80 text-xs" numberOfLines={1}>
-                {album.artist}
               </Text>
             </View>
           </View>
