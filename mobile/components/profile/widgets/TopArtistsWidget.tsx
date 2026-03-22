@@ -2,6 +2,7 @@ import { View, Text, ScrollView, TouchableOpacity } from 'react-native'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useRouter } from 'expo-router'
+import * as Haptics from 'expo-haptics'
 import type { TopArtist } from '@/models/ProfileCustomization'
 
 interface TopArtistsWidgetProps {
@@ -19,19 +20,20 @@ export default function TopArtistsWidget({ artists, containerColor }: TopArtists
       className="rounded-3xl p-5 gap-4"
       style={{ backgroundColor: containerColor ?? '#eeeef0' }}
     >
-      <Text className="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-1">
+      <Text className="text-sm font-extrabold uppercase tracking-widest text-on-surface-variant mb-1">
         Top Artists
       </Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 16, paddingVertical: 4 }}>
         {artists.map((artist, i) => (
-          <TouchableOpacity 
-            key={i} 
-            className="items-center gap-2" 
+          <TouchableOpacity
+            key={i}
+            className="items-center gap-2"
             style={{ width: 96 }}
             activeOpacity={0.8}
             onPress={() => {
               if (artist.id) {
-                router.push(`/(home)/(discover)/artist/${artist.id}`)
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                router.push({ pathname: '/artist/[id]', params: { id: artist.id } })
               } else {
                 console.warn(`Artist "${artist.name}" is missing an ID. Please re-select them in Edit Profile.`)
               }
