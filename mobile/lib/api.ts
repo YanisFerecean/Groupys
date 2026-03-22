@@ -2,14 +2,19 @@ import type { ProfileCustomization } from '@/models/ProfileCustomization'
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL!
 
-export async function apiFetch<T>(path: string, token: string | null): Promise<T> {
+export async function apiFetch<T>(path: string, token: string | null, cache = true): Promise<T> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  }
+
+  if (!cache) {
+    headers['Cache-Control'] = 'no-cache, no-store'
+    headers['Pragma'] = 'no-cache'
+  }
+
   const res = await fetch(`${API_URL}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      'Cache-Control': 'no-cache, no-store',
-      'Pragma': 'no-cache',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+    headers,
   })
 
   if (!res.ok) {
@@ -294,6 +299,115 @@ function makeHeaders(token: string | null): Record<string, string> {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   }
+}
+
+function authHeader(token: string | null): Record<string, string> {
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
+export async function apiPost<T>(
+  path: string,
+  token: string | null,
+  body: unknown,
+): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`, {
+    method: 'POST',
+    headers: makeHeaders(token),
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new Error(`API error ${res.status}: ${res.statusText}`)
+  return res.json() as Promise<T>
+}
+
+export async function apiPut<T>(
+  path: string,
+  token: string | null,
+  body: unknown,
+): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`, {
+    method: 'PUT',
+    headers: makeHeaders(token),
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new Error(`API error ${res.status}: ${res.statusText}`)
+  return res.json() as Promise<T>
+}
+
+export async function apiDelete(
+  path: string,
+  token: string | null,
+): Promise<void> {
+  const res = await fetch(`${API_URL}${path}`, {
+    method: 'DELETE',
+    headers: makeHeaders(token),
+  })
+  if (!res.ok) throw new Error(`API error ${res.status}: ${res.statusText}`)
+}
+
+export async function apiPostMultipart<T>(
+  path: string,
+  token: string | null,
+  formData: FormData,
+): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`, {
+    method: 'POST',
+    headers: authHeader(token),
+    body: formData,
+  })
+  if (!res.ok) throw new Error(`API error ${res.status}: ${res.statusText}`)
+  return res.json() as Promise<T>
+}
+
+export async function createPost(
+  communityId: string,
+  token: string,
+  title: string,
+  content: string,
+  mediaList?: { uri: string; type?: string | null }[],
+): Promise<any> {
+  const formData = new FormData()
+  formData.append('title', title)
+  formData.append('content', content)
+
+  if (mediaList && mediaList.length > 0) {
+    for (const media of mediaList) {
+      const ext = media.uri.split('.').pop() || 'jpg'
+      const mimeType = media.type === 'video' ? `video/${ext}` : `image/${ext}`
+      formData.append('files', {
+        uri: media.uri,
+        type: mimeType,
+        name: `upload_${Date.now()}.${ext}`,
+      } as any)
+    }
+  }
+
+  return apiPostMultipart(`/posts/community/${communityId}`, token, formData)
+}
+
+export async function fetchMyPosts(token: string): Promise<any[]> {
+  return apiFetch('/posts/mine', token)
+}
+
+export async function uploadCommunityMedia(
+  token: string,
+  uri: string,
+  type: string = 'image',
+): Promise<string> {
+  const formData = new FormData()
+  const ext = uri.split('.').pop() || 'jpg'
+  const mimeType = type === 'video' ? `video/${ext}` : `image/${ext}`
+  formData.append('file', {
+    uri,
+    type: mimeType,
+    name: `upload_${Date.now()}.${ext}`,
+  } as any)
+
+  const res = await apiPostMultipart<{ url: string }>('/communities/media/upload', token, formData)
+  return res.url
+}
+
+export function mediaUrl(key: string): string {
+  return `${API_URL}/posts/media/${key}`
 }
 
 export async function fetchUserByClerkId(
