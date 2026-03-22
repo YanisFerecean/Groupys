@@ -18,7 +18,18 @@
       "Bash(find /c/Uni/Projects/groupys-web-app/mobile -type f -name *ost* -o -name *Post*)",
       "Bash(grep -r \"upload\\\\|storage\\\\|file\\\\|bucket\" /c/Uni/Projects/groupys-web-app/backend/quarkus-groupys/src/main/java --include=*.java)",
       "Bash(find /c/Uni/Projects/groupys-web-app/web/src -type f -name *post* -o -name *Post*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(find /c/Uni/Projects/groupys-web-app -name .env* -o -name *.env)",
+      "Bash(grep -r \"spotify\\\\|Spotify\" /c/Uni/Projects/groupys-web-app/web --include=*.ts --include=*.tsx --include=*.js --include=*.jsx)",
+      "Bash(grep -r \"fetch\\\\|axios\\\\|request\" /c/Uni/Projects/groupys-web-app/web/src/app/api --include=*.ts --include=*.tsx)",
+      "Bash(ls C:/Uni/Projects/groupys-web-app/web/src/middleware*)",
+      "Bash(ls C:/Uni/Projects/groupys-web-app/web/middleware*)",
+      "Bash(find C:UniProjectsgroupys-web-appwebsrc -type f -path *hooks* -name *.ts -o -path *hooks* -name *.tsx)",
+      "Bash(npx eslint:*)",
+      "Bash(./mvnw.cmd compile:*)",
+      "Bash(cmd.exe /c \"mvnw.cmd compile -q\")",
+      "WebSearch",
+      "WebFetch(domain:developer.spotify.com)"
     ]
   }
 }

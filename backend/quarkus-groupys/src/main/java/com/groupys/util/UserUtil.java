@@ -21,7 +21,8 @@ public final class UserUtil {
                 user.nameColor,
                 user.profileImage,
                 user.widgets,
-                user.dateJoined
+                user.dateJoined,
+                user.spotifyRefreshToken != null
         );
     }
 }
