@@ -192,6 +192,39 @@ function TrackRow({
   )
 }
 
+function LoadingGroupys() {
+  const pulseAnim = useRef(new Animated.Value(0)).current
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 0, duration: 1000, useNativeDriver: true }),
+      ])
+    ).start()
+  }, [pulseAnim])
+
+  const scale = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.93, 1.05]
+  })
+
+  const opacity = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.5, 1]
+  })
+
+  return (
+    <View className="flex-1 items-center justify-center">
+      <Animated.View style={{ transform: [{ scale }], opacity, paddingBottom: 120 }}>
+        <Text className="text-5xl font-extrabold tracking-tighter" style={{ color: Colors.primary }}>
+          Groupys
+        </Text>
+      </Animated.View>
+    </View>
+  )
+}
+
 export default function ArtistScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const { getToken } = useAuth()
@@ -327,11 +360,7 @@ export default function ArtistScreen() {
       </TouchableOpacity>
 
       {loading ? (
-        <View className="flex-1 items-center justify-center">
-          <View className="w-16 h-16 rounded-full bg-white/10 items-center justify-center">
-            <Ionicons name="musical-notes" size={28} color={Colors.primary} />
-          </View>
-        </View>
+        <LoadingGroupys />
       ) : artist ? (
         <Animated.View
           style={{ flex: 1, opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}
