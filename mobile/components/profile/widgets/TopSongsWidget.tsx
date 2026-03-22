@@ -4,7 +4,10 @@ import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
 import { Audio, type AVPlaybackStatus } from 'expo-av'
+import { useAuth } from '@clerk/expo'
 import * as Haptics from 'expo-haptics'
+import { searchTracks } from '@/lib/musicSearch'
+import { Colors } from '@/constants/colors'
 import type { TopSong } from '@/models/ProfileCustomization'
 
 interface TopSongsWidgetProps {
@@ -13,15 +16,46 @@ interface TopSongsWidgetProps {
 }
 
 export default function TopSongsWidget({ songs, containerColor }: TopSongsWidgetProps) {
+  const { getToken } = useAuth()
   const soundRef = useRef<Audio.Sound | null>(null)
   const [playingId, setPlayingId] = useState<number | string | null>(null)
   const [loadingId, setLoadingId] = useState<number | string | null>(null)
+  // Cache resolved preview URLs so we only fetch once per song
+  const previewCache = useRef<Record<string, string>>({})
 
   useEffect(() => {
     return () => {
       soundRef.current?.unloadAsync()
     }
   }, [])
+
+  const resolvePreviewUrl = useCallback(
+    async (song: TopSong): Promise<string | null> => {
+      if (song.previewUrl?.startsWith('http')) return song.previewUrl
+
+      const cacheKey = `${song.title}::${song.artist}`
+      if (previewCache.current[cacheKey]) return previewCache.current[cacheKey]
+
+      try {
+        const token = await getToken()
+        const results = await searchTracks(song.title, token, 5)
+        const match = results.find(
+          (r) =>
+            r.title.toLowerCase() === song.title.toLowerCase() &&
+            r.artist.toLowerCase() === song.artist.toLowerCase(),
+        ) ?? results[0]
+
+        if (match?.preview?.startsWith('http')) {
+          previewCache.current[cacheKey] = match.preview
+          return match.preview
+        }
+      } catch (err) {
+        console.error('Preview resolve error:', err)
+      }
+      return null
+    },
+    [getToken],
+  )
 
   const handlePress = useCallback(
     async (song: TopSong, index: number) => {
@@ -46,14 +80,15 @@ export default function TopSongsWidget({ songs, containerColor }: TopSongsWidget
         setPlayingId(null)
       }
 
-      if (!song.previewUrl || !song.previewUrl.startsWith('http')) return
-
       setLoadingId(songKey)
       try {
+        const previewUrl = await resolvePreviewUrl(song)
+        if (!previewUrl) return
+
         await Audio.setAudioModeAsync({ playsInSilentModeIOS: true })
 
         const loadPromise = Audio.Sound.createAsync(
-          { uri: song.previewUrl },
+          { uri: previewUrl },
           { shouldPlay: true },
           (status: AVPlaybackStatus) => {
             if (status.isLoaded && status.didJustFinish) {
@@ -77,7 +112,7 @@ export default function TopSongsWidget({ songs, containerColor }: TopSongsWidget
         setLoadingId(null)
       }
     },
-    [playingId]
+    [playingId, resolvePreviewUrl]
   )
 
   if (!songs?.length) return null
@@ -95,15 +130,13 @@ export default function TopSongsWidget({ songs, containerColor }: TopSongsWidget
           const songKey = song.id ?? `idx-${i}`
           const isPlaying = playingId === songKey
           const isLoading = loadingId === songKey
-          const hasPreview = !!song.previewUrl
 
           return (
             <TouchableOpacity
               key={i}
               className="w-32 h-32 rounded-2xl overflow-hidden bg-surface-container-high shrink-0 relative"
-              activeOpacity={hasPreview ? 0.85 : 1}
+              activeOpacity={0.85}
               onPress={() => handlePress(song, i)}
-              disabled={!hasPreview}
             >
               {song.coverUrl ? (
                 <Image
@@ -119,20 +152,19 @@ export default function TopSongsWidget({ songs, containerColor }: TopSongsWidget
               />
 
               {/* Play/pause overlay */}
-              {hasPreview && (
+              {(isPlaying || isLoading) && (
                 <View className="absolute inset-0 items-center justify-center">
                   <View
                     className="w-11 h-11 rounded-full items-center justify-center"
-                    style={{ backgroundColor: isPlaying ? 'rgba(255,255,255,0.95)' : 'rgba(0,0,0,0.45)' }}
+                    style={{ backgroundColor: isPlaying ? Colors.primary : 'rgba(186,0,43,0.6)' }}
                   >
                     {isLoading ? (
-                      <ActivityIndicator size="small" color={isPlaying ? '#000' : '#fff'} />
+                      <ActivityIndicator size="small" color="#fff" />
                     ) : (
                       <Ionicons
-                        name={isPlaying ? 'pause' : 'play'}
+                        name="pause"
                         size={18}
-                        color={isPlaying ? '#000' : '#fff'}
-                        style={{ marginLeft: isPlaying ? 0 : 2 }}
+                        color="#fff"
                       />
                     )}
                   </View>
