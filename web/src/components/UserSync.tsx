@@ -9,16 +9,18 @@ import {
 } from "@/lib/api";
 
 export default function UserSync() {
+  const { getToken, isLoaded: isAuthLoaded } = useAuth();
   const { user, isLoaded } = useUser();
   const syncedRef = useRef(false);
 
   useEffect(() => {
-    if (!isLoaded || !user || syncedRef.current) return;
+    if (!isLoaded || !isAuthLoaded || !user || syncedRef.current) return;
     syncedRef.current = true;
 
     (async () => {
       try {
-        const existing = await fetchUserByClerkId(user.id);
+        const token = await getToken();
+        const existing = await fetchUserByClerkId(user.id, token);
         if (!existing) {
           await createBackendUser({
             clerkId: user.id,
@@ -41,7 +43,7 @@ export default function UserSync() {
         console.error("Failed to sync user to backend:", err);
       }
     })();
-  }, [isLoaded, user]);
+  }, [getToken, isAuthLoaded, isLoaded, user]);
 
   return null;
 }

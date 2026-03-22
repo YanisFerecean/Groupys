@@ -2,8 +2,8 @@ import { useRef } from 'react'
 import { Animated, Image, Pressable, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
-import type { DiscoverUser } from '@/constants/mockData'
 import { Colors } from '@/constants/colors'
+import type { DiscoverUser } from '@/models/DiscoverUser'
 
 export default function UserOnlineCard({ user }: { user: DiscoverUser }) {
   const scale = useRef(new Animated.Value(1)).current
@@ -74,9 +74,9 @@ export default function UserOnlineCard({ user }: { user: DiscoverUser }) {
 
         {/* Genre pills */}
         <View style={{ flexDirection: 'row', gap: 5, flexWrap: 'wrap', justifyContent: 'center' }}>
-          {user.genres.slice(0, 2).map((g) => (
+          {user.genres.slice(0, 2).map((genre) => (
             <View
-              key={g}
+              key={genre}
               style={{
                 backgroundColor: `${Colors.primary}22`,
                 borderRadius: 99,
@@ -84,7 +84,7 @@ export default function UserOnlineCard({ user }: { user: DiscoverUser }) {
                 paddingVertical: 3,
               }}
             >
-              <Text style={{ color: Colors.primary, fontSize: 10, fontWeight: '700' }}>{g}</Text>
+              <Text style={{ color: Colors.primary, fontSize: 10, fontWeight: '700' }}>{genre}</Text>
             </View>
           ))}
         </View>

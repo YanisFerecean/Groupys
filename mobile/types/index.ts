@@ -1,3 +1,4 @@
+export type { ProfileCustomization, TopSong, TopArtist, TopAlbum } from '@/models/ProfileCustomization'
 export type { Post } from '@/models/Post'
 export type { Artist } from '@/models/Artist'
 export type { CuratorProfile } from '@/models/CuratorProfile'

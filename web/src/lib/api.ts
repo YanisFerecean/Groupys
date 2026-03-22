@@ -146,12 +146,52 @@ export function backendUserToProfile(user: BackendUser): ProfileCustomization {
 
 // ── API calls ──────────────────────────────────────────────────────────────
 
+type JsonRequestInit = Omit<RequestInit, "body"> & {
+  body?: unknown;
+};
+
+function requireToken(token: string | null): string {
+  if (!token) {
+    throw new Error("Missing Clerk session token for authenticated API request");
+  }
+
+  return token;
+}
+
+async function apiRequest(
+  path: string,
+  token: string | null,
+  init: JsonRequestInit = {},
+): Promise<Response> {
+  const headers = new Headers(init.headers);
+  headers.set("Accept", "application/json");
+  headers.set("Authorization", `Bearer ${requireToken(token)}`);
+
+  const requestInit: RequestInit = {
+    ...init,
+    headers,
+  };
+
+  if (init.body !== undefined) {
+    headers.set("Content-Type", "application/json");
+    requestInit.body = JSON.stringify(init.body);
+  }
+
+  return fetch(`${API_URL}${path}`, requestInit);
+}
+
+async function readErrorMessage(res: Response, fallback: string): Promise<string> {
+  const body = await res.text().catch(() => "");
+  return body ? `${fallback} (${res.status}): ${body}` : `${fallback} (${res.status})`;
+}
+
 export async function fetchUserByClerkId(
   clerkId: string,
+  token: string | null,
 ): Promise<BackendUser | null> {
-  const res = await fetch(`${API_URL}/users/clerk/${clerkId}`);
+  const res = await apiRequest(`/users/clerk/${encodeURIComponent(clerkId)}`, token);
   if (res.status === 404) return null;
-  if (!res.ok) throw new Error("Failed to fetch user profile");
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to fetch user profile"));
   return res.json();
 }
 
@@ -164,19 +204,17 @@ export async function createBackendUser(data: {
 }): Promise<BackendUser> {
   const res = await fetch(`${API_URL}/users`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
+    body: data,
   });
 
   if (res.status === 409) {
     // User already exists (race condition) — fetch and return
-    const existing = await fetchUserByClerkId(data.clerkId);
+    const existing = await fetchUserByClerkId(data.clerkId, token);
     if (existing) return existing;
   }
 
   if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Failed to create user (${res.status}): ${body}`);
+    throw new Error(await readErrorMessage(res, "Failed to create user"));
   }
   return res.json();
 }
@@ -184,6 +222,7 @@ export async function createBackendUser(data: {
 export async function updateBackendUser(
   userId: string,
   data: Partial<ProfileCustomization>,
+  token: string | null,
 ): Promise<BackendUser> {
   const widgets = profileToWidgets(data);
   const body = {
@@ -197,11 +236,10 @@ export async function updateBackendUser(
     widgets: widgets.length ? JSON.stringify(widgets) : null,
   };
 
-  const res = await fetch(`${API_URL}/users/${userId}`, {
+  const res = await apiRequest(`/users/${encodeURIComponent(userId)}`, token, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body,
   });
-  if (!res.ok) throw new Error("Failed to update user profile");
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to update user profile"));
   return res.json();
 }

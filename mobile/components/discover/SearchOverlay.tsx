@@ -15,7 +15,6 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Audio, AVPlaybackStatus } from 'expo-av'
-import { apiFetch } from '@/lib/api'
 import { Colors } from '@/constants/colors'
 import type { ArtistRes } from '@/models/ArtistRes'
 import type { AlbumRes } from '@/models/AlbumRes'
@@ -192,19 +191,13 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
   const inputRef = useRef<TextInput>(null)
 
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<SearchResult | null>(null)
-  const [searching, setSearching] = useState(false)
+  const [debouncedQuery, setDebouncedQuery] = useState('')
   const [playingId, setPlayingId] = useState<number | null>(null)
   const [loadingId, setLoadingId] = useState<number | null>(null)
   const soundRef = useRef<Audio.Sound | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
 
   const fadeAnim = useRef(new Animated.Value(0)).current
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // Stable ref so getToken never causes the search effect to re-run
-  const getTokenRef = useRef(getToken)
-  getTokenRef.current = getToken
-  // Track the last query that was actually fetched to avoid duplicate calls
-  const lastFetchedRef = useRef<string>('')
 
   // Fade in on mount, auto-focus input
   useEffect(() => {
@@ -213,45 +206,69 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
     return () => clearTimeout(t)
   }, [fadeAnim])
 
-  // Debounced search — only re-runs when query changes, getToken is accessed via ref
+  // Debounce: update debouncedQuery 300ms after the user stops typing
   useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-
     const trimmed = query.trim()
     if (!trimmed) {
+      setDebouncedQuery('')
+      return
+    }
+    const t = setTimeout(() => setDebouncedQuery(trimmed), 300)
+    return () => clearTimeout(t)
+  }, [query])
+
+  const [results, setResults] = useState<SearchResult | null>(null)
+  const [searching, setSearching] = useState(false)
+  // Track whether we're in the debounce window (typed but not yet sent)
+  const isDebouncing = query.trim().length > 0 && query.trim() !== debouncedQuery
+
+  useEffect(() => {
+    if (debouncedQuery.length === 0) {
       setResults(null)
       setSearching(false)
-      lastFetchedRef.current = ''
       return
     }
 
-    // Clear stale results immediately so the dots render in clean space
-    setResults(null)
+    // Abort any in-flight request
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
 
-    debounceRef.current = setTimeout(async () => {
-      // Skip if identical to last successful fetch
-      if (trimmed === lastFetchedRef.current) return
-
-      setSearching(true)
+    let cancelled = false
+    setSearching(true)
+    ;(async () => {
       try {
-        const token = await getTokenRef.current()
-        const data = await apiFetch<SearchResult>(`/search?q=${encodeURIComponent(trimmed)}`, token)
-        lastFetchedRef.current = trimmed
-        setResults({
-          ...data,
-          artists: [...data.artists].sort((a, b) => b.listeners - a.listeners),
-        })
+        const token = await getToken()
+        const res = await fetch(
+          `${process.env.EXPO_PUBLIC_API_URL}/search?q=${encodeURIComponent(debouncedQuery)}`,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            signal: controller.signal,
+          },
+        )
+        if (!res.ok) throw new Error(`API error ${res.status}`)
+        const data = (await res.json()) as SearchResult
+        if (!cancelled) {
+          setResults({
+            ...data,
+            artists: [...data.artists].sort((a, b) => b.listeners - a.listeners),
+          })
+        }
       } catch (err) {
+        if (err && typeof err === 'object' && 'name' in err && (err as { name: string }).name === 'AbortError') return
         console.error('Search error:', err)
       } finally {
-        setSearching(false)
+        if (!cancelled) setSearching(false)
       }
-    }, 450)
-
+    })()
     return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current)
+      cancelled = true
+      controller.abort()
     }
-  }, [query])
+  }, [debouncedQuery, getToken])
 
   // Stop sound on unmount
   useEffect(() => {
@@ -279,7 +296,7 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
       soundRef.current = null
       setPlayingId(null)
     }
-    if (!track.preview) return
+    if (!track.preview || !track.preview.startsWith('http')) return
     setLoadingId(track.id)
     try {
       await Audio.setAudioModeAsync({ playsInSilentModeIOS: true })
@@ -312,6 +329,10 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
 
   const hasResults =
     results && (results.artists.length > 0 || results.albums.length > 0 || results.tracks.length > 0)
+
+  // Show "no results" only when we've actually completed a search for the current input
+  const showNoResults =
+    !searching && !isDebouncing && query.trim().length > 0 && !hasResults
 
   return (
     <Animated.View style={[StyleSheet.absoluteFillObject, { opacity: fadeAnim }]}>
@@ -351,16 +372,20 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: insets.bottom + 32, paddingTop: 8 }}
         >
-          {searching && <SearchingDots />}
-
-          {!searching && query.length > 0 && !hasResults && (
-            <Text style={styles.hint}>{'No results for "' + query + '"'}</Text>
-          )}
-
-          {!searching && !query && (
+          {/* Initial empty state */}
+          {!query && !hasResults && (
             <Text style={styles.hint}>Start typing to search</Text>
           )}
 
+          {/* Inline loading indicator — only when no results to show yet */}
+          {(searching || isDebouncing) && !hasResults && <SearchingDots />}
+
+          {/* No results — only after a completed search */}
+          {showNoResults && (
+            <Text style={styles.hint}>{'No results for "' + query.trim() + '"'}</Text>
+          )}
+
+          {/* Results list — stays visible while a new search is in-flight */}
           {hasResults && (
             <View style={styles.resultsWrap}>
               {results!.artists.length > 0 && (
@@ -528,7 +553,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'flex-end',
     gap: 6,
-    marginTop: 40,
+    marginTop: 8,
+    marginBottom: 12,
     height: 24,
   },
   dot: {
