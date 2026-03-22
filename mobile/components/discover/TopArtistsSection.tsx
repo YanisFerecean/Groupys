@@ -116,8 +116,8 @@ export function TopArtistsSkeleton() {
 
 export function useTopArtists() {
   const { getToken } = useAuth()
-  const [artists, setArtists] = useState<ChartArtist[]>([])
   const [expanded, setExpanded] = useState(false)
+  const [artists, setArtists] = useState<ChartArtist[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
