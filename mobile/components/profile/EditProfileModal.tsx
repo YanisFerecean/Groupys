@@ -369,7 +369,7 @@ export default function EditProfileModal({
         if (newForm.topSongs?.length) {
           const repairedSongs = await Promise.all(
             newForm.topSongs.map(async (s) => {
-              if (s.id) return s
+              if (s.id && s.previewUrl) return s
               const results = await searchTracks(s.title, token, 5)
               const match = results.find(
                 (r) =>
@@ -378,7 +378,7 @@ export default function EditProfileModal({
               )
               if (match) {
                 changed = true
-                return { ...s, id: match.id }
+                return { ...s, id: match.id, previewUrl: match.preview }
               }
               return s
             })
@@ -460,7 +460,7 @@ export default function EditProfileModal({
   const addSong = (r: TrackSearchResult) => {
     const songs = [...(form.topSongs ?? [])]
     if (songs.length < 3) {
-      songs.push({ id: r.id, title: r.title, artist: r.artist, coverUrl: r.coverUrl })
+      songs.push({ id: r.id, title: r.title, artist: r.artist, coverUrl: r.coverUrl, previewUrl: r.preview })
       set('topSongs', songs)
     }
   }
