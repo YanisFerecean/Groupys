@@ -6,6 +6,8 @@ export async function apiFetch<T>(path: string, token: string | null): Promise<T
   const res = await fetch(`${API_URL}${path}`, {
     headers: {
       'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache, no-store',
+      'Pragma': 'no-cache',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
   })
@@ -126,6 +128,7 @@ function pickArtistImage(value: unknown): string | undefined {
 function normalizeTrackItem(item: UnknownRecord) {
   const album = asRecord(item.album)
   return {
+    id: typeof item.id === 'number' ? item.id : undefined,
     title: firstString(item.title, item.name) ?? '',
     artist: pickArtistName(item.artist) ?? '',
     coverUrl: firstString(
@@ -140,6 +143,7 @@ function normalizeTrackItem(item: UnknownRecord) {
       album?.coverBig,
       album?.coverXl,
     ),
+    previewUrl: asString(item.previewUrl) ?? asString(item.preview),
   }
 }
 
@@ -162,6 +166,7 @@ function normalizeAlbumItem(item: UnknownRecord) {
 
 function normalizeArtistItem(item: UnknownRecord) {
   return {
+    id: typeof item.id === 'number' ? item.id : undefined,
     name: firstString(item.name, item.title) ?? '',
     genre: asString(item.genre),
     imageUrl: firstString(
