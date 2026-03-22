@@ -49,7 +49,7 @@ export default function SettingsScreen() {
               Settings
             </Text>
           </View>
-          <Text className="text-sm font-bold tracking-wider text-on-surface">
+          <Text className="text-2xl font-extrabold tracking-wider" style={{ color: Colors.primary }}>
             Groupys
           </Text>
         </View>
