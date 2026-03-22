@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { useAuth } from "@clerk/nextjs";
 import type { ProfileCustomization } from "@/types/profile";
 import {
   Dialog,
@@ -20,6 +21,12 @@ import BannerPicker from "./BannerPicker";
 import MusicSearchInput from "./MusicSearchInput";
 import type { TrackResult, ArtistResult, AlbumResult } from "./MusicSearchInput";
 import { COUNTRIES } from "@/lib/countries";
+import {
+  fetchSpotifyTopArtists,
+  fetchSpotifyTopTracks,
+  fetchSpotifySavedAlbums,
+  fetchSpotifyCurrentlyPlaying,
+} from "@/lib/spotify";
 
 // ── Error parsers ───────────────────────────────────────────────────────────
 
@@ -62,6 +69,7 @@ interface ProfileEditDrawerProps {
   onUpdateProfileImage: (file: File) => Promise<void>;
   onRemoveProfileImage: () => Promise<void>;
   isSaving: boolean;
+  spotifyConnected?: boolean;
 }
 
 export default function ProfileEditDrawer({
@@ -75,6 +83,7 @@ export default function ProfileEditDrawer({
   onUpdateProfileImage,
   onRemoveProfileImage,
   isSaving,
+  spotifyConnected,
 }: ProfileEditDrawerProps) {
   const [form, setForm] = useState<ProfileCustomization>({ ...profile });
   const [username, setUsername] = useState(currentUsername);
@@ -82,7 +91,9 @@ export default function ProfileEditDrawer({
   const [pendingAvatarFile, setPendingAvatarFile] = useState<File | null>(null);
   const [removeAvatar, setRemoveAvatar] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [syncing, setSyncing] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { getToken } = useAuth();
 
   const handleOpenChange = (next: boolean) => {
     if (next) {
@@ -222,6 +233,79 @@ export default function ProfileEditDrawer({
       artist: result.artist,
       coverUrl: result.coverUrl,
     });
+  };
+
+  // ── Spotify sync handlers ──────────────────────────────────────────────────
+
+  const syncTopArtists = async () => {
+    const token = await getToken();
+    if (!token) return;
+    setSyncing("artists");
+    try {
+      const artists = await fetchSpotifyTopArtists(token);
+      set(
+        "topArtists",
+        artists.map((a) => ({ name: a.name, imageUrl: a.imageUrl })),
+      );
+    } catch (err) {
+      console.error("Failed to sync top artists:", err);
+    } finally {
+      setSyncing(null);
+    }
+  };
+
+  const syncTopTracks = async () => {
+    const token = await getToken();
+    if (!token) return;
+    setSyncing("tracks");
+    try {
+      const tracks = await fetchSpotifyTopTracks(token);
+      set(
+        "topSongs",
+        tracks.map((t) => ({ title: t.title, artist: t.artist, coverUrl: t.coverUrl })),
+      );
+    } catch (err) {
+      console.error("Failed to sync top tracks:", err);
+    } finally {
+      setSyncing(null);
+    }
+  };
+
+  const syncSavedAlbums = async () => {
+    const token = await getToken();
+    if (!token) return;
+    setSyncing("albums");
+    try {
+      const albums = await fetchSpotifySavedAlbums(token);
+      set(
+        "topAlbums",
+        albums.map((a) => ({ title: a.title, artist: a.artist, coverUrl: a.coverUrl })),
+      );
+    } catch (err) {
+      console.error("Failed to sync saved albums:", err);
+    } finally {
+      setSyncing(null);
+    }
+  };
+
+  const syncCurrentlyPlaying = async () => {
+    const token = await getToken();
+    if (!token) return;
+    setSyncing("listening");
+    try {
+      const track = await fetchSpotifyCurrentlyPlaying(token);
+      if (track) {
+        set("currentlyListening", {
+          title: track.title,
+          artist: track.artist,
+          coverUrl: track.coverUrl,
+        });
+      }
+    } catch (err) {
+      console.error("Failed to sync currently playing:", err);
+    } finally {
+      setSyncing(null);
+    }
   };
 
   return (
@@ -416,9 +500,64 @@ export default function ProfileEditDrawer({
 
             {/* ── Widgets Tab ── */}
             <TabsContent value="widgets" className="space-y-5">
+              {spotifyConnected && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full gap-2 border-[#1DB954]/30 text-[#1DB954] hover:bg-[#1DB954]/10 hover:text-[#1ed760]"
+                  onClick={async () => {
+                    const token = await getToken();
+                    if (!token) return;
+                    setSyncing("all");
+                    try {
+                      const [artists, tracks, albums, playing] = await Promise.all([
+                        fetchSpotifyTopArtists(token),
+                        fetchSpotifyTopTracks(token),
+                        fetchSpotifySavedAlbums(token),
+                        fetchSpotifyCurrentlyPlaying(token),
+                      ]);
+                      setForm((prev) => ({
+                        ...prev,
+                        topArtists: artists.map((a) => ({ name: a.name, imageUrl: a.imageUrl })),
+                        topSongs: tracks.map((t) => ({ title: t.title, artist: t.artist, coverUrl: t.coverUrl })),
+                        topAlbums: albums.map((a) => ({ title: a.title, artist: a.artist, coverUrl: a.coverUrl })),
+                        ...(playing ? { currentlyListening: { title: playing.title, artist: playing.artist, coverUrl: playing.coverUrl } } : {}),
+                      }));
+                    } catch (err) {
+                      console.error("Failed to sync all from Spotify:", err);
+                    } finally {
+                      setSyncing(null);
+                    }
+                  }}
+                  disabled={syncing !== null}
+                >
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                    <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+                  </svg>
+                  {syncing === "all" ? "Syncing all widgets..." : "Sync All from Spotify"}
+                </Button>
+              )}
+
               {/* Top Albums */}
               <div className="space-y-3 p-5 bg-surface-container-low rounded-xl">
-                <Label className="font-bold">Top Albums</Label>
+                <div className="flex items-center justify-between">
+                  <Label className="font-bold">Top Albums</Label>
+                  {spotifyConnected && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="xs"
+                      className="text-[#1DB954] hover:text-[#1ed760] gap-1.5"
+                      onClick={syncSavedAlbums}
+                      disabled={syncing !== null}
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                        <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+                      </svg>
+                      {syncing === "albums" ? "Syncing..." : "Sync"}
+                    </Button>
+                  )}
+                </div>
                 {(form.topAlbums ?? []).map((album, i) => (
                   <div
                     key={i}
@@ -459,7 +598,24 @@ export default function ProfileEditDrawer({
 
               {/* Currently Listening */}
               <div className="space-y-3 p-5 bg-surface-container-low rounded-xl">
-                <Label className="font-bold">Currently Listening</Label>
+                <div className="flex items-center justify-between">
+                  <Label className="font-bold">Currently Listening</Label>
+                  {spotifyConnected && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="xs"
+                      className="text-[#1DB954] hover:text-[#1ed760] gap-1.5"
+                      onClick={syncCurrentlyPlaying}
+                      disabled={syncing !== null}
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                        <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+                      </svg>
+                      {syncing === "listening" ? "Syncing..." : "Sync"}
+                    </Button>
+                  )}
+                </div>
                 {form.currentlyListening?.title ? (
                   <div className="flex items-center gap-3 p-2 bg-surface-container rounded-lg">
                     {form.currentlyListening.coverUrl && (
@@ -496,7 +652,24 @@ export default function ProfileEditDrawer({
 
               {/* Top Songs */}
               <div className="space-y-3 p-5 bg-surface-container-low rounded-xl">
-                <Label className="font-bold">Top Songs</Label>
+                <div className="flex items-center justify-between">
+                  <Label className="font-bold">Top Songs</Label>
+                  {spotifyConnected && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="xs"
+                      className="text-[#1DB954] hover:text-[#1ed760] gap-1.5"
+                      onClick={syncTopTracks}
+                      disabled={syncing !== null}
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                        <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+                      </svg>
+                      {syncing === "tracks" ? "Syncing..." : "Sync"}
+                    </Button>
+                  )}
+                </div>
                 {(form.topSongs ?? []).map((song, i) => (
                   <div
                     key={i}
@@ -538,7 +711,24 @@ export default function ProfileEditDrawer({
 
               {/* Top Artists */}
               <div className="space-y-3 p-5 bg-surface-container-low rounded-xl">
-                <Label className="font-bold">Top Artists</Label>
+                <div className="flex items-center justify-between">
+                  <Label className="font-bold">Top Artists</Label>
+                  {spotifyConnected && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="xs"
+                      className="text-[#1DB954] hover:text-[#1ed760] gap-1.5"
+                      onClick={syncTopArtists}
+                      disabled={syncing !== null}
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                        <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+                      </svg>
+                      {syncing === "artists" ? "Syncing..." : "Sync"}
+                    </Button>
+                  )}
+                </div>
                 {(form.topArtists ?? []).map((artist, i) => (
                   <div
                     key={i}

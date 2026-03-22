@@ -1,13 +1,48 @@
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import { useAuth } from "@clerk/nextjs";
 import type { ProfileCustomization } from "@/types/profile";
+import { fetchSpotifyCurrentlyPlaying } from "@/lib/spotify";
 import WidgetCard from "./WidgetCard";
+
+const POLL_INTERVAL = 30_000;
 
 interface CurrentlyListeningWidgetProps {
   track?: ProfileCustomization["currentlyListening"];
+  spotifyConnected?: boolean;
 }
 
 export default function CurrentlyListeningWidget({
-  track,
+  track: savedTrack,
+  spotifyConnected,
 }: CurrentlyListeningWidgetProps) {
+  const { getToken } = useAuth();
+  const [liveTrack, setLiveTrack] = useState(savedTrack);
+
+  const poll = useCallback(async () => {
+    const token = await getToken();
+    if (!token) return;
+    try {
+      const data = await fetchSpotifyCurrentlyPlaying(token);
+      setLiveTrack(data ?? savedTrack);
+    } catch {
+      // keep showing last known track
+    }
+  }, [getToken, savedTrack]);
+
+  useEffect(() => {
+    if (!spotifyConnected) {
+      setLiveTrack(savedTrack);
+      return;
+    }
+    poll();
+    const id = setInterval(poll, POLL_INTERVAL);
+    return () => clearInterval(id);
+  }, [spotifyConnected, poll]);
+
+  const track = spotifyConnected ? liveTrack : savedTrack;
+
   return (
     <WidgetCard title="Currently Listening">
       {track?.title ? (

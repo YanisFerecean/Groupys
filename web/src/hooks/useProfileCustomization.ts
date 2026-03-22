@@ -11,17 +11,18 @@ import {
 } from "@/lib/api";
 
 export function useProfileCustomization() {
-  const { getToken, isLoaded: isAuthLoaded } = useAuth();
+  const { getToken, isLoaded: isAuthLoaded, isSignedIn } = useAuth();
   const { user, isLoaded } = useUser();
   const [isSaving, setIsSaving] = useState(false);
   const [profile, setProfile] = useState<ProfileCustomization>({});
   const [backendUserId, setBackendUserId] = useState<string | null>(null);
   const [isProfileLoaded, setIsProfileLoaded] = useState(false);
+  const [spotifyConnected, setSpotifyConnected] = useState(false);
   const fetchedRef = useRef(false);
 
   // Fetch or create backend user when Clerk user is available
   useEffect(() => {
-    if (!isLoaded || !isAuthLoaded || !user || fetchedRef.current) return;
+    if (!isLoaded || !isAuthLoaded || !isSignedIn || !user || fetchedRef.current) return;
     fetchedRef.current = true;
 
     (async () => {
@@ -42,10 +43,11 @@ export function useProfileCustomization() {
             username: user.username ?? user.id,
             displayName: user.fullName ?? undefined,
             profileImage: user.imageUrl ?? undefined,
-          });
+          }, token);
         }
 
         setBackendUserId(backendUser.id);
+        setSpotifyConnected(backendUser.spotifyConnected);
         setProfile(backendUserToProfile(backendUser));
       } catch (err) {
         console.error("Failed to load profile from backend:", err);
@@ -53,7 +55,7 @@ export function useProfileCustomization() {
         setIsProfileLoaded(true);
       }
     })();
-  }, [getToken, isAuthLoaded, isLoaded, user]);
+  }, [getToken, isAuthLoaded, isSignedIn, isLoaded, user]);
 
   const updateProfile = useCallback(
     async (partial: Partial<ProfileCustomization>) => {
@@ -122,5 +124,7 @@ export function useProfileCustomization() {
     removeProfileImage,
     isLoaded: isLoaded && isProfileLoaded,
     isSaving,
+    spotifyConnected,
+    setSpotifyConnected,
   };
 }

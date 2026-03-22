@@ -24,6 +24,7 @@ export interface BackendUser {
   profileImage: string | null;
   widgets: string | null;
   dateJoined: string;
+  spotifyConnected: boolean;
 }
 
 // ── Widget ↔ ProfileCustomization conversion ───────────────────────────────
@@ -205,7 +206,7 @@ export async function createBackendUser(
   },
   token: string | null,
 ): Promise<BackendUser> {
-  const res = await fetch(`${API_URL}/users`, {
+  const res = await apiRequest("/users", token, {
     method: "POST",
     body: data,
   });

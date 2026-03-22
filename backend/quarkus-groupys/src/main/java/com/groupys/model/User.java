@@ -43,6 +43,15 @@ public class User {
     @Column(columnDefinition = "jsonb")
     public String widgets;
 
+    @Column(name = "spotify_access_token", length = 512)
+    public String spotifyAccessToken;
+
+    @Column(name = "spotify_refresh_token", length = 512)
+    public String spotifyRefreshToken;
+
+    @Column(name = "spotify_token_expiry")
+    public Instant spotifyTokenExpiry;
+
     @Column(name = "date_joined", nullable = false, updatable = false)
     public Instant dateJoined;
 
