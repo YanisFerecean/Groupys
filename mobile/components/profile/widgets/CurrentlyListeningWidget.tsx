@@ -72,7 +72,7 @@ export default function CurrentlyListeningWidget({ track }: CurrentlyListeningWi
           />
           <View className="absolute bottom-0 left-0 right-0 p-4 flex-row items-end justify-between">
             <View className="flex-1 mr-4">
-              <Text className="text-white/70 text-xs font-semibold uppercase tracking-wider mb-0.5">
+              <Text className="text-white/70 text-sm font-extrabold uppercase tracking-wider mb-0.5">
                 Currently Listening
               </Text>
               <Text className="text-white font-bold text-base" numberOfLines={1}>
@@ -93,7 +93,7 @@ export default function CurrentlyListeningWidget({ track }: CurrentlyListeningWi
             <Text className="text-2xl">🎵</Text>
           </View>
           <View className="flex-1 min-w-0">
-            <Text className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-0.5">
+            <Text className="text-sm font-extrabold text-on-surface-variant uppercase tracking-wider mb-0.5">
               Currently Listening
             </Text>
             <Text className="text-sm font-bold text-on-surface" numberOfLines={1}>
