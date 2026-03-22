@@ -57,24 +57,25 @@ public class ArtistService {
 
     @Transactional
     public ArtistResDto getById(Long id) {
-        DeezerArtistDto deezerArtist = deezerClient.getArtistById(id);
-        if (deezerArtist == null) {
-            return null;
+        Artist existing = artistRepository.findById(id);
+        DeezerArtistDto deezerArtist;
+        try {
+            deezerArtist = deezerClient.getArtistById(id);
+        } catch (Exception e) {
+            deezerArtist = null;
+        }
+
+        if (!hasRequiredArtistData(deezerArtist)) {
+            return existing != null ? artistMapper.toResDto(existing) : null;
         }
 
         LastFmArtistInfoResponse.LastFmArtistDetail lastfmDetail = fetchLastFmInfo(deezerArtist.name());
         ArtistResDto result = artistMapper.toResDto(deezerArtist, lastfmDetail);
-
-        Artist existing = artistRepository.findById(id);
         Artist entity = artistMapper.toEntity(deezerArtist, lastfmDetail);
         if (existing == null) {
             artistRepository.persist(entity);
         } else {
-            existing.setName(entity.getName());
-            existing.setImages(entity.getImages());
-            existing.setListeners(entity.getListeners());
-            existing.setPlaycount(entity.getPlaycount());
-            existing.setSummary(entity.getSummary());
+            mergeArtist(existing, entity);
         }
 
         return result;
@@ -149,5 +150,30 @@ public class ArtistService {
     private Long parseLong(String value) {
         if (value == null || value.isBlank()) return null;
         return Long.parseLong(value);
+    }
+
+    private boolean hasRequiredArtistData(DeezerArtistDto deezerArtist) {
+        return deezerArtist != null
+                && deezerArtist.id() != null
+                && deezerArtist.name() != null
+                && !deezerArtist.name().isBlank();
+    }
+
+    private void mergeArtist(Artist existing, Artist incoming) {
+        if (incoming.getName() != null && !incoming.getName().isBlank()) {
+            existing.setName(incoming.getName());
+        }
+        if (incoming.getImages() != null && !incoming.getImages().isEmpty()) {
+            existing.setImages(incoming.getImages());
+        }
+        if (incoming.getListeners() != null) {
+            existing.setListeners(incoming.getListeners());
+        }
+        if (incoming.getPlaycount() != null) {
+            existing.setPlaycount(incoming.getPlaycount());
+        }
+        if (incoming.getSummary() != null && !incoming.getSummary().isBlank()) {
+            existing.setSummary(incoming.getSummary());
+        }
     }
 }
