@@ -16,80 +16,23 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Audio, AVPlaybackStatus } from 'expo-av'
 import { apiFetch } from '@/lib/api'
+import { formatCount } from '@/lib/timeAgo'
+import { communityResToCard } from '@/lib/communityUtils'
 import { Colors } from '@/constants/colors'
+import CommunityCard from '@/components/discover/CommunityCard'
+import CreateCommunityModal from '@/components/community/CreateCommunityModal'
 import type { ArtistRes as ChartArtist } from '@/models/ArtistRes'
 import type { TrackRes } from '@/models/TrackRes'
-import CommunityCard from '@/components/discover/CommunityCard'
-import type { Community } from '@/models/Community'
+import type { CommunityResDto } from '@/models/CommunityRes'
 
 if (Platform.OS === 'android') {
   UIManager.setLayoutAnimationEnabledExperimental?.(true)
-}
-
-function formatCount(n: number): string {
-  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1).replace(/\.0$/, '')}B`
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, '')}k`
-  return String(n)
 }
 
 function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60)
   const s = seconds % 60
   return `${m}:${String(s).padStart(2, '0')}`
-}
-
-const COMMUNITY_PALETTES = [
-  { color: '#7c3aed', icon: 'disc' },
-  { color: '#be185d', icon: 'heart' },
-  { color: '#0891b2', icon: 'musical-notes' },
-  { color: '#b45309', icon: 'flame' },
-  { color: '#059669', icon: 'volume-high' },
-  { color: '#6366f1', icon: 'star' },
-]
-
-function buildArtistCommunities(artist: ChartArtist): Community[] {
-  const seed = artist.id % COMMUNITY_PALETTES.length
-  const pick = (offset: number) => COMMUNITY_PALETTES[(seed + offset) % COMMUNITY_PALETTES.length]
-
-  return [
-    {
-      id: `${artist.id}-fans`,
-      name: `${artist.name} Fans`,
-      tagline: 'The official fan hub',
-      members: 8400 + (artist.id * 317) % 40000,
-      color: pick(0).color,
-      icon: pick(0).icon,
-      isLive: artist.listeners % 3 === 0,
-    },
-    {
-      id: `${artist.id}-discuss`,
-      name: 'Deep Cuts',
-      tagline: `Rare tracks & B-sides`,
-      members: 2100 + (artist.id * 211) % 12000,
-      color: pick(1).color,
-      icon: pick(1).icon,
-      isLive: false,
-    },
-    {
-      id: `${artist.id}-covers`,
-      name: 'Cover Sessions',
-      tagline: 'Fan covers & remixes',
-      members: 1300 + (artist.id * 173) % 8000,
-      color: pick(2).color,
-      icon: pick(2).icon,
-      isLive: artist.playcount % 5 === 0,
-    },
-    {
-      id: `${artist.id}-setlists`,
-      name: 'Live & Setlists',
-      tagline: 'Tours, shows & bootlegs',
-      members: 4700 + (artist.id * 251) % 20000,
-      color: pick(3).color,
-      icon: pick(3).icon,
-      isLive: false,
-    },
-  ]
 }
 
 function AnimatedExpandRow({ children }: { children: React.ReactNode }) {
@@ -147,7 +90,6 @@ function TrackRow({
       activeOpacity={0.7}
       onPress={onPress}
     >
-      {/* Index / play indicator */}
       <View className="w-5 items-center justify-center">
         {isLoading ? (
           <Animated.View style={{ transform: [{ rotate: spin }] }}>
@@ -161,11 +103,7 @@ function TrackRow({
       </View>
 
       {albumCover ? (
-        <Image
-          source={{ uri: albumCover }}
-          className="w-11 h-11 rounded-md"
-          resizeMode="cover"
-        />
+        <Image source={{ uri: albumCover }} className="w-11 h-11 rounded-md" resizeMode="cover" />
       ) : (
         <View className="w-11 h-11 rounded-md bg-white/10 items-center justify-center">
           <Ionicons name="musical-note" size={18} color="#888" />
@@ -204,15 +142,8 @@ function LoadingGroupys() {
     ).start()
   }, [pulseAnim])
 
-  const scale = pulseAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.93, 1.05]
-  })
-
-  const opacity = pulseAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.5, 1]
-  })
+  const scale = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.93, 1.05] })
+  const opacity = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] })
 
   return (
     <View className="flex-1 items-center justify-center">
@@ -232,10 +163,12 @@ export default function ArtistScreen() {
 
   const [artist, setArtist] = useState<ChartArtist | null>(null)
   const [tracks, setTracks] = useState<TrackRes[]>([])
+  const [communities, setCommunities] = useState<CommunityResDto[]>([])
   const [loading, setLoading] = useState(true)
   const [tracksLoading, setTracksLoading] = useState(true)
   const [expanded, setExpanded] = useState(false)
   const [communitiesExpanded, setCommunitiesExpanded] = useState(false)
+  const [showCreateCommunity, setShowCreateCommunity] = useState(false)
 
   const [playingId, setPlayingId] = useState<number | null>(null)
   const [loadingId, setLoadingId] = useState<number | null>(null)
@@ -244,23 +177,22 @@ export default function ArtistScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current
   const slideAnim = useRef(new Animated.Value(24)).current
 
-  // Fetch artist + top tracks
+  // Fetch artist + top tracks + communities
   useEffect(() => {
     if (!id) return
     let cancelled = false
     ;(async () => {
       try {
         const token = await getToken()
-        const [artistData, tracksData] = await Promise.all([
+        const [artistData, tracksData, communitiesData] = await Promise.all([
           apiFetch<ChartArtist>(`/artists/${id}`, token),
-          apiFetch<TrackRes[]>(`/artists/${id}/top-tracks?limit=5`, token).catch((err) => {
-            console.error('Failed to fetch top tracks:', err)
-            return [] as TrackRes[]
-          }),
+          apiFetch<TrackRes[]>(`/artists/${id}/top-tracks?limit=5`, token).catch(() => [] as TrackRes[]),
+          apiFetch<CommunityResDto[]>(`/communities/artist/${id}`, token).catch(() => [] as CommunityResDto[]),
         ])
         if (!cancelled) {
           setArtist(artistData)
           setTracks(tracksData)
+          setCommunities(communitiesData)
         }
       } catch (err) {
         console.error('Failed to fetch artist:', err)
@@ -284,16 +216,12 @@ export default function ArtistScreen() {
     }
   }, [loading, fadeAnim, slideAnim])
 
-  // Stop & unload sound on unmount
   useEffect(() => {
-    return () => {
-      soundRef.current?.unloadAsync()
-    }
+    return () => { soundRef.current?.unloadAsync() }
   }, [])
 
   const handleTrackPress = useCallback(
     async (track: TrackRes) => {
-      // Tap playing track → stop
       if (playingId === track.id) {
         await soundRef.current?.stopAsync()
         await soundRef.current?.unloadAsync()
@@ -302,7 +230,6 @@ export default function ArtistScreen() {
         return
       }
 
-      // Stop current sound if any
       if (soundRef.current) {
         await soundRef.current.stopAsync()
         await soundRef.current.unloadAsync()
@@ -337,8 +264,19 @@ export default function ArtistScreen() {
     [playingId]
   )
 
+  const handleCommunityCreated = useCallback((newCommunity: CommunityResDto) => {
+    setCommunities((prev) => [newCommunity, ...prev])
+    setShowCreateCommunity(false)
+  }, [])
+
+  const navigateToCommunity = useCallback((communityId: string) => {
+    router.push(`/(home)/(discover)/community/${communityId}` as any)
+  }, [])
+
   const visibleTracks = expanded ? tracks.slice(0, 5) : tracks.slice(0, 3)
   const canExpand = tracks.length > 3
+  const communityCards = communities.map(communityResToCard)
+  const visibleCommunities = communitiesExpanded ? communityCards : communityCards.slice(0, 2)
 
   const heroImage =
     artist?.images[artist.images.length - 1] ||
@@ -407,35 +345,70 @@ export default function ArtistScreen() {
             <View className="px-5 pt-8 pb-2">
               <View className="flex-row items-center justify-between mb-4">
                 <Text className="text-on-surface font-bold text-base">Communities</Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    LayoutAnimation.configureNext(
-                      LayoutAnimation.create(280, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity)
-                    )
-                    setCommunitiesExpanded((e) => !e)
-                  }}
-                >
-                  <Text className="text-primary text-sm font-semibold">
-                    {communitiesExpanded ? 'Show less' : 'Show more'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              <View className="gap-3">
-                <View className="flex-row gap-3">
-                  {buildArtistCommunities(artist).slice(0, 2).map((community) => (
-                    <CommunityCard key={community.id} community={community} />
-                  ))}
+                <View className="flex-row items-center gap-3">
+                  <TouchableOpacity onPress={() => setShowCreateCommunity(true)}>
+                    <Ionicons name="add-circle-outline" size={22} color={Colors.primary} />
+                  </TouchableOpacity>
+                  {communityCards.length > 2 ? (
+                    <TouchableOpacity
+                      onPress={() => {
+                        LayoutAnimation.configureNext(
+                          LayoutAnimation.create(280, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity)
+                        )
+                        setCommunitiesExpanded((e) => !e)
+                      }}
+                    >
+                      <Text className="text-primary text-sm font-semibold">
+                        {communitiesExpanded ? 'Show less' : 'Show more'}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
-                {communitiesExpanded && (
-                  <AnimatedExpandRow>
-                    <View className="flex-row gap-3">
-                      {buildArtistCommunities(artist).slice(2, 4).map((community) => (
-                        <CommunityCard key={community.id} community={community} />
-                      ))}
-                    </View>
-                  </AnimatedExpandRow>
-                )}
               </View>
+
+              {communities.length === 0 ? (
+                <View className="items-center py-6">
+                  <Ionicons name="people-outline" size={32} color={Colors.onSurfaceVariant} />
+                  <Text className="text-on-surface-variant text-sm mt-2">No communities yet</Text>
+                  <TouchableOpacity
+                    onPress={() => setShowCreateCommunity(true)}
+                    className="mt-3 bg-primary px-5 py-2 rounded-full"
+                  >
+                    <Text className="text-on-primary text-sm font-bold">Create One</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View className="gap-3">
+                  {/* First row */}
+                  <View className="flex-row gap-3">
+                    {visibleCommunities.slice(0, 2).map((c) => (
+                      <CommunityCard
+                        key={c.id}
+                        community={c}
+                        onPress={() => navigateToCommunity(communities.find((dto) => dto.id === c.id || dto.name === c.name)?.id ?? c.id)}
+                      />
+                    ))}
+                  </View>
+                  {/* Additional rows */}
+                  {communitiesExpanded && communityCards.length > 2 ? (
+                    <AnimatedExpandRow>
+                      <View className="gap-3">
+                        {Array.from({ length: Math.ceil((communityCards.length - 2) / 2) }).map((_, rowIdx) => (
+                          <View key={rowIdx} className="flex-row gap-3">
+                            {communityCards.slice(2 + rowIdx * 2, 4 + rowIdx * 2).map((c) => (
+                              <CommunityCard
+                                key={c.id}
+                                community={c}
+                                onPress={() => navigateToCommunity(communities.find((dto) => dto.name === c.name)?.id ?? c.id)}
+                              />
+                            ))}
+                          </View>
+                        ))}
+                      </View>
+                    </AnimatedExpandRow>
+                  ) : null}
+                </View>
+              )}
             </View>
 
             {/* Top Tracks */}
@@ -502,6 +475,17 @@ export default function ArtistScreen() {
           </TouchableOpacity>
         </View>
       )}
+
+      {/* Create Community Modal */}
+      {artist ? (
+        <CreateCommunityModal
+          visible={showCreateCommunity}
+          onClose={() => setShowCreateCommunity(false)}
+          onCreated={handleCommunityCreated}
+          artistId={artist.id}
+          artistName={artist.name}
+        />
+      ) : null}
     </View>
   )
 }

@@ -24,7 +24,19 @@ public class Community {
 
     public String country;
 
-    @Column(name = "image_url")
+    @Column(name = "banner_url")
+    public String bannerUrl;
+
+    @Column(name = "icon_type")
+    public String iconType; // "IMAGE" or "EMOJI"
+
+    @Column(name = "icon_emoji")
+    public String iconEmoji;
+
+    @Column(name = "icon_url")
+    public String iconUrl;
+
+    @Column(name = "image_url") // legacy, kept for compatibility
     public String imageUrl;
 
     @ElementCollection(fetch = FetchType.EAGER)

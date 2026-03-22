@@ -3,6 +3,7 @@ import { ClerkProvider } from '@clerk/expo'
 import { tokenCache } from '@clerk/expo/token-cache'
 import { Slot } from 'expo-router'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
+import { AuthTokenProvider } from '@/hooks/AuthTokenContext'
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!
 
@@ -14,7 +15,9 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
-        <Slot />
+        <AuthTokenProvider>
+          <Slot />
+        </AuthTokenProvider>
       </ClerkProvider>
     </SafeAreaProvider>
   )

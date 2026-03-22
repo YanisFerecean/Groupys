@@ -2,6 +2,8 @@ package com.groupys.model;
 
 import jakarta.persistence.*;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -13,13 +15,15 @@ public class Post {
     public UUID id;
 
     @Column(columnDefinition = "TEXT")
+    public String title;
+
+    @Column(columnDefinition = "TEXT")
     public String content;
 
-    @Column(name = "media_url")
-    public String mediaUrl;
-
-    @Column(name = "media_type")
-    public String mediaType;
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "post_media", joinColumns = @JoinColumn(name = "post_id"))
+    @OrderColumn(name = "sort_order")
+    public List<PostMedia> media = new ArrayList<>();
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "community_id", nullable = false)

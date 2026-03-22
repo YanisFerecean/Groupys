@@ -1,19 +1,49 @@
 import { Ionicons } from '@expo/vector-icons'
-import { useState } from 'react'
+import { useAuth } from '@clerk/expo'
+import { useCallback, useEffect, useState } from 'react'
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native'
+import { router } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import SectionHeader from '@/components/ui/SectionHeader'
 import { TopArtistRows, TopArtistsSkeleton, useTopArtists } from '@/components/discover/TopArtistsSection'
 import CommunityCard from '@/components/discover/CommunityCard'
 import UserOnlineCard from '@/components/discover/UserOnlineCard'
 import SearchOverlay from '@/components/discover/SearchOverlay'
+import { apiFetch } from '@/lib/api'
+import { communityResToCard } from '@/lib/communityUtils'
 import { Colors } from '@/constants/colors'
-import { communities, activeUsers } from '@/constants/mockData'
+import { activeUsers } from '@/constants/mockData'
+import type { CommunityResDto } from '@/models/CommunityRes'
 
 export default function DiscoverScreen() {
   const insets = useSafeAreaInsets()
+  const { getToken } = useAuth()
   const { artists, expanded, loading, toggleExpand } = useTopArtists()
   const [searchOpen, setSearchOpen] = useState(false)
+  const [communities, setCommunities] = useState<CommunityResDto[]>([])
+  const [communitiesLoading, setCommunitiesLoading] = useState(true)
+
+  const fetchCommunities = useCallback(async () => {
+    try {
+      const token = await getToken()
+      const data = await apiFetch<CommunityResDto[]>('/communities', token)
+      setCommunities(data)
+    } catch (err) {
+      console.error('Failed to fetch communities:', err)
+    } finally {
+      setCommunitiesLoading(false)
+    }
+  }, [getToken])
+
+  useEffect(() => {
+    fetchCommunities()
+  }, [fetchCommunities])
+
+  const communityCards = communities.slice(0, 4).map(communityResToCard)
+
+  const navigateToCommunity = (communityId: string) => {
+    router.push(`/(home)/(discover)/community/${communityId}` as any)
+  }
 
   return (
     <View className="flex-1 bg-surface">
@@ -54,18 +84,39 @@ export default function DiscoverScreen() {
         {/* Explore Communities */}
         <View className="px-5 pt-8 pb-2">
           <SectionHeader title="Explore Communities" actionText="See All" />
-          <View className="mt-4 gap-3">
-            <View className="flex-row gap-3">
-              {communities.slice(0, 2).map((community) => (
-                <CommunityCard key={community.id} community={community} />
-              ))}
+          {communitiesLoading ? (
+            <View className="mt-4 items-center py-6">
+              <Text className="text-on-surface-variant text-sm">Loading communities...</Text>
             </View>
-            <View className="flex-row gap-3">
-              {communities.slice(2, 4).map((community) => (
-                <CommunityCard key={community.id} community={community} />
-              ))}
+          ) : communityCards.length === 0 ? (
+            <View className="mt-4 items-center py-6">
+              <Ionicons name="people-outline" size={32} color={Colors.onSurfaceVariant} />
+              <Text className="text-on-surface-variant text-sm mt-2">No communities yet</Text>
             </View>
-          </View>
+          ) : (
+            <View className="mt-4 gap-3">
+              <View className="flex-row gap-3">
+                {communityCards.slice(0, 2).map((community, idx) => (
+                  <CommunityCard
+                    key={community.id}
+                    community={community}
+                    onPress={() => navigateToCommunity(communities[idx].id)}
+                  />
+                ))}
+              </View>
+              {communityCards.length > 2 ? (
+                <View className="flex-row gap-3">
+                  {communityCards.slice(2, 4).map((community, idx) => (
+                    <CommunityCard
+                      key={community.id}
+                      community={community}
+                      onPress={() => navigateToCommunity(communities[idx + 2].id)}
+                    />
+                  ))}
+                </View>
+              ) : null}
+            </View>
+          )}
         </View>
 
         {/* Who's On */}
@@ -86,9 +137,7 @@ export default function DiscoverScreen() {
 
       </ScrollView>
 
-
-
-      {/* Search overlay — rendered last so it sits on top */}
+      {/* Search overlay */}
       {searchOpen && <SearchOverlay onClose={() => setSearchOpen(false)} />}
     </View>
   )

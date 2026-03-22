@@ -5,7 +5,11 @@ import com.groupys.dto.CommunityMemberResDto;
 import com.groupys.dto.CommunityResDto;
 import com.groupys.dto.CommunityUpdateDto;
 import com.groupys.service.CommunityService;
+import com.groupys.service.StorageService;
 import io.quarkus.security.Authenticated;
+import jakarta.inject.Inject;
+import org.jboss.resteasy.reactive.RestForm;
+import org.jboss.resteasy.reactive.multipart.FileUpload;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.*;
@@ -14,7 +18,9 @@ import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 
+import java.io.InputStream;
 import java.net.URI;
+import java.nio.file.Files;
 import java.util.List;
 import java.util.UUID;
 
@@ -27,6 +33,9 @@ public class CommunityResource {
 
     @Inject
     CommunityService communityService;
+
+    @Inject
+    StorageService storageService;
 
     @Inject
     JsonWebToken jwt;
@@ -97,7 +106,8 @@ public class CommunityResource {
     public Response checkMembership(@PathParam("id") UUID id) {
         String clerkId = jwt.getSubject();
         boolean member = communityService.isMember(id, clerkId);
-        return Response.ok(java.util.Map.of("member", member)).build();
+        boolean owner = communityService.isOwner(id, clerkId);
+        return Response.ok(java.util.Map.of("member", member, "owner", owner)).build();
     }
 
     @POST
@@ -118,5 +128,23 @@ public class CommunityResource {
     public Response delete(@PathParam("id") UUID id) {
         communityService.delete(id);
         return Response.noContent().build();
+    }
+
+    @POST
+    @Path("/media/upload")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    public Response uploadMedia(@RestForm("file") FileUpload file) {
+        if (file == null || file.size() == 0) {
+            throw new BadRequestException("No file provided");
+        }
+        try {
+            String mediaType = file.contentType();
+            InputStream is = Files.newInputStream(file.uploadedFile());
+            String mediaUrl = storageService.upload(file.fileName(), mediaType, is, file.size());
+            is.close();
+            return Response.ok(java.util.Map.of("url", mediaUrl)).build();
+        } catch (Exception e) {
+            throw new InternalServerErrorException("File upload failed", e);
+        }
     }
 }

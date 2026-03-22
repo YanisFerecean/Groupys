@@ -91,6 +91,10 @@ public class CommunityService {
         community.genre = dto.genre();
         community.country = dto.country();
         community.imageUrl = dto.imageUrl();
+        community.bannerUrl = dto.bannerUrl();
+        community.iconType = dto.iconType();
+        community.iconEmoji = dto.iconEmoji();
+        community.iconUrl = dto.iconUrl();
         if (dto.artistId() != null) {
             Artist artist = artistRepository.findByIdOptional(dto.artistId())
                     .orElseThrow(() -> new NotFoundException("Artist not found"));
@@ -159,6 +163,14 @@ public class CommunityService {
         return communityMemberRepository.findByUserAndCommunity(user.id, communityId).isPresent();
     }
 
+    public boolean isOwner(UUID communityId, String clerkId) {
+        User user = userRepository.findByClerkId(clerkId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        Community community = communityRepository.findByIdOptional(communityId)
+                .orElseThrow(() -> new NotFoundException("Community not found"));
+        return community.createdBy != null && community.createdBy.id.equals(user.id);
+    }
+
     public List<CommunityMemberResDto> getMembers(UUID communityId) {
         communityRepository.findByIdOptional(communityId)
                 .orElseThrow(() -> new NotFoundException("Community not found"));
@@ -183,6 +195,10 @@ public class CommunityService {
         community.genre = dto.genre();
         community.country = dto.country();
         community.imageUrl = dto.imageUrl();
+        community.bannerUrl = dto.bannerUrl();
+        community.iconType = dto.iconType();
+        community.iconEmoji = dto.iconEmoji();
+        community.iconUrl = dto.iconUrl();
         return CommunityUtil.toDto(community);
     }
 

@@ -3,6 +3,7 @@ package com.groupys.service;
 import com.groupys.dto.PostResDto;
 import com.groupys.model.Community;
 import com.groupys.model.Post;
+import com.groupys.model.PostMedia;
 import com.groupys.model.PostReaction;
 import com.groupys.model.User;
 import com.groupys.repository.*;
@@ -11,8 +12,10 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.NotFoundException;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @ApplicationScoped
 public class PostService {
@@ -59,6 +62,14 @@ public class PostService {
                 .toList();
     }
 
+    public List<PostResDto> getAccountPosts(String clerkId) {
+        User user = userRepository.findByClerkId(clerkId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        return postRepository.findByAuthor(user.id).stream()
+                .map(post -> toDto(post, user))
+                .toList();
+    }
+
     public PostResDto getById(UUID postId, String clerkId) {
         User user = userRepository.findByClerkId(clerkId).orElse(null);
         Post post = postRepository.findByIdOptional(postId)
@@ -67,16 +78,18 @@ public class PostService {
     }
 
     @Transactional
-    public PostResDto create(UUID communityId, String content, String mediaUrl, String mediaType, String clerkId) {
+    public PostResDto create(UUID communityId, String title, String content, List<PostMedia> mediaList, String clerkId) {
         User author = userRepository.findByClerkId(clerkId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
         Community community = communityRepository.findByIdOptional(communityId)
                 .orElseThrow(() -> new NotFoundException("Community not found"));
 
         Post post = new Post();
+        post.title = title;
         post.content = content;
-        post.mediaUrl = mediaUrl;
-        post.mediaType = mediaType;
+        if (mediaList != null) {
+            post.media = new java.util.ArrayList<>(mediaList);
+        }
         post.community = community;
         post.author = author;
         postRepository.persist(post);
@@ -125,8 +138,10 @@ public class PostService {
         }
         commentService.deleteAllByPost(postId);
         postReactionRepository.delete("post.id", postId);
-        if (post.mediaUrl != null) {
-            storageService.delete(post.mediaUrl);
+        if (post.media != null && !post.media.isEmpty()) {
+            for (PostMedia pm : post.media) {
+                storageService.delete(pm.url);
+            }
         }
         postRepository.delete(post);
     }
@@ -141,22 +156,31 @@ public class PostService {
                     .map(r -> r.reactionType)
                     .orElse(null);
         }
+        List<PostResDto.PostMediaDto> mediaDtos = new ArrayList<>();
+        if (post.media != null) {
+            for (int i = 0; i < post.media.size(); i++) {
+                PostMedia m = post.media.get(i);
+                mediaDtos.add(new PostResDto.PostMediaDto(m.url, m.type, i));
+            }
+        }
+
         return new PostResDto(
                 post.id,
                 post.content,
-                post.mediaUrl,
-                post.mediaType,
+                mediaDtos,
                 post.community.id,
                 post.community.name,
                 post.author.id,
                 post.author.username,
                 post.author.displayName,
                 post.author.profileImage,
+                post.author.clerkId,
                 post.createdAt,
                 likes,
                 dislikes,
                 userReaction,
-                comments
+                comments,
+                post.title
         );
     }
 }

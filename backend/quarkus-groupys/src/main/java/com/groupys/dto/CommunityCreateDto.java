@@ -11,6 +11,10 @@ public record CommunityCreateDto(
         @Size(max = 50) String genre,
         @Size(max = 60) String country,
         String imageUrl,
+        String bannerUrl,
+        String iconType,
+        String iconEmoji,
+        String iconUrl,
         List<String> tags,
         Long artistId
 ) {

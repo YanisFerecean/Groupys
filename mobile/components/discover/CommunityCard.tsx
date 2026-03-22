@@ -6,6 +6,7 @@ import type { Community } from '@/types'
 
 interface CommunityCardProps {
   community: Community
+  onPress?: () => void
 }
 
 function formatMembers(count: number): string {
@@ -13,7 +14,7 @@ function formatMembers(count: number): string {
   return String(count)
 }
 
-export default function CommunityCard({ community }: CommunityCardProps) {
+export default function CommunityCard({ community, onPress }: CommunityCardProps) {
   const scale = useRef(new Animated.Value(1)).current
 
   const handlePressIn = () => {
@@ -36,7 +37,12 @@ export default function CommunityCard({ community }: CommunityCardProps) {
   }
 
   return (
-    <Pressable className="flex-1" onPressIn={handlePressIn} onPressOut={handlePressOut}>
+    <Pressable
+      className="flex-1"
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      onPress={onPress}
+    >
       <Animated.View
         style={{
           backgroundColor: community.color,
