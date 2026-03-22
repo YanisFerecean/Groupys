@@ -56,6 +56,7 @@ public class UserService {
         user.username = dto.username();
         user.displayName = dto.displayName();
         user.bio = dto.bio();
+        user.profileImage = dto.profileImage();
         userRepository.persist(user);
         return UserUtil.toDto(user);
     }
@@ -70,6 +71,9 @@ public class UserService {
         user.bannerUrl = dto.bannerUrl();
         user.accentColor = dto.accentColor();
         user.nameColor = dto.nameColor();
+        if (dto.profileImage() != null) {
+            user.profileImage = dto.profileImage();
+        }
         if (dto.widgets() != null) {
             user.widgets = dto.widgets();
         }

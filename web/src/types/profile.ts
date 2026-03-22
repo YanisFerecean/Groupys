@@ -5,6 +5,7 @@ export interface ProfileCustomization {
   bannerUrl?: string;
   accentColor?: string;
   nameColor?: string;
+  profileImage?: string;
   topSongs?: { title: string; artist: string; coverUrl?: string }[];
   topArtists?: { name: string; genre?: string; imageUrl?: string }[];
   topAlbums?: {

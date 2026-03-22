@@ -7,6 +7,7 @@ public record UserCreateDto(
         @NotBlank String clerkId,
         @NotBlank @Size(min = 3, max = 30) String username,
         @Size(max = 50) String displayName,
-        @Size(max = 300) String bio
+        @Size(max = 300) String bio,
+        String profileImage
 ) {
 }

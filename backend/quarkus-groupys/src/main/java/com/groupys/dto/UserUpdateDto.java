@@ -9,6 +9,7 @@ public record UserUpdateDto(
         String bannerUrl,
         @Size(max = 7) String accentColor,
         @Size(max = 7) String nameColor,
+        String profileImage,
         String widgets
 ) {
 }

@@ -1,8 +1,12 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useAuth, useUser } from "@clerk/nextjs";
-import { fetchUserByClerkId, createBackendUser } from "@/lib/api";
+import { useUser } from "@clerk/nextjs";
+import {
+  fetchUserByClerkId,
+  createBackendUser,
+  updateBackendUser,
+} from "@/lib/api";
 
 export default function UserSync() {
   const { getToken, isLoaded: isAuthLoaded } = useAuth();
@@ -22,7 +26,18 @@ export default function UserSync() {
             clerkId: user.id,
             username: user.username ?? user.id,
             displayName: user.fullName ?? undefined,
-          }, token);
+            profileImage: user.imageUrl ?? undefined,
+          });
+        } else if (user.imageUrl && existing.profileImage !== user.imageUrl) {
+          await updateBackendUser(existing.id, {
+            displayName: existing.displayName ?? undefined,
+            bio: existing.bio ?? undefined,
+            country: existing.country ?? undefined,
+            bannerUrl: existing.bannerUrl ?? undefined,
+            accentColor: existing.accentColor ?? undefined,
+            nameColor: existing.nameColor ?? undefined,
+            profileImage: user.imageUrl,
+          });
         }
       } catch (err) {
         console.error("Failed to sync user to backend:", err);
