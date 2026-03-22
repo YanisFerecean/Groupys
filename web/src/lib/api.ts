@@ -195,13 +195,16 @@ export async function fetchUserByClerkId(
   return res.json();
 }
 
-export async function createBackendUser(data: {
-  clerkId: string;
-  username: string;
-  displayName?: string;
-  bio?: string;
-  profileImage?: string;
-}): Promise<BackendUser> {
+export async function createBackendUser(
+  data: {
+    clerkId: string;
+    username: string;
+    displayName?: string;
+    bio?: string;
+    profileImage?: string;
+  },
+  token: string | null,
+): Promise<BackendUser> {
   const res = await fetch(`${API_URL}/users`, {
     method: "POST",
     body: data,
