@@ -3,6 +3,7 @@ export interface TopSong {
   title: string
   artist: string
   coverUrl?: string
+  previewUrl?: string
 }
 
 export interface TopArtist {
