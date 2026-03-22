@@ -9,6 +9,7 @@ import com.groupys.dto.lastfm.LastFmChartTracksResponse;
 import com.groupys.dto.lastfm.LastFmGeoTracksResponse;
 import com.groupys.dto.lastfm.LastFmTagAlbumsResponse;
 import com.groupys.dto.lastfm.LastFmTopArtistsResponse;
+import io.quarkus.cache.CacheResult;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
@@ -34,6 +35,7 @@ public class ChartService {
     @ConfigProperty(name = "lastfm.api.key")
     String lastfmApiKey;
 
+    @CacheResult(cacheName = "charts-tracks")
     public List<TopTrackResDto> getGlobalTopTracks() {
         LastFmChartTracksResponse response = fetchLastFmResponse(
                 "chart.gettoptracks",
@@ -55,6 +57,7 @@ public class ChartService {
                 .toList();
     }
 
+    @CacheResult(cacheName = "charts-tracks-country")
     public List<TopTrackResDto> getTopTracksByCountry(String country) {
         LastFmGeoTracksResponse response = fetchLastFmResponse(
                 "geo.gettoptracks",
@@ -76,6 +79,7 @@ public class ChartService {
                 .toList();
     }
 
+    @CacheResult(cacheName = "charts-artists")
     public List<ArtistResDto> getGlobalTopArtists() {
         LastFmChartArtistsResponse response = fetchLastFmResponse(
                 "chart.gettopartists",
@@ -93,6 +97,7 @@ public class ChartService {
                 .toList();
     }
 
+    @CacheResult(cacheName = "charts-artists-country")
     public List<ArtistResDto> getTopArtistsByCountry(String country) {
         LastFmTopArtistsResponse response = fetchLastFmResponse(
                 "geo.gettopartists",
@@ -110,10 +115,12 @@ public class ChartService {
                 .toList();
     }
 
+    @CacheResult(cacheName = "charts-albums")
     public List<TopAlbumResDto> getGlobalTopAlbums() {
         return getTopAlbumsByTag("all");
     }
 
+    @CacheResult(cacheName = "charts-albums-tag")
     public List<TopAlbumResDto> getTopAlbumsByTag(String tag) {
         LastFmTagAlbumsResponse response = fetchLastFmResponse(
                 "tag.gettopalbums",
