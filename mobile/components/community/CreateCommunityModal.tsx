@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
+
 import * as ImagePicker from 'expo-image-picker'
 import * as Haptics from 'expo-haptics'
 import { apiPost, uploadCommunityMedia } from '@/lib/api'
@@ -43,6 +44,7 @@ export default function CreateCommunityModal({
   const [name, setName] = useState(`${artistName} Fans`)
   const [country, setCountry] = useState('')
   const [tags, setTags] = useState<string[]>([])
+  const [tagInput, setTagInput] = useState('')
   
   const [bannerUri, setBannerUri] = useState<string | null>(null)
   const [iconType, setIconType] = useState<'IMAGE' | 'EMOJI'>('EMOJI')
@@ -51,11 +53,23 @@ export default function CreateCommunityModal({
   
   const [submitting, setSubmitting] = useState(false)
 
-  const toggleTag = (tag: string) => {
-    if (tags.includes(tag)) {
-      setTags(tags.filter((t) => t !== tag))
+  const addTag = (raw: string) => {
+    const tag = raw.trim().toLowerCase()
+    if (!tag || tags.includes(tag) || tags.length >= 5) return
+    setTags([...tags, tag])
+    setTagInput('')
+  }
+
+  const removeTag = (tag: string) => {
+    setTags(tags.filter((t) => t !== tag))
+  }
+
+  const toggleSuggestion = (tag: string) => {
+    const normalized = tag.toLowerCase()
+    if (tags.includes(normalized)) {
+      removeTag(normalized)
     } else if (tags.length < 5) {
-      setTags([...tags, tag])
+      setTags([...tags, normalized])
     }
   }
 
@@ -114,6 +128,7 @@ export default function CreateCommunityModal({
       setTags([])
       setBannerUri(null)
       setIconUri(null)
+      setTagInput('')
       setIconEmoji('🌟')
       setIconType('EMOJI')
     } catch (err) {
@@ -241,24 +256,59 @@ export default function CreateCommunityModal({
           <Text className="text-on-surface font-semibold text-sm mb-2">
             Tags ({tags.length}/5)
           </Text>
-          <View className="flex-row flex-wrap gap-2 mb-2">
-            {tags.map((tag) => (
-              <TouchableOpacity
-                key={tag}
-                onPress={() => toggleTag(tag)}
-                className="flex-row items-center gap-1 bg-primary/15 px-3 py-1.5 rounded-full"
+
+          {/* Custom tag input */}
+          <View className="flex-row items-center gap-2 mb-3">
+            <TextInput
+              className="flex-1 bg-surface-container-low rounded-xl px-4 py-3 text-sm text-on-surface"
+              placeholder="Add a custom tag..."
+              placeholderTextColor={Colors.onSurfaceVariant}
+              value={tagInput}
+              onChangeText={setTagInput}
+              onSubmitEditing={() => addTag(tagInput)}
+              returnKeyType="done"
+              maxLength={30}
+            />
+            <TouchableOpacity
+              onPress={() => addTag(tagInput)}
+              disabled={!tagInput.trim() || tags.length >= 5}
+              className={`px-4 py-3 rounded-xl ${
+                tagInput.trim() && tags.length < 5 ? 'bg-primary' : 'bg-surface-container-high'
+              }`}
+            >
+              <Text
+                className={`text-sm font-bold ${
+                  tagInput.trim() && tags.length < 5 ? 'text-white' : 'text-on-surface-variant'
+                }`}
               >
-                <Text className="text-xs font-semibold text-primary">{tag}</Text>
-                <Ionicons name="close" size={12} color={Colors.primary} />
-              </TouchableOpacity>
-            ))}
+                Add
+              </Text>
+            </TouchableOpacity>
           </View>
-          <Text className="text-xs text-on-surface-variant mb-3">Suggestions:</Text>
-          <View className="flex-row flex-wrap gap-2">
-            {TAG_SUGGESTIONS.filter((t) => !tags.includes(t)).map((tag) => (
+
+          {/* Selected tags */}
+          {tags.length > 0 ? (
+            <View className="flex-row flex-wrap gap-2 mb-3">
+              {tags.map((tag) => (
+                <TouchableOpacity
+                  key={tag}
+                  onPress={() => removeTag(tag)}
+                  className="flex-row items-center gap-1 bg-primary/15 px-3 py-1.5 rounded-full"
+                >
+                  <Text className="text-xs font-semibold text-primary">#{tag}</Text>
+                  <Ionicons name="close" size={12} color={Colors.primary} />
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
+
+          {/* Suggestions */}
+          <Text className="text-xs text-on-surface-variant mb-2">Suggestions:</Text>
+          <View className="flex-row flex-wrap gap-2 mb-4">
+            {TAG_SUGGESTIONS.filter((t) => !tags.includes(t.toLowerCase())).map((tag) => (
               <TouchableOpacity
                 key={tag}
-                onPress={() => toggleTag(tag)}
+                onPress={() => toggleSuggestion(tag)}
                 className="bg-surface-container-high px-3 py-1.5 rounded-full"
                 disabled={tags.length >= 5}
               >
