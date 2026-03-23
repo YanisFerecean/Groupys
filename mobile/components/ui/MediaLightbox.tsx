@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import {
+  Animated,
   Modal,
   View,
   TouchableOpacity,
@@ -39,9 +40,74 @@ interface MediaSlideProps {
   token: string | null
 }
 
+const BAR_COUNT = 32
+
+// Pre-seeded per-bar random profiles so animation is consistent across play/pause
+function makeBarProfiles(count: number) {
+  return Array.from({ length: count }, () => ({
+    min: Math.random() * 0.12 + 0.04,
+    max: Math.random() * 0.65 + 0.35,
+    duration: 180 + Math.floor(Math.random() * 320),
+    delay: Math.floor(Math.random() * 250),
+  }))
+}
+
+function AudioVisualizer({ isPlaying }: { isPlaying: boolean }) {
+  const bars = useRef(
+    Array.from({ length: BAR_COUNT }, () => new Animated.Value(0.08))
+  ).current
+  const profiles = useRef(makeBarProfiles(BAR_COUNT)).current
+  const animationsRef = useRef<Animated.CompositeAnimation[]>([])
+
+  useEffect(() => {
+    animationsRef.current.forEach((a) => a.stop())
+    animationsRef.current = []
+
+    if (isPlaying) {
+      bars.forEach((bar, i) => {
+        const { min, max, duration, delay } = profiles[i]
+        const loop = Animated.loop(
+          Animated.sequence([
+            Animated.timing(bar, { toValue: max, duration, useNativeDriver: false, delay: i === 0 ? 0 : delay }),
+            Animated.timing(bar, { toValue: min, duration, useNativeDriver: false }),
+          ])
+        )
+        animationsRef.current.push(loop)
+        loop.start()
+      })
+    } else {
+      bars.forEach((bar) =>
+        Animated.timing(bar, { toValue: 0.08, duration: 250, useNativeDriver: false }).start()
+      )
+    }
+
+    return () => {
+      animationsRef.current.forEach((a) => a.stop())
+    }
+  }, [isPlaying])
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 56, gap: 2.5, marginBottom: 20, marginTop: 4 }}>
+      {bars.map((bar, i) => (
+        <Animated.View
+          key={i}
+          style={{
+            width: 3,
+            borderRadius: 2,
+            height: bar.interpolate({ inputRange: [0, 1], outputRange: [4, 52] }),
+            backgroundColor: Colors.primary,
+            opacity: bar.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1] }),
+          }}
+        />
+      ))}
+    </View>
+  )
+}
+
 const MediaSlide = React.memo(({ item, isActive, token }: MediaSlideProps) => {
   const [loading, setLoading] = useState(true)
   const [sound, setSound] = useState<Audio.Sound | null>(null)
+  const soundRef = useRef<Audio.Sound | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [position, setPosition] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -88,6 +154,7 @@ const MediaSlide = React.memo(({ item, isActive, token }: MediaSlideProps) => {
         { shouldPlay: false },
         onPlaybackStatusUpdate
       )
+      soundRef.current = newSound
       setSound(newSound)
       setLoading(false)
     } catch (error) {
@@ -96,23 +163,26 @@ const MediaSlide = React.memo(({ item, isActive, token }: MediaSlideProps) => {
     }
   }, [item.url, token, onPlaybackStatusUpdate])
 
+  // Unload on unmount — uses ref so it always has the live sound instance
+  useEffect(() => {
+    return () => {
+      soundRef.current?.stopAsync().then(() => soundRef.current?.unloadAsync())
+      soundRef.current = null
+    }
+  }, [])
+
   useEffect(() => {
     if (isActive && isAudio) {
       loadAudio()
     }
-    return () => {
-      if (sound) {
-        sound.unloadAsync()
-      }
-    }
   }, [isActive, isAudio, loadAudio])
 
-  // Stop audio when not active
+  // Pause when swiped away
   useEffect(() => {
-    if (!isActive && isAudio && sound) {
-      sound.pauseAsync()
+    if (!isActive && isAudio && soundRef.current) {
+      soundRef.current.pauseAsync()
     }
-  }, [isActive, isAudio, sound])
+  }, [isActive, isAudio])
 
   const handlePlayPause = async () => {
     if (!sound) return
@@ -165,10 +235,12 @@ const MediaSlide = React.memo(({ item, isActive, token }: MediaSlideProps) => {
 
         {isAudio && (
           <View className="w-full bg-white/10 p-8 rounded-3xl border border-white/20 items-center">
-            <View className="w-20 h-20 bg-primary/20 rounded-full items-center justify-center mb-6">
-              <Ionicons name="musical-notes" size={40} color={Colors.primary} />
+            <View className="w-16 h-16 bg-primary/20 rounded-full items-center justify-center mb-4">
+              <Ionicons name="musical-notes" size={32} color={Colors.primary} />
             </View>
-            
+
+            <AudioVisualizer isPlaying={isPlaying} />
+
             <View className="w-full mb-6">
               <View className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
                 <View 
