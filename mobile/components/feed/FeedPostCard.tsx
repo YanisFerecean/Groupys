@@ -117,14 +117,13 @@ export default function FeedPostCard({
           onPress={navigateToPost}
           activeOpacity={0.7}
         >
-          <View pointerEvents="none">
-            <MarkdownDisplay
-              content={post.content}
-              numberOfLines={3}
-              baseFontSize={14}
-              color={Colors.onSurfaceVariant}
-            />
-          </View>
+          <MarkdownDisplay
+            content={post.content}
+            numberOfLines={3}
+            baseFontSize={14}
+            color={Colors.onSurfaceVariant}
+            interactive
+          />
         </TouchableOpacity>
       ) : null}
 

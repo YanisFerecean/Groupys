@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '@clerk/expo'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
@@ -13,18 +13,22 @@ import FeedPostCard from '@/components/feed/FeedPostCard'
 import { apiFetch } from '@/lib/api'
 import { Colors } from '@/constants/colors'
 import type { PostResDto } from '@/models/PostRes'
-import type { CommunityResDto } from '@/models/CommunityRes'
 
 export default function FeedScreen() {
   const insets = useSafeAreaInsets()
-  const { getToken } = useAuth()
+  const { getToken, isLoaded: isAuthLoaded } = useAuth()
+  const getTokenRef = useRef(getToken)
   const [posts, setPosts] = useState<PostResDto[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
+  useEffect(() => {
+    getTokenRef.current = getToken
+  }, [getToken])
+
   const fetchFeed = useCallback(async () => {
     try {
-      const token = await getToken()
+      const token = await getTokenRef.current()
       const data = await apiFetch<PostResDto[]>('/posts/feed', token)
       setPosts(data)
     } catch (err) {
@@ -33,11 +37,12 @@ export default function FeedScreen() {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [getToken])
+  }, [])
 
   useEffect(() => {
+    if (!isAuthLoaded) return
     fetchFeed()
-  }, [fetchFeed])
+  }, [isAuthLoaded, fetchFeed])
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true)

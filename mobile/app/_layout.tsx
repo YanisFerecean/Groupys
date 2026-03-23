@@ -4,6 +4,7 @@ import { tokenCache } from '@clerk/expo/token-cache'
 import { Slot } from 'expo-router'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { AuthTokenProvider } from '@/hooks/AuthTokenContext'
+import { useFonts, DMSans_400Regular, DMSans_500Medium, DMSans_700Bold } from '@expo-google-fonts/dm-sans'
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!
 
@@ -12,6 +13,8 @@ if (!publishableKey) {
 }
 
 export default function RootLayout() {
+  useFonts({ DMSans_400Regular, DMSans_500Medium, DMSans_700Bold })
+
   return (
     <SafeAreaProvider>
       <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>

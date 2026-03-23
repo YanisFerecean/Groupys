@@ -1,6 +1,6 @@
 import type { ProfileCustomization } from '@/models/ProfileCustomization'
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL!
+export const API_URL = process.env.EXPO_PUBLIC_API_URL!
 
 export async function apiFetch<T>(path: string, token: string | null, cache = true): Promise<T> {
   const headers: Record<string, string> = {
@@ -48,6 +48,8 @@ export interface BackendUser {
   profileImage: string | null
   widgets: string | null
   dateJoined: string
+  tags?: string[]
+  spotifyConnected?: boolean
 }
 
 // ── Widget conversion ───────────────────────────────────────────────────────
@@ -282,9 +284,12 @@ function profileToWidgets(profile: Partial<ProfileCustomization>): BackendWidget
 
 export function backendUserToProfile(user: BackendUser): ProfileCustomization {
   return {
+    id: user.id ?? undefined,
     displayName: user.displayName ?? undefined,
     bio: user.bio ?? undefined,
     country: user.country ?? undefined,
+    tags: user.tags || [],
+    spotifyConnected: user.spotifyConnected ?? false,
     bannerUrl: user.bannerUrl ?? undefined,
     accentColor: user.accentColor ?? undefined,
     nameColor: user.nameColor ?? undefined,
@@ -429,6 +434,7 @@ export async function createBackendUser(
     username: string
     displayName?: string
     bio?: string
+    profileImage?: string
   },
   token: string | null,
 ): Promise<BackendUser> {
@@ -447,6 +453,30 @@ export async function createBackendUser(
   return res.json()
 }
 
+export async function syncUserProfileImage(
+  user: BackendUser,
+  profileImage: string,
+  token: string | null,
+): Promise<BackendUser> {
+  const res = await fetch(`${API_URL}/users/${encodeURIComponent(user.id)}`, {
+    method: 'PUT',
+    headers: makeHeaders(token),
+    body: JSON.stringify({
+      displayName: user.displayName ?? null,
+      bio: user.bio ?? null,
+      country: user.country ?? null,
+      bannerUrl: user.bannerUrl ?? null,
+      accentColor: user.accentColor ?? null,
+      nameColor: user.nameColor ?? null,
+      profileImage,
+      widgets: user.widgets ?? null,
+      tags: user.tags ?? null,
+    }),
+  })
+  if (!res.ok) throw new Error(`Failed to sync profile image (${res.status})`)
+  return res.json()
+}
+
 export async function updateBackendUser(
   userId: string,
   data: Partial<ProfileCustomization>,
@@ -457,6 +487,7 @@ export async function updateBackendUser(
     displayName: data.displayName ?? null,
     bio: data.bio ?? null,
     country: data.country ?? null,
+    tags: data.tags ?? null,
     bannerUrl: data.bannerUrl ?? null,
     accentColor: data.accentColor ?? null,
     nameColor: data.nameColor ?? null,

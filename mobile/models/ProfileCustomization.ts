@@ -21,9 +21,12 @@ export interface TopAlbum {
 }
 
 export interface ProfileCustomization {
+  id?: string
   displayName?: string
   bio?: string
   country?: string
+  tags?: string[]
+  spotifyConnected?: boolean
   bannerUrl?: string
   accentColor?: string
   nameColor?: string

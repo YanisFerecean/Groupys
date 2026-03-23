@@ -46,7 +46,7 @@ interface Props {
 
 export default function CommunityDetailScreen({ communityId, postRoute, communityRoute }: Props) {
   const insets = useSafeAreaInsets()
-  const { token } = useAuthToken()
+  const { refreshToken } = useAuthToken()
   const { user } = useUser()
 
   const [community, setCommunity] = useState<CommunityResDto | null>(null)
@@ -59,6 +59,7 @@ export default function CommunityDetailScreen({ communityId, postRoute, communit
   const [showEditModal, setShowEditModal] = useState(false)
 
   const fetchAll = useCallback(async () => {
+    const token = await refreshToken()
     if (!token) return
     try {
       const [communityData, membershipData, membersData, postsData] = await Promise.all([
@@ -77,17 +78,19 @@ export default function CommunityDetailScreen({ communityId, postRoute, communit
     } finally {
       setLoading(false)
     }
-  }, [communityId, token])
+  }, [communityId, refreshToken])
 
   useEffect(() => {
     fetchAll()
   }, [fetchAll])
 
   const handleJoinLeave = useCallback(async () => {
-    if (joining || !token) return
+    if (joining) return
     setJoining(true)
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     try {
+      const token = await refreshToken()
+      if (!token) return
       const endpoint = isMember
         ? `/communities/${communityId}/leave`
         : `/communities/${communityId}/join`
@@ -99,7 +102,7 @@ export default function CommunityDetailScreen({ communityId, postRoute, communit
     } finally {
       setJoining(false)
     }
-  }, [communityId, isMember, joining, token])
+  }, [communityId, isMember, joining, refreshToken])
 
   const handlePostUpdated = useCallback((updated: PostResDto) => {
     setPosts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))

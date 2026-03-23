@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '@clerk/expo'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native'
 import { router } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -17,15 +17,20 @@ import type { CommunityResDto } from '@/models/CommunityRes'
 
 export default function DiscoverScreen() {
   const insets = useSafeAreaInsets()
-  const { getToken } = useAuth()
+  const { getToken, isLoaded: isAuthLoaded } = useAuth()
+  const getTokenRef = useRef(getToken)
   const { artists, expanded, loading, toggleExpand } = useTopArtists()
   const [searchOpen, setSearchOpen] = useState(false)
   const [communities, setCommunities] = useState<CommunityResDto[]>([])
   const [communitiesLoading, setCommunitiesLoading] = useState(true)
 
+  useEffect(() => {
+    getTokenRef.current = getToken
+  }, [getToken])
+
   const fetchCommunities = useCallback(async () => {
     try {
-      const token = await getToken()
+      const token = await getTokenRef.current()
       const data = await apiFetch<CommunityResDto[]>('/communities', token)
       setCommunities(data)
     } catch (err) {
@@ -33,11 +38,12 @@ export default function DiscoverScreen() {
     } finally {
       setCommunitiesLoading(false)
     }
-  }, [getToken])
+  }, [])
 
   useEffect(() => {
+    if (!isAuthLoaded) return
     fetchCommunities()
-  }, [fetchCommunities])
+  }, [isAuthLoaded, fetchCommunities])
 
   const communityCards = communities.slice(0, 4).map(communityResToCard)
 

@@ -1,7 +1,9 @@
 import { View, Text, Animated, Easing } from 'react-native'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useAuth } from '@clerk/expo'
+import { apiFetch } from '@/lib/api'
 
 function SoundWaveBar({ delay }: { delay: number }) {
   const height = useRef(new Animated.Value(4)).current
@@ -50,11 +52,49 @@ function SoundWaveAnimation({ color = '#fff' }: { color?: string }) {
   )
 }
 
-interface CurrentlyListeningWidgetProps {
-  track?: { title: string; artist: string; coverUrl?: string }
+interface TrackInfo {
+  title: string
+  artist: string
+  coverUrl?: string
 }
 
-export default function CurrentlyListeningWidget({ track }: CurrentlyListeningWidgetProps) {
+interface CurrentlyListeningWidgetProps {
+  track?: TrackInfo
+  spotifyConnected?: boolean
+}
+
+export default function CurrentlyListeningWidget({ track: manualTrack, spotifyConnected }: CurrentlyListeningWidgetProps) {
+  const { getToken } = useAuth()
+  const getTokenRef = useRef(getToken)
+  const [spotifyTrack, setSpotifyTrack] = useState<TrackInfo | null>(null)
+
+  useEffect(() => {
+    getTokenRef.current = getToken
+  }, [getToken])
+
+  useEffect(() => {
+    if (!spotifyConnected) {
+      setSpotifyTrack(null)
+      return
+    }
+
+    const fetchSpotify = async () => {
+      try {
+        const token = await getTokenRef.current()
+        if (!token) return
+        const data = await apiFetch<TrackInfo | null>('/spotify/currently-playing', token)
+        setSpotifyTrack(data)
+      } catch (err) {
+        console.error('Failed to fetch Spotify status:', err)
+      }
+    }
+
+    fetchSpotify()
+    const interval = setInterval(fetchSpotify, 30000) // refresh every 30s
+    return () => clearInterval(interval)
+  }, [spotifyConnected])
+
+  const track = spotifyTrack || manualTrack
   if (!track?.title) return null
 
   return (

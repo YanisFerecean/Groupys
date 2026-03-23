@@ -3,7 +3,11 @@ package com.groupys.model;
 import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 import java.util.UUID;
 
 @Entity
@@ -54,6 +58,11 @@ public class User {
 
     @Column(name = "date_joined", nullable = false, updatable = false)
     public Instant dateJoined;
+
+    @ElementCollection
+    @CollectionTable(name = "user_tags", joinColumns = @JoinColumn(name = "user_id"))
+    @Column(name = "tag")
+    public List<String> tags = new ArrayList<>();
 
     @PrePersist
     void onPersist() {

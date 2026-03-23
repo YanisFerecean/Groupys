@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'expo-router'
-import { ScrollView, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native'
+import { ScrollView, Text, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth, useUser } from '@clerk/expo'
 import { Ionicons } from '@expo/vector-icons'
@@ -29,13 +29,21 @@ export default function ProfileScreen() {
   // My posts
   const [myPosts, setMyPosts] = useState<PostResDto[]>([])
   const [loadingPosts, setLoadingPosts] = useState(true)
+  const [postSearch, setPostSearch] = useState('')
+  const [postMediaFilter, setPostMediaFilter] = useState<'all' | 'text' | 'photo' | 'video'>('all')
+  const [postSort, setPostSort] = useState<'newest' | 'oldest' | 'top'>('newest')
   const { getToken } = useAuth()
+  const getTokenRef = useRef(getToken)
+
+  useEffect(() => {
+    getTokenRef.current = getToken
+  }, [getToken])
 
   useEffect(() => {
     if (!isLoaded) return
     const fetchPosts = async () => {
       try {
-        const token = await getToken()
+        const token = await getTokenRef.current()
         if (!token) return
         const data = await fetchMyPosts(token)
         setMyPosts(data)
@@ -46,7 +54,36 @@ export default function ProfileScreen() {
       }
     }
     fetchPosts()
-  }, [isLoaded, getToken])
+  }, [isLoaded])
+
+  const filteredPosts = useMemo(() => {
+    let posts = myPosts
+
+    if (postSearch.trim()) {
+      const q = postSearch.trim().toLowerCase()
+      posts = posts.filter(
+        (p) =>
+          p.title?.toLowerCase().includes(q) ||
+          p.content.toLowerCase().includes(q) ||
+          p.communityName.toLowerCase().includes(q)
+      )
+    }
+
+    if (postMediaFilter !== 'all') {
+      posts = posts.filter((p) => {
+        if (postMediaFilter === 'text') return p.media.length === 0
+        if (postMediaFilter === 'photo') return p.media.some((m) => m.type.startsWith('image'))
+        if (postMediaFilter === 'video') return p.media.some((m) => m.type.startsWith('video'))
+        return true
+      })
+    }
+
+    return [...posts].sort((a, b) => {
+      if (postSort === 'newest') return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      if (postSort === 'oldest') return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      return b.likeCount - a.likeCount
+    })
+  }, [myPosts, postSearch, postMediaFilter, postSort])
 
   const handleSaveProfile = async (data: Partial<ProfileCustomization>) => {
     await updateProfile(data)
@@ -145,7 +182,10 @@ export default function ProfileScreen() {
             {/* Widgets */}
             {hasWidgets ? (
               <View className="px-5 pt-6 gap-4">
-                <CurrentlyListeningWidget track={profile.currentlyListening} />
+                <CurrentlyListeningWidget 
+                  track={profile.currentlyListening} 
+                  spotifyConnected={profile.spotifyConnected} 
+                />
                 <TopAlbumsWidget
                   albums={profile.topAlbums}
                   containerColor={profile.albumsContainerColor}
@@ -182,7 +222,32 @@ export default function ProfileScreen() {
 
             {/* My Posts */}
             <View className="px-5 pt-10 pb-4">
-              <Text className="text-on-surface font-bold text-base mb-4">My Posts</Text>
+              <View className="flex-row items-center justify-between mb-3">
+                <Text className="text-on-surface font-bold text-base">
+                  My Posts
+                  {!loadingPosts && myPosts.length > 0 && (
+                    <Text className="text-on-surface-variant font-normal text-sm"> ({myPosts.length})</Text>
+                  )}
+                </Text>
+                {!loadingPosts && myPosts.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() =>
+                      setPostSort((s) => (s === 'newest' ? 'oldest' : s === 'oldest' ? 'top' : 'newest'))
+                    }
+                    className="flex-row items-center gap-1 px-3 py-1.5 rounded-full bg-surface-container"
+                  >
+                    <Ionicons
+                      name={postSort === 'top' ? 'trending-up' : 'time-outline'}
+                      size={14}
+                      color={Colors.primary}
+                    />
+                    <Text className="text-xs font-semibold" style={{ color: Colors.primary }}>
+                      {postSort === 'newest' ? 'Newest' : postSort === 'oldest' ? 'Oldest' : 'Top'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
               {loadingPosts ? (
                 <View className="py-8 items-center">
                   <ActivityIndicator size="small" color={Colors.primary} />
@@ -193,19 +258,92 @@ export default function ProfileScreen() {
                   <Text className="text-on-surface-variant text-sm mt-2">No posts yet</Text>
                 </View>
               ) : (
-                <View>
-                  {myPosts.map((post) => (
-                    <FeedPostCard
-                      key={post.id}
-                      post={post}
-                      onPostUpdated={(updated) =>
-                        setMyPosts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
-                      }
-                      communityRoute="/(home)/(profile)/community"
-                      postRoute="/(home)/(profile)/post"
+                <>
+                  {/* Search */}
+                  <View className="flex-row items-center bg-surface-container rounded-xl px-4 py-3 gap-3 mb-3">
+                    <Ionicons name="search" size={18} color={Colors.onSurfaceVariant} />
+                    <TextInput
+                      value={postSearch}
+                      onChangeText={setPostSearch}
+                      placeholder="Search posts…"
+                      placeholderTextColor={Colors.onSurfaceVariant}
+                      className="flex-1 text-sm text-on-surface"
+                      style={{ color: Colors.onSurface }}
+                      returnKeyType="search"
                     />
-                  ))}
-                </View>
+                    {postSearch.length > 0 && (
+                      <TouchableOpacity onPress={() => setPostSearch('')}>
+                        <Ionicons name="close-circle" size={18} color={Colors.onSurfaceVariant} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  {/* Media type chips */}
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    className="mb-4"
+                    contentContainerStyle={{ gap: 8 }}
+                  >
+                    {(['all', 'text', 'photo', 'video'] as const).map((f) => {
+                      const active = postMediaFilter === f
+                      const label = f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)
+                      const icon =
+                        f === 'all'
+                          ? 'apps-outline'
+                          : f === 'text'
+                            ? 'document-text-outline'
+                            : f === 'photo'
+                              ? 'image-outline'
+                              : 'videocam-outline'
+                      return (
+                        <TouchableOpacity
+                          key={f}
+                          onPress={() => setPostMediaFilter(f)}
+                          className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full"
+                          style={{
+                            backgroundColor: active ? Colors.primary : Colors.surfaceContainer,
+                            borderWidth: 1,
+                            borderColor: active ? Colors.primary : Colors.outlineVariant,
+                          }}
+                        >
+                          <Ionicons
+                            name={icon as any}
+                            size={14}
+                            color={active ? '#fff' : Colors.onSurfaceVariant}
+                          />
+                          <Text
+                            className="text-xs font-semibold"
+                            style={{ color: active ? '#fff' : Colors.onSurfaceVariant }}
+                          >
+                            {label}
+                          </Text>
+                        </TouchableOpacity>
+                      )
+                    })}
+                  </ScrollView>
+
+                  {filteredPosts.length === 0 ? (
+                    <View className="py-10 items-center bg-surface-container-low rounded-2xl">
+                      <Ionicons name="search-outline" size={28} color={Colors.onSurfaceVariant} />
+                      <Text className="text-on-surface-variant text-sm mt-2">No posts match your filters</Text>
+                    </View>
+                  ) : (
+                    <View>
+                      {filteredPosts.map((post) => (
+                        <FeedPostCard
+                          key={post.id}
+                          post={post}
+                          onPostUpdated={(updated) =>
+                            setMyPosts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+                          }
+                          communityRoute="/(home)/(profile)/community"
+                          postRoute="/(home)/(profile)/post"
+                        />
+                      ))}
+                    </View>
+                  )}
+                </>
               )}
             </View>
           </>

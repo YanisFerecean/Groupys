@@ -1,6 +1,7 @@
 package com.groupys.dto;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 public record UserResDto(
@@ -15,6 +16,7 @@ public record UserResDto(
         String nameColor,
         String profileImage,
         String widgets,
+        List<String> tags,
         Instant dateJoined,
         boolean spotifyConnected
 ) {
