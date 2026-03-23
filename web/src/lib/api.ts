@@ -168,14 +168,15 @@ async function apiRequest(
   headers.set("Accept", "application/json");
   headers.set("Authorization", `Bearer ${requireToken(token)}`);
 
+  const { body, ...rest } = init;
   const requestInit: RequestInit = {
-    ...init,
+    ...rest,
     headers,
   };
 
-  if (init.body !== undefined) {
+  if (body !== undefined) {
     headers.set("Content-Type", "application/json");
-    requestInit.body = JSON.stringify(init.body);
+    requestInit.body = JSON.stringify(body);
   }
 
   return fetch(`${API_URL}${path}`, requestInit);

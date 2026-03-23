@@ -14,22 +14,24 @@ const BASE_URL = "https://groupys.app";
 export const metadata: Metadata = {
   metadataBase: new URL(BASE_URL),
   title: {
-    default: "Groupys – Music is better together",
+    default: "Groupys – Find Your Music Community | Connect with Music Lovers",
     template: "%s | Groupys",
   },
   description:
-    "Groupys is a community-based music platform. Join music communities, match with people who share your taste, rate albums, and share weekly check-ins.",
+    "Groupys is a community-based music platform. Join music communities, match with people who share your taste, rate albums, and share weekly hot takes.",
   keywords: [
     "music community",
     "music social network",
     "album ratings",
     "music discovery",
     "taste match",
-    "weekly check-in",
+    "weekly hot take",
     "music app",
   ],
+  applicationName: "Groupys",
   authors: [{ name: "Groupys" }],
   creator: "Groupys",
+  category: "music",
   robots: {
     index: true,
     follow: true,
@@ -40,16 +42,16 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: BASE_URL,
     siteName: "Groupys",
-    title: "Groupys – Music is better together",
+    title: "Groupys – Find Your Music Community | Connect with Music Lovers",
     description:
-      "Join music communities, match with people who share your taste, rate albums, and share weekly check-ins.",
+      "Join music communities, match with people who share your taste, rate albums, and share weekly hot takes.",
     images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "Groupys" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Groupys – Music is better together",
+    title: "Groupys – Find Your Music Community | Connect with Music Lovers",
     description:
-      "Join music communities, match with people who share your taste, rate albums, and share weekly check-ins.",
+      "Join music communities, match with people who share your taste, rate albums, and share weekly hot takes.",
     images: ["/og-image.png"],
     creator: "@groupysapp",
   },

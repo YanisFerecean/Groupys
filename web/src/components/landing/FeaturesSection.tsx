@@ -4,21 +4,18 @@ const features = [
     title: "Music Communities",
     description:
       "Join or create spaces built around artists, genres, and scenes. Share tracks, concert reviews, and discoveries — as text, links, or uploads.",
-    cta: "Explore communities",
   },
   {
-    icon: "favorite",
-    title: "Taste Match",
+    icon: "people",
+    title: "Frequency Match",
     description:
-      "Two profiles placed side by side based on taste overlap — shared genres, common artists, similar listening habits. Swipe to connect.",
-    cta: "See how it works",
+      "Swipe through profiles that vibe with your taste. See what you share — genres, artists, listening habits — then connect with people who get your sound.",
   },
   {
-    icon: "auto_stories",
-    title: "Weekly Check-in",
+    icon: "quiz",
+    title: "Weekly Hot Take",
     description:
-      "Every Monday, five short questions about your week in music. Share your answers publicly and give your profile a living, breathing feel.",
-    cta: "See an example",
+      "Get your opinions out there — your top albums, underrated gems, what deserves hype. Share your takes, display them on your profile.",
   },
 ];
 
@@ -42,13 +39,7 @@ export default function FeaturesSection() {
                 <span className="material-symbols-outlined text-primary text-3xl">{f.icon}</span>
               </div>
               <h3 className="text-xl font-bold mb-4">{f.title}</h3>
-              <p className="text-on-surface-variant leading-relaxed mb-6">{f.description}</p>
-              <a className="text-primary font-bold inline-flex items-center gap-2 group" href="#">
-                {f.cta}{" "}
-                <span className="material-symbols-outlined text-sm transition-transform group-hover:translate-x-1">
-                  arrow_forward
-                </span>
-              </a>
+              <p className="text-on-surface-variant leading-relaxed">{f.description}</p>
             </div>
           ))}
         </div>

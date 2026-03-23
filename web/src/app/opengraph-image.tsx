@@ -63,7 +63,7 @@ export default function OGImage() {
             lineHeight: 1.5,
           }}
         >
-          Communities · Taste Match · Weekly Check-in · Album Ratings
+          Communities · Frequency Match · Weekly Hot Take · Album Ratings
         </div>
       </div>
     ),

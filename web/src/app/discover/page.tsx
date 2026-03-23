@@ -1,4 +1,11 @@
+import type { Metadata } from "next";
 import TrendingArtistsSection from "@/components/discover/TrendingArtistsSection";
+
+export const metadata: Metadata = {
+  title: "Discover",
+  description: "Explore trending artists, music communities, and find people who share your taste.",
+  robots: { index: false, follow: false },
+};
 import CommunitiesSection from "@/components/discover/CommunitiesSection";
 import WhosOnSection from "@/components/discover/WhosOnSection";
 
