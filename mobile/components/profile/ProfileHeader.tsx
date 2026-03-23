@@ -99,13 +99,13 @@ export default function ProfileHeader({
       {/* Avatar + info */}
       <View className="px-5">
         {/* Avatar centered */}
-        <View className="items-center -mt-10 mb-3">
+        <View className="items-center -mt-16 mb-3">
           <TouchableOpacity
             onPress={onAvatarPress}
             activeOpacity={onAvatarPress ? 0.8 : 1}
             disabled={!onAvatarPress || isUploadingAvatar}
           >
-            <View className="w-20 h-20 rounded-2xl overflow-hidden border-4 border-surface bg-surface-container-high">
+            <View className="w-[120px] h-[120px] rounded-2xl overflow-hidden border-4 border-surface bg-surface-container-high">
               {avatarUrl && !avatarError ? (
                 <Image
                   source={{ uri: avatarUrl }}
@@ -115,7 +115,7 @@ export default function ProfileHeader({
                 />
               ) : (
                 <View className="w-full h-full items-center justify-center">
-                  <Ionicons name="person" size={32} color={Colors.onSurfaceVariant} />
+                  <Ionicons name="person" size={48} color={Colors.onSurfaceVariant} />
                 </View>
               )}
             </View>
@@ -123,13 +123,13 @@ export default function ProfileHeader({
             {/* Camera badge overlay */}
             {onAvatarPress && (
               <View
-                className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full items-center justify-center"
+                className="absolute -bottom-1 -right-1 w-9 h-9 rounded-full items-center justify-center"
                 style={{ backgroundColor: accentColor }}
               >
                 {isUploadingAvatar ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Ionicons name="camera" size={14} color="#fff" />
+                  <Ionicons name="camera" size={16} color="#fff" />
                 )}
               </View>
             )}
@@ -164,11 +164,26 @@ export default function ProfileHeader({
           <Text className="text-sm text-on-surface-variant mt-0.5">@{username}</Text>
         ) : null}
         {profile.bio ? (
-          <Text className="text-sm text-on-surface-variant mt-2 leading-5">{profile.bio}</Text>
+          <Text
+            className="text-sm text-on-surface-variant mt-2 leading-5"
+            style={{ fontFamily: 'DMSans_700Bold' }}
+          >
+            {profile.bio}
+          </Text>
         ) : null}
-        {profile.country ? (
-          <View className="mt-2 self-start rounded-full px-3 py-1 bg-surface-container-high">
-            <Text className="text-xs font-semibold text-on-surface-variant">{profile.country}</Text>
+        {profile.country || (profile.tags && profile.tags.length > 0) ? (
+          <View className="flex-row flex-wrap gap-2 mt-3">
+            {profile.country && (
+              <View className="rounded-full px-3 py-1 bg-surface-container-high flex-row items-center gap-1">
+                <Ionicons name="location-outline" size={12} color={Colors.onSurfaceVariant} />
+                <Text className="text-xs font-semibold text-on-surface-variant">{profile.country}</Text>
+              </View>
+            )}
+            {profile.tags?.map((tag) => (
+              <View key={tag} className="rounded-full px-3 py-1 bg-primary/10 border border-primary/20">
+                <Text className="text-xs font-bold text-primary">{tag}</Text>
+              </View>
+            ))}
           </View>
         ) : null}
 
@@ -176,7 +191,7 @@ export default function ProfileHeader({
         <View className="flex-row gap-6 mt-4">
           <View>
             <Text className="text-lg font-bold" style={{ color: accentColor }}>
-              —
+              20
             </Text>
             <Text className="text-xs uppercase tracking-wide text-on-surface-variant">
               Albums Rated
@@ -184,7 +199,7 @@ export default function ProfileHeader({
           </View>
           <View>
             <Text className="text-lg font-bold" style={{ color: accentColor }}>
-              —
+              5
             </Text>
             <Text className="text-xs uppercase tracking-wide text-on-surface-variant">
               Communities
@@ -192,10 +207,10 @@ export default function ProfileHeader({
           </View>
           <View>
             <Text className="text-lg font-bold" style={{ color: accentColor }}>
-              —
+              78
             </Text>
             <Text className="text-xs uppercase tracking-wide text-on-surface-variant">
-              Check-ins
+              Posts
             </Text>
           </View>
         </View>
