@@ -1,5 +1,15 @@
+import { API_URL } from '@/lib/api'
 import type { CommunityResDto } from '@/models/CommunityRes'
 import type { Community } from '@/models/Community'
+
+function toAbsoluteUrl(url: string | undefined): string | undefined {
+  if (!url) return undefined
+  if (url.startsWith('http')) return url
+  // URL is a relative path like /api/posts/media/{key}
+  // API_URL is http://host:port/api — strip the /api suffix to get the base host
+  const baseHost = API_URL.replace(/\/api\/?$/, '')
+  return `${baseHost}${url}`
+}
 
 const PALETTES = [
   { color: '#7c3aed', icon: 'disc' },
@@ -30,5 +40,9 @@ export function communityResToCard(dto: CommunityResDto): Community {
     color: palette.color,
     icon: palette.icon,
     isLive: false,
+    bannerUrl: toAbsoluteUrl(dto.bannerUrl),
+    iconUrl: toAbsoluteUrl(dto.iconUrl),
+    iconEmoji: dto.iconEmoji,
+    iconType: dto.iconType,
   }
 }
