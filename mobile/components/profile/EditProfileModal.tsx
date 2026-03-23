@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import {
   Modal,
   View,
@@ -18,11 +18,10 @@ import { useAuth } from '@clerk/expo'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Colors } from '@/constants/colors'
 import type { ProfileCustomization } from '@/models/ProfileCustomization'
-import {
-  searchTracks,
-  searchArtists,
-  searchAlbums,
-} from '@/lib/musicSearch'
+import { searchTracks, searchArtists, searchAlbums } from '@/lib/musicSearch'
+import { CountryPicker } from './CountryPicker'
+import { GenrePicker } from './GenrePicker'
+import { SpotifyConnectButton } from './SpotifyConnectButton'
 import type { TrackSearchResult } from '@/models/TrackSearchResult'
 import type { ArtistSearchResult } from '@/models/ArtistSearchResult'
 import type { AlbumSearchResult } from '@/models/AlbumSearchResult'
@@ -422,7 +421,63 @@ export default function EditProfileModal({
         }
 
         if (changed) {
-          setForm(newForm)
+          // Patch only the resolved IDs onto the current form state so any
+          // deletions / additions the user made while we were fetching are preserved.
+          setForm((prev) => {
+            const updated = { ...prev }
+
+            if (newForm.topArtists?.length) {
+              const idByName = new Map(
+                newForm.topArtists.filter((a) => a.id).map((a) => [a.name.toLowerCase(), a.id])
+              )
+              updated.topArtists = prev.topArtists?.map((a) =>
+                a.id ? a : { ...a, id: idByName.get(a.name.toLowerCase()) ?? a.id }
+              )
+            }
+
+            if (newForm.topSongs?.length) {
+              const patchByKey = new Map(
+                newForm.topSongs.filter((s) => s.id).map((s) => [
+                  `${s.title.toLowerCase()}|${s.artist.toLowerCase()}`,
+                  { id: s.id, previewUrl: s.previewUrl },
+                ])
+              )
+              updated.topSongs = prev.topSongs?.map((s) => {
+                const patch = patchByKey.get(`${s.title.toLowerCase()}|${s.artist.toLowerCase()}`)
+                return patch ? { ...s, ...patch } : s
+              })
+            }
+
+            if (newForm.topAlbums?.length) {
+              const idByKey = new Map(
+                newForm.topAlbums.filter((al) => al.id).map((al) => [
+                  `${al.title.toLowerCase()}|${al.artist.toLowerCase()}`,
+                  al.id,
+                ])
+              )
+              updated.topAlbums = prev.topAlbums?.map((al) => {
+                const id = idByKey.get(`${al.title.toLowerCase()}|${al.artist.toLowerCase()}`)
+                return id && !al.id ? { ...al, id } : al
+              })
+            }
+
+            if (
+              newForm.currentlyListening?.id &&
+              prev.currentlyListening &&
+              !prev.currentlyListening.id
+            ) {
+              const prevKey = `${prev.currentlyListening.title.toLowerCase()}|${prev.currentlyListening.artist.toLowerCase()}`
+              const newKey = `${newForm.currentlyListening.title.toLowerCase()}|${newForm.currentlyListening.artist.toLowerCase()}`
+              if (prevKey === newKey) {
+                updated.currentlyListening = {
+                  ...prev.currentlyListening,
+                  id: newForm.currentlyListening.id,
+                }
+              }
+            }
+
+            return updated
+          })
         }
       } catch (err) {
         console.warn('Auto-repair IDs failed:', err)
@@ -440,6 +495,16 @@ export default function EditProfileModal({
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save profile.')
+    }
+  }
+
+  // Tags helpers
+  const toggleTag = (tag: string) => {
+    const currentTags = form.tags || []
+    if (currentTags.includes(tag)) {
+      set('tags', currentTags.filter((t) => t !== tag))
+    } else if (currentTags.length < 5) {
+      set('tags', [...currentTags, tag])
     }
   }
 
@@ -641,15 +706,39 @@ export default function EditProfileModal({
                 </Text>
               </View>
 
-              <View className="gap-2">
+              <View className="gap-2 z-50">
                 <SectionLabel>Country</SectionLabel>
-                <TextInput
+                <CountryPicker
                   value={form.country ?? ''}
-                  onChangeText={(v) => set('country', v)}
-                  placeholder="e.g. United States"
-                  placeholderTextColor={Colors.onSurfaceVariant}
-                  className="bg-surface-container rounded-xl px-4 py-3.5 text-base text-on-surface"
-                  style={{ color: Colors.onSurface }}
+                  onChange={(v) => set('country', v)}
+                />
+              </View>
+
+              <View className="gap-2 z-40">
+                <SectionLabel>Tags ({form.tags?.length || 0}/5)</SectionLabel>
+                <GenrePicker onSelect={toggleTag} />
+                
+                {form.tags && form.tags.length > 0 && (
+                  <View className="flex-row flex-wrap gap-2 mt-2">
+                    {form.tags.map((tag) => (
+                      <TouchableOpacity
+                        key={tag}
+                        onPress={() => toggleTag(tag)}
+                        className="flex-row items-center gap-1 bg-primary/15 px-3 py-1.5 rounded-full"
+                      >
+                        <Text className="text-xs font-semibold text-primary">{tag}</Text>
+                        <Ionicons name="close" size={12} color={Colors.primary} />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+
+              <View className="gap-2 mt-4">
+                <SectionLabel>Integrations</SectionLabel>
+                <SpotifyConnectButton
+                  connected={form.spotifyConnected ?? false}
+                  onConnect={() => set('spotifyConnected', true)}
                 />
               </View>
             </View>
