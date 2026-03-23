@@ -9,6 +9,7 @@ import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.QueryParam;
+import org.eclipse.microprofile.rest.client.annotation.ClientHeaderParam;
 import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
 
 @Path("/")
@@ -42,4 +43,9 @@ public interface DeezerClient {
     @Path("/artist/{id}/top")
     DeezerTrackSearchResponse getArtistTopTracks(@PathParam("id") Long id,
                                                  @QueryParam("limit") int limit);
+
+    @GET
+    @Path("/genre")
+    @ClientHeaderParam(name = "Accept-Language", value = "en")
+    com.groupys.dto.deezer.DeezerGenreListResponse getGenres();
 }
