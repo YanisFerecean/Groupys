@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import { useAuth, useUser } from '@clerk/expo'
 
 interface AuthTokenContextType {
@@ -16,8 +16,13 @@ const AuthTokenContext = createContext<AuthTokenContextType>({
 export function AuthTokenProvider({ children }: { children: React.ReactNode }) {
   const { getToken, isSignedIn } = useAuth()
   const { isLoaded } = useUser()
+  const getTokenRef = useRef(getToken)
   const [token, setToken] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    getTokenRef.current = getToken
+  }, [getToken])
 
   const refreshToken = useCallback(async () => {
     if (!isSignedIn) {
@@ -26,7 +31,7 @@ export function AuthTokenProvider({ children }: { children: React.ReactNode }) {
       return null
     }
     try {
-      const t = await getToken()
+      const t = await getTokenRef.current()
       setToken(t)
       return t
     } catch (err) {
@@ -35,7 +40,7 @@ export function AuthTokenProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false)
     }
-  }, [getToken, isSignedIn])
+  }, [isSignedIn])
 
   useEffect(() => {
     if (isLoaded) {
