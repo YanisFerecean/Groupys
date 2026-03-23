@@ -34,10 +34,23 @@ public class SpotifyResource {
     @Path("/auth-url")
     @Authenticated
     @SecurityRequirement(name = "bearerAuth")
-    public Response getAuthUrl() {
+    public Response getAuthUrl(@QueryParam("redirect_uri") String customRedirectUri) {
         String clerkId = jwt.getSubject();
-        String url = spotifyService.buildAuthorizationUrl(clerkId);
+        String url = spotifyService.buildAuthorizationUrl(clerkId, customRedirectUri);
         return Response.ok(Map.of("url", url)).build();
+    }
+
+    @POST
+    @Path("/callback")
+    @Authenticated
+    @SecurityRequirement(name = "bearerAuth")
+    public Response mobileCallback(Map<String, String> payload) {
+        String code = payload.get("code");
+        String redirectUri = payload.get("redirect_uri");
+        if (code == null) return Response.status(Response.Status.BAD_REQUEST).build();
+        
+        spotifyService.handleCallback(code, jwt.getSubject(), redirectUri);
+        return Response.ok().build();
     }
 
     @GET
@@ -50,7 +63,7 @@ public class SpotifyResource {
                     URI.create(frontendUrl + "/profile?spotify=error")).build();
         }
         try {
-            spotifyService.handleCallback(code, clerkId);
+            spotifyService.handleCallback(code, clerkId, null);
             return Response.temporaryRedirect(
                     URI.create(frontendUrl + "/profile?spotify=connected")).build();
         } catch (Exception e) {
