@@ -35,7 +35,7 @@ interface Props {
 export default function PostDetailScreen({ postId }: Props) {
   const insets = useSafeAreaInsets()
   const { user } = useUser()
-  const { token } = useAuthToken()
+  const { refreshToken } = useAuthToken()
 
   const [post, setPost] = useState<PostResDto | null>(null)
   const [comments, setComments] = useState<CommentResDto[]>([])
@@ -47,6 +47,7 @@ export default function PostDetailScreen({ postId }: Props) {
   const [initialIndex, setInitialIndex] = useState<number | null>(null)
 
   const fetchData = useCallback(async () => {
+    const token = await refreshToken()
     if (!token) return
     try {
       const [postData, commentsData] = await Promise.all([
@@ -60,7 +61,7 @@ export default function PostDetailScreen({ postId }: Props) {
     } finally {
       setLoading(false)
     }
-  }, [postId, token])
+  }, [postId, refreshToken])
 
   useEffect(() => {
     fetchData()
@@ -68,23 +69,26 @@ export default function PostDetailScreen({ postId }: Props) {
 
   const handleReact = useCallback(
     async (type: 'like' | 'dislike') => {
-      if (!token) return
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
       try {
+        const token = await refreshToken()
+        if (!token) return
         const updated = await apiPost<PostResDto>(`/posts/${postId}/react`, token, { type })
         setPost(updated)
       } catch (err) {
         console.error('React error:', err)
       }
     },
-    [postId, token],
+    [postId, refreshToken],
   )
 
   const handleSubmitComment = useCallback(async () => {
-    if (!commentText.trim() || submitting || !token) return
+    if (!commentText.trim() || submitting) return
     setSubmitting(true)
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     try {
+      const token = await refreshToken()
+      if (!token) return
       await apiPost<CommentResDto>(
         `/comments/post/${postId}`,
         token,
@@ -93,7 +97,6 @@ export default function PostDetailScreen({ postId }: Props) {
           parentCommentId: replyTo,
         },
       )
-      // Refresh comments to get proper nesting
       const updatedComments = await apiFetch<CommentResDto[]>(`/comments/post/${postId}`, token)
       setComments(updatedComments)
       setCommentText('')
@@ -103,10 +106,10 @@ export default function PostDetailScreen({ postId }: Props) {
     } finally {
       setSubmitting(false)
     }
-  }, [postId, commentText, replyTo, submitting, token])
+  }, [postId, commentText, replyTo, submitting, refreshToken])
 
   const handleDelete = async () => {
-    if (!token || deleting) return
+    if (deleting) return
     Alert.alert('Delete Post', 'Are you sure you want to delete this post?', [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -115,6 +118,8 @@ export default function PostDetailScreen({ postId }: Props) {
         onPress: async () => {
           setDeleting(true)
           try {
+            const token = await refreshToken()
+            if (!token) return
             await apiDelete(`/posts/${postId}`, token)
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
             router.back()
@@ -221,6 +226,7 @@ export default function PostDetailScreen({ postId }: Props) {
                 content={post.content}
                 baseFontSize={16}
                 color={Colors.onSurface}
+                interactive
               />
             </View>
           ) : null}
