@@ -1,4 +1,9 @@
+import type { Metadata } from "next";
 import ArtistDetail from "@/components/discover/ArtistDetail";
+
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+};
 
 interface ArtistPageProps {
   params: Promise<{ id: string }>;

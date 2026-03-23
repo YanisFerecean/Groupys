@@ -19,7 +19,14 @@
       "Bash(grep -r \"upload\\\\|storage\\\\|file\\\\|bucket\" /c/Uni/Projects/groupys-web-app/backend/quarkus-groupys/src/main/java --include=*.java)",
       "Bash(find /c/Uni/Projects/groupys-web-app/web/src -type f -name *post* -o -name *Post*)",
       "Bash(npm install:*)",
-      "Bash(npx eslint:*)"
+      "Bash(npx eslint:*)",
+      "Bash(grep -r proxy C:/Uni/Projects/groupys-web-app/web/node_modules/next/dist/server --include=*.js -l)",
+      "Bash(grep -r \"proxy\\\\.ts\\\\|proxy\\\\.js\\\\|proxyFile\\\\|MIDDLEWARE_FILENAME\\\\|middlewareFile\\\\|middleware\\\\.ts\" C:/Uni/Projects/groupys-web-app/web/node_modules/next/dist/lib --include=*.js -l)",
+      "Bash(grep -r \"MIDDLEWARE_FILENAME\\\\|middleware_filename\\\\|''''middleware''''\" C:/Uni/Projects/groupys-web-app/web/node_modules/next/dist/shared/lib --include=*.js)",
+      "Bash(grep -r \"PROXY_FILENAME\\\\|proxy.*export\\\\|export.*proxy\" C:/Uni/Projects/groupys-web-app/web/node_modules/next/dist/lib --include=*.js)",
+      "Bash(grep -r \"PROXY_LOCATION_REGEXP\\\\|proxy.*default\\\\|defaultExport.*proxy\\\\|proxyModule\" C:/Uni/Projects/groupys-web-app/web/node_modules/next/dist/server --include=*.js)",
+      "Bash(grep -r \"middleware-to-proxy\\\\|proxy.*matcher\\\\|proxy.*config\\\\|getNamedExports.*proxy\\\\|proxyExports\" C:/Uni/Projects/groupys-web-app/web/node_modules/next/dist --include=*.js)",
+      "Bash(find C:/Uni/Projects/groupys-web-app/web/node_modules/next -name *.md -path */docs/*)"
     ]
   }
 }

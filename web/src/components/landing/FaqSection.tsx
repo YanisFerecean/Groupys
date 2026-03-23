@@ -6,12 +6,12 @@ const faqs = [
   {
     question: "What is Groupys?",
     answer:
-      "Groupys is a community-based music platform where you can join music communities, rate albums and tracks, match with people who share your taste, and share weekly check-ins about what you're listening to.",
+      "Groupys is a community-based music platform where you can join music communities, rate albums and tracks, match with people who share your taste, and share weekly hot takes about what you're listening to.",
   },
   {
-    question: "How does Taste Match work?",
+    question: "How does Frequency Match work?",
     answer:
-      "Taste Match compares your genre preferences, favourite artists, and listening habits against other users to generate a compatibility score. The higher the score, the more aligned your musical tastes are.",
+      "Frequency Match compares your genre preferences, favourite artists, and listening habits against other users to generate a compatibility score. The higher the score, the more aligned your musical tastes are.",
   },
   {
     question: "Is Groupys free?",
@@ -19,14 +19,14 @@ const faqs = [
       "Groupys is currently in private beta and free for all users. We'll announce any future pricing well in advance.",
   },
   {
-    question: "What is the Weekly Check-in?",
+    question: "What is the Weekly Hot Take?",
     answer:
-      "Every Monday you receive five short rotating questions about what you're listening to. It takes under 60 seconds. You can share your answers publicly to spark conversations or keep them private.",
+      "Once a week, post your take — an album worth more attention, something overrated, a hidden gem. It shows up on your profile so others can see where you stand.",
   },
   {
     question: "How do music communities work?",
     answer:
-      "Communities are genre or artist-based spaces where members post, comment, rate albums, and discuss music — similar to a subreddit but built entirely around music discovery.",
+      "Communities are genre or artist-based spaces where members post, comment, rate albums, and discuss music. Each community is built around a shared taste — whether that's an artist, a genre, or a vibe.",
   },
   {
     question: "What apps is Groupys available on?",

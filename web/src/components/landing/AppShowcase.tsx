@@ -1,5 +1,5 @@
-const mockupSrc =
-  "https://lh3.googleusercontent.com/aida-public/AB6AXuAkpclHoGjz5wY5yadVHRVWCoT-Cd7ZSB6USQMIlZTZeowEUyyeEVE8DSrpyzds0ayxfu9GSyXOJZbMvzbNPLoRJ3TLN31hynK5Dm2qB4feOmGGfo7H1Sb7uJifAXnfR6O06QwAZvn7ctg8DLxD_v-__DHbroQLJFUm1kLzLEI4-Cg1Ha7_ZIYBCYSX4A_75DdD9rIzP2kUZl_SD-4puWVt3JHLil8DzE4MZCjneB0eyaX_UTE3mUD_4AkC_6TfBulXCBvgLIdRgyE";
+const mockupSrc = "/phone_1.png";
+const mockupSrc2 = "/phone_2.png";
 
 const highlights = [
   {
@@ -13,9 +13,9 @@ const highlights = [
       "Go song by song through any album. Build a personal record of everything you've heard and how it made you feel.",
   },
   {
-    title: "Weekly Check-in",
+    title: "Weekly Hot Take",
     description:
-      "Five rotating questions, every Monday. Never longer than 60 seconds. Share publicly to spark conversations.",
+      "Drop your takes each week and pin them to your profile. A living record of your musical opinions.",
   },
 ];
 
@@ -34,7 +34,7 @@ export default function AppShowcase() {
           {/* Secondary mockup — hidden on small screens to avoid overflow */}
           <div className="hidden sm:block absolute z-10 top-20 -right-4 lg:right-10 w-[200px] h-[420px] sm:w-[240px] sm:h-[500px] md:w-[280px] md:h-[580px] bg-on-surface rounded-[3rem] p-3 shadow-2xl overflow-hidden border-4 border-surface-container-high opacity-80 scale-90">
             <div className="w-full h-full bg-white rounded-[2.5rem] overflow-hidden">
-              <img alt="Groupys community feed" className="w-full h-full object-cover" src={mockupSrc} />
+              <img alt="Groupys community feed" className="w-full h-full object-cover" src={mockupSrc2} />
             </div>
           </div>
         </div>

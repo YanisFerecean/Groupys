@@ -66,13 +66,13 @@ export default function PrivacyPage() {
             ratings, and album reviews you submit inside communities are stored on our servers.
           </p>
           <p>
-            <strong className="text-on-surface">Weekly Check-in answers.</strong> If you choose to
+            <strong className="text-on-surface">Weekly Hot Take answers.</strong> If you choose to
             share your answers publicly, they are visible to other users and used to enrich your
             profile. Private answers are stored but never displayed to others.
           </p>
           <p>
             <strong className="text-on-surface">Match preferences.</strong> Genre preferences,
-            favourite artists, and listening habits you provide are used to power the Taste Match
+            favourite artists, and listening habits you provide are used to power the Frequency Match
             feature.
           </p>
           <p>
@@ -87,14 +87,14 @@ export default function PrivacyPage() {
           <ul className="list-disc list-inside space-y-2 pl-2">
             <li>Authenticating your account and keeping it secure.</li>
             <li>
-              Powering the Taste Match feature — comparing your taste profile against others to
+              Powering the Frequency Match feature — comparing your taste profile against others to
               suggest connections.
             </li>
             <li>
-              Displaying your public profile, posts, ratings, and Weekly Check-in answers to other
+              Displaying your public profile, posts, ratings, and Weekly Hot Take answers to other
               users where you have chosen to share them.
             </li>
-            <li>Sending you the Weekly Check-in push notification every Monday.</li>
+            <li>Sending you the Weekly Hot Take push notification every Monday.</li>
             <li>Diagnosing errors and improving platform performance.</li>
           </ul>
           <p>We do not use your data for advertising or sell it to third parties.</p>

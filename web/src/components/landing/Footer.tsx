@@ -1,8 +1,8 @@
 const links = [
-  { label: "Instagram", href: "#" },
-  { label: "Twitter", href: "#" },
-  { label: "App Store", href: "#" },
-  { label: "Google Play", href: "#" },
+  { label: "Instagram", href: "/coming-soon" },
+  { label: "Twitter", href: "/coming-soon" },
+  { label: "App Store", href: "/coming-soon" },
+  { label: "Google Play", href: "/coming-soon" },
 ];
 
 const legalLinks = [{ label: "Privacy Policy", href: "/privacy" }];
