@@ -3,7 +3,6 @@ import { Animated, Easing, Image, Text, TouchableOpacity, View } from 'react-nat
 import * as Haptics from 'expo-haptics'
 import { useAuth } from '@clerk/expo'
 import { router } from 'expo-router'
-import { apiFetch } from '@/lib/api'
 import { useTrendingArtistsStore } from '@/stores/useTrendingArtistsStore'
 import type { ArtistRes as ChartArtist } from '@/models/ArtistRes'
 
@@ -116,13 +115,19 @@ export function TopArtistsSkeleton() {
 }
 
 export function useTopArtists() {
-  const { getToken } = useAuth()
+  const { getToken, isLoaded: isAuthLoaded } = useAuth()
+  const getTokenRef = useRef(getToken)
   const [expanded, setExpanded] = useState(false)
   const { artists, loading, fetchArtists } = useTrendingArtistsStore()
 
   useEffect(() => {
-    getToken().then((token) => fetchArtists(token))
-  }, [getToken, fetchArtists])
+    getTokenRef.current = getToken
+  }, [getToken])
+
+  useEffect(() => {
+    if (!isAuthLoaded) return
+    getTokenRef.current().then((token) => fetchArtists(token))
+  }, [isAuthLoaded, fetchArtists])
 
   const toggleExpand = useCallback(() => {
     setExpanded((prev) => !prev)
