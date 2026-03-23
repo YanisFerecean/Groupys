@@ -55,22 +55,24 @@ public class SpotifyService {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public String buildAuthorizationUrl(String clerkId) {
+    public String buildAuthorizationUrl(String clerkId, String customRedirectUri) {
+        String rUri = (customRedirectUri != null) ? customRedirectUri : redirectUri;
         return "https://accounts.spotify.com/authorize"
                 + "?client_id=" + enc(clientId)
                 + "&response_type=code"
-                + "&redirect_uri=" + enc(redirectUri)
+                + "&redirect_uri=" + enc(rUri)
                 + "&scope=" + enc(SCOPES)
                 + "&state=" + enc(clerkId);
     }
 
     @Transactional
-    public void handleCallback(String code, String clerkId) {
+    public void handleCallback(String code, String clerkId, String customRedirectUri) {
+        String rUri = (customRedirectUri != null) ? customRedirectUri : redirectUri;
         String basicAuth = "Basic " + Base64.getEncoder().encodeToString(
                 (clientId + ":" + clientSecret).getBytes(StandardCharsets.UTF_8));
 
         SpotifyTokenResponse tokens = spotifyAuth.exchangeToken(
-                "authorization_code", code, redirectUri, basicAuth);
+                "authorization_code", code, rUri, basicAuth);
 
         User user = userRepository.findByClerkId(clerkId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
