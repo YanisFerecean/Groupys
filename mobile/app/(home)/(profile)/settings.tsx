@@ -5,7 +5,6 @@ import { useState } from 'react'
 import { ActivityIndicator, ScrollView, Switch, Text, TouchableOpacity, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Colors } from '@/constants/colors'
-import { musicalAffinities } from '@/constants/mockData'
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets()
@@ -107,38 +106,6 @@ export default function SettingsScreen() {
         </View>
 
 
-
-        {/* Musical Affinities */}
-        <View className="px-5 pt-10">
-          <Text className="mb-4 text-xs font-bold uppercase tracking-widest text-on-surface-variant">
-            MUSICAL AFFINITIES
-          </Text>
-          <View className="flex-row flex-wrap gap-2">
-            {musicalAffinities.map((tag) => (
-              <View
-                key={tag.name}
-                className={`rounded-full px-5 py-2.5 ${
-                  tag.active
-                    ? 'bg-primary'
-                    : 'bg-surface-container-high'
-                }`}
-              >
-                <Text
-                  className={`text-sm font-medium ${
-                    tag.active ? 'text-white' : 'text-on-surface'
-                  }`}
-                >
-                  {tag.name}
-                </Text>
-              </View>
-            ))}
-            <TouchableOpacity className="rounded-full border border-outline-variant px-5 py-2.5">
-              <Text className="text-sm font-medium text-primary">
-                + Add Interest
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
 
         {/* Sign Out */}
         <View className="px-5 pt-10">
