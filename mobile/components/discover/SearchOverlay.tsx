@@ -186,9 +186,10 @@ function SearchingDots() {
 }
 
 export default function SearchOverlay({ onClose }: SearchOverlayProps) {
-  const { getToken } = useAuth()
+  const { getToken, isLoaded: isAuthLoaded } = useAuth()
   const insets = useSafeAreaInsets()
   const inputRef = useRef<TextInput>(null)
+  const getTokenRef = useRef(getToken)
 
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
@@ -198,6 +199,10 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
   const abortRef = useRef<AbortController | null>(null)
 
   const fadeAnim = useRef(new Animated.Value(0)).current
+
+  useEffect(() => {
+    getTokenRef.current = getToken
+  }, [getToken])
 
   // Fade in on mount, auto-focus input
   useEffect(() => {
@@ -223,7 +228,7 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
   const isDebouncing = query.trim().length > 0 && query.trim() !== debouncedQuery
 
   useEffect(() => {
-    if (debouncedQuery.length === 0) {
+    if (debouncedQuery.length === 0 || !isAuthLoaded) {
       setResults(null)
       setSearching(false)
       return
@@ -238,7 +243,7 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
     setSearching(true)
     ;(async () => {
       try {
-        const token = await getToken()
+        const token = await getTokenRef.current()
         const res = await fetch(
           `${process.env.EXPO_PUBLIC_API_URL}/search?q=${encodeURIComponent(debouncedQuery)}`,
           {
@@ -268,7 +273,7 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
       cancelled = true
       controller.abort()
     }
-  }, [debouncedQuery, getToken])
+  }, [debouncedQuery, isAuthLoaded])
 
   // Stop sound on unmount
   useEffect(() => {
