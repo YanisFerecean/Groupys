@@ -6,4 +6,8 @@ export interface Community {
   color: string
   icon: string
   isLive: boolean
+  bannerUrl?: string
+  iconUrl?: string
+  iconEmoji?: string
+  iconType?: string
 }
