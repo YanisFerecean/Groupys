@@ -141,6 +141,11 @@ class ArtistServiceTest {
         public DeezerTrackSearchResponse getArtistTopTracks(Long id, int limit) {
             throw new UnsupportedOperationException("Not used in this test");
         }
+
+        @Override
+        public com.groupys.dto.deezer.DeezerGenreListResponse getGenres() {
+            throw new UnsupportedOperationException("Not used in this test");
+        }
     }
 
     private static final class StubLastFmClient implements LastFmClient {
