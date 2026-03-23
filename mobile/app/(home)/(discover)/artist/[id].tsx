@@ -158,7 +158,8 @@ function LoadingGroupys() {
 
 export default function ArtistScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
-  const { getToken } = useAuth()
+  const { getToken, isLoaded: isAuthLoaded } = useAuth()
+  const getTokenRef = useRef(getToken)
   const insets = useSafeAreaInsets()
 
   const [artist, setArtist] = useState<ChartArtist | null>(null)
@@ -177,13 +178,17 @@ export default function ArtistScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current
   const slideAnim = useRef(new Animated.Value(24)).current
 
+  useEffect(() => {
+    getTokenRef.current = getToken
+  }, [getToken])
+
   // Fetch artist + top tracks + communities
   useEffect(() => {
-    if (!id) return
+    if (!id || !isAuthLoaded) return
     let cancelled = false
     ;(async () => {
       try {
-        const token = await getToken()
+        const token = await getTokenRef.current()
         const [artistData, tracksData, communitiesData] = await Promise.all([
           apiFetch<ChartArtist>(`/artists/${id}`, token),
           apiFetch<TrackRes[]>(`/artists/${id}/top-tracks?limit=5`, token).catch(() => [] as TrackRes[]),
@@ -204,7 +209,7 @@ export default function ArtistScreen() {
       }
     })()
     return () => { cancelled = true }
-  }, [id, getToken])
+  }, [id, isAuthLoaded])
 
   // Fade-in after load
   useEffect(() => {
