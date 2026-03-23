@@ -77,6 +77,9 @@ public class UserService {
         if (dto.widgets() != null) {
             user.widgets = dto.widgets();
         }
+        if (dto.tags() != null) {
+            user.tags = dto.tags();
+        }
         return UserUtil.toDto(user);
     }
 
