@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth, useUser } from '@clerk/expo'
 import type { ProfileCustomization } from '@/models/ProfileCustomization'
 import {
   fetchUserByClerkId,
   createBackendUser,
   updateBackendUser,
+  syncUserProfileImage,
   backendUserToProfile,
   type BackendUser,
 } from '@/lib/api'
@@ -13,10 +14,15 @@ import { hasUsername } from '@/lib/auth'
 export function useProfileCustomization() {
   const { getToken, isLoaded: isAuthLoaded } = useAuth()
   const { user, isLoaded } = useUser()
+  const getTokenRef = useRef(getToken)
 
   const [backendUser, setBackendUser] = useState<BackendUser | null>(null)
   const [fetching, setFetching] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+
+  useEffect(() => {
+    getTokenRef.current = getToken
+  }, [getToken])
 
   useEffect(() => {
     if (!isLoaded || !isAuthLoaded || !user || !hasUsername(user)) return
@@ -24,7 +30,7 @@ export function useProfileCustomization() {
 
     ;(async () => {
       try {
-        const token = await getToken()
+        const token = await getTokenRef.current()
         let bu = await fetchUserByClerkId(user.id, token)
 
         if (!bu) {
@@ -38,9 +44,12 @@ export function useProfileCustomization() {
               clerkId: user.id,
               username: user.username ?? user.id,
               displayName: user.fullName ?? undefined,
+              profileImage: user.imageUrl ?? undefined,
             },
             token,
           )
+        } else if (user.imageUrl && bu.profileImage !== user.imageUrl) {
+          bu = await syncUserProfileImage(bu, user.imageUrl, token)
         }
 
         if (!cancelled) setBackendUser(bu)
@@ -52,14 +61,14 @@ export function useProfileCustomization() {
     })()
 
     return () => { cancelled = true }
-  }, [isLoaded, isAuthLoaded, user, getToken])
+  }, [isLoaded, isAuthLoaded, user])
 
   const updateProfile = useCallback(
     async (partial: Partial<ProfileCustomization>) => {
       if (!backendUser) throw new Error('No backend user')
       setIsSaving(true)
       try {
-        const token = await getToken()
+        const token = await getTokenRef.current()
         const updated = await updateBackendUser(backendUser.id, partial, token)
         setBackendUser(updated)
         return updated
@@ -67,7 +76,7 @@ export function useProfileCustomization() {
         setIsSaving(false)
       }
     },
-    [backendUser, getToken],
+    [backendUser],
   )
 
   return {
