@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native'
 import * as ImagePicker from 'expo-image-picker'
+import * as DocumentPicker from 'expo-document-picker'
 import * as Haptics from 'expo-haptics'
 import { router } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -53,6 +54,7 @@ export default function CreatePostScreen() {
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [media, setMedia] = useState<ImagePicker.ImagePickerAsset[]>([])
+  const [files, setFiles] = useState<DocumentPicker.DocumentPickerAsset[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [loadingCommunities, setLoadingCommunities] = useState(true)
 
@@ -93,6 +95,22 @@ export default function CreatePostScreen() {
     }
   }
 
+  const pickFile = async () => {
+    const totalAttachments = media.length + files.length
+    if (totalAttachments >= 4) {
+      alert('Maximum 4 attachments allowed.')
+      return
+    }
+    const result = await DocumentPicker.getDocumentAsync({
+      multiple: true,
+      copyToCacheDirectory: true,
+    })
+    if (!result.canceled && result.assets) {
+      const remaining = 4 - totalAttachments
+      setFiles(prev => [...prev, ...result.assets.slice(0, remaining)])
+    }
+  }
+
   const handleSubmit = async () => {
     if (!title.trim() || !selectedCommunity || submitting) return
     setSubmitting(true)
@@ -101,12 +119,16 @@ export default function CreatePostScreen() {
       const token = await getToken()
       if (!token) return
 
+      const allMedia = [
+        ...media.map(m => ({ uri: m.uri, type: m.type as any })),
+        ...files.map(f => ({ uri: f.uri, type: f.mimeType ?? 'application/octet-stream' })),
+      ]
       await createPost(
         selectedCommunity.id,
         token,
         title.trim(),
         content.trim(),
-        media.length ? media.map(m => ({ uri: m.uri, type: m.type as any })) : undefined
+        allMedia.length ? allMedia : undefined
       )
       
       // Navigate back or to the community/feed
@@ -315,6 +337,23 @@ export default function CreatePostScreen() {
               ))}
             </ScrollView>
           ) : null}
+          {/* File attachments */}
+          {files.length > 0 ? (
+            <View className="mb-4 gap-2">
+              {files.map((f, idx) => (
+                <View key={idx} className="flex-row items-center bg-surface-container-high rounded-xl px-3 py-2.5 gap-3">
+                  <Ionicons name="document-outline" size={20} color={Colors.primary} />
+                  <Text className="flex-1 text-sm text-on-surface" numberOfLines={1}>{f.name}</Text>
+                  <Text className="text-xs text-on-surface-variant">
+                    {f.size ? `${(f.size / 1024).toFixed(0)} KB` : ''}
+                  </Text>
+                  <TouchableOpacity onPress={() => setFiles(prev => prev.filter((_, i) => i !== idx))}>
+                    <Ionicons name="close-circle" size={20} color={Colors.onSurfaceVariant} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          ) : null}
         </ScrollView>
 
         {/* Toolbar */}
@@ -328,6 +367,9 @@ export default function CreatePostScreen() {
           </TouchableOpacity>
           <TouchableOpacity onPress={() => pickMedia('videos')} className="p-2.5">
             <Ionicons name="play-circle-outline" size={22} color={Colors.onSurfaceVariant} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={pickFile} className="p-2.5">
+            <Ionicons name="attach-outline" size={22} color={Colors.onSurfaceVariant} />
           </TouchableOpacity>
 
           <View className="flex-1" />
