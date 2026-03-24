@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useSyncExternalStore } from "react";
 import Image from "next/image";
 
 const communities = [
@@ -51,18 +51,23 @@ const desktopTransforms = [
 // stackOrder[i] = card index at position i (0=back, 3=front)
 const initialStack = [0, 1, 2, 3];
 
+const mobileQuery = "(max-width: 639px)";
+function subscribeMobile(cb: () => void) {
+  const mql = window.matchMedia(mobileQuery);
+  mql.addEventListener("change", cb);
+  return () => mql.removeEventListener("change", cb);
+}
+function getIsMobile() {
+  return window.matchMedia(mobileQuery).matches;
+}
+function getIsMobileServer() {
+  return false;
+}
+
 export default function CommunitiesPreview() {
   const [stackOrder, setStackOrder] = useState(initialStack);
   const [animating, setAnimating] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const mql = window.matchMedia("(max-width: 639px)");
-    setIsMobile(mql.matches);
-    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
-    mql.addEventListener("change", handler);
-    return () => mql.removeEventListener("change", handler);
-  }, []);
+  const isMobile = useSyncExternalStore(subscribeMobile, getIsMobile, getIsMobileServer);
 
   const transforms = isMobile ? mobileTransforms : desktopTransforms;
 
