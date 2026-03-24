@@ -9,28 +9,28 @@ const communities = [
     tags: ["Fan Club", "Memes"],
     members: "3.8k",
     posts: "912",
-    image: "/lana-del-rey.png",
+    image: "/lana-del-rey.jpg",
   },
   {
     name: "The Ocean",
     tags: ["Fan Club"],
     members: "3.2k",
     posts: "789",
-    image: "/frank-ocean.png",
+    image: "/frank-ocean.jpg",
   },
   {
     name: "BadBunnies",
     tags: ["News", "Memes"],
     members: "4.9k",
     posts: "1.2k",
-    image: "/bad-bunny.png",
+    image: "/bad-bunny.jpg",
   },
   {
     name: "Marvins Room",
     tags: ["Art", "Discussion"],
     members: "5.4k",
     posts: "1.4k",
-    image: "/drake.png",
+    image: "/drake.jpg",
   },
 ];
 
