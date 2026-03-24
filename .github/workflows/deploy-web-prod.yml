@@ -58,6 +58,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push web image
+        id: docker_build
         uses: docker/build-push-action@v6
         with:
           context: ./web
@@ -79,10 +80,22 @@ jobs:
           {
             echo "## Web Build Summary"
             echo ""
-            echo "- Node version: ${{ env.NODE_VERSION }}"
-            echo "- Image: ghcr.io/${OWNER_LC}/${WEB_IMAGE_NAME}:${GITHUB_SHA}"
-            echo "- Host: ${{ secrets.VM88_HOST }}"
-            echo "- Deploy path: ${{ secrets.DEPLOY_PATH }}"
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| **Status** | ✅ Success |"
+            echo "| **Triggered by** | \`${{ github.actor }}\` |"
+            echo "| **Branch** | \`${{ github.ref_name }}\` |"
+            echo "| **Commit** | [\`${GITHUB_SHA::7}\`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}) |"
+            echo "| **Node version** | ${{ env.NODE_VERSION }} |"
+            echo "| **Image (sha tag)** | \`ghcr.io/${OWNER_LC}/${WEB_IMAGE_NAME}:${GITHUB_SHA}\` |"
+            echo "| **Image (latest tag)** | \`ghcr.io/${OWNER_LC}/${WEB_IMAGE_NAME}:latest\` |"
+            echo "| **Digest** | \`${{ steps.docker_build.outputs.digest }}\` |"
+            echo ""
+            echo "### Tags pushed"
+            echo "\`\`\`"
+            echo "ghcr.io/${OWNER_LC}/${WEB_IMAGE_NAME}:${GITHUB_SHA}"
+            echo "ghcr.io/${OWNER_LC}/${WEB_IMAGE_NAME}:latest"
+            echo "\`\`\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
   deploy:

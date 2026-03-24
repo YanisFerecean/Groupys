@@ -59,7 +59,7 @@ export default function CommunitiesPreview() {
   }
 
   return (
-    <div className="relative h-[420px] sm:h-[500px] max-w-[280px] mx-auto lg:ml-auto lg:mr-0 lg:-translate-x-[7.5rem]">
+    <div className="relative h-[420px] sm:h-[500px] w-full max-w-[340px] sm:max-w-[300px] mx-auto lg:ml-auto lg:mr-0 lg:-translate-x-[7.5rem]">
       {communities.map((c, i) => {
         const pos = stackOrder.indexOf(i);
         return (
