@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 
 const communities = [
@@ -34,7 +34,14 @@ const communities = [
   },
 ];
 
-const defaultTransforms = [
+const mobileTransforms = [
+  "rotate(-14deg) translate(-32px, 24px)",
+  "rotate(-4deg) translate(-18px, 12px)",
+  "rotate(6deg) translate(-6px, 4px)",
+  "rotate(16deg) translate(10px, -6px)",
+];
+
+const desktopTransforms = [
   "rotate(-18deg) translate(-64px, 40px)",
   "rotate(-5deg) translate(-36px, 20px)",
   "rotate(8deg) translate(-12px, 6px)",
@@ -47,6 +54,17 @@ const initialStack = [0, 1, 2, 3];
 export default function CommunitiesPreview() {
   const [stackOrder, setStackOrder] = useState(initialStack);
   const [animating, setAnimating] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const mql = window.matchMedia("(max-width: 639px)");
+    setIsMobile(mql.matches);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, []);
+
+  const transforms = isMobile ? mobileTransforms : desktopTransforms;
 
   function handleHover(cardIndex: number) {
     if (animating) return;
@@ -59,7 +77,7 @@ export default function CommunitiesPreview() {
   }
 
   return (
-    <div className="relative h-[420px] sm:h-[500px] w-full max-w-[340px] sm:max-w-[300px] mx-auto lg:ml-auto lg:mr-0 lg:-translate-x-[7.5rem]">
+    <div className="relative h-[340px] sm:h-[500px] w-full max-w-[260px] sm:max-w-[300px] mx-auto lg:ml-auto lg:mr-0 lg:-translate-x-[7.5rem]">
       {communities.map((c, i) => {
         const pos = stackOrder.indexOf(i);
         return (
@@ -69,7 +87,7 @@ export default function CommunitiesPreview() {
             className="absolute inset-0 overflow-hidden rounded-2xl shadow-xl transition-all duration-500 cursor-pointer"
             style={{
               zIndex: pos,
-              transform: defaultTransforms[pos],
+              transform: transforms[pos],
               transformOrigin: "bottom center",
               pointerEvents: animating ? "none" : "auto",
             }}
@@ -84,7 +102,7 @@ export default function CommunitiesPreview() {
               className="absolute inset-0"
               style={{ background: "linear-gradient(180deg, rgba(28,27,26,0) 40%, rgba(28,27,26,0.88) 100%)" }}
             />
-            <div className="absolute bottom-0 left-0 p-5 w-full space-y-2">
+            <div className="absolute bottom-0 left-0 p-3 sm:p-5 w-full space-y-1.5 sm:space-y-2">
               <div className="flex gap-1.5 flex-wrap">
                 {c.tags.map((tag) => (
                   <span
@@ -95,7 +113,7 @@ export default function CommunitiesPreview() {
                   </span>
                 ))}
               </div>
-              <h3 className="text-white text-2xl font-extrabold tracking-tight leading-tight">
+              <h3 className="text-white text-lg sm:text-2xl font-extrabold tracking-tight leading-tight">
                 {c.name}
               </h3>
               <div className="flex gap-4 pt-1">
