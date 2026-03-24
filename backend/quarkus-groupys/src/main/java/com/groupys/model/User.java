@@ -56,6 +56,9 @@ public class User {
     @Column(name = "spotify_token_expiry")
     public Instant spotifyTokenExpiry;
 
+    @Column(name = "last_seen_at")
+    public Instant lastSeenAt;
+
     @Column(name = "date_joined", nullable = false, updatable = false)
     public Instant dateJoined;
 

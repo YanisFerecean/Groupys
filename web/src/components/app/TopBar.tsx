@@ -1,6 +1,8 @@
 "use client";
 
 import { UserButton } from "@clerk/nextjs";
+import { usePathname } from "next/navigation";
+import DmButton from "./DmButton";
 
 interface TopBarProps {
   onMenuClick?: () => void;
@@ -9,6 +11,10 @@ interface TopBarProps {
 }
 
 export default function TopBar({ onMenuClick, onSearchClick, onSettingsClick }: TopBarProps) {
+  const pathname = usePathname();
+  const isProfile = pathname === "/profile" || pathname.startsWith("/profile/");
+  const isFeed = pathname === "/feed" || pathname.startsWith("/feed/");
+
   return (
     <header className="fixed top-0 right-0 left-0 lg:left-64 h-16 lg:h-20 z-40 bg-surface/80 backdrop-blur-xl border-b border-surface-container">
       <div className="flex items-center justify-between px-4 lg:px-12 h-full">
@@ -35,15 +41,15 @@ export default function TopBar({ onMenuClick, onSearchClick, onSettingsClick }: 
 
         {/* Actions */}
         <div className="flex items-center gap-4 lg:gap-6">
-          <button
-            onClick={onSettingsClick}
-            className="hidden sm:block text-slate-500 hover:text-slate-800 transition-colors"
-          >
-            <span className="material-symbols-outlined">settings</span>
-          </button>
-          <button className="text-slate-500 hover:text-slate-800 transition-colors">
-            <span className="material-symbols-outlined">notifications</span>
-          </button>
+          {isProfile && (
+            <button
+              onClick={onSettingsClick}
+              className="text-slate-500 hover:text-slate-800 transition-colors"
+            >
+              <span className="material-symbols-outlined">settings</span>
+            </button>
+          )}
+          {isFeed && <DmButton />}
           <UserButton />
         </div>
       </div>

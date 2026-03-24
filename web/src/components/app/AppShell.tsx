@@ -2,11 +2,13 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useAuth, useUser } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
 import SideNav from "@/components/app/SideNav";
 import TopBar from "@/components/app/TopBar";
 import SearchOverlay from "@/components/discover/SearchOverlay";
 import SettingsDialog from "@/components/app/SettingsDialog";
 import { fetchUserByClerkId } from "@/lib/api";
+import { useWebSocket } from "@/hooks/useWebSocket";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -15,6 +17,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [spotifyConnected, setSpotifyConnected] = useState(false);
   const { getToken, isLoaded: isAuthLoaded, isSignedIn } = useAuth();
   const { user, isLoaded } = useUser();
+  const router = useRouter();
+  useWebSocket();
+
+  // Redirect unauthenticated users to home
+  useEffect(() => {
+    if (isAuthLoaded && !isSignedIn) {
+      router.replace("/");
+    }
+  }, [isAuthLoaded, isSignedIn, router]);
 
   // Load spotify connection status from backend
   useEffect(() => {
@@ -29,6 +40,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const handleSpotifyDisconnected = useCallback(() => {
     setSpotifyConnected(false);
   }, []);
+
+  if (!isAuthLoaded || !isSignedIn) return null;
 
   return (
     <div className="bg-surface text-on-surface min-h-screen">
