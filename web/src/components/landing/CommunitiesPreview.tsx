@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useState } from "react";
 import Image from "next/image";
+import { motion } from "framer-motion";
 
 const communities = [
   {
@@ -34,73 +35,71 @@ const communities = [
   },
 ];
 
-const mobileTransforms = [
-  "rotate(-10deg) translate(-20px, 16px)",
-  "rotate(-3deg) translate(-10px, 8px)",
-  "rotate(4deg) translate(-2px, 2px)",
-  "rotate(12deg) translate(8px, -4px)",
+const mobilePositions = [
+  { rotate: -10, x: -20, y: 16 },
+  { rotate: -3, x: -10, y: 8 },
+  { rotate: 4, x: -2, y: 2 },
+  { rotate: 12, x: 8, y: -4 },
 ];
 
-const desktopTransforms = [
-  "rotate(-18deg) translate(-64px, 40px)",
-  "rotate(-5deg) translate(-36px, 20px)",
-  "rotate(8deg) translate(-12px, 6px)",
-  "rotate(20deg) translate(16px, -10px)",
+const desktopPositions = [
+  { rotate: -18, x: -64, y: 40 },
+  { rotate: -5, x: -36, y: 20 },
+  { rotate: 8, x: -12, y: 6 },
+  { rotate: 20, x: 16, y: -10 },
 ];
 
 // stackOrder[i] = card index at position i (0=back, 3=front)
 const initialStack = [0, 1, 2, 3];
 
-const mobileQuery = "(max-width: 639px)";
-function subscribeMobile(cb: () => void) {
-  const mql = window.matchMedia(mobileQuery);
-  mql.addEventListener("change", cb);
-  return () => mql.removeEventListener("change", cb);
-}
-function getIsMobile() {
-  return window.matchMedia(mobileQuery).matches;
-}
-function getIsMobileServer() {
-  return false;
-}
-
 export default function CommunitiesPreview() {
   const [stackOrder, setStackOrder] = useState(initialStack);
-  const [animating, setAnimating] = useState(false);
-  const isMobile = useSyncExternalStore(subscribeMobile, getIsMobile, getIsMobileServer);
+  const [pullingCard, setPullingCard] = useState<number | null>(null);
 
-  const transforms = isMobile ? mobileTransforms : desktopTransforms;
+  const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches;
+  const positions = isMobile ? mobilePositions : desktopPositions;
 
-  function handleHover(cardIndex: number) {
-    if (animating) return;
+  function handleClick(e: React.MouseEvent, cardIndex: number) {
+    e.stopPropagation();
+    if (pullingCard !== null) return;
     const pos = stackOrder.indexOf(cardIndex);
     if (pos === stackOrder.length - 1) return; // already on top
-    const newStack = [...stackOrder.filter((c) => c !== cardIndex), cardIndex];
-    setStackOrder(newStack);
-    setAnimating(true);
-    setTimeout(() => setAnimating(false), 500);
+
+    setPullingCard(cardIndex);
+    setTimeout(() => {
+      setStackOrder((prev) => [...prev.filter((c) => c !== cardIndex), cardIndex]);
+      setPullingCard(null);
+    }, 350);
   }
 
-  function handleTap(e: React.MouseEvent, cardIndex: number) {
-    e.stopPropagation();
-    handleHover(cardIndex);
-  }
+  const activeCard = stackOrder[stackOrder.length - 1];
 
   return (
-    <div className="relative h-[280px] sm:h-[500px] w-full max-w-[200px] sm:max-w-[300px] mx-auto lg:ml-auto lg:mr-0 lg:-translate-x-[7.5rem]">
+    <div className="flex flex-col items-center gap-4 w-full max-w-[200px] sm:max-w-[300px] mx-auto lg:ml-auto lg:mr-0 lg:-translate-x-[7.5rem]">
+    <div className="relative h-[280px] sm:h-[500px] w-full">
       {communities.map((c, i) => {
         const pos = stackOrder.indexOf(i);
+        const isPulling = pullingCard === i;
+
         return (
-          <div
+          <motion.div
             key={c.name}
-            onMouseEnter={() => !isMobile && handleHover(i)}
-            onClick={(e) => isMobile && handleTap(e, i)}
-            className="absolute inset-0 overflow-hidden rounded-2xl shadow-xl transition-all duration-500 cursor-pointer"
+            onClick={(e) => handleClick(e, i)}
+            className="absolute inset-0 overflow-hidden rounded-2xl shadow-xl cursor-pointer"
+            animate={
+              isPulling
+                ? { rotate: -20, x: -(isMobile ? 180 - pos * 25 : 350 - pos * 50), y: -30, scale: 1.05 }
+                : { rotate: positions[pos].rotate, x: positions[pos].x, y: positions[pos].y, scale: 1 }
+            }
+            transition={
+              isPulling
+                ? { duration: 0.35, ease: "easeOut" }
+                : { duration: 0.45, ease: [0.25, 0.46, 0.45, 0.94] }
+            }
             style={{
               zIndex: pos,
-              transform: transforms[pos],
               transformOrigin: "bottom center",
-              pointerEvents: animating ? "none" : "auto",
+              pointerEvents: pullingCard !== null ? "none" : "auto",
             }}
           >
             <Image
@@ -142,9 +141,23 @@ export default function CommunitiesPreview() {
                 ))}
               </div>
             </div>
-          </div>
+          </motion.div>
         );
       })}
+    </div>
+    <div className="relative z-10 flex gap-2 mt-20 self-start ml-16">
+      {communities.map((_, i) => (
+        <button
+          key={i}
+          onClick={(e) => handleClick(e, i)}
+          className={`rounded-full transition-all duration-300 ${
+            activeCard === i
+              ? "w-4 h-2 bg-foreground"
+              : "w-2 h-2 bg-foreground/25 hover:bg-foreground/50"
+          }`}
+        />
+      ))}
+    </div>
     </div>
   );
 }
