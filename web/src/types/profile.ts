@@ -21,4 +21,5 @@ export interface ProfileCustomization {
   albumsContainerColor?: string;
   songsContainerColor?: string;
   artistsContainerColor?: string;
+  tags?: string[];
 }

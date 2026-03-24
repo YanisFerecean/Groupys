@@ -62,7 +62,7 @@ public class User {
     @Column(name = "date_joined", nullable = false, updatable = false)
     public Instant dateJoined;
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "user_tags", joinColumns = @JoinColumn(name = "user_id"))
     @Column(name = "tag")
     public List<String> tags = new ArrayList<>();
