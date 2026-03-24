@@ -1,3 +1,4 @@
+import Image from "next/image";
 import type { ProfileCustomization } from "@/types/profile";
 import WidgetCard from "./WidgetCard";
 
@@ -20,10 +21,12 @@ export default function TopSongsWidget({ songs, containerColor }: TopSongsWidget
                 {i + 1}
               </span>
               {song.coverUrl ? (
-                <img
+                <Image
                   src={song.coverUrl}
                   alt={song.title}
-                  className="w-10 h-10 rounded object-cover shrink-0"
+                  width={40}
+                  height={40}
+                  className="rounded object-cover shrink-0"
                 />
               ) : (
                 <div className="w-10 h-10 rounded bg-surface-container-high flex items-center justify-center shrink-0">

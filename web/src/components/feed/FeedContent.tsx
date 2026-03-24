@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import MarkdownContent from "@/components/ui/MarkdownContent";
@@ -80,10 +81,12 @@ function FeedPostCard({
         onClick={() => router.push(`/profile/${post.authorUsername}`)}
       >
         {post.authorProfileImage ? (
-          <img
+          <Image
             src={post.authorProfileImage}
             alt={post.authorDisplayName || post.authorUsername}
-            className="w-9 h-9 shrink-0 rounded-full object-cover"
+            width={36}
+            height={36}
+            className="shrink-0 rounded-full object-cover"
           />
         ) : (
           <div className="w-9 h-9 shrink-0 rounded-full bg-surface-container-high flex items-center justify-center">

@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 const artists = [
   {
     name: "PinkPantheress",
@@ -50,9 +52,10 @@ export default function TrendingArtists() {
               className="text-center group block"
             >
               <div className="relative aspect-square rounded-full overflow-hidden mb-6 ring-offset-4 ring-transparent group-hover:ring-primary/30 ring-4 transition-all duration-500">
-                <img
+                <Image
                   alt={artist.name}
-                  className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500"
+                  fill
+                  className="object-cover grayscale group-hover:grayscale-0 transition-all duration-500"
                   src={artist.image}
                 />
                 <div className="absolute top-2 left-2 w-7 h-7 bg-primary text-on-primary rounded-full flex items-center justify-center text-xs font-black shadow-md">

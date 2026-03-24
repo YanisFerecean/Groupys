@@ -1,3 +1,4 @@
+import Image from "next/image";
 import type { ProfileCustomization } from "@/types/profile";
 import WidgetCard from "./WidgetCard";
 
@@ -14,10 +15,11 @@ export default function TopArtistsWidget({ artists, containerColor }: TopArtists
           {artists.slice(0, 3).map((artist, i) => (
             <div key={i} className="flex items-center gap-3">
               {artist.imageUrl ? (
-                <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 bg-surface-container-high">
-                  <img
+                <div className="relative w-10 h-10 rounded-full overflow-hidden shrink-0 bg-surface-container-high">
+                  <Image
                     alt={artist.name}
-                    className="w-full h-full object-cover"
+                    fill
+                    className="object-cover"
                     src={artist.imageUrl}
                   />
                 </div>

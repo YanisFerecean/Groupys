@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 
 const communities = [
   {
@@ -73,10 +74,11 @@ export default function CommunitiesPreview() {
               pointerEvents: animating ? "none" : "auto",
             }}
           >
-            <img
+            <Image
               alt={c.name}
               src={c.image}
-              className="w-full h-full object-cover"
+              fill
+              className="object-cover"
             />
             <div
               className="absolute inset-0"

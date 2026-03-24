@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 
@@ -70,10 +71,12 @@ function ArtistRow({ artist, onPress }: { artist: ArtistRes; onPress: () => void
       onClick={onPress}
     >
       {image ? (
-        <img
+        <Image
           src={image}
           alt={artist.name}
-          className="w-11 h-11 rounded-full object-cover"
+          width={44}
+          height={44}
+          className="rounded-full object-cover"
         />
       ) : (
         <div className="w-11 h-11 rounded-full bg-surface-container-high flex items-center justify-center">
@@ -103,10 +106,12 @@ function AlbumRow({ album }: { album: AlbumRes }) {
   return (
     <div className="flex items-center gap-3 px-4 py-2.5">
       {cover ? (
-        <img
+        <Image
           src={cover}
           alt={album.title}
-          className="w-11 h-11 rounded-lg object-cover"
+          width={44}
+          height={44}
+          className="rounded-lg object-cover"
         />
       ) : (
         <div className="w-11 h-11 rounded-lg bg-surface-container-high flex items-center justify-center">
@@ -144,10 +149,12 @@ function TrackRow({
       onClick={onPress}
     >
       {cover ? (
-        <img
+        <Image
           src={cover}
           alt={track.title}
-          className="w-11 h-11 rounded-lg object-cover"
+          width={44}
+          height={44}
+          className="rounded-lg object-cover"
         />
       ) : (
         <div className="w-11 h-11 rounded-lg bg-surface-container-high flex items-center justify-center">

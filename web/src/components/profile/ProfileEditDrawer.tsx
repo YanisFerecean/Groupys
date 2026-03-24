@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import Image from "next/image";
 import { useAuth } from "@clerk/nextjs";
 import type { ProfileCustomization } from "@/types/profile";
 import {
@@ -340,10 +341,11 @@ export default function ProfileEditDrawer({
                 <div className="flex items-center gap-4">
                   <div className="relative w-20 h-20 rounded-xl overflow-hidden bg-surface-container-high shrink-0">
                     {displayedAvatar ? (
-                      <img
+                      <Image
                         src={displayedAvatar}
                         alt="Avatar"
-                        className="w-full h-full object-cover"
+                        fill
+                        className="object-cover"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
@@ -402,7 +404,7 @@ export default function ProfileEditDrawer({
                   onChange={(e) => {
                     setUsername(e.target.value);
                     if (errors.username) setErrors((prev) => {
-                      const { username: _, ...rest } = prev;
+                      const { username: _username, ...rest } = prev;
                       return rest;
                     });
                   }}
@@ -564,10 +566,12 @@ export default function ProfileEditDrawer({
                     className="flex items-center gap-3 p-2 bg-surface-container rounded-lg"
                   >
                     {album.coverUrl && (
-                      <img
+                      <Image
                         src={album.coverUrl}
                         alt={album.title}
-                        className="w-10 h-10 rounded object-cover shrink-0"
+                        width={40}
+                        height={40}
+                        className="rounded object-cover shrink-0"
                       />
                     )}
                     <div className="flex-1 min-w-0">
@@ -619,10 +623,12 @@ export default function ProfileEditDrawer({
                 {form.currentlyListening?.title ? (
                   <div className="flex items-center gap-3 p-2 bg-surface-container rounded-lg">
                     {form.currentlyListening.coverUrl && (
-                      <img
+                      <Image
                         src={form.currentlyListening.coverUrl}
                         alt={form.currentlyListening.title}
-                        className="w-12 h-12 rounded object-cover shrink-0"
+                        width={48}
+                        height={48}
+                        className="rounded object-cover shrink-0"
                       />
                     )}
                     <div className="flex-1 min-w-0">
@@ -679,10 +685,12 @@ export default function ProfileEditDrawer({
                       {i + 1}
                     </span>
                     {song.coverUrl && (
-                      <img
+                      <Image
                         src={song.coverUrl}
                         alt={song.title}
-                        className="w-10 h-10 rounded object-cover shrink-0"
+                        width={40}
+                        height={40}
+                        className="rounded object-cover shrink-0"
                       />
                     )}
                     <div className="flex-1 min-w-0">
@@ -735,10 +743,12 @@ export default function ProfileEditDrawer({
                     className="flex items-center gap-3 p-2 bg-surface-container rounded-lg"
                   >
                     {artist.imageUrl ? (
-                      <img
+                      <Image
                         src={artist.imageUrl}
                         alt={artist.name}
-                        className="w-10 h-10 rounded-full object-cover shrink-0"
+                        width={40}
+                        height={40}
+                        className="rounded-full object-cover shrink-0"
                       />
                     ) : (
                       <div className="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center shrink-0">

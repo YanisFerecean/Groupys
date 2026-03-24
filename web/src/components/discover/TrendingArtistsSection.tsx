@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Image from "next/image";
 import { useAuth } from "@clerk/nextjs";
 import SectionHeader from "@/components/discover/SectionHeader";
 
@@ -29,12 +30,13 @@ function ArtistBubble({ artist }: { artist: ChartArtist }) {
 
   return (
     <button className="flex flex-col items-center gap-2 group">
-      <div className="w-24 h-24 lg:w-28 lg:h-28 rounded-full overflow-hidden bg-surface-container-high group-hover:ring-2 group-hover:ring-primary/30 transition-all">
+      <div className="relative w-24 h-24 lg:w-28 lg:h-28 rounded-full overflow-hidden bg-surface-container-high group-hover:ring-2 group-hover:ring-primary/30 transition-all">
         {imageUrl ? (
-          <img
+          <Image
             src={imageUrl}
             alt={artist.name}
-            className="w-full h-full object-cover"
+            fill
+            className="object-cover"
           />
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-surface-container to-surface-container-highest" />

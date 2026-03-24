@@ -1,3 +1,4 @@
+import Image from "next/image";
 import type { ProfileCustomization } from "@/types/profile";
 import WidgetCard from "./WidgetCard";
 
@@ -14,10 +15,11 @@ export default function TopAlbumsWidget({ albums, containerColor }: TopAlbumsWid
           {albums.slice(0, 3).map((album, i) => (
             <div key={i} className="group">
               {album.coverUrl ? (
-                <div className="aspect-square rounded-xl overflow-hidden shadow-md mb-3">
-                  <img
+                <div className="relative aspect-square rounded-xl overflow-hidden shadow-md mb-3">
+                  <Image
                     alt={album.title}
-                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    fill
+                    className="object-cover transition-transform duration-300 group-hover:scale-105"
                     src={album.coverUrl}
                   />
                 </div>

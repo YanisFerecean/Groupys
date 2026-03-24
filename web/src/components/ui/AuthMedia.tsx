@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
+import Image from "next/image";
 
 export default function AuthMedia({
   src,
@@ -68,5 +69,5 @@ export default function AuthMedia({
     );
   }
 
-  return <img src={blobUrl} alt="Post media" className={className} />;
+  return <Image src={blobUrl} alt="Post media" width={0} height={0} sizes="100vw" className={className} />;
 }

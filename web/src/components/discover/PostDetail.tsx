@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import MarkdownContent from "@/components/ui/MarkdownContent";
@@ -132,10 +133,12 @@ function CommentThread({
           onClick={() => router.push(`/profile/${comment.authorUsername}`)}
         >
           {comment.authorProfileImage ? (
-            <img
+            <Image
               src={comment.authorProfileImage}
               alt={comment.authorDisplayName || comment.authorUsername}
-              className="w-7 h-7 shrink-0 rounded-full object-cover"
+              width={28}
+              height={28}
+              className="shrink-0 rounded-full object-cover"
             />
           ) : (
             <div className="w-7 h-7 shrink-0 rounded-full bg-surface-container-high flex items-center justify-center">
@@ -425,10 +428,12 @@ export default function PostDetail({ id }: { id: string }) {
           onClick={() => router.push(`/profile/${post.authorUsername}`)}
         >
           {post.authorProfileImage ? (
-            <img
+            <Image
               src={post.authorProfileImage}
               alt={post.authorDisplayName || post.authorUsername}
-              className="w-11 h-11 shrink-0 rounded-full object-cover"
+              width={44}
+              height={44}
+              className="shrink-0 rounded-full object-cover"
             />
           ) : (
             <div className="w-11 h-11 shrink-0 rounded-full bg-surface-container-high flex items-center justify-center">

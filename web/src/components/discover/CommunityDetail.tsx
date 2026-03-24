@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth, useUser } from "@clerk/nextjs";
 import { useEditor, EditorContent } from "@tiptap/react";
@@ -93,10 +94,12 @@ function MemberRow({ member }: { member: MemberRes }) {
   return (
     <div className="flex items-center gap-3 py-3 px-2">
       {member.profileImage ? (
-        <img
+        <Image
           src={member.profileImage}
           alt={member.displayName || member.username}
-          className="w-10 h-10 rounded-full object-cover"
+          width={40}
+          height={40}
+          className="rounded-full object-cover"
         />
       ) : (
         <div className="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center">
@@ -163,10 +166,12 @@ function PostCard({
         }}
       >
         {post.authorProfileImage ? (
-          <img
+          <Image
             src={post.authorProfileImage}
             alt={post.authorDisplayName || post.authorUsername}
-            className="w-9 h-9 shrink-0 rounded-full object-cover"
+            width={36}
+            height={36}
+            className="shrink-0 rounded-full object-cover"
           />
         ) : (
           <div className="w-9 h-9 shrink-0 rounded-full bg-surface-container-high flex items-center justify-center">
@@ -611,9 +616,12 @@ function CreatePostForm({
               <audio src={preview} controls className="flex-1 h-8" />
             </div>
           ) : (
-            <img
+            <Image
               src={preview}
               alt="Preview"
+              width={0}
+              height={0}
+              sizes="100vw"
               className="w-full max-h-48 object-cover rounded-xl"
             />
           )}
@@ -914,8 +922,6 @@ export default function CommunityDetail({ id }: { id: string }) {
   }
 
   const owner = members.find((m) => m.role === "owner");
-  const isCurrentUserOwner =
-    !!owner && !!clerkUser && community?.createdById === clerkUser.id;
   const currentMember = clerkUser
     ? members.find((m) => m.username === clerkUser.username)
     : undefined;
@@ -1136,10 +1142,12 @@ export default function CommunityDetail({ id }: { id: string }) {
                           {i + 1}
                         </span>
                         {user.profileImage ? (
-                          <img
+                          <Image
                             src={user.profileImage}
                             alt={user.displayName || user.username}
-                            className="w-8 h-8 rounded-full object-cover shrink-0"
+                            width={32}
+                            height={32}
+                            className="rounded-full object-cover shrink-0"
                           />
                         ) : (
                           <div className="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center shrink-0">

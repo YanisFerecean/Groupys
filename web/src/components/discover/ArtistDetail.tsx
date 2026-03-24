@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import CreateCommunityModal from "@/components/discover/CreateCommunityModal";
@@ -193,10 +194,12 @@ function TrackRow({
       </div>
 
       {cover ? (
-        <img
+        <Image
           src={cover}
           alt={track.title}
-          className="w-11 h-11 rounded-lg object-cover shrink-0"
+          width={44}
+          height={44}
+          className="rounded-lg object-cover shrink-0"
         />
       ) : (
         <div className="w-11 h-11 rounded-lg bg-surface-container-high flex items-center justify-center shrink-0">
@@ -443,10 +446,11 @@ export default function ArtistDetail({ id }: { id: string }) {
       {/* Hero */}
       <div className="relative h-64 sm:h-80 lg:h-96 -mx-px overflow-hidden rounded-b-3xl lg:rounded-3xl lg:mt-6 lg:mx-6">
         {heroImage ? (
-          <img
+          <Image
             src={heroImage}
             alt={artist.name}
-            className="w-full h-full object-cover"
+            fill
+            className="object-cover"
           />
         ) : (
           <div className="w-full h-full bg-surface-container-high flex items-center justify-center">

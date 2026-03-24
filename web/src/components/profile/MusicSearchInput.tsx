@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import Image from "next/image";
 import { Input } from "@/components/ui/input";
 
 // ── Result types from /api/music-search ─────────────────────────────────────
@@ -159,10 +160,12 @@ export default function MusicSearchInput<T extends SearchType>({
 function TrackRow({ result }: { result: TrackResult }) {
   return (
     <>
-      <img
+      <Image
         src={result.coverUrl}
         alt={result.title}
-        className="w-10 h-10 rounded object-cover shrink-0"
+        width={40}
+        height={40}
+        className="rounded object-cover shrink-0"
       />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold truncate">{result.title}</p>
@@ -177,10 +180,12 @@ function TrackRow({ result }: { result: TrackResult }) {
 function ArtistRow({ result }: { result: ArtistResult }) {
   return (
     <>
-      <img
+      <Image
         src={result.imageUrl}
         alt={result.name}
-        className="w-10 h-10 rounded-full object-cover shrink-0"
+        width={40}
+        height={40}
+        className="rounded-full object-cover shrink-0"
       />
       <p className="text-sm font-semibold truncate">{result.name}</p>
     </>
@@ -190,10 +195,12 @@ function ArtistRow({ result }: { result: ArtistResult }) {
 function AlbumRow({ result }: { result: AlbumResult }) {
   return (
     <>
-      <img
+      <Image
         src={result.coverUrl}
         alt={result.title}
-        className="w-10 h-10 rounded object-cover shrink-0"
+        width={40}
+        height={40}
+        className="rounded object-cover shrink-0"
       />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold truncate">{result.title}</p>

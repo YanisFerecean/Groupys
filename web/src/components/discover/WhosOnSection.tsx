@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import SectionHeader from "@/components/discover/SectionHeader";
 
 interface DiscoverUser {
@@ -25,10 +26,12 @@ function UserOnlineCard({ user }: { user: DiscoverUser }) {
     <button className="flex flex-col items-center gap-2 p-4 rounded-2xl border border-outline-variant/30 bg-primary/5 hover:bg-primary/10 transition-colors w-36 shrink-0">
       {/* Avatar + online dot */}
       <div className="relative">
-        <img
+        <Image
           src={user.image}
           alt={user.name}
-          className="w-16 h-16 rounded-full object-cover"
+          width={64}
+          height={64}
+          className="rounded-full object-cover"
         />
         <div className="absolute bottom-0.5 right-0.5 w-3.5 h-3.5 rounded-full bg-green-500 border-2 border-surface-container-low" />
       </div>

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
+import Image from "next/image";
 import { useAuth } from "@clerk/nextjs";
 import type { ProfileCustomization } from "@/types/profile";
 import { fetchSpotifyCurrentlyPlaying } from "@/lib/spotify";
@@ -20,26 +21,24 @@ export default function CurrentlyListeningWidget({
   const { getToken } = useAuth();
   const [liveTrack, setLiveTrack] = useState(savedTrack);
 
-  const poll = useCallback(async () => {
-    const token = await getToken();
-    if (!token) return;
-    try {
-      const data = await fetchSpotifyCurrentlyPlaying(token);
-      setLiveTrack(data ?? savedTrack);
-    } catch {
-      // keep showing last known track
-    }
-  }, [getToken, savedTrack]);
-
   useEffect(() => {
-    if (!spotifyConnected) {
-      setLiveTrack(savedTrack);
-      return;
+    if (!spotifyConnected) return;
+
+    async function poll() {
+      const token = await getToken();
+      if (!token) return;
+      try {
+        const data = await fetchSpotifyCurrentlyPlaying(token);
+        setLiveTrack(data ?? savedTrack);
+      } catch {
+        // keep showing last known track
+      }
     }
+
     poll();
     const id = setInterval(poll, POLL_INTERVAL);
     return () => clearInterval(id);
-  }, [spotifyConnected, poll]);
+  }, [spotifyConnected, getToken, savedTrack]);
 
   const track = spotifyConnected ? liveTrack : savedTrack;
 
@@ -49,10 +48,12 @@ export default function CurrentlyListeningWidget({
         <div className="flex items-center gap-4">
           {track.coverUrl && (
             <div className="w-14 h-14 shrink-0 rounded-lg overflow-hidden shadow">
-              <img
+              <Image
                 alt={track.title}
                 className="w-full h-full object-cover"
                 src={track.coverUrl}
+                width={56}
+                height={56}
               />
             </div>
           )}

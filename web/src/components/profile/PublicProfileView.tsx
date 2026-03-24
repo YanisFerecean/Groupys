@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import type { ProfileCustomization } from "@/types/profile";
@@ -127,11 +128,12 @@ export default function PublicProfileView({
         <div className="px-6 md:px-12 -mt-16 md:-mt-20 relative z-10">
           <div className="flex flex-col items-center md:flex-row md:items-end gap-6">
             {/* Avatar */}
-            <div className="w-32 h-32 md:w-40 md:h-40 shrink-0 rounded-2xl overflow-hidden shadow-2xl border-4 border-surface bg-surface-container-high">
+            <div className="relative w-32 h-32 md:w-40 md:h-40 shrink-0 rounded-2xl overflow-hidden shadow-2xl border-4 border-surface bg-surface-container-high">
               {avatarUrl ? (
-                <img
+                <Image
                   alt={displayName}
-                  className="w-full h-full object-cover"
+                  fill
+                  className="object-cover"
                   src={avatarUrl}
                 />
               ) : (
