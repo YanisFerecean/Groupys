@@ -4,10 +4,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - "web/**"
-      - "docker/docker-compose.prod.yaml"
-      - ".github/workflows/deploy-web-prod.yml"
   workflow_dispatch:
 
 concurrency:
@@ -23,7 +19,26 @@ env:
   WEB_IMAGE_NAME: groupys-web
 
 jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      web: ${{ steps.filter.outputs.web }}
+      deploy: ${{ steps.filter.outputs.deploy }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            web:
+              - 'web/**'
+            deploy:
+              - 'docker/docker-compose.prod.yaml'
+              - '.github/workflows/deploy-web-prod.yml'
+
   build:
+    needs: changes
+    if: needs.changes.outputs.web == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -101,13 +116,25 @@ jobs:
 
   deploy:
     runs-on: ubuntu-24.04
-    needs: build
+    if: always() && !failure() && !cancelled()
+    needs:
+      - changes
+      - build
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
       - name: Normalize image owner
         run: echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+
+      - name: Resolve image tag
+        id: tags
+        run: |
+          if [ "${{ needs.changes.outputs.web }}" = "true" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "web_tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "web_tag=latest" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Prepare remote deploy directory
         uses: appleboy/ssh-action@v1.0.3
@@ -138,7 +165,7 @@ jobs:
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           REGISTRY_USERNAME: ${{ github.actor }}
           REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
-          WEB_IMAGE: ghcr.io/${{ env.OWNER_LC }}/${{ env.WEB_IMAGE_NAME }}:${{ github.sha }}
+          WEB_IMAGE: ghcr.io/${{ env.OWNER_LC }}/${{ env.WEB_IMAGE_NAME }}:${{ steps.tags.outputs.web_tag }}
           NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
           CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
@@ -194,8 +221,9 @@ jobs:
           {
             echo "## Web Deploy Summary"
             echo ""
-            echo "- Host: ${{ secrets.VM88_HOST }}"
-            echo "- User: ${{ secrets.VM88_USER }}"
-            echo "- Image: ghcr.io/${{ env.OWNER_LC }}/${{ env.WEB_IMAGE_NAME }}:${{ github.sha }}"
-            echo "- Deploy path: ${{ secrets.DEPLOY_PATH }}"
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| **Host** | ${{ secrets.VM88_HOST }} |"
+            echo "| **Image** | \`ghcr.io/${{ env.OWNER_LC }}/${{ env.WEB_IMAGE_NAME }}:${{ steps.tags.outputs.web_tag }}\` |"
+            echo "| **Deploy path** | ${{ secrets.DEPLOY_PATH }} |"
           } >> "$GITHUB_STEP_SUMMARY"
