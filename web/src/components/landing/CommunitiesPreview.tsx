@@ -81,6 +81,11 @@ export default function CommunitiesPreview() {
     setTimeout(() => setAnimating(false), 500);
   }
 
+  function handleTap(e: React.MouseEvent, cardIndex: number) {
+    e.stopPropagation();
+    handleHover(cardIndex);
+  }
+
   return (
     <div className="relative h-[280px] sm:h-[500px] w-full max-w-[200px] sm:max-w-[300px] mx-auto lg:ml-auto lg:mr-0 lg:-translate-x-[7.5rem]">
       {communities.map((c, i) => {
@@ -88,7 +93,8 @@ export default function CommunitiesPreview() {
         return (
           <div
             key={c.name}
-            onMouseEnter={() => handleHover(i)}
+            onMouseEnter={() => !isMobile && handleHover(i)}
+            onClick={(e) => isMobile && handleTap(e, i)}
             className="absolute inset-0 overflow-hidden rounded-2xl shadow-xl transition-all duration-500 cursor-pointer"
             style={{
               zIndex: pos,
@@ -102,7 +108,8 @@ export default function CommunitiesPreview() {
               src={c.image}
               fill
               className="object-cover"
-              sizes="280px"
+              sizes="(max-width: 639px) 400px, 900px"
+              quality={90}
               priority={pos === communities.length - 1}
             />
             <div
