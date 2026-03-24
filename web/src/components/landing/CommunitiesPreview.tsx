@@ -35,10 +35,10 @@ const communities = [
 ];
 
 const mobileTransforms = [
-  "rotate(-14deg) translate(-32px, 24px)",
-  "rotate(-4deg) translate(-18px, 12px)",
-  "rotate(6deg) translate(-6px, 4px)",
-  "rotate(16deg) translate(10px, -6px)",
+  "rotate(-10deg) translate(-20px, 16px)",
+  "rotate(-3deg) translate(-10px, 8px)",
+  "rotate(4deg) translate(-2px, 2px)",
+  "rotate(12deg) translate(8px, -4px)",
 ];
 
 const desktopTransforms = [
@@ -82,7 +82,7 @@ export default function CommunitiesPreview() {
   }
 
   return (
-    <div className="relative h-[340px] sm:h-[500px] w-full max-w-[260px] sm:max-w-[300px] mx-auto lg:ml-auto lg:mr-0 lg:-translate-x-[7.5rem]">
+    <div className="relative h-[280px] sm:h-[500px] w-full max-w-[200px] sm:max-w-[300px] mx-auto lg:ml-auto lg:mr-0 lg:-translate-x-[7.5rem]">
       {communities.map((c, i) => {
         const pos = stackOrder.indexOf(i);
         return (
@@ -112,7 +112,7 @@ export default function CommunitiesPreview() {
                 {c.tags.map((tag) => (
                   <span
                     key={tag}
-                    className="bg-white/20 backdrop-blur-sm text-white px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-widest uppercase"
+                    className="bg-white/20 backdrop-blur-sm text-white px-1.5 py-0.5 sm:px-2.5 rounded-full text-[8px] sm:text-[10px] font-bold tracking-widest uppercase"
                   >
                     {tag}
                   </span>
@@ -121,14 +121,14 @@ export default function CommunitiesPreview() {
               <h3 className="text-white text-lg sm:text-2xl font-extrabold tracking-tight leading-tight">
                 {c.name}
               </h3>
-              <div className="flex gap-4 pt-1">
+              <div className="flex gap-3 sm:gap-4 pt-0.5 sm:pt-1">
                 {[
                   { value: c.members, label: "Members" },
                   { value: c.posts, label: "Posts" },
                 ].map((s) => (
                   <div key={s.label} className="flex flex-col">
-                    <span className="text-white font-bold text-sm leading-tight">{s.value}</span>
-                    <span className="text-white/60 text-[10px] uppercase tracking-widest font-semibold">{s.label}</span>
+                    <span className="text-white font-bold text-xs sm:text-sm leading-tight">{s.value}</span>
+                    <span className="text-white/60 text-[8px] sm:text-[10px] uppercase tracking-widest font-semibold">{s.label}</span>
                   </div>
                 ))}
               </div>
