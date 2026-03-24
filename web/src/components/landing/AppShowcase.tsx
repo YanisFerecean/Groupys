@@ -30,13 +30,13 @@ export default function AppShowcase() {
           {/* Primary mockup */}
           <div className="relative z-20 w-[200px] h-[420px] sm:w-[240px] sm:h-[500px] md:w-[280px] md:h-[580px] bg-on-surface rounded-[3rem] p-3 shadow-2xl overflow-hidden border-4 border-surface-container-high">
             <div className="relative w-full h-full bg-white rounded-[2.5rem] overflow-hidden">
-              <Image alt="Groupys mobile app" fill className="object-cover" src={mockupSrc} />
+              <Image alt="Groupys mobile app" fill className="object-cover" src={mockupSrc} sizes="(max-width: 640px) 200px, (max-width: 768px) 240px, 280px" />
             </div>
           </div>
           {/* Secondary mockup — hidden on small screens to avoid overflow */}
           <div className="hidden sm:block absolute z-10 top-20 -right-4 lg:right-10 w-[200px] h-[420px] sm:w-[240px] sm:h-[500px] md:w-[280px] md:h-[580px] bg-on-surface rounded-[3rem] p-3 shadow-2xl overflow-hidden border-4 border-surface-container-high opacity-80 scale-90">
             <div className="relative w-full h-full bg-white rounded-[2.5rem] overflow-hidden">
-              <Image alt="Groupys community feed" fill className="object-cover" src={mockupSrc2} />
+              <Image alt="Groupys community feed" fill className="object-cover" src={mockupSrc2} sizes="(max-width: 640px) 200px, (max-width: 768px) 240px, 280px" />
             </div>
           </div>
         </div>

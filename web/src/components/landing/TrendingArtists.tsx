@@ -57,6 +57,7 @@ export default function TrendingArtists() {
                   fill
                   className="object-cover grayscale group-hover:grayscale-0 transition-all duration-500"
                   src={artist.image}
+                  sizes="(max-width: 768px) calc(50vw - 40px), 300px"
                 />
                 <div className="absolute top-2 left-2 w-7 h-7 bg-primary text-on-primary rounded-full flex items-center justify-center text-xs font-black shadow-md">
                   {i + 1}

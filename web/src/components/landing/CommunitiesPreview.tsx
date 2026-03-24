@@ -102,6 +102,8 @@ export default function CommunitiesPreview() {
               src={c.image}
               fill
               className="object-cover"
+              sizes="280px"
+              priority={pos === communities.length - 1}
             />
             <div
               className="absolute inset-0"
