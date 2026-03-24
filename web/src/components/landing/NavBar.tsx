@@ -11,7 +11,7 @@ export default function NavBar() {
 
   return (
     <nav className="fixed top-0 w-full z-50 bg-slate-50/70 glass-nav">
-      <div className="max-w-7xl mx-auto px-6 sm:px-8 py-5 grid grid-cols-3 items-center">
+      <div className="max-w-7xl mx-auto px-6 sm:px-8 py-5 flex items-center justify-between">
         <div className="text-2xl font-black tracking-tighter text-primary">Groupys</div>
 
         {/* Desktop nav links */}
