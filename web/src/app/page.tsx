@@ -140,6 +140,14 @@ const jsonLd = {
 export default function Home() {
   return (
     <>
+      {/* Preload LCP image — top card in CommunitiesPreview is always drake.png on initial render */}
+      <link
+        rel="preload"
+        as="image"
+        href="/_next/image?url=%2Fdrake.png&w=384&q=75"
+        imageSrcSet="/_next/image?url=%2Fdrake.png&w=256&q=75 256w, /_next/image?url=%2Fdrake.png&w=384&q=75 384w"
+        imageSizes="280px"
+      />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
