@@ -11,7 +11,7 @@ import Footer from "@/components/landing/Footer";
 export const metadata: Metadata = {
   title: "Groupys – Find Your Music Community | Connect with Music Lovers",
   description:
-    "Groupys is a community-based music platform. Join communities, match with people who share your taste, rate albums, and share weekly hot takes.",
+    "Groupys is the music community app where you connect with music lovers, join music fan communities, rate albums with our album rating app, and discover your music social network.",
   alternates: { canonical: "https://groupys.app" },
 };
 
@@ -80,6 +80,14 @@ const jsonLd = {
       offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
       publisher: { "@id": "https://groupys.app/#organization" },
       author: { "@id": "https://groupys.app/#organization" },
+    },
+    {
+      "@type": "WebApplication",
+      name: "Groupys",
+      description:
+        "Find your music community. Connect with people who share your taste.",
+      applicationCategory: "SocialNetworkingApplication",
+      url: "https://groupys.app",
     },
     {
       "@type": "FAQPage",

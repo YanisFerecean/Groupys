@@ -1,4 +1,9 @@
+# *
 User-agent: *
 Allow: /
 
-Sitemap: https://groupys.com/sitemap.xml
+# Host
+Host: https://groupys.app
+
+# Sitemaps
+Sitemap: https://groupys.app/sitemap.xml

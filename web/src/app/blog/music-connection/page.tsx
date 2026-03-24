@@ -75,8 +75,23 @@ const sources = [
   },
 ];
 
+const articleJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Article",
+  headline: "How to Find People Who Like the Same Music as You",
+  datePublished: "2026-03-23",
+  author: { "@type": "Organization", name: "Groupys" },
+  publisher: { "@id": "https://groupys.app/#organization" },
+  url: "https://groupys.app/blog/music-connection",
+};
+
 export default function MusicConnectionPage() {
   return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }}
+      />
     <div className="min-h-screen bg-surface text-on-surface">
       <div className="max-w-2xl mx-auto px-6 py-24">
         <Link
@@ -379,5 +394,6 @@ export default function MusicConnectionPage() {
         </article>
       </div>
     </div>
+    </>
   );
 }

@@ -63,8 +63,23 @@ const sources = [
   },
 ];
 
+const articleJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Article",
+  headline: "How to Rate Albums the Right Way (And Why It Matters)",
+  datePublished: "2026-03-23",
+  author: { "@type": "Organization", name: "Groupys" },
+  publisher: { "@id": "https://groupys.app/#organization" },
+  url: "https://groupys.app/blog/album-rating",
+};
+
 export default function AlbumRatingPage() {
   return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }}
+      />
     <div className="min-h-screen bg-surface text-on-surface">
       <div className="max-w-2xl mx-auto px-6 py-24">
         <Link
@@ -285,5 +300,6 @@ export default function AlbumRatingPage() {
         </article>
       </div>
     </div>
+    </>
   );
 }

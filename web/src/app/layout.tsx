@@ -18,15 +18,16 @@ export const metadata: Metadata = {
     template: "%s | Groupys",
   },
   description:
-    "Groupys is a community-based music platform. Join music communities, match with people who share your taste, rate albums, and share weekly hot takes.",
+    "Groupys is the music community app where you connect with music lovers, join music fan communities, rate albums with our album rating app, and discover your music social network.",
   keywords: [
-    "music community",
+    "music community app",
+    "connect with music lovers",
+    "music fan communities",
+    "album rating app",
     "music social network",
-    "album ratings",
     "music discovery",
     "taste match",
     "weekly hot take",
-    "music app",
   ],
   applicationName: "Groupys",
   authors: [{ name: "Groupys" }],
@@ -44,14 +45,14 @@ export const metadata: Metadata = {
     siteName: "Groupys",
     title: "Groupys – Find Your Music Community | Connect with Music Lovers",
     description:
-      "Join music communities, match with people who share your taste, rate albums, and share weekly hot takes.",
+      "Connect with music lovers, join music fan communities, rate albums, and share weekly hot takes on Groupys.",
     images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "Groupys" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "Groupys – Find Your Music Community | Connect with Music Lovers",
     description:
-      "Join music communities, match with people who share your taste, rate albums, and share weekly hot takes.",
+      "Connect with music lovers, join music fan communities, rate albums, and share weekly hot takes on Groupys.",
     images: ["/og-image.png"],
     creator: "@groupysapp",
   },
