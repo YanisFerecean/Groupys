@@ -27,7 +27,7 @@ export function MessageThread({ messages, conversationId, hasMore, isLoadingMore
   // Listen to typing events
   useEffect(() => {
     const unsubs = [
-      chatWs.on("TYPING", (payload: any) => {
+      chatWs.on("TYPING", (payload: { conversationId: string; userId: string; username: string; isTyping: boolean }) => {
         if (payload.conversationId === conversationId && payload.username !== user?.username) {
           setTypists(prev => {
             const next = new Map(prev);
@@ -42,7 +42,9 @@ export function MessageThread({ messages, conversationId, hasMore, isLoadingMore
       })
     ];
     return () => unsubs.forEach(u => u());
-  }, [conversationId, user?.id]);
+  }, [conversationId, user?.id, user?.username]);
+
+  const newestMessageId = messages[0]?.id;
 
   // Scroll to bottom on mount or new bottom message
   useEffect(() => {
@@ -50,9 +52,7 @@ export function MessageThread({ messages, conversationId, hasMore, isLoadingMore
     if (bottomRef.current) {
       bottomRef.current.scrollIntoView({ behavior: "auto" });
     }
-  }, [messages[0]?.id, typists.size]); // messages[0] is the newest conceptually, wait, let's make sure our messages array is newest-first or oldest-first.
-  // Wait, in useMessages we do [payload, ...prev] - so index 0 is newest.
-  // But we render them in reverse! Let's ensure we render them bottom-up.
+  }, [newestMessageId, typists.size]);
 
   // After older messages are prepended, restore scroll position so the view doesn't jump
   useEffect(() => {

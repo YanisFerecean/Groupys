@@ -3,10 +3,9 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
-import { Search, Plus, X, Loader2 } from "lucide-react";
+import { Search, X, Loader2 } from "lucide-react";
 import { searchUsers, startConversation } from "@/lib/chat-api";
 import { BackendUser } from "@/lib/api";
-import { Button } from "@/components/ui/button";
 
 interface NewConversationModalProps {
   isOpen: boolean;
@@ -117,7 +116,7 @@ export function NewConversationModal({ isOpen, onClose }: NewConversationModalPr
             ))
           ) : query.length >= 2 ? (
             <div className="text-center p-8 text-muted-foreground text-sm">
-              No users found matching "{query}"
+              No users found matching &quot;{query}&quot;
             </div>
           ) : (
             <div className="text-center p-8 text-muted-foreground text-sm">

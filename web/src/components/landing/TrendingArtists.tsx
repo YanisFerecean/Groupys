@@ -43,7 +43,7 @@ export default function TrendingArtists() {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-          {artists.map((artist, i) => (
+          {artists.map((artist) => (
             <a
               key={artist.name}
               href={artist.url}

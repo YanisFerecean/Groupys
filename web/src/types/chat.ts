@@ -52,12 +52,12 @@ export interface WsMessagePayload {
 
 export interface WsInbound {
   type: string;
-  payload: Record<string, any>;
+  payload: Record<string, unknown>;
 }
 
 export interface WsOutbound {
   type: string;
-  payload?: Record<string, any>;
+  payload?: Record<string, unknown>;
   conversationId?: string;
   content?: string;
   tempId?: string;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ChevronLeft, Info } from "lucide-react";
 import { useUser } from "@clerk/nextjs";
@@ -32,14 +32,17 @@ export default function ConversationPage() {
   const [otherLastReadAt, setOtherLastReadAt] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!conversation || !user) return;
-    const other = conversation.participants.find(p => p.username !== user.username);
-    setOtherLastReadAt(other?.lastReadAt ?? null);
+    async function seed() {
+      if (!conversation || !user) return;
+      const other = conversation.participants.find(p => p.username !== user.username);
+      setOtherLastReadAt(other?.lastReadAt ?? null);
+    }
+    seed();
   }, [conversation?.id, user?.username]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!conversationId) return;
-    return chatWs.on("READ", (payload: any) => {
+    return chatWs.on("READ", (payload: { conversationId: string; readAt: string }) => {
       if (payload.conversationId === conversationId) {
         setOtherLastReadAt(payload.readAt);
       }
@@ -53,32 +56,45 @@ export default function ConversationPage() {
     }
   }, [conversationId, messages.length, conversation?.unreadCount, markAsRead]);
 
-  // Derive header info
-  let headerTitle = "Chat";
-  let avatarUrl = null;
-  let isOtherOnline = false;
-  let lastSeenText: string | null = null;
+  // Derive header info (no impure calls — Date.now handled separately below)
+  const { headerTitle, avatarUrl, isOtherOnline } = useMemo(() => {
+    let headerTitle = "Chat";
+    let avatarUrl: string | null = null;
+    let isOtherOnline = false;
 
-  if (conversation && user) {
-    if (conversation.isGroup) {
-      headerTitle = conversation.groupName || "Group Chat";
-    } else {
-      const other = conversation.participants.find(p => p.username !== user.username);
-      if (other) {
-        headerTitle = other.displayName || other.username;
-        avatarUrl = other.profileImage;
-        isOtherOnline = isOnline(other.userId);
-        if (!isOtherOnline && other.lastSeenAt) {
-          const diff = Date.now() - new Date(other.lastSeenAt).getTime();
-          const minutes = Math.floor(diff / 60000);
-          if (minutes < 1) lastSeenText = "last seen just now";
-          else if (minutes < 60) lastSeenText = `last seen ${minutes}m ago`;
-          else if (minutes < 1440) lastSeenText = `last seen ${Math.floor(minutes / 60)}h ago`;
-          else lastSeenText = `last seen ${Math.floor(minutes / 1440)}d ago`;
+    if (conversation && user) {
+      if (conversation.isGroup) {
+        headerTitle = conversation.groupName || "Group Chat";
+      } else {
+        const other = conversation.participants.find(p => p.username !== user.username);
+        if (other) {
+          headerTitle = other.displayName || other.username;
+          avatarUrl = other.profileImage;
+          isOtherOnline = isOnline(other.userId);
         }
       }
     }
-  }
+
+    return { headerTitle, avatarUrl, isOtherOnline };
+  }, [conversation, user, isOnline]);
+
+  // Compute "last seen X ago" outside render to avoid Date.now() purity violation
+  const [lastSeenText, setLastSeenText] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function update() {
+      if (!conversation || !user || conversation.isGroup) { setLastSeenText(null); return; }
+      const other = conversation.participants.find(p => p.username !== user.username);
+      if (!other || isOnline(other.userId) || !other.lastSeenAt) { setLastSeenText(null); return; }
+      const diff = Date.now() - new Date(other.lastSeenAt).getTime();
+      const minutes = Math.floor(diff / 60000);
+      if (minutes < 1) setLastSeenText("last seen just now");
+      else if (minutes < 60) setLastSeenText(`last seen ${minutes}m ago`);
+      else if (minutes < 1440) setLastSeenText(`last seen ${Math.floor(minutes / 60)}h ago`);
+      else setLastSeenText(`last seen ${Math.floor(minutes / 1440)}d ago`);
+    }
+    update();
+  }, [conversation, user, isOnline]);
 
   const handleSend = (content: string) => {
     if (!user) return;

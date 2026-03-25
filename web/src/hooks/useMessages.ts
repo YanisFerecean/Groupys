@@ -61,7 +61,7 @@ export function useMessages(conversationId: string | null) {
           });
         }
       }),
-      chatWs.on("MESSAGE_ACK", (payload: any) => {
+      chatWs.on("MESSAGE_ACK", (payload: { tempId: string; messageId: string; createdAt: string }) => {
         setMessages((prev) => {
           const idx = prev.findIndex((m) => m.tempId === payload.tempId);
           if (idx !== -1) {

@@ -45,7 +45,7 @@ export function useConversations() {
     const unsubs = [
       chatWs.on("MESSAGE_NEW", (payload: Message) => {
         setConversations((prev) => {
-          let updated = [...prev];
+          const updated = [...prev];
           const idx = updated.findIndex((c) => c.id === payload.conversationId);
 
           if (idx !== -1) {

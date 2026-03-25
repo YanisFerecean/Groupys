@@ -15,7 +15,7 @@ export class ChatWebSocketClient {
   private isAuthenticated = false;
 
   // Handlers for specific event types
-  private handlers: Map<string, Array<(payload: any) => void>> = new Map();
+  private handlers: Map<string, Array<(payload: unknown) => void>> = new Map();
 
   constructor(private url: string) {}
 
@@ -84,7 +84,7 @@ export class ChatWebSocketClient {
           }
 
           this.emit(msg.type, msg.payload || msg);
-        } catch (err) {
+        } catch (_err) {
           console.error("[WS] Failed to parse message:", event.data);
         }
       };
@@ -132,22 +132,22 @@ export class ChatWebSocketClient {
     }
   }
 
-  public on(type: string, handler: (payload: any) => void) {
+  public on<T = unknown>(type: string, handler: (payload: T) => void): () => void {
     if (!this.handlers.has(type)) {
       this.handlers.set(type, []);
     }
-    this.handlers.get(type)!.push(handler);
+    this.handlers.get(type)!.push(handler as (payload: unknown) => void);
 
     // Return unsubscribe function
     return () => {
       const arr = this.handlers.get(type);
       if (arr) {
-        this.handlers.set(type, arr.filter((h) => h !== handler));
+        this.handlers.set(type, arr.filter((h) => h !== (handler as (payload: unknown) => void)));
       }
     };
   }
 
-  private emit(type: string, payload: any) {
+  private emit(type: string, payload: unknown) {
     const handlers = this.handlers.get(type);
     if (handlers) {
       handlers.forEach((handler) => handler(payload));
