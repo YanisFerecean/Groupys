@@ -5,6 +5,7 @@ import com.groupys.dto.ConversationResDto;
 import com.groupys.dto.MessageResDto;
 import com.groupys.service.ChatService;
 import com.groupys.service.PresenceService;
+import com.groupys.service.UserService;
 import com.groupys.websocket.WebSocketMessage;
 import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
@@ -38,6 +39,9 @@ public class ConversationResource {
 
     @Inject
     JsonWebToken jwt;
+
+    @Inject
+    UserService userService;
 
     // ── Conversations ─────────────────────────────────────────────────────────
 
@@ -121,8 +125,25 @@ public class ConversationResource {
         return Response.noContent().build();
     }
 
+    // ── E2E public keys ───────────────────────────────────────────────────────
+
+    @GET
+    @Path("/keys/{username}")
+    public Response getPublicKey(@PathParam("username") String username) {
+        String key = userService.getPublicKeyByUsername(username);
+        return Response.ok(Map.of("publicKey", key)).build();
+    }
+
+    @PUT
+    @Path("/keys/me")
+    public Response savePublicKey(PublicKeyRequest req) {
+        userService.savePublicKey(jwt.getSubject(), req.publicKey());
+        return Response.noContent().build();
+    }
+
     // ── Request records ───────────────────────────────────────────────────────
 
     public record StartConversationRequest(UUID targetUserId) {}
     public record SendMessageRequest(String content) {}
+    public record PublicKeyRequest(String publicKey) {}
 }

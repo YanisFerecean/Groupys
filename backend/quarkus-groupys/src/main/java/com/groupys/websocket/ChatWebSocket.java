@@ -41,6 +41,7 @@ public class ChatWebSocket {
     private static final ScheduledExecutorService authTimeoutScheduler =
             Executors.newSingleThreadScheduledExecutor();
 
+
     @Inject
     PresenceService presenceService;
 
@@ -308,12 +309,7 @@ public class ChatWebSocket {
                 ? WebSocketMessage.presenceOnline(user.id.toString(), user.username)
                 : WebSocketMessage.presenceOffline(user.id.toString(), user.username));
 
-        chatService.getConversations(user.clerkId).stream()
-                .flatMap(c -> c.participants().stream())
-                .map(p -> chatService.getClerkIdByUserId(p.userId()))
-                .filter(Objects::nonNull)
-                .filter(clerkId -> !clerkId.equals(user.clerkId))
-                .distinct()
+        chatService.getConversationPartnerClerkIds(user.clerkId)
                 .forEach(clerkId -> presenceService.sendTo(clerkId, json));
     }
 

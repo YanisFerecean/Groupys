@@ -2,14 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ChevronLeft, Info } from "lucide-react";
+import { ChevronLeft, Info, Lock } from "lucide-react";
 import { useUser } from "@clerk/nextjs";
+import { useAuth } from "@clerk/nextjs";
 import { useMessages } from "@/hooks/useMessages";
 import { useConversations } from "@/hooks/useConversations";
 import { MessageThread } from "@/components/chat/MessageThread";
 import { MessageInput } from "@/components/chat/MessageInput";
 import { usePresence } from "@/hooks/usePresence";
+import { useCrypto } from "@/hooks/useCrypto";
 import { chatWs } from "@/lib/ws";
+import { fetchPublicKey } from "@/lib/chat-api";
 
 export default function ConversationPage() {
   const params = useParams();
@@ -21,12 +24,42 @@ export default function ConversationPage() {
     
   const conversationId = conversationIdValue ?? null;
 
+  const { getToken } = useAuth();
   const { conversations, markAsRead } = useConversations();
-  const { messages, isLoading, hasMore, loadMore, sendMessage, resendMessage } = useMessages(conversationId);
   const { isOnline } = usePresence();
+  const { ready: cryptoReady, makeEncrypt, makeDecrypt } = useCrypto();
 
-  // Find current conversation info from the list
+  // Fetch the other participant's public key for E2E (direct chats only)
+  const [otherPublicKey, setOtherPublicKey] = useState<string | null>(null);
   const conversation = conversations.find(c => c.id === conversationId);
+
+  useEffect(() => {
+    async function fetchKey() {
+      if (!conversation || conversation.isGroup || !user) return;
+      const other = conversation.participants.find(p => p.username !== user.username);
+      if (!other) return;
+      const token = await getToken();
+      const key = await fetchPublicKey(other.username, token);
+      setOtherPublicKey(key);
+    }
+    fetchKey();
+  }, [conversation?.id, user?.username]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const encryptFn = useMemo(
+    () => (cryptoReady && otherPublicKey ? makeEncrypt(otherPublicKey) : undefined),
+    [cryptoReady, otherPublicKey, makeEncrypt]
+  );
+
+  const decryptFn = useMemo(
+    () => (cryptoReady && otherPublicKey ? makeDecrypt(otherPublicKey) : undefined),
+    [cryptoReady, otherPublicKey, makeDecrypt]
+  );
+
+  const { messages, isLoading, hasMore, loadMore, sendMessage, resendMessage } = useMessages(
+    conversationId,
+    decryptFn,
+    encryptFn
+  );
 
   // Other participant's last read timestamp — seeded from conversation data, kept live via READ events
   const [otherLastReadAt, setOtherLastReadAt] = useState<string | null>(null);
@@ -123,7 +156,12 @@ export default function ConversationPage() {
           )}
 
           <div className="flex flex-col">
-            <h2 className="font-semibold text-[15px]">{headerTitle}</h2>
+            <div className="flex items-center gap-1.5">
+              <h2 className="font-semibold text-[15px]">{headerTitle}</h2>
+              {encryptFn && (
+                <Lock className="w-3 h-3 text-primary opacity-70" title="End-to-end encrypted" />
+              )}
+            </div>
             {isOtherOnline ? (
               <span className="text-xs text-primary font-medium flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block"></span>

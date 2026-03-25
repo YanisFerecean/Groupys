@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @ApplicationScoped
@@ -33,6 +34,26 @@ public class ChatService {
 
     @Inject
     UserRepository userRepository;
+
+    // ── Rate limiting ─────────────────────────────────────────────────────────
+
+    private static final int RATE_LIMIT_MAX = 20;
+    private static final long RATE_LIMIT_WINDOW_MS = 10_000; // 10 seconds
+    private static final ConcurrentHashMap<String, long[]> rateLimitMap = new ConcurrentHashMap<>();
+
+    private void checkRateLimit(String clerkId) {
+        long now = System.currentTimeMillis();
+        long[] bucket = rateLimitMap.compute(clerkId, (k, v) -> {
+            if (v == null || now - v[1] >= RATE_LIMIT_WINDOW_MS) {
+                return new long[]{1, now};
+            }
+            v[0]++;
+            return v;
+        });
+        if (bucket[0] > RATE_LIMIT_MAX) {
+            throw new jakarta.ws.rs.ClientErrorException("Rate limit exceeded: too many messages", 429);
+        }
+    }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -190,6 +211,8 @@ public class ChatService {
 
     @Transactional
     public MessageResDto sendMessage(UUID conversationId, String clerkId, String content) {
+        checkRateLimit(clerkId);
+
         User sender = requireUserByClerkId(clerkId);
         requireParticipant(conversationId, sender.id);
 
@@ -254,5 +277,26 @@ public class ChatService {
 
     public String getClerkIdByUserId(UUID userId) {
         return userRepository.findByIdOptional(userId).map(u -> u.clerkId).orElse(null);
+    }
+
+    /**
+     * Returns the clerkIds of all users who share at least one conversation with the given user,
+     * excluding the user themselves. Uses two queries instead of N+1.
+     */
+    public List<String> getConversationPartnerClerkIds(String clerkId) {
+        User user = requireUserByClerkId(clerkId);
+        List<Conversation> convs = conversationRepository.findByUserId(user.id);
+        if (convs.isEmpty()) return List.of();
+
+        List<UUID> partnerIds = convs.stream()
+                .flatMap(c -> c.participants.stream())
+                .map(cp -> cp.user.id)
+                .filter(id -> !id.equals(user.id))
+                .distinct()
+                .toList();
+
+        if (partnerIds.isEmpty()) return List.of();
+
+        return new java.util.ArrayList<>(userRepository.findClerkIdsByUserIds(partnerIds).values());
     }
 }

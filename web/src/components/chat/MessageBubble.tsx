@@ -15,7 +15,7 @@ export function MessageBubble({ message, isMine, onRetry }: MessageBubbleProps) 
   return (
     <div className={`flex w-full ${isMine ? "justify-end" : "justify-start"} mb-4`}>
 
-      <div className={`flex flex-col max-w-[75%] ${isMine ? "items-end" : "items-start"}`}>
+      <div className={`flex flex-col max-w-[75%] min-w-0 ${isMine ? "items-end" : "items-start"}`}>
         <div
           className={`px-4 py-2.5 rounded-2xl ${
             isMine
@@ -23,7 +23,7 @@ export function MessageBubble({ message, isMine, onRetry }: MessageBubbleProps) 
               : "bg-surface-container-high text-on-surface rounded-bl-sm"
           } ${message.status === "sending" ? "opacity-70" : ""}`}
         >
-          <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">
+          <p className="whitespace-pre-wrap break-all text-[15px] leading-relaxed">
             {message.content}
           </p>
         </div>

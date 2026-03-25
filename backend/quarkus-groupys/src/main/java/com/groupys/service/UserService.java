@@ -89,4 +89,18 @@ public class UserService {
                 .orElseThrow(() -> new NotFoundException("User not found"));
         userRepository.delete(user);
     }
+
+    public String getPublicKeyByUsername(String username) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        if (user.publicKey == null) throw new NotFoundException("Public key not set");
+        return user.publicKey;
+    }
+
+    @Transactional
+    public void savePublicKey(String clerkId, String publicKey) {
+        User user = userRepository.findByClerkId(clerkId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        user.publicKey = publicKey;
+    }
 }

@@ -93,3 +93,20 @@ export async function searchUsers(query: string, token: string | null): Promise<
   if (!res.ok) throw new Error("Failed to search users");
   return res.json();
 }
+
+/** Fetches the ECDH public key for a user by username. Returns null if not yet set. */
+export async function fetchPublicKey(username: string, token: string | null): Promise<string | null> {
+  try {
+    const res = await apiRequest(`/chat/keys/${encodeURIComponent(username)}`, token);
+    if (!res.ok) return null;
+    const data = await res.json() as { publicKey: string };
+    return data.publicKey ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Uploads (or replaces) the current user's ECDH public key on the server. */
+export async function uploadPublicKey(publicKey: string, token: string | null): Promise<void> {
+  await apiRequest("/chat/keys/me", token, { method: "PUT", body: { publicKey } });
+}

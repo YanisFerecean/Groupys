@@ -49,8 +49,12 @@ export function MessageInput({ conversationId, onSend, disabled }: MessageInputP
     typingTimeoutRef.current = setTimeout(stopTyping, 2000);
   };
 
+  const MAX_LENGTH = 2000;
+  const remaining = MAX_LENGTH - content.length;
+  const nearLimit = remaining <= 200;
+
   const handleSend = () => {
-    if (!content.trim() || disabled) return;
+    if (!content.trim() || disabled || content.length > MAX_LENGTH) return;
     
     stopTyping();
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
@@ -74,19 +78,31 @@ export function MessageInput({ conversationId, onSend, disabled }: MessageInputP
   return (
     <div className="p-4 bg-surface border-t border-surface-container-high">
       <div className="flex items-end gap-2 max-w-4xl mx-auto align-bottom">
-        <textarea
-          ref={textareaRef}
-          value={content}
-          onChange={handleTextChange}
-          onKeyDown={handleKeyDown}
-          placeholder="Message..."
-          disabled={disabled}
-          rows={1}
-          className="flex-1 max-h-[120px] min-h-[44px] bg-surface-container resize-none rounded-2xl px-4 py-3 text-[15px] text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 placeholder:text-on-surface-variant disabled:opacity-50 transition-all custom-scrollbar"
-        />
+        <div className="flex-1 relative">
+          <textarea
+            ref={textareaRef}
+            value={content}
+            onChange={handleTextChange}
+            onKeyDown={handleKeyDown}
+            placeholder="Message..."
+            disabled={disabled}
+            rows={1}
+            maxLength={MAX_LENGTH}
+            className={`w-full max-h-[120px] min-h-[44px] bg-surface-container resize-none rounded-2xl px-4 py-3 text-[15px] text-on-surface focus:outline-none focus:ring-2 placeholder:text-on-surface-variant disabled:opacity-50 transition-all custom-scrollbar ${
+              remaining < 0 ? "focus:ring-error/40 ring-2 ring-error/30" : "focus:ring-primary/20"
+            }`}
+          />
+          {nearLimit && (
+            <span className={`absolute right-3 bottom-2 text-[11px] tabular-nums pointer-events-none ${
+              remaining <= 0 ? "text-error font-medium" : "text-on-surface-variant"
+            }`}>
+              {remaining}
+            </span>
+          )}
+        </div>
         <button
           onClick={handleSend}
-          disabled={!content.trim() || disabled}
+          disabled={!content.trim() || disabled || remaining < 0}
           className="h-[44px] w-[44px] rounded-full bg-primary text-primary-foreground flex items-center justify-center flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"
         >
           <SendHorizonal className="w-5 h-5 ml-0.5" />

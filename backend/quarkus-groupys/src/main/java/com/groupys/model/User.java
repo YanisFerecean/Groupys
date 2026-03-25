@@ -59,6 +59,10 @@ public class User {
     @Column(name = "last_seen_at")
     public Instant lastSeenAt;
 
+    /** ECDH P-256 public key (SPKI, base64) — used for E2E encryption. Null until the user's client uploads it. */
+    @Column(name = "public_key", columnDefinition = "TEXT")
+    public String publicKey;
+
     @Column(name = "date_joined", nullable = false, updatable = false)
     public Instant dateJoined;
 
