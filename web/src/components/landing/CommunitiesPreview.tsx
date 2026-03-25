@@ -108,8 +108,9 @@ export default function CommunitiesPreview() {
               fill
               className="object-cover"
               sizes="(max-width: 639px) 400px, 900px"
-              quality={75}
+              quality={70}
               priority
+              fetchPriority={"high"}
             />
             <div
               className="absolute inset-0"
@@ -150,6 +151,7 @@ export default function CommunitiesPreview() {
         <button
           key={i}
           onClick={(e) => handleClick(e, i)}
+          aria-label={`View ${communities[i].name}`}
           className={`rounded-full transition-all duration-300 ${
             activeCard === i
               ? "w-4 h-2 bg-foreground"
