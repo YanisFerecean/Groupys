@@ -107,7 +107,7 @@ export default function CommunitiesPreview() {
               src={c.image}
               fill
               className="object-cover"
-              sizes="(max-width: 639px) 400px, 900px"
+              sizes="(max-width: 639px) 200px, 300px"
               quality={70}
               priority
               fetchPriority={"high"}
