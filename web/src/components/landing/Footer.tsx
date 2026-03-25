@@ -1,6 +1,6 @@
 const links = [
   { label: "Instagram", href: "/coming-soon" },
-  { label: "Twitter", href: "/coming-soon" },
+  { label: "Twitter", href: "https://x.com/groupysapp" },
   { label: "App Store", href: "/coming-soon" },
   { label: "Google Play", href: "/coming-soon" },
 ];

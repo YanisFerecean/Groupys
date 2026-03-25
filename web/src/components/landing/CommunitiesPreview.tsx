@@ -108,7 +108,7 @@ export default function CommunitiesPreview() {
               fill
               className="object-cover"
               sizes="(max-width: 639px) 400px, 900px"
-              quality={90}
+              quality={75}
               priority={pos === communities.length - 1}
             />
             <div
