@@ -109,7 +109,7 @@ export default function CommunitiesPreview() {
               className="object-cover"
               sizes="(max-width: 639px) 400px, 900px"
               quality={75}
-              priority={pos === communities.length - 1}
+              priority
             />
             <div
               className="absolute inset-0"
