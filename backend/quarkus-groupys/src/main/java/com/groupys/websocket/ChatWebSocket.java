@@ -9,6 +9,7 @@ import com.groupys.service.ChatService;
 import com.groupys.service.PresenceService;
 import io.quarkus.arc.Arc;
 import io.quarkus.websockets.next.*;
+import jakarta.enterprise.context.control.ActivateRequestContext;
 import io.smallrye.common.annotation.Blocking;
 import io.smallrye.jwt.auth.principal.JWTParser;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -18,8 +19,12 @@ import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.jboss.logging.Logger;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 @WebSocket(path = "/ws/chat")
 @ApplicationScoped
@@ -27,8 +32,14 @@ public class ChatWebSocket {
 
     private static final Logger LOG = Logger.getLogger(ChatWebSocket.class);
 
-    // Map connection ID -> clerkId for lookup on close/error
+    // Map connection ID -> clerkId for authenticated sessions
     private static final ConcurrentHashMap<String, String> sessionToClerk = new ConcurrentHashMap<>();
+
+    // Connections that have opened but not yet sent a valid AUTH message
+    private static final ConcurrentHashMap<String, WebSocketConnection> pendingAuth = new ConcurrentHashMap<>();
+
+    private static final ScheduledExecutorService authTimeoutScheduler =
+            Executors.newSingleThreadScheduledExecutor();
 
     @Inject
     PresenceService presenceService;
@@ -47,38 +58,26 @@ public class ChatWebSocket {
     // -- Lifecycle -------------------------------------------------------------
 
     @OnOpen
-    @Blocking
     public void onOpen(WebSocketConnection connection) {
-        String token = extractToken(connection.handshakeRequest().query());
-        if (token == null) {
-            closeWithError(connection, "Missing token");
-            return;
-        }
-
-        String clerkId;
-        User user;
-        try {
-            JsonWebToken jwt = jwtParser.parse(token);
-            clerkId = jwt.getSubject();
-            user = userRepository.findByClerkId(clerkId)
-                    .orElseThrow(() -> new IllegalStateException("User not found"));
-        } catch (Exception e) {
-            LOG.warnf("Invalid WS token: %s", e.getMessage());
-            closeWithError(connection, "Invalid or expired token");
-            return;
-        }
-
-        presenceService.register(clerkId, connection);
-        sessionToClerk.put(connection.id(), clerkId);
-        LOG.infof("WS connected (Next): %s (%s)", user.username, connection.id());
-
-        // Broadcast online presence
-        broadcastPresence(user, true);
+        pendingAuth.put(connection.id(), connection);
+        // Close unauthenticated connections after 10 seconds
+        authTimeoutScheduler.schedule(() -> {
+            if (pendingAuth.remove(connection.id()) != null) {
+                closeWithError(connection, "Authentication timeout");
+            }
+        }, 10, TimeUnit.SECONDS);
     }
 
     @OnTextMessage
     @Blocking
+    @ActivateRequestContext
     public void onMessage(String rawMessage, WebSocketConnection connection) {
+        // If this connection hasn't authenticated yet, the first message must be AUTH
+        if (pendingAuth.containsKey(connection.id())) {
+            handleAuth(rawMessage, connection);
+            return;
+        }
+
         String clerkId = sessionToClerk.get(connection.id());
         if (clerkId == null) return;
 
@@ -105,31 +104,38 @@ public class ChatWebSocket {
             case "TYPING_START" -> handleTyping(user, msg, true);
             case "TYPING_STOP"  -> handleTyping(user, msg, false);
             case "READ_RECEIPT" -> handleReadReceipt(user, msg);
+            case "SYNC"         -> handleSync(connection, user);
             default -> sendJson(connection, WebSocketMessage.error("Unknown message type: " + type));
         }
     }
 
     @OnClose
     @Blocking
+    @ActivateRequestContext
     public void onClose(WebSocketConnection connection) {
+        pendingAuth.remove(connection.id()); // no-op if already authenticated
         String clerkId = sessionToClerk.remove(connection.id());
         if (clerkId == null) return;
 
-        presenceService.remove(clerkId);
+        presenceService.remove(clerkId, connection); // conditional: won't wipe a newer connection
         LOG.infof("WS closed for clerkId=%s", clerkId);
 
-        userRepository.findByClerkId(clerkId).ifPresent(user -> {
-            try {
-                Arc.container().instance(ChatWebSocket.class).get().updateLastSeen(user.id);
-                broadcastPresence(user, false);
-            } catch (Exception e) {
-                LOG.warnf("Failed to update lastSeenAt for %s: %s", clerkId, e.getMessage());
-            }
-        });
+        // Only update lastSeen and broadcast offline if no other tab is still connected
+        if (!presenceService.isOnline(clerkId)) {
+            userRepository.findByClerkId(clerkId).ifPresent(user -> {
+                try {
+                    Arc.container().instance(ChatWebSocket.class).get().updateLastSeen(user.id);
+                    broadcastPresence(user, false);
+                } catch (Exception e) {
+                    LOG.warnf("Failed to update lastSeenAt for %s: %s", clerkId, e.getMessage());
+                }
+            });
+        }
     }
 
     @OnError
     @Blocking
+    @ActivateRequestContext
     public void onError(WebSocketConnection connection, Throwable error) {
         LOG.errorf(error, "WS error on session %s", connection.id());
         onClose(connection);
@@ -141,6 +147,48 @@ public class ChatWebSocket {
     }
 
     // -- Message handlers ------------------------------------------------------
+
+    private void handleAuth(String rawMessage, WebSocketConnection connection) {
+        Map<String, Object> msg;
+        try {
+            //noinspection unchecked
+            msg = mapper.readValue(rawMessage, Map.class);
+        } catch (Exception e) {
+            closeWithError(connection, "Invalid JSON");
+            return;
+        }
+
+        if (!"AUTH".equals(msg.get("type"))) {
+            closeWithError(connection, "First message must be AUTH");
+            return;
+        }
+
+        String token = (String) msg.get("token");
+        if (token == null || token.isBlank()) {
+            closeWithError(connection, "Missing token");
+            return;
+        }
+
+        String clerkId;
+        User user;
+        try {
+            JsonWebToken jwt = jwtParser.parse(token);
+            clerkId = jwt.getSubject();
+            user = userRepository.findByClerkId(clerkId)
+                    .orElseThrow(() -> new IllegalStateException("User not found: " + clerkId));
+        } catch (Exception e) {
+            LOG.warnf("WS auth failed [%s]: %s", e.getClass().getSimpleName(), e.getMessage());
+            closeWithError(connection, "Invalid or expired token");
+            return;
+        }
+
+        pendingAuth.remove(connection.id());
+        presenceService.register(clerkId, connection);
+        sessionToClerk.put(connection.id(), clerkId);
+        LOG.infof("WS authenticated: %s (%s)", user.username, connection.id());
+        sendJson(connection, WebSocketMessage.authOk());
+        broadcastPresence(user, true);
+    }
 
     private void handleMessageSend(WebSocketConnection connection, User sender, Map<String, Object> msg) {
         String convIdStr = (String) msg.get("conversationId");
@@ -239,6 +287,20 @@ public class ChatWebSocket {
         }
     }
 
+    private void handleSync(WebSocketConnection connection, User user) {
+        if (user.lastSeenAt == null) return;
+
+        Instant cap = Instant.now().minus(24, ChronoUnit.HOURS);
+        Instant since = user.lastSeenAt.isBefore(cap) ? cap : user.lastSeenAt;
+
+        List<MessageResDto> missed = chatService.getMissedMessages(user.clerkId, since);
+        for (MessageResDto msg : missed) {
+            Map<String, Object> data = buildMessageData(msg, null);
+            sendJson(connection, WebSocketMessage.messageNew(data));
+        }
+        LOG.infof("Sync: pushed %d missed message(s) to %s", missed.size(), user.username);
+    }
+
     // -- Helpers ---------------------------------------------------------------
 
     private void broadcastPresence(User user, boolean online) {
@@ -269,16 +331,6 @@ public class ChatWebSocket {
         } catch (JsonProcessingException e) {
             return "{\"type\":\"ERROR\",\"payload\":{\"message\":\"serialisation error\"}}";
         }
-    }
-
-    private String extractToken(String query) {
-        if (query == null) return null;
-        for (String param : query.split("&")) {
-            if (param.startsWith("token=")) {
-                return param.substring("token=".length());
-            }
-        }
-        return null;
     }
 
     private void closeWithError(WebSocketConnection connection, String reason) {

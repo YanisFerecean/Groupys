@@ -14,6 +14,7 @@ import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,8 +43,11 @@ public class ConversationResource {
 
     @GET
     @Path("/conversations")
-    public List<ConversationResDto> listConversations() {
-        return chatService.getConversations(jwt.getSubject());
+    public List<ConversationResDto> listConversations(
+            @QueryParam("cursor") String cursorParam,
+            @QueryParam("size") @DefaultValue("20") int size) {
+        Instant cursor = cursorParam != null ? Instant.parse(cursorParam) : null;
+        return chatService.getConversationsPaged(jwt.getSubject(), Math.min(size, 50), cursor);
     }
 
     @GET

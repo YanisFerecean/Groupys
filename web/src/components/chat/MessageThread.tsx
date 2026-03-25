@@ -14,12 +14,14 @@ interface MessageThreadProps {
   isLoadingMore: boolean;
   onLoadMore: () => void;
   otherLastReadAt?: string | null;
+  onRetry?: (msg: Message) => void;
 }
 
-export function MessageThread({ messages, conversationId, hasMore, isLoadingMore, onLoadMore, otherLastReadAt }: MessageThreadProps) {
+export function MessageThread({ messages, conversationId, hasMore, isLoadingMore, onLoadMore, otherLastReadAt, onRetry }: MessageThreadProps) {
   const { user } = useUser();
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const prevScrollHeightRef = useRef(0);
   const [typists, setTypists] = useState<Map<string, string>>(new Map());
 
   // Listen to typing events
@@ -52,11 +54,20 @@ export function MessageThread({ messages, conversationId, hasMore, isLoadingMore
   // Wait, in useMessages we do [payload, ...prev] - so index 0 is newest.
   // But we render them in reverse! Let's ensure we render them bottom-up.
 
+  // After older messages are prepended, restore scroll position so the view doesn't jump
+  useEffect(() => {
+    if (!isLoadingMore && containerRef.current && prevScrollHeightRef.current > 0) {
+      const newScrollHeight = containerRef.current.scrollHeight;
+      containerRef.current.scrollTop = newScrollHeight - prevScrollHeightRef.current;
+      prevScrollHeightRef.current = 0;
+    }
+  }, [isLoadingMore]);
+
   const handleScroll = () => {
     if (!containerRef.current) return;
-    // If scrolled to top (which is actually negative or 0 depending on flex-direction)
     const { scrollTop } = containerRef.current;
-    if (scrollTop === 0 && hasMore && !isLoadingMore) {
+    if (scrollTop < 100 && hasMore && !isLoadingMore) {
+      prevScrollHeightRef.current = containerRef.current.scrollHeight;
       onLoadMore();
     }
   };
@@ -72,8 +83,11 @@ export function MessageThread({ messages, conversationId, hasMore, isLoadingMore
       onScroll={handleScroll}
     >
       {isLoadingMore && (
-        <div className="flex justify-center py-2">
-          <span className="text-xs text-on-surface-variant animate-pulse">Loading previous messages...</span>
+        <div className="sticky top-4 flex justify-center z-10 pointer-events-none">
+          <div className="flex items-center gap-2 bg-surface-container shadow-md rounded-full px-4 py-2">
+            <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            <span className="text-xs text-on-surface-variant">Loading...</span>
+          </div>
         </div>
       )}
 
@@ -115,7 +129,11 @@ export function MessageThread({ messages, conversationId, hasMore, isLoadingMore
             const isMine = msg.senderUsername === user?.username;
             return (
               <div key={msg.id || msg.tempId}>
-                <MessageBubble message={msg} isMine={isMine} />
+                <MessageBubble
+                  message={msg}
+                  isMine={isMine}
+                  onRetry={msg.status === "failed" && onRetry ? () => onRetry(msg) : undefined}
+                />
                 {idx === lastSeenIdx && (
                   <p className="text-[11px] text-on-surface-variant text-right pr-1 -mt-2 mb-2">
                     Seen

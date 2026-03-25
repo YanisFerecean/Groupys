@@ -13,26 +13,11 @@ export function useWebSocket() {
       return;
     }
 
-    let isMounted = true;
+    // Pass the getToken callback — ws.ts calls it fresh on every (re)connect
+    chatWs.connect(getToken);
+    setIsConnected(true);
 
-    async function initWs() {
-      try {
-        const token = await getToken();
-        if (token && isMounted) {
-          chatWs.connect(token);
-          // Assuming successful connect if token exists
-          setIsConnected(true);
-        }
-      } catch (e) {
-        console.error("Failed to init WS:", e);
-      }
-    }
-
-    initWs();
-
-    return () => {
-      isMounted = false;
-    };
+    return () => {};
   }, [getToken, isLoaded, isSignedIn]);
 
   return { isConnected, chatWs };

@@ -9,7 +9,7 @@ import { NewConversationModal } from "@/components/chat/NewConversationModal";
 import AppShell from "@/components/app/AppShell";
 
 export default function ChatLayout({ children }: { children: React.ReactNode }) {
-  const { conversations, isLoading } = useConversations();
+  const { conversations, isLoading, hasMore, isLoadingMore, loadMore } = useConversations();
   const params = useParams();
   const activeId = Array.isArray(params.conversationId)
       ? params.conversationId[0]
@@ -42,7 +42,13 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
               <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
             </div>
           ) : (
-            <ConversationList conversations={conversations} activeId={activeId} />
+            <ConversationList
+              conversations={conversations}
+              activeId={activeId}
+              hasMore={hasMore}
+              isLoadingMore={isLoadingMore}
+              onLoadMore={loadMore}
+            />
           )}
         </div>
 

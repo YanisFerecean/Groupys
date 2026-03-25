@@ -3,9 +3,10 @@ import { Message } from "@/types/chat";
 interface MessageBubbleProps {
   message: Message;
   isMine: boolean;
+  onRetry?: () => void;
 }
 
-export function MessageBubble({ message, isMine }: MessageBubbleProps) {
+export function MessageBubble({ message, isMine, onRetry }: MessageBubbleProps) {
   const time = new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
     minute: "2-digit",
@@ -33,7 +34,14 @@ export function MessageBubble({ message, isMine }: MessageBubbleProps) {
             <span className="text-[10px] text-on-surface-variant italic">Sending...</span>
           )}
           {isMine && message.status === "failed" && (
-            <span className="text-[10px] text-error">Failed to send</span>
+            <>
+              <span className="text-[10px] text-error">Failed to send</span>
+              {onRetry && (
+                <button onClick={onRetry} className="text-[10px] text-primary underline ml-1">
+                  Retry
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>

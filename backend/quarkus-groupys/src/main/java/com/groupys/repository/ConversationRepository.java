@@ -5,6 +5,7 @@ import com.groupys.model.ConversationParticipant;
 import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
 import jakarta.enterprise.context.ApplicationScoped;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -15,6 +16,7 @@ public class ConversationRepository implements PanacheRepositoryBase<Conversatio
     /**
      * Find all conversations where the user is a participant,
      * ordered by updatedAt descending (most recent first).
+     * Used internally for presence broadcasting — no limit.
      */
     public List<Conversation> findByUserId(UUID userId) {
         return getEntityManager().createQuery(
@@ -24,6 +26,24 @@ public class ConversationRepository implements PanacheRepositoryBase<Conversatio
                 "ORDER BY c.updatedAt DESC NULLS LAST",
                 Conversation.class
         ).setParameter("userId", userId).getResultList();
+    }
+
+    /**
+     * Cursor-based paginated version of findByUserId.
+     * Pass cursor=null to get the first page; subsequent pages pass the updatedAt
+     * of the last item from the previous page.
+     */
+    public List<Conversation> findByUserIdPaged(UUID userId, int size, Instant cursor) {
+        String jpql = "SELECT DISTINCT c FROM Conversation c " +
+                "JOIN c.participants cp " +
+                "WHERE cp.user.id = :userId " +
+                (cursor != null ? "AND c.updatedAt < :cursor " : "") +
+                "ORDER BY c.updatedAt DESC NULLS LAST";
+        var query = getEntityManager().createQuery(jpql, Conversation.class)
+                .setParameter("userId", userId)
+                .setMaxResults(size);
+        if (cursor != null) query.setParameter("cursor", cursor);
+        return query.getResultList();
     }
 
     /**

@@ -89,14 +89,48 @@ export function useMessages(conversationId: string | null) {
       const token = await getToken();
       const msgs = await fetchMessages(conversationId, page, 30, token);
       if (msgs.length < 30) setHasMore(false);
-      // Append older messages
-      setMessages((prev) => [...prev, ...msgs]);
+      // Append older messages, deduplicating in case real-time prepends shifted the offset window
+      setMessages((prev) => {
+        const existingIds = new Set(prev.map((m) => m.id));
+        const fresh = msgs.filter((m) => !existingIds.has(m.id));
+        return [...prev, ...fresh];
+      });
     } catch (e) {
       console.error("loadMore failed", e);
     } finally {
       setIsLoading(false);
     }
   }, [conversationId, isLoading, hasMore, getToken]);
+
+  const resendMessage = useCallback(async (tempId: string, content: string) => {
+    if (!conversationId) return;
+    setMessages((prev) => {
+      const idx = prev.findIndex((m) => m.tempId === tempId);
+      if (idx === -1) return prev;
+      const updated = [...prev];
+      updated[idx] = { ...updated[idx], status: "sending" };
+      return updated;
+    });
+    try {
+      const token = await getToken();
+      const saved = await postMessage(conversationId, content, token);
+      setMessages((prev) => {
+        const idx = prev.findIndex((m) => m.tempId === tempId);
+        if (idx === -1) return prev;
+        const updated = [...prev];
+        updated[idx] = { ...saved, status: "sent" };
+        return updated;
+      });
+    } catch {
+      setMessages((prev) => {
+        const idx = prev.findIndex((m) => m.tempId === tempId);
+        if (idx === -1) return prev;
+        const updated = [...prev];
+        updated[idx] = { ...updated[idx], status: "failed" };
+        return updated;
+      });
+    }
+  }, [conversationId, getToken]);
 
   const sendMessage = useCallback(async (content: string, senderId: string, senderUsername: string) => {
     if (!conversationId) return;
@@ -142,5 +176,5 @@ export function useMessages(conversationId: string | null) {
     }
   }, [conversationId, getToken]);
 
-  return { messages, isLoading, hasMore, loadMore, sendMessage };
+  return { messages, isLoading, hasMore, loadMore, sendMessage, resendMessage };
 }

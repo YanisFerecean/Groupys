@@ -12,5 +12,6 @@ public record ConversationResDto(
         String lastMessage,
         Instant lastMessageAt,
         long unreadCount,
-        Instant createdAt
+        Instant createdAt,
+        Instant updatedAt
 ) {}

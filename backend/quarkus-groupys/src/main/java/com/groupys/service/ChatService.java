@@ -18,6 +18,7 @@ import jakarta.ws.rs.NotFoundException;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -51,7 +52,8 @@ public class ChatService {
                 cp.user.username,
                 cp.user.displayName,
                 cp.user.profileImage,
-                cp.lastReadAt
+                cp.lastReadAt,
+                cp.user.lastSeenAt
         );
     }
 
@@ -75,9 +77,12 @@ public class ChatService {
         Message latest = messageRepository.findLatestInConversation(c.id);
         long unread = 0;
 
-        ConversationParticipant myParticipant = conversationRepository.findParticipant(c.id, currentUserId).orElse(null);
-        if (myParticipant != null && myParticipant.lastReadAt != null) {
-            unread = messageRepository.countUnread(c.id, currentUserId, myParticipant.lastReadAt);
+        ConversationParticipant myParticipant = c.participants.stream()
+                .filter(cp -> cp.user.id.equals(currentUserId))
+                .findFirst().orElse(null);
+        if (myParticipant != null) {
+            Instant since = myParticipant.lastReadAt != null ? myParticipant.lastReadAt : Instant.EPOCH;
+            unread = messageRepository.countUnread(c.id, currentUserId, since);
         }
 
         List<ParticipantDto> participants = c.participants.stream()
@@ -89,10 +94,11 @@ public class ChatService {
                 c.isGroup,
                 c.groupName,
                 participants,
-                latest != null && !latest.isDeleted ? latest.content : null,
+                latest != null ? latest.content : null,
                 latest != null ? latest.createdAt : null,
                 unread,
-                c.createdAt
+                c.createdAt,
+                c.updatedAt
         );
     }
 
@@ -100,8 +106,36 @@ public class ChatService {
 
     public List<ConversationResDto> getConversations(String clerkId) {
         User user = requireUserByClerkId(clerkId);
-        return conversationRepository.findByUserId(user.id).stream()
-                .map(c -> toConversationDto(c, user.id))
+        List<Conversation> convs = conversationRepository.findByUserId(user.id);
+        if (convs.isEmpty()) return List.of();
+        return toConversationDtoList(convs, user.id);
+    }
+
+    public List<ConversationResDto> getConversationsPaged(String clerkId, int size, Instant cursor) {
+        User user = requireUserByClerkId(clerkId);
+        List<Conversation> convs = conversationRepository.findByUserIdPaged(user.id, size, cursor);
+        if (convs.isEmpty()) return List.of();
+        return toConversationDtoList(convs, user.id);
+    }
+
+    private List<ConversationResDto> toConversationDtoList(List<Conversation> convs, UUID userId) {
+        List<UUID> ids = convs.stream().map(c -> c.id).toList();
+        Map<UUID, Message> latestMap = messageRepository.findLatestPerConversations(ids);
+        Map<UUID, Long> unreadMap = messageRepository.countUnreadPerConversations(ids, userId);
+
+        return convs.stream()
+                .map(c -> {
+                    Message latest = latestMap.get(c.id);
+                    long unread = unreadMap.getOrDefault(c.id, 0L);
+                    List<ParticipantDto> participants = c.participants.stream()
+                            .map(this::toParticipantDto).collect(Collectors.toList());
+                    return new ConversationResDto(
+                            c.id, c.isGroup, c.groupName, participants,
+                            latest != null ? latest.content : null,
+                            latest != null ? latest.createdAt : null,
+                            unread, c.createdAt, c.updatedAt
+                    );
+                })
                 .collect(Collectors.toList());
     }
 
@@ -175,15 +209,11 @@ public class ChatService {
         msg.sender = sender;
         msg.content = content.strip();
         msg.messageType = "text";
+        msg.createdAt = Instant.now(); // set before persist so DTO is populated without flush()
         messageRepository.persist(msg);
 
         // Update conversation updatedAt to bubble it to top of inbox
         conv.updatedAt = Instant.now();
-
-        // Flush immediately so @PrePersist populates the createdAt timestamp! 
-        // Otherwise, it gets evaluated as null when building the DTO,
-        // causing NPEs in WebSocket handlers up the chain.
-        messageRepository.flush();
 
         return toMessageDto(msg);
     }
@@ -205,6 +235,15 @@ public class ChatService {
         ConversationParticipant cp = conversationRepository.findParticipant(conversationId, user.id)
                 .orElseThrow(() -> new ForbiddenException("Not a participant in this conversation"));
         cp.lastReadAt = Instant.now();
+    }
+
+    public List<MessageResDto> getMissedMessages(String clerkId, Instant since) {
+        User user = requireUserByClerkId(clerkId);
+        List<Conversation> convs = conversationRepository.findByUserId(user.id);
+        if (convs.isEmpty()) return List.of();
+        List<UUID> ids = convs.stream().map(c -> c.id).toList();
+        return messageRepository.findMissedMessages(ids, user.id, since)
+                .stream().map(this::toMessageDto).collect(Collectors.toList());
     }
 
     public List<UUID> getParticipantUserIds(UUID conversationId) {

@@ -8,5 +8,6 @@ public record ParticipantDto(
         String username,
         String displayName,
         String profileImage,
-        Instant lastReadAt
+        Instant lastReadAt,
+        Instant lastSeenAt
 ) {}

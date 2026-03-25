@@ -22,7 +22,7 @@ export default function ConversationPage() {
   const conversationId = conversationIdValue ?? null;
 
   const { conversations, markAsRead } = useConversations();
-  const { messages, isLoading, hasMore, loadMore, sendMessage } = useMessages(conversationId);
+  const { messages, isLoading, hasMore, loadMore, sendMessage, resendMessage } = useMessages(conversationId);
   const { isOnline } = usePresence();
 
   // Find current conversation info from the list
@@ -57,6 +57,7 @@ export default function ConversationPage() {
   let headerTitle = "Chat";
   let avatarUrl = null;
   let isOtherOnline = false;
+  let lastSeenText: string | null = null;
 
   if (conversation && user) {
     if (conversation.isGroup) {
@@ -67,6 +68,14 @@ export default function ConversationPage() {
         headerTitle = other.displayName || other.username;
         avatarUrl = other.profileImage;
         isOtherOnline = isOnline(other.userId);
+        if (!isOtherOnline && other.lastSeenAt) {
+          const diff = Date.now() - new Date(other.lastSeenAt).getTime();
+          const minutes = Math.floor(diff / 60000);
+          if (minutes < 1) lastSeenText = "last seen just now";
+          else if (minutes < 60) lastSeenText = `last seen ${minutes}m ago`;
+          else if (minutes < 1440) lastSeenText = `last seen ${Math.floor(minutes / 60)}h ago`;
+          else lastSeenText = `last seen ${Math.floor(minutes / 1440)}d ago`;
+        }
       }
     }
   }
@@ -99,12 +108,14 @@ export default function ConversationPage() {
 
           <div className="flex flex-col">
             <h2 className="font-semibold text-[15px]">{headerTitle}</h2>
-            {isOtherOnline && (
+            {isOtherOnline ? (
               <span className="text-xs text-primary font-medium flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block"></span>
                 Online
               </span>
-            )}
+            ) : lastSeenText ? (
+              <span className="text-xs text-on-surface-variant">{lastSeenText}</span>
+            ) : null}
           </div>
         </div>
 
@@ -123,6 +134,9 @@ export default function ConversationPage() {
         onLoadMore={() => {
           const nextPage = Math.floor(messages.length / 30);
           loadMore(nextPage);
+        }}
+        onRetry={(msg) => {
+          if (msg.tempId) resendMessage(msg.tempId, msg.content);
         }}
       />
 

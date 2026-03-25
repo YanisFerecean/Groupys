@@ -1,57 +1,88 @@
 import { WsInbound, WsOutbound } from "@/types/chat";
 
+type GetToken = () => Promise<string | null>;
+
 export class ChatWebSocketClient {
   private ws: WebSocket | null = null;
-  private token: string | null = null;
+  private getToken: GetToken | null = null;
   private backoff = 1000;
   private maxBackoff = 30000;
   private isConnecting = false;
   private isIntentionalClose = false;
 
   private messageQueue: WsOutbound[] = [];
-  
+  private hasConnectedBefore = false;
+  private isAuthenticated = false;
+
   // Handlers for specific event types
   private handlers: Map<string, Array<(payload: any) => void>> = new Map();
 
   constructor(private url: string) {}
 
-  public connect(token: string) {
+  public connect(getToken: GetToken) {
+    this.getToken = getToken;
+
     if (this.ws?.readyState === WebSocket.OPEN || this.isConnecting) {
       return;
     }
 
-    this.token = token;
     this.isConnecting = true;
     this.isIntentionalClose = false;
 
     // Use ws:// if on localhost/dev, otherwise wss://
     const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
     const wsProtocol = isLocalhost ? "ws://" : "wss://";
-    
+
     // Fallback URL if env var not set
     const baseUrl = this.url || `${wsProtocol}${window.location.host}/api/ws/chat`;
-    
-    // Ensure we don't duplicate the wss:// if it's already in this.url
-    const wsUrl = baseUrl.startsWith('ws') ? baseUrl : `${wsProtocol}${baseUrl.replace(/^https?:\/\//, '')}`;
-    
-    const urlWithToken = `${wsUrl}?token=${encodeURIComponent(token)}`;
 
-    console.log("[WS] Connecting to:", urlWithToken.split('?')[0]); // Hide token in logs
+    // Ensure we don't duplicate the wss:// if it's already in this.url
+    const wsUrl = baseUrl.startsWith("ws") ? baseUrl : `${wsProtocol}${baseUrl.replace(/^https?:\/\//, "")}`;
+
+    console.log("[WS] Connecting to:", wsUrl);
 
     try {
-      this.ws = new WebSocket(urlWithToken);
+      this.ws = new WebSocket(wsUrl);
 
-      this.ws.onopen = () => {
+      this.ws.onopen = async () => {
         console.log("[WS] Connected");
         this.isConnecting = false;
-        this.backoff = 1000; // Reset backoff
-        this.flushQueue();
+        this.isAuthenticated = false;
+        this.backoff = 1000;
+
+        // Fetch a fresh token on every (re)connect so it's never expired
+        try {
+          const token = await this.getToken!();
+          if (!token) {
+            console.error("[WS] No token available, closing");
+            this.ws?.close();
+            return;
+          }
+          // AUTH must be the first message — token is sent in the message body, not the URL
+          // SYNC and queue flush happen only after AUTH_OK to avoid racing with AUTH processing
+          this.ws!.send(JSON.stringify({ type: "AUTH", token }));
+        } catch (e) {
+          console.error("[WS] Failed to get token for AUTH:", e);
+          this.ws?.close();
+        }
       };
 
       this.ws.onmessage = (event) => {
         try {
           const msg: WsInbound = JSON.parse(event.data);
           console.log("[WS Inbound]", msg.type, msg.payload || msg);
+
+          if (msg.type === "AUTH_OK") {
+            // Server confirmed auth — now safe to send SYNC and flush queued messages
+            this.isAuthenticated = true;
+            if (this.hasConnectedBefore) {
+              this.ws!.send(JSON.stringify({ type: "SYNC" }));
+            }
+            this.hasConnectedBefore = true;
+            this.flushQueue();
+            return;
+          }
+
           this.emit(msg.type, msg.payload || msg);
         } catch (err) {
           console.error("[WS] Failed to parse message:", event.data);
@@ -62,7 +93,8 @@ export class ChatWebSocketClient {
         console.log(`[WS] Closed. Code: ${event.code}, Reason: ${event.reason}`);
         this.ws = null;
         this.isConnecting = false;
-        
+        this.isAuthenticated = false;
+
         if (!this.isIntentionalClose) {
           this.scheduleReconnect();
         }
@@ -80,18 +112,22 @@ export class ChatWebSocketClient {
 
   public disconnect() {
     this.isIntentionalClose = true;
+    this.isAuthenticated = false;
+    this.hasConnectedBefore = false;
     if (this.ws) {
       this.ws.close();
       this.ws = null;
     }
   }
 
+  private static readonly EPHEMERAL_TYPES = new Set(["TYPING_START", "TYPING_STOP"]);
+
   public send(msg: WsOutbound) {
-    if (this.ws?.readyState === WebSocket.OPEN) {
+    if (this.ws?.readyState === WebSocket.OPEN && this.isAuthenticated) {
       console.log("[WS Outbound]", msg);
       this.ws.send(JSON.stringify(msg));
-    } else {
-      console.log("[WS] Queueing message (not connected)");
+    } else if (!ChatWebSocketClient.EPHEMERAL_TYPES.has(msg.type)) {
+      console.log("[WS] Queueing message (not connected or not yet authed)");
       this.messageQueue.push(msg);
     }
   }
@@ -101,12 +137,12 @@ export class ChatWebSocketClient {
       this.handlers.set(type, []);
     }
     this.handlers.get(type)!.push(handler);
-    
+
     // Return unsubscribe function
     return () => {
       const arr = this.handlers.get(type);
       if (arr) {
-        this.handlers.set(type, arr.filter(h => h !== handler));
+        this.handlers.set(type, arr.filter((h) => h !== handler));
       }
     };
   }
@@ -114,7 +150,7 @@ export class ChatWebSocketClient {
   private emit(type: string, payload: any) {
     const handlers = this.handlers.get(type);
     if (handlers) {
-      handlers.forEach(handler => handler(payload));
+      handlers.forEach((handler) => handler(payload));
     }
   }
 
@@ -126,13 +162,13 @@ export class ChatWebSocketClient {
   }
 
   private scheduleReconnect() {
-    if (this.isIntentionalClose || !this.token) return;
-    
+    if (this.isIntentionalClose || !this.getToken) return;
+
     console.log(`[WS] Reconnecting in ${this.backoff}ms...`);
     setTimeout(() => {
-      if (this.token) this.connect(this.token);
+      if (this.getToken) this.connect(this.getToken);
     }, this.backoff);
-    
+
     // Exponential backoff
     this.backoff = Math.min(this.backoff * 2, this.maxBackoff);
   }

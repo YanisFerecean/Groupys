@@ -1,24 +1,34 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Conversation, Message } from "@/types/chat";
 import { fetchConversations, markRead } from "@/lib/chat-api";
 import { chatWs } from "@/lib/ws";
 import { useAuth } from "@clerk/nextjs";
 
+const PAGE_SIZE = 20;
+
 export function useConversations() {
   const { getToken } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const cursorRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     let isMounted = true;
 
     async function load() {
       setIsLoading(true);
+      cursorRef.current = undefined;
       try {
         const token = await getToken();
         if (token && isMounted) {
-          const convos = await fetchConversations(token);
+          const convos = await fetchConversations(token, undefined, PAGE_SIZE);
           setConversations(convos);
+          setHasMore(convos.length === PAGE_SIZE);
+          if (convos.length > 0) {
+            cursorRef.current = convos[convos.length - 1].updatedAt ?? undefined;
+          }
         }
       } catch (e) {
         console.error("Failed to load conversations:", e);
@@ -37,37 +47,42 @@ export function useConversations() {
         setConversations((prev) => {
           let updated = [...prev];
           const idx = updated.findIndex((c) => c.id === payload.conversationId);
-          
+
           if (idx !== -1) {
             const convo = { ...updated[idx] };
             convo.lastMessage = payload.content;
             convo.lastMessageAt = payload.createdAt;
             convo.unreadCount += 1;
-            
+
             updated.splice(idx, 1);
             updated.unshift(convo); // Bubble up
           }
           return updated;
         });
       }),
-      chatWs.on("READ", (payload: any) => {
-         setConversations((prev) => {
-           let updated = [...prev];
-           const idx = updated.findIndex(c => c.id === payload.conversationId);
-           if (idx !== -1) {
-             const convo = { ...updated[idx] };
-             // On READ receipt (either us reading or them reading), typically we only care about OUR unread count.
-             // If this READ event was triggered by our own mark_read action, unread => 0.
-             convo.unreadCount = 0; 
-             updated[idx] = convo;
-           }
-           return updated;
-         });
-      })
     ];
 
     return () => unsubs.forEach((u) => u());
   }, []);
+
+  const loadMore = useCallback(async () => {
+    if (isLoadingMore || !hasMore) return;
+    setIsLoadingMore(true);
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const convos = await fetchConversations(token, cursorRef.current, PAGE_SIZE);
+      setConversations((prev) => [...prev, ...convos]);
+      setHasMore(convos.length === PAGE_SIZE);
+      if (convos.length > 0) {
+        cursorRef.current = convos[convos.length - 1].updatedAt ?? undefined;
+      }
+    } catch (e) {
+      console.error("Failed to load more conversations:", e);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [isLoadingMore, hasMore, getToken]);
 
   const markAsRead = useCallback(async (conversationId: string) => {
     try {
@@ -89,5 +104,5 @@ export function useConversations() {
     }
   }, [getToken]);
 
-  return { conversations, isLoading, markAsRead, setConversations };
+  return { conversations, isLoading, isLoadingMore, hasMore, loadMore, markAsRead, setConversations };
 }

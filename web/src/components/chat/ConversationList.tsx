@@ -1,17 +1,30 @@
 "use client";
 
+import { useRef } from "react";
 import Link from "next/link";
 import { formatDistanceToNowStrict } from "date-fns";
-import { Conversation, Participant } from "@/types/chat";
+import { Conversation } from "@/types/chat";
 import { useUser } from "@clerk/nextjs";
 
 interface ConversationListProps {
   conversations: Conversation[];
   activeId?: string;
+  hasMore?: boolean;
+  isLoadingMore?: boolean;
+  onLoadMore?: () => void;
 }
 
-export function ConversationList({ conversations, activeId }: ConversationListProps) {
+export function ConversationList({ conversations, activeId, hasMore, isLoadingMore, onLoadMore }: ConversationListProps) {
   const { user } = useUser();
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const handleScroll = () => {
+    const el = containerRef.current;
+    if (!el || !hasMore || isLoadingMore || !onLoadMore) return;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 100) {
+      onLoadMore();
+    }
+  };
 
   if (conversations.length === 0) {
     return (
@@ -22,7 +35,7 @@ export function ConversationList({ conversations, activeId }: ConversationListPr
   }
 
   return (
-    <div className="flex-1 overflow-y-auto w-full custom-scrollbar">
+    <div ref={containerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto w-full custom-scrollbar">
       {conversations.map((convo) => {
         // Find the "other" person in a 1-on-1
         const otherParticipant = convo.participants.find(
@@ -91,6 +104,11 @@ export function ConversationList({ conversations, activeId }: ConversationListPr
           </Link>
         );
       })}
+      {isLoadingMore && (
+        <div className="flex justify-center py-3">
+          <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        </div>
+      )}
     </div>
   );
 }

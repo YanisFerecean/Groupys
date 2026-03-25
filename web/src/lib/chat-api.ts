@@ -35,8 +35,10 @@ async function apiRequest(
   return fetch(`${API_URL}${path}`, requestInit);
 }
 
-export async function fetchConversations(token: string | null): Promise<Conversation[]> {
-  const res = await apiRequest("/chat/conversations", token);
+export async function fetchConversations(token: string | null, cursor?: string, size = 20): Promise<Conversation[]> {
+  const params = new URLSearchParams({ size: size.toString() });
+  if (cursor) params.set("cursor", cursor);
+  const res = await apiRequest(`/chat/conversations?${params}`, token);
   if (!res.ok) throw new Error("Failed to fetch conversations");
   return res.json();
 }

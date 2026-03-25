@@ -28,7 +28,11 @@
       "Bash(grep -r \"middleware-to-proxy\\\\|proxy.*matcher\\\\|proxy.*config\\\\|getNamedExports.*proxy\\\\|proxyExports\" C:/Uni/Projects/groupys-web-app/web/node_modules/next/dist --include=*.js)",
       "Bash(find C:/Uni/Projects/groupys-web-app/web/node_modules/next -name *.md -path */docs/*)",
       "Bash(ls -la *.png)",
-      "Bash(find C:UniProjectsgroupys-web-appbackend -name *.java)"
+      "Bash(find C:UniProjectsgroupys-web-appbackend -name *.java)",
+      "Bash(find /c/Uni/Projects/groupys-web-app -maxdepth 2 -type d -name *backend* -o -name *server* -o -name *api* -o -name *web* -o -name *client* -o -name *frontend*)",
+      "Bash(find /c/Uni/Projects/groupys-web-app/web/src -type f \\\\\\(-iname *chat* -o -iname *message* -o -iname *direct* \\\\\\))",
+      "Bash(find /c/Uni/Projects/groupys-web-app/web/src/app -type f -name *.tsx -o -name *.ts)",
+      "Bash(find /c/Uni/Projects/groupys-web-app/backend/quarkus-groupys/src/main/resources -name *.* -type f)"
     ]
   }
 }

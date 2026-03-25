@@ -22,8 +22,12 @@ public class PresenceService {
         }
     }
 
-    public void remove(String clerkId) {
-        activeSessions.remove(clerkId);
+    /**
+     * Removes the connection only if it is still the current registered connection for clerkId.
+     * Safe against the race where a new connection authenticates before the old one's @OnClose fires.
+     */
+    public void remove(String clerkId, WebSocketConnection connection) {
+        activeSessions.remove(clerkId, connection);
     }
 
     public boolean isOnline(String clerkId) {

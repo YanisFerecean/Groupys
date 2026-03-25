@@ -57,6 +57,10 @@ public record WebSocketMessage(
         ));
     }
 
+    public static WebSocketMessage authOk() {
+        return new WebSocketMessage("AUTH_OK", Map.of());
+    }
+
     public static WebSocketMessage error(String message) {
         return new WebSocketMessage("ERROR", Map.of("message", message));
     }

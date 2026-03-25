@@ -4,6 +4,7 @@ export interface Participant {
   displayName: string | null;
   profileImage: string | null;
   lastReadAt: string | null;
+  lastSeenAt: string | null;
 }
 
 export interface Conversation {
@@ -15,6 +16,7 @@ export interface Conversation {
   lastMessageAt: string | null;
   unreadCount: number;
   createdAt: string;
+  updatedAt: string | null;
 }
 
 export interface Message {
