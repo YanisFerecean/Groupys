@@ -1,15 +1,42 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { Plus, MessageCircle } from "lucide-react";
+import { useUser } from "@clerk/nextjs";
 import { useConversations } from "@/hooks/useConversations";
+import { useCrypto } from "@/hooks/useCrypto";
 import { ConversationList } from "@/components/chat/ConversationList";
 import { NewConversationModal } from "@/components/chat/NewConversationModal";
 import AppShell from "@/components/app/AppShell";
+import { isEncrypted } from "@/lib/crypto";
 
 export default function ChatLayout({ children }: { children: React.ReactNode }) {
+  const { user } = useUser();
   const { conversations, isLoading, hasMore, isLoadingMore, loadMore } = useConversations();
+  const { decryptForPartner } = useCrypto();
+
+  // Map of conversationId -> decrypted last message preview
+  const [decryptedPreviews, setDecryptedPreviews] = useState<Map<string, string>>(new Map());
+
+  useEffect(() => {
+    async function decryptPreviews() {
+      const updates = new Map<string, string>();
+      await Promise.all(
+        conversations.map(async (convo) => {
+          if (!convo.lastMessage || convo.isGroup || !isEncrypted(convo.lastMessage)) return;
+          const other = convo.participants.find((p) => p.username !== user?.username);
+          if (!other) return;
+          const plain = await decryptForPartner(other.username, convo.lastMessage);
+          updates.set(convo.id, plain);
+        })
+      );
+      if (updates.size > 0) {
+        setDecryptedPreviews((prev) => new Map([...prev, ...updates]));
+      }
+    }
+    decryptPreviews();
+  }, [conversations, decryptForPartner, user?.username]);
   const params = useParams();
   const activeId = Array.isArray(params.conversationId)
       ? params.conversationId[0]
@@ -48,6 +75,7 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
               hasMore={hasMore}
               isLoadingMore={isLoadingMore}
               onLoadMore={loadMore}
+              decryptedPreviews={decryptedPreviews}
             />
           )}
         </div>

@@ -12,9 +12,10 @@ interface ConversationListProps {
   hasMore?: boolean;
   isLoadingMore?: boolean;
   onLoadMore?: () => void;
+  decryptedPreviews?: Map<string, string>;
 }
 
-export function ConversationList({ conversations, activeId, hasMore, isLoadingMore, onLoadMore }: ConversationListProps) {
+export function ConversationList({ conversations, activeId, hasMore, isLoadingMore, onLoadMore, decryptedPreviews }: ConversationListProps) {
   const { user } = useUser();
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -98,7 +99,7 @@ export function ConversationList({ conversations, activeId, hasMore, isLoadingMo
                 )}
               </div>
               <p className={`truncate text-sm ${convo.unreadCount > 0 ? "text-on-surface font-medium" : "text-on-surface-variant"}`}>
-                {convo.lastMessage || "Start a conversation..."}
+                {decryptedPreviews?.get(convo.id) ?? convo.lastMessage ?? "Start a conversation..."}
               </p>
             </div>
           </Link>

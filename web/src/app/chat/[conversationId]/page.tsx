@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { ChevronLeft, Info, Lock } from "lucide-react";
 import { useUser } from "@clerk/nextjs";
 import { useAuth } from "@clerk/nextjs";
@@ -90,10 +91,11 @@ export default function ConversationPage() {
   }, [conversationId, messages.length, conversation?.unreadCount, markAsRead]);
 
   // Derive header info (no impure calls — Date.now handled separately below)
-  const { headerTitle, avatarUrl, isOtherOnline } = useMemo(() => {
+  const { headerTitle, avatarUrl, isOtherOnline, otherUsername } = useMemo(() => {
     let headerTitle = "Chat";
     let avatarUrl: string | null = null;
     let isOtherOnline = false;
+    let otherUsername: string | null = null;
 
     if (conversation && user) {
       if (conversation.isGroup) {
@@ -104,11 +106,12 @@ export default function ConversationPage() {
           headerTitle = other.displayName || other.username;
           avatarUrl = other.profileImage;
           isOtherOnline = isOnline(other.userId);
+          otherUsername = other.username;
         }
       }
     }
 
-    return { headerTitle, avatarUrl, isOtherOnline };
+    return { headerTitle, avatarUrl, isOtherOnline, otherUsername };
   }, [conversation, user, isOnline]);
 
   // Compute "last seen X ago" outside render to avoid Date.now() purity violation
@@ -146,31 +149,48 @@ export default function ConversationPage() {
             <ChevronLeft className="w-6 h-6" />
           </button>
 
-          {avatarUrl ? (
-             /* eslint-disable-next-line @next/next/no-img-element */
-            <img src={avatarUrl} alt={headerTitle} className="w-10 h-10 rounded-full object-cover" />
-          ) : (
-            <div className="w-10 h-10 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-lg uppercase">
-              {headerTitle.charAt(0)}
-            </div>
-          )}
+          <Link
+            href={otherUsername ? `/profile/${otherUsername}` : "#"}
+            className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+          >
+            {avatarUrl ? (
+               /* eslint-disable-next-line @next/next/no-img-element */
+              <img src={avatarUrl} alt={headerTitle} className="w-10 h-10 rounded-full object-cover" />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-lg uppercase">
+                {headerTitle.charAt(0)}
+              </div>
+            )}
 
-          <div className="flex flex-col">
-            <div className="flex items-center gap-1.5">
-              <h2 className="font-semibold text-[15px]">{headerTitle}</h2>
-              {encryptFn && (
-                <Lock className="w-3 h-3 text-primary opacity-70" title="End-to-end encrypted" />
-              )}
+            <div className="flex flex-col">
+              <div className="flex items-center gap-1.5">
+                <h2 className="font-semibold text-[15px]">{headerTitle}</h2>
+                {encryptFn && (
+                  <span
+                    className="relative group/lock"
+                    onClick={(e) => e.preventDefault()}
+                  >
+                    <Lock className="w-3 h-3 text-primary opacity-70 cursor-default" />
+                    <span className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 w-52 rounded-lg bg-surface-container-high border border-surface-container-highest shadow-md px-3 py-2 text-xs text-on-surface opacity-0 group-hover/lock:opacity-100 transition-opacity duration-150 z-50">
+                      <span className="flex items-center gap-1.5 font-semibold text-primary mb-1">
+                        <Lock className="w-3 h-3" />
+                        End-to-end encrypted
+                      </span>
+                      Messages are encrypted on your device and can only be read by you and {headerTitle}.
+                    </span>
+                  </span>
+                )}
+              </div>
+              {isOtherOnline ? (
+                <span className="text-xs text-primary font-medium flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block"></span>
+                  Online
+                </span>
+              ) : lastSeenText ? (
+                <span className="text-xs text-on-surface-variant">{lastSeenText}</span>
+              ) : null}
             </div>
-            {isOtherOnline ? (
-              <span className="text-xs text-primary font-medium flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block"></span>
-                Online
-              </span>
-            ) : lastSeenText ? (
-              <span className="text-xs text-on-surface-variant">{lastSeenText}</span>
-            ) : null}
-          </div>
+          </Link>
         </div>
 
         <button className="p-2 rounded-full hover:bg-surface-container text-on-surface-variant transition-colors">
