@@ -23,6 +23,7 @@ export interface BackendUser {
   nameColor: string | null;
   profileImage: string | null;
   widgets: string | null;
+  tags: string[];
   dateJoined: string;
   spotifyConnected: boolean;
 }
@@ -141,6 +142,7 @@ export function backendUserToProfile(user: BackendUser): ProfileCustomization {
     bannerUrl: user.bannerUrl ?? undefined,
     accentColor: user.accentColor ?? undefined,
     nameColor: user.nameColor ?? undefined,
+    tags: user.tags ?? [],
     ...widgetsToProfile(parseWidgets(user.widgets)),
   };
 }
@@ -239,6 +241,7 @@ export async function updateBackendUser(
     nameColor: data.nameColor ?? null,
     profileImage: data.profileImage ?? null,
     widgets: widgets.length ? JSON.stringify(widgets) : null,
+    tags: data.tags ?? null,
   };
 
   const res = await apiRequest(`/users/${encodeURIComponent(userId)}`, token, {

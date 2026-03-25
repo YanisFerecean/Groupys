@@ -140,7 +140,7 @@ const jsonLd = {
 export default function Home() {
   return (
     <>
-      {/* Preload LCP image — top card in CommunitiesPreview is always drake.png on initial render */}
+      {/* Preload LCP image — top card in CommunitiesPreview is always drake.jpg on initial render */}
       <link
         rel="preload"
         as="image"

@@ -84,6 +84,22 @@ export default function ProfileHeader({
                 {countryFlag(profile.country)} {profile.country}
               </span>
             )}
+            {profile.tags && profile.tags.length > 0 && (
+              <div className="flex flex-wrap gap-2 justify-center md:justify-start mb-3">
+                {profile.tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="text-xs font-semibold px-3 py-1 rounded-full"
+                    style={{
+                      backgroundColor: "color-mix(in srgb, var(--profile-accent, var(--color-primary)) 15%, transparent)",
+                      color: "var(--profile-accent, var(--color-primary))",
+                    }}
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
             <div className="flex items-center gap-6 md:gap-8 text-on-surface-variant font-medium flex-wrap justify-center md:justify-start mt-2">
               <div className="flex items-center gap-2">
                 <span className="font-bold text-lg" style={{ color: "var(--profile-accent, var(--color-primary))" }}>24</span>

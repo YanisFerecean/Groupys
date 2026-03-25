@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import Image from "next/image";
 import { useAuth } from "@clerk/nextjs";
 import type { ProfileCustomization } from "@/types/profile";
@@ -93,8 +93,51 @@ export default function ProfileEditDrawer({
   const [removeAvatar, setRemoveAvatar] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [syncing, setSyncing] = useState<string | null>(null);
+  const [tagQuery, setTagQuery] = useState("");
+  const [tagResults, setTagResults] = useState<{ id: number; name: string }[]>([]);
+  const [tagSearching, setTagSearching] = useState(false);
+  const tagDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { getToken } = useAuth();
+
+  const searchTags = useCallback(async (text: string) => {
+    setTagQuery(text);
+    if (tagDebounceRef.current) clearTimeout(tagDebounceRef.current);
+    if (text.length < 1) { setTagResults([]); return; }
+    tagDebounceRef.current = setTimeout(async () => {
+      setTagSearching(true);
+      try {
+        const token = await getToken();
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api"}/genres?q=${encodeURIComponent(text)}`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        if (res.ok) {
+          const data = await res.json() as { id: number; name: string }[];
+          setTagResults(data.slice(0, 5));
+        }
+      } catch { /* ignore */ } finally {
+        setTagSearching(false);
+      }
+    }, 350);
+  }, [getToken]);
+
+  const addTag = useCallback((name: string) => {
+    const current = form.tags ?? [];
+    if (current.length >= 5 || current.includes(name)) return;
+    set("tags", [...current, name]);
+    setTagQuery("");
+    setTagResults([]);
+  }, [form.tags]);
+
+  const removeTag = useCallback((name: string) => {
+    set("tags", (form.tags ?? []).filter((t) => t !== name));
+  }, [form.tags]);
+
+  // Clear tag search when dialog closes
+  useEffect(() => {
+    if (!open) { setTagQuery(""); setTagResults([]); }
+  }, [open]);
 
   const handleOpenChange = (next: boolean) => {
     if (next) {
@@ -454,6 +497,93 @@ export default function ProfileEditDrawer({
                   placeholder="Tell people about yourself..."
                   rows={3}
                 />
+              </div>
+
+              {/* Tags */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Tags</Label>
+                  <span className="text-xs text-on-surface-variant">{(form.tags ?? []).length}/5</span>
+                </div>
+                {/* Selected tags */}
+                {(form.tags ?? []).length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {(form.tags ?? []).map((tag) => (
+                      <span
+                        key={tag}
+                        className="flex items-center gap-1 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium"
+                      >
+                        {tag}
+                        <button
+                          type="button"
+                          onClick={() => removeTag(tag)}
+                          className="ml-0.5 hover:text-error transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-sm">close</span>
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {/* Search input */}
+                {(form.tags ?? []).length < 5 && (
+                  <div className="relative">
+                    <div className="flex items-center gap-2 rounded-md border border-input bg-transparent px-3 h-9">
+                      {tagSearching ? (
+                        <span className="material-symbols-outlined text-base text-on-surface-variant animate-spin">progress_activity</span>
+                      ) : (
+                        <span className="material-symbols-outlined text-base text-on-surface-variant">search</span>
+                      )}
+                      <input
+                        type="text"
+                        value={tagQuery}
+                        onChange={(e) => searchTags(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && tagQuery.trim()) {
+                            e.preventDefault();
+                            addTag(tagQuery.trim());
+                          }
+                        }}
+                        placeholder="Search or type a custom tag..."
+                        className="flex-1 text-sm bg-transparent outline-none placeholder:text-on-surface-variant"
+                      />
+                      {tagQuery.trim().length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => addTag(tagQuery.trim())}
+                          className="w-6 h-6 rounded-full bg-primary flex items-center justify-center shrink-0"
+                        >
+                          <span className="material-symbols-outlined text-sm text-on-primary">add</span>
+                        </button>
+                      )}
+                    </div>
+                    {/* Dropdown */}
+                    {tagQuery.trim().length > 0 && (
+                      <div className="absolute z-10 mt-1 w-full rounded-md border border-surface-container-high bg-surface shadow-md overflow-hidden">
+                        {tagResults.map((g, i) => (
+                          <button
+                            key={g.id}
+                            type="button"
+                            onClick={() => addTag(g.name)}
+                            className={`w-full text-left px-4 py-2 text-sm hover:bg-surface-container transition-colors ${i > 0 ? "border-t border-surface-container-high" : ""}`}
+                          >
+                            {g.name}
+                          </button>
+                        ))}
+                        {!tagResults.some((g) => g.name.toLowerCase() === tagQuery.trim().toLowerCase()) && (
+                          <button
+                            type="button"
+                            onClick={() => addTag(tagQuery.trim())}
+                            className={`w-full text-left px-4 py-2 text-sm text-primary hover:bg-surface-container transition-colors flex items-center gap-2 ${tagResults.length > 0 ? "border-t border-surface-container-high" : ""}`}
+                          >
+                            <span className="material-symbols-outlined text-base">add_circle</span>
+                            Add &quot;{tagQuery.trim()}&quot;
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </TabsContent>
 

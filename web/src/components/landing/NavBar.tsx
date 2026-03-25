@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
+import { Show, SignInButton, UserButton } from "@clerk/nextjs";
 
 const isProd = process.env.NEXT_PUBLIC_APP_ENV === "prod";
 
@@ -46,11 +46,6 @@ export default function NavBar() {
                   Login
                 </button>
               </SignInButton>
-              <SignUpButton>
-                <button className="px-6 py-2 bg-primary text-on-primary rounded-full font-bold scale-95 duration-200 ease-in-out hover:scale-100 transition-transform">
-                  Get Started
-                </button>
-              </SignUpButton>
             </Show>
             <Show when="signed-in">
               <Link
@@ -117,11 +112,6 @@ export default function NavBar() {
                     Login
                   </button>
                 </SignInButton>
-                <SignUpButton>
-                  <button className="w-full py-3 bg-primary text-on-primary rounded-full font-bold hover:opacity-90 transition-opacity">
-                    Get Started
-                  </button>
-                </SignUpButton>
               </Show>
               <Show when="signed-in">
                 <Link

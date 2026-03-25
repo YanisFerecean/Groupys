@@ -1,7 +1,7 @@
 import Image from "next/image";
 
-const mockupSrc = "/phone_1.png";
-const mockupSrc2 = "/phone_2.png";
+const mockupSrc = "/phone_1.jpg";
+const mockupSrc2 = "/phone_2.jpg";
 
 const highlights = [
   {

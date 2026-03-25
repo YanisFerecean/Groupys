@@ -56,10 +56,17 @@ public class User {
     @Column(name = "spotify_token_expiry")
     public Instant spotifyTokenExpiry;
 
+    @Column(name = "last_seen_at")
+    public Instant lastSeenAt;
+
+    /** ECDH P-256 public key (SPKI, base64) — used for E2E encryption. Null until the user's client uploads it. */
+    @Column(name = "public_key", columnDefinition = "TEXT")
+    public String publicKey;
+
     @Column(name = "date_joined", nullable = false, updatable = false)
     public Instant dateJoined;
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "user_tags", joinColumns = @JoinColumn(name = "user_id"))
     @Column(name = "tag")
     public List<String> tags = new ArrayList<>();

@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useUser } from "@clerk/nextjs";
+import { useAuth, useUser } from "@clerk/nextjs";
+import { startConversation } from "@/lib/chat-api";
 import type { ProfileCustomization } from "@/types/profile";
 import {
   type BackendUser,
@@ -35,10 +36,26 @@ export default function PublicProfileView({
 }) {
   const router = useRouter();
   const { user: clerkUser } = useUser();
+  const { getToken } = useAuth();
   const [backendUser, setBackendUser] = useState<BackendUser | null>(null);
   const [profile, setProfile] = useState<ProfileCustomization>({});
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [messagingLoading, setMessagingLoading] = useState(false);
+
+  async function handleMessage() {
+    if (!backendUser || messagingLoading) return;
+    setMessagingLoading(true);
+    try {
+      const token = await getToken();
+      const conversation = await startConversation(backendUser.id, token);
+      router.push(`/chat/${conversation.id}`);
+    } catch (err) {
+      console.error("Failed to start conversation:", err);
+    } finally {
+      setMessagingLoading(false);
+    }
+  }
 
   // Redirect to own profile if viewing self
   useEffect(() => {
@@ -51,8 +68,10 @@ export default function PublicProfileView({
     let cancelled = false;
     (async () => {
       try {
+        const token = await getToken();
         const res = await fetch(
           `${API_URL}/users/username/${encodeURIComponent(username)}`,
+          token ? { headers: { Authorization: `Bearer ${token}` } } : {},
         );
         if (res.status === 404) {
           if (!cancelled) setNotFound(true);
@@ -74,7 +93,7 @@ export default function PublicProfileView({
     return () => {
       cancelled = true;
     };
-  }, [username]);
+  }, [username, getToken]);
 
   if (loading) {
     return (
@@ -171,6 +190,22 @@ export default function PublicProfileView({
                   {countryFlag(profile.country)} {profile.country}
                 </span>
               )}
+              {profile.tags && profile.tags.length > 0 && (
+                <div className="flex flex-wrap gap-2 justify-center md:justify-start mb-3">
+                  {profile.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="text-xs font-semibold px-3 py-1 rounded-full"
+                      style={{
+                        backgroundColor: "color-mix(in srgb, var(--profile-accent, var(--color-primary)) 15%, transparent)",
+                        color: "var(--profile-accent, var(--color-primary))",
+                      }}
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
               <div className="flex items-center gap-6 md:gap-8 text-on-surface-variant font-medium flex-wrap justify-center md:justify-start mt-2">
                 <div className="flex items-center gap-2">
                   <span
@@ -237,19 +272,23 @@ export default function PublicProfileView({
                   Link Up
                 </span>
               </button>
-              <button
-                className="px-5 py-2.5 text-sm font-bold rounded-full bg-surface-container-high hover:bg-surface-container-highest transition-colors"
-              >
-                <span className="flex items-center gap-2">
-                  <span
-                    className="material-symbols-outlined"
-                    style={{ fontSize: 18 }}
-                  >
-                    chat
+              {clerkUser && (
+                <button
+                  onClick={handleMessage}
+                  disabled={messagingLoading}
+                  className="px-5 py-2.5 text-sm font-bold rounded-full bg-surface-container-high hover:bg-surface-container-highest transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  <span className="flex items-center gap-2">
+                    <span
+                      className="material-symbols-outlined"
+                      style={{ fontSize: 18 }}
+                    >
+                      {messagingLoading ? "hourglass_empty" : "chat"}
+                    </span>
+                    {messagingLoading ? "Opening..." : "Message"}
                   </span>
-                  Message
-                </span>
-              </button>
+                </button>
+              )}
               <button className="p-3 bg-surface-container-high rounded-full hover:bg-surface-container-highest transition-colors">
                 <span className="material-symbols-outlined text-xl">
                   share

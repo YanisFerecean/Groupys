@@ -43,7 +43,7 @@ export default function TrendingArtists() {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-          {artists.map((artist, i) => (
+          {artists.map((artist) => (
             <a
               key={artist.name}
               href={artist.url}
@@ -59,9 +59,6 @@ export default function TrendingArtists() {
                   src={artist.image}
                   sizes="(max-width: 768px) calc(50vw - 40px), 300px"
                 />
-                <div className="absolute top-2 left-2 w-7 h-7 bg-primary text-on-primary rounded-full flex items-center justify-center text-xs font-black shadow-md">
-                  {i + 1}
-                </div>
               </div>
               <h4 className="font-bold group-hover:text-primary transition-colors duration-300">
                 {artist.name}
