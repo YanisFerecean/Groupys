@@ -2,7 +2,17 @@
 
 import { useRef } from "react";
 import Link from "next/link";
-import { formatDistanceToNowStrict } from "date-fns";
+function formatTimeAgo(date: Date): string {
+  const rtf = new Intl.RelativeTimeFormat("en", { numeric: "always", style: "narrow" });
+  const seconds = Math.round((date.getTime() - Date.now()) / 1000);
+  const abs = Math.abs(seconds);
+  if (abs < 60) return rtf.format(Math.round(seconds), "second");
+  if (abs < 3600) return rtf.format(Math.round(seconds / 60), "minute");
+  if (abs < 86400) return rtf.format(Math.round(seconds / 3600), "hour");
+  if (abs < 2592000) return rtf.format(Math.round(seconds / 86400), "day");
+  if (abs < 31536000) return rtf.format(Math.round(seconds / 2592000), "month");
+  return rtf.format(Math.round(seconds / 31536000), "year");
+}
 import { Conversation } from "@/types/chat";
 import { useUser } from "@clerk/nextjs";
 
@@ -52,7 +62,7 @@ export function ConversationList({ conversations, activeId, hasMore, isLoadingMo
           : otherParticipant?.profileImage;
 
         const timeAgo = convo.lastMessageAt
-          ? formatDistanceToNowStrict(new Date(convo.lastMessageAt), { addSuffix: true })
+          ? formatTimeAgo(new Date(convo.lastMessageAt))
           : null;
 
         const isActive = activeId === convo.id;
