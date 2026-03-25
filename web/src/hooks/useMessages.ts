@@ -68,7 +68,7 @@ export function useMessages(
     });
 
     return () => { isMounted = false; };
-  }, [decryptFn]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [decryptFn]);
 
   // Real-time subscription — re-registers when conversationId or decryptFn changes
   useEffect(() => {
