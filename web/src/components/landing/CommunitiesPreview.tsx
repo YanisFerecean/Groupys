@@ -106,6 +106,7 @@ export default function CommunitiesPreview() {
               zIndex: pos,
               transformOrigin: "bottom center",
               pointerEvents: pullingCard !== null ? "none" : "auto",
+              willChange: "transform",
             }}
           >
             <Image
@@ -127,7 +128,7 @@ export default function CommunitiesPreview() {
                 {c.tags.map((tag) => (
                   <span
                     key={tag}
-                    className="bg-white/20 backdrop-blur-sm text-white px-1.5 py-0.5 sm:px-2.5 rounded-full text-[8px] sm:text-[10px] font-bold tracking-widest uppercase"
+                    className="bg-white/25 text-white px-1.5 py-0.5 sm:px-2.5 rounded-full text-[8px] sm:text-[10px] font-bold tracking-widest uppercase"
                   >
                     {tag}
                   </span>
