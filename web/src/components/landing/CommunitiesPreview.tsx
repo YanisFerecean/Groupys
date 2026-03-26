@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
 
@@ -56,8 +56,16 @@ export default function CommunitiesPreview() {
   const [stackOrder, setStackOrder] = useState(initialStack);
   const [pullingCard, setPullingCard] = useState<number | null>(null);
 
-  const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches;
-  const positions = isMobile ? mobilePositions : desktopPositions;
+  const isMobile = useRef(typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches);
+  const positions = isMobile.current ? mobilePositions : desktopPositions;
+
+  // Track previous positions to skip animating cards that didn't move
+  const prevPositions = useRef<Map<number, number>>(new Map());
+  useEffect(() => {
+    communities.forEach((_, i) => {
+      prevPositions.current.set(i, stackOrder.indexOf(i));
+    });
+  }, [stackOrder]);
 
   function handleClick(e: React.MouseEvent, cardIndex: number) {
     e.stopPropagation();
@@ -69,7 +77,7 @@ export default function CommunitiesPreview() {
     setTimeout(() => {
       setStackOrder((prev) => [...prev.filter((c) => c !== cardIndex), cardIndex]);
       setPullingCard(null);
-    }, 350);
+    }, 250);
   }
 
   const activeCard = stackOrder[stackOrder.length - 1];
@@ -80,6 +88,8 @@ export default function CommunitiesPreview() {
       {communities.map((c, i) => {
         const pos = stackOrder.indexOf(i);
         const isPulling = pullingCard === i;
+        const prevPos = prevPositions.current.get(i) ?? pos;
+        const posChanged = prevPos !== pos;
 
         return (
           <motion.div
@@ -88,13 +98,13 @@ export default function CommunitiesPreview() {
             className="absolute inset-0 overflow-hidden rounded-2xl shadow-xl cursor-pointer"
             animate={
               isPulling
-                ? { rotate: -20, x: -(isMobile ? 180 - pos * 25 : 350 - pos * 50), y: -30, scale: 1.05 }
+                ? { rotate: -20, x: -(isMobile.current ? 180 - pos * 25 : 350 - pos * 50), y: -30, scale: 1.05 }
                 : { rotate: positions[pos].rotate, x: positions[pos].x, y: positions[pos].y, scale: 1 }
             }
             transition={
               isPulling
-                ? { duration: 0.35, ease: "easeOut" }
-                : { duration: 0.45, ease: [0.25, 0.46, 0.45, 0.94] }
+                ? { duration: 0.25, ease: "easeOut" }
+                : { duration: posChanged ? 0.3 : 0, ease: [0.25, 0.46, 0.45, 0.94] }
             }
             style={{
               zIndex: pos,
