@@ -68,11 +68,9 @@ export default function CommunitiesPreview() {
 
     setPullingCard(cardIndex);
     setTimeout(() => {
-      setStackOrder((prev) => {
-        const next = [...prev.filter((c) => c !== cardIndex), cardIndex];
-        setPrevStackOrder(prev);
-        return next;
-      });
+      const next = [...stackOrder.filter((c) => c !== cardIndex), cardIndex];
+      setPrevStackOrder(stackOrder);
+      setStackOrder(next);
       setPullingCard(null);
     }, 250);
   }
@@ -100,7 +98,7 @@ export default function CommunitiesPreview() {
             transition={
               isPulling
                 ? { duration: 0.25, ease: "easeOut" }
-                : { duration: posChanged ? 0.3 : 0, ease: [0.25, 0.46, 0.45, 0.94] }
+                : { duration: posChanged ? 0.3 : 0, delay: posChanged ? pos * 0.04 : 0, ease: [0.25, 0.46, 0.45, 0.94] }
             }
             style={{
               zIndex: pos,
