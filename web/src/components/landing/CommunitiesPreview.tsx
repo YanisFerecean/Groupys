@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
 
@@ -53,19 +53,12 @@ const desktopPositions = [
 const initialStack = [0, 1, 2, 3];
 
 export default function CommunitiesPreview() {
+  const [isMobile] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches);
+  const positions = isMobile ? mobilePositions : desktopPositions;
+
   const [stackOrder, setStackOrder] = useState(initialStack);
+  const [prevStackOrder, setPrevStackOrder] = useState(initialStack);
   const [pullingCard, setPullingCard] = useState<number | null>(null);
-
-  const isMobile = useRef(typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches);
-  const positions = isMobile.current ? mobilePositions : desktopPositions;
-
-  // Track previous positions to skip animating cards that didn't move
-  const prevPositions = useRef<Map<number, number>>(new Map());
-  useEffect(() => {
-    communities.forEach((_, i) => {
-      prevPositions.current.set(i, stackOrder.indexOf(i));
-    });
-  }, [stackOrder]);
 
   function handleClick(e: React.MouseEvent, cardIndex: number) {
     e.stopPropagation();
@@ -75,7 +68,11 @@ export default function CommunitiesPreview() {
 
     setPullingCard(cardIndex);
     setTimeout(() => {
-      setStackOrder((prev) => [...prev.filter((c) => c !== cardIndex), cardIndex]);
+      setStackOrder((prev) => {
+        const next = [...prev.filter((c) => c !== cardIndex), cardIndex];
+        setPrevStackOrder(prev);
+        return next;
+      });
       setPullingCard(null);
     }, 250);
   }
@@ -88,8 +85,7 @@ export default function CommunitiesPreview() {
       {communities.map((c, i) => {
         const pos = stackOrder.indexOf(i);
         const isPulling = pullingCard === i;
-        const prevPos = prevPositions.current.get(i) ?? pos;
-        const posChanged = prevPos !== pos;
+        const posChanged = prevStackOrder.indexOf(i) !== pos;
 
         return (
           <motion.div
@@ -98,7 +94,7 @@ export default function CommunitiesPreview() {
             className="absolute inset-0 overflow-hidden rounded-2xl shadow-xl cursor-pointer"
             animate={
               isPulling
-                ? { rotate: -20, x: -(isMobile.current ? 180 - pos * 25 : 350 - pos * 50), y: -30, scale: 1.05 }
+                ? { rotate: -20, x: -(isMobile ? 180 - pos * 25 : 350 - pos * 50), y: -30, scale: 1.05 }
                 : { rotate: positions[pos].rotate, x: positions[pos].x, y: positions[pos].y, scale: 1 }
             }
             transition={
