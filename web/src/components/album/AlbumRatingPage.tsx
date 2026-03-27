@@ -64,22 +64,37 @@ function scoreLabel(score: number): string {
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function ScorePicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const [hovered, setHovered] = useState<number | null>(null);
+  const display = hovered ?? value;
+
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-4">
-        <input
-          type="range"
-          min={1}
-          max={10}
-          value={value}
-          onChange={(e) => onChange(Number(e.target.value))}
-          className="flex-1 accent-primary h-2 cursor-pointer"
-        />
-        <span className={`text-3xl font-extrabold tabular-nums w-8 text-right ${scoreColor(value)}`}>
+      <div className="flex items-center gap-1">
+        {Array.from({ length: 10 }, (_, i) => i + 1).map((star) => (
+          <button
+            key={star}
+            type="button"
+            onClick={() => onChange(star)}
+            onMouseEnter={() => setHovered(star)}
+            onMouseLeave={() => setHovered(null)}
+            className="transition-transform hover:scale-110 active:scale-95"
+            aria-label={`Rate ${star}`}
+          >
+            <span
+              className={`material-symbols-outlined text-2xl transition-colors ${
+                star <= display ? "text-primary" : "text-outline"
+              }`}
+              style={{ fontVariationSettings: star <= display ? "'FILL' 1" : "'FILL' 0" }}
+            >
+              star
+            </span>
+          </button>
+        ))}
+        <span className={`ml-2 text-xl font-extrabold tabular-nums ${scoreColor(value)}`}>
           {value}
         </span>
       </div>
-      <p className={`text-sm font-semibold ${scoreColor(value)}`}>{scoreLabel(value)}</p>
+      <p className={`text-sm font-semibold ${scoreColor(display)}`}>{scoreLabel(display)}</p>
     </div>
   );
 }
@@ -229,7 +244,7 @@ export default function AlbumRatingPage({ id }: { id: string }) {
         albumCoverUrl: album?.coverMedium ?? null,
         artistName: album?.artist?.name ?? null,
         score,
-        review: review.trim() || null,
+        review: review.trim(),
       };
       const saved = await upsertAlbumRating(payload, token);
       setMyRatingId(saved.id);
@@ -376,15 +391,14 @@ export default function AlbumRatingPage({ id }: { id: string }) {
             <ScorePicker value={score} onChange={setScore} />
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm text-on-surface-variant font-medium">
-                Review <span className="text-outline font-normal">(optional)</span>
-              </label>
+              <label className="text-sm text-on-surface-variant font-medium">Review</label>
               <textarea
                 value={review}
                 onChange={(e) => setReview(e.target.value)}
                 placeholder="Share your thoughts…"
                 rows={3}
                 maxLength={2000}
+                required
                 className="w-full rounded-xl bg-surface-container border border-outline-variant px-3 py-2 text-sm text-on-surface resize-none focus:outline-none focus:ring-2 focus:ring-primary/40 placeholder:text-outline"
               />
             </div>

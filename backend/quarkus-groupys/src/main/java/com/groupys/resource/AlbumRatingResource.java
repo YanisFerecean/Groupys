@@ -34,7 +34,7 @@ public class AlbumRatingResource {
 
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
-    public Response upsert(AlbumRatingCreateDto dto) {
+    public Response upsert(@jakarta.validation.Valid AlbumRatingCreateDto dto) {
         AlbumRatingResDto result = albumRatingService.upsert(dto, jwt.getSubject());
         return Response.ok(result).build();
     }
