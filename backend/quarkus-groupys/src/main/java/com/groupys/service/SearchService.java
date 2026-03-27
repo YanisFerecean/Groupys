@@ -18,9 +18,9 @@ public class SearchService {
 
     public SearchResDto search(String query) {
         return new SearchResDto(
-                artistService.search(query, 5),
-                albumService.search(query, 5),
-                trackService.search(query, 5)
+                artistService.search(query, 3),
+                albumService.search(query, 3),
+                trackService.search(query, 3)
         );
     }
 }

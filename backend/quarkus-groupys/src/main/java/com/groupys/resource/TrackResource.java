@@ -28,7 +28,7 @@ public class TrackResource {
     @GET
     @Path("/search")
     public List<TrackResDto> search(@QueryParam("q") String query,
-                                    @DefaultValue("5") @QueryParam("limit") int limit) {
+                                    @DefaultValue("10") @QueryParam("limit") int limit) {
         return trackService.search(query, limit);
     }
 
