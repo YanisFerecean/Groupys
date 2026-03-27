@@ -22,7 +22,7 @@ export function MessageBubble({ message, isMine, showTime = true, isLastInGroup 
 
       <div className={`flex flex-col max-w-[75%] min-w-0 ${isMine ? "items-end" : "items-start"}`}>
         <div
-          className={`px-4 py-2.5 rounded-2xl ${
+          className={`px-4 py-2.5 rounded-2xl w-fit max-w-full ${
             isMine
               ? "bg-primary text-on-primary rounded-br-sm"
               : "bg-surface-container-high text-on-surface rounded-bl-sm"
