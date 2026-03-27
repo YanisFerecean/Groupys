@@ -77,8 +77,8 @@ export function MessageThread({ messages, conversationId, hasMore, isLoadingMore
   const displayMessages = [...messages].reverse();
 
   return (
-    <div 
-      className="flex-1 overflow-y-auto p-4 custom-scrollbar" 
+    <div
+      className="flex-1 overflow-y-auto p-4 custom-scrollbar"
       ref={containerRef}
       onScroll={handleScroll}
     >
@@ -125,13 +125,50 @@ export function MessageThread({ messages, conversationId, hasMore, isLoadingMore
               }, -1)
             : -1;
 
+          const dayKey = (ts: string) => {
+            const d = new Date(ts);
+            return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+          };
+          const formatDay = (ts: string) => {
+            const d = new Date(ts);
+            const now = new Date();
+            const yesterday = new Date(now);
+            yesterday.setDate(now.getDate() - 1);
+            if (dayKey(ts) === dayKey(now.toISOString())) return "Today";
+            if (dayKey(ts) === dayKey(yesterday.toISOString())) return "Yesterday";
+            return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined });
+          };
+
           return displayMessages.map((msg, idx) => {
             const isMine = msg.senderUsername === user?.username;
+
+            // A group is a consecutive run of messages from the same sender within the same minute.
+            const minuteBucket = (ts: string) => Math.floor(new Date(ts).getTime() / 60000);
+            const next = displayMessages[idx + 1];
+            const isLastInGroup =
+              !next ||
+              next.senderUsername !== msg.senderUsername ||
+              minuteBucket(next.createdAt) !== minuteBucket(msg.createdAt);
+
+            const prev = displayMessages[idx - 1];
+            const showDateSeparator = !prev || dayKey(prev.createdAt) !== dayKey(msg.createdAt);
+
             return (
               <div key={msg.id || msg.tempId}>
+                {showDateSeparator && (
+                  <div className="flex items-center gap-3 my-4">
+                    <div className="flex-1 h-px bg-surface-container-high" />
+                    <span className="text-[11px] text-on-surface-variant font-medium px-1">
+                      {formatDay(msg.createdAt)}
+                    </span>
+                    <div className="flex-1 h-px bg-surface-container-high" />
+                  </div>
+                )}
                 <MessageBubble
                   message={msg}
                   isMine={isMine}
+                  showTime={isLastInGroup}
+                  isLastInGroup={isLastInGroup}
                   onRetry={msg.status === "failed" && onRetry ? () => onRetry(msg) : undefined}
                 />
                 {idx === lastSeenIdx && (

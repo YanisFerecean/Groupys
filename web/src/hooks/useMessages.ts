@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Message } from "@/types/chat";
 import { fetchMessages, postMessage } from "@/lib/chat-api";
 import { chatWs } from "@/lib/ws";
@@ -17,7 +17,25 @@ export function useMessages(
   const [isLoading, setIsLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
 
-  // Initial load — runs when conversationId changes (not when decryptFn changes to avoid double fetches)
+  // Keep a ref so the load function always uses the latest decryptFn without
+  // being a reactive dependency (which would cause unnecessary re-fetches).
+  const decryptFnRef = useRef(decryptFn);
+  useEffect(() => { decryptFnRef.current = decryptFn; }, [decryptFn]);
+
+  const decryptBatch = useCallback(async (msgs: Message[]): Promise<Message[]> => {
+    const fn = decryptFnRef.current;
+    if (!fn) return msgs;
+    return Promise.all(
+      msgs.map(async (m) => {
+        if (!isEncrypted(m.content)) return m;
+        const content = await fn(m.content).catch(() => "[Encrypted message — decryption failed]");
+        return { ...m, content };
+      })
+    );
+  }, []);
+
+  // Initial load — runs when conversationId changes (not when decryptFn changes to avoid double fetches).
+  // Uses decryptFnRef so it decrypts immediately if the key is already available.
   useEffect(() => {
     if (!conversationId) {
       setMessages([]);
@@ -30,8 +48,9 @@ export function useMessages(
       try {
         const token = await getToken();
         const msgs = await fetchMessages(conversationId!, 0, 30, token);
+        const decrypted = await decryptBatch(msgs);
         if (isMounted) {
-          setMessages(msgs);
+          setMessages(decrypted);
           setHasMore(msgs.length === 30);
         }
       } catch (err) {
@@ -43,9 +62,10 @@ export function useMessages(
 
     load();
     return () => { isMounted = false; };
-  }, [conversationId, getToken]);
+  }, [conversationId, getToken, decryptBatch]);
 
-  // When decryptFn becomes available, decrypt already-loaded encrypted messages in-place
+  // When decryptFn becomes available after messages are already loaded, decrypt them in-place.
+  // This handles the case where messages loaded before the crypto key was ready.
   useEffect(() => {
     if (!decryptFn) return;
     let isMounted = true;
@@ -127,15 +147,7 @@ export function useMessages(
       const msgs = await fetchMessages(conversationId, page, 30, token);
       if (msgs.length < 30) setHasMore(false);
 
-      const decrypted = decryptFn
-        ? await Promise.all(
-            msgs.map(async (m) => {
-              if (!isEncrypted(m.content)) return m;
-              const content = await decryptFn(m.content).catch(() => "[Encrypted message — decryption failed]");
-              return { ...m, content };
-            })
-          )
-        : msgs;
+      const decrypted = await decryptBatch(msgs);
 
       setMessages((prev) => {
         const existingIds = new Set(prev.map((m) => m.id));
@@ -147,7 +159,7 @@ export function useMessages(
     } finally {
       setIsLoading(false);
     }
-  }, [conversationId, isLoading, hasMore, getToken, decryptFn]);
+  }, [conversationId, isLoading, hasMore, getToken, decryptBatch]);
 
   const sendMessage = useCallback(async (content: string, senderId: string, senderUsername: string) => {
     if (!conversationId) return;
