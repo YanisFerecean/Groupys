@@ -64,13 +64,11 @@ public class AlbumService {
 
         Artist artist = resolveArtistEntity(deezerAlbum);
         if (existing == null) {
-            Album album = albumMapper.toEntity(deezerAlbum, artist);
-            albumRepository.persist(album);
-            return albumMapper.toResDto(album);
+            albumRepository.persist(albumMapper.toEntity(deezerAlbum, artist));
+        } else {
+            mergeAlbum(existing, deezerAlbum, artist);
         }
-
-        mergeAlbum(existing, deezerAlbum, artist);
-        return albumMapper.toResDto(existing);
+        return albumMapper.toResDto(deezerAlbum);
     }
 
     private void mergeAlbum(Album existing, DeezerAlbumDto deezer, Artist artist) {

@@ -25,6 +25,11 @@ public class AlbumMapper {
         List<String> genres = deezer.genres() != null && deezer.genres().data() != null
                 ? deezer.genres().data().stream().map(g -> g.name()).toList()
                 : Collections.emptyList();
+        List<AlbumResDto.TrackDto> tracks = deezer.tracks() != null && deezer.tracks().data() != null
+                ? deezer.tracks().data().stream()
+                        .map(t -> new AlbumResDto.TrackDto(t.id(), t.title(), t.duration(), t.preview(), t.trackPosition()))
+                        .toList()
+                : Collections.emptyList();
 
         return new AlbumResDto(
                 deezer.id(),
@@ -39,7 +44,8 @@ public class AlbumMapper {
                 deezer.nbTracks(),
                 deezer.fans(),
                 genres,
-                artistDto
+                artistDto,
+                tracks
         );
     }
 
@@ -62,7 +68,8 @@ public class AlbumMapper {
                 entity.getNbTracks(),
                 entity.getFans(),
                 entity.getGenres(),
-                artistDto
+                artistDto,
+                Collections.emptyList()
         );
     }
 

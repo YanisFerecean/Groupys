@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
@@ -30,6 +30,7 @@ interface AlbumRes {
   fans: number | null;
   genres: string[];
   artist: { id: number; name: string; images: string[] } | null;
+  tracks: { id: number; title: string; duration: number | null; preview: string | null; trackPosition: number | null }[];
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -159,6 +160,77 @@ function RatingCard({
   );
 }
 
+function TrackRow({
+  track,
+  isPlaying,
+  isLoading,
+  onPress,
+}: {
+  track: AlbumRes["tracks"][number];
+  isPlaying: boolean;
+  isLoading: boolean;
+  onPress: () => void;
+}) {
+  const mins = track.duration ? Math.floor(track.duration / 60) : null;
+  const secs = track.duration ? track.duration % 60 : null;
+  const duration = mins !== null && secs !== null ? `${mins}:${String(secs).padStart(2, "0")}` : null;
+  const hasPreview = !!track.preview;
+
+  return (
+    <button
+      className={`group flex items-center gap-4 w-full text-left px-4 py-3 rounded-2xl transition-colors ${
+        isPlaying
+          ? "bg-primary/8"
+          : hasPreview
+          ? "hover:bg-surface-container-low cursor-pointer"
+          : "cursor-default opacity-50"
+      }`}
+      onClick={onPress}
+      disabled={!hasPreview}
+    >
+      {/* Position / play state */}
+      <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors bg-surface-container-high group-hover:bg-surface-container-highest">
+        {isLoading ? (
+          <span className="material-symbols-outlined text-primary text-base animate-spin">sync</span>
+        ) : isPlaying ? (
+          <span className="material-symbols-outlined text-primary text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+            pause
+          </span>
+        ) : hasPreview ? (
+          <span className="material-symbols-outlined text-on-surface-variant text-[18px] opacity-0 group-hover:opacity-100 transition-opacity">
+            play_arrow
+          </span>
+        ) : null}
+        {!isLoading && !isPlaying && (
+          <span className={`text-sm font-bold tabular-nums text-on-surface-variant absolute ${hasPreview ? "group-hover:opacity-0 transition-opacity" : ""}`}>
+            {track.trackPosition ?? "·"}
+          </span>
+        )}
+      </div>
+
+      {/* Title */}
+      <div className="flex-1 min-w-0">
+        <p className={`text-sm font-semibold truncate transition-colors ${isPlaying ? "text-primary" : "text-on-surface"}`}>
+          {track.title}
+        </p>
+        {hasPreview && !isPlaying && (
+          <p className="text-[11px] text-outline mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            Preview
+          </p>
+        )}
+        {isPlaying && (
+          <p className="text-[11px] text-primary mt-0.5">Now playing</p>
+        )}
+      </div>
+
+      {/* Duration */}
+      {duration && (
+        <span className="text-xs text-on-surface-variant tabular-nums shrink-0">{duration}</span>
+      )}
+    </button>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function AlbumRatingPage({ id }: { id: string }) {
@@ -175,6 +247,9 @@ export default function AlbumRatingPage({ id }: { id: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [myRatingId, setMyRatingId] = useState<string | null>(null);
+  const [playingId, setPlayingId] = useState<number | null>(null);
+  const [loadingId, setLoadingId] = useState<number | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const albumId = Number(id);
   const getTokenRef = useRef(getToken);
@@ -255,6 +330,33 @@ export default function AlbumRatingPage({ id }: { id: string }) {
       setSubmitting(false);
     }
   };
+
+  useEffect(() => () => { audioRef.current?.pause(); }, []);
+
+  const handleTrackPress = useCallback((track: AlbumRes["tracks"][number]) => {
+    if (!track.preview) return;
+    if (playingId === track.id) {
+      audioRef.current?.pause();
+      audioRef.current = null;
+      setPlayingId(null);
+      return;
+    }
+    audioRef.current?.pause();
+    audioRef.current = null;
+    setPlayingId(null);
+
+    setLoadingId(track.id);
+    const audio = new Audio(track.preview);
+    audioRef.current = audio;
+    audio.addEventListener("canplaythrough", () => {
+      setLoadingId(null);
+      setPlayingId(track.id);
+      audio.play();
+    });
+    audio.addEventListener("ended", () => { setPlayingId(null); audioRef.current = null; });
+    audio.addEventListener("error", () => { setLoadingId(null); });
+    audio.load();
+  }, [playingId]);
 
   const handleDelete = async () => {
     if (!myRatingId) return;
@@ -431,6 +533,28 @@ export default function AlbumRatingPage({ id }: { id: string }) {
             </div>
           </form>
         </section>
+
+        {/* Track list */}
+        {album.tracks.length > 0 && (
+          <section className="pt-8">
+            <h3 className="text-on-surface font-bold text-base mb-3">Tracks</h3>
+            <div className="bg-surface-container-lowest/65 border border-outline-variant rounded-2xl overflow-hidden py-1">
+              {album.tracks.map((track, i) => (
+                <div key={track.id}>
+                  <TrackRow
+                    track={track}
+                    isPlaying={playingId === track.id}
+                    isLoading={loadingId === track.id}
+                    onPress={() => handleTrackPress(track)}
+                  />
+                  {i < album.tracks.length - 1 && (
+                    <div className="mx-4 h-px bg-outline-variant/40" />
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Community ratings */}
         {!ratingsLoading && ratings.length > 0 && (
