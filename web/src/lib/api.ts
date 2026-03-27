@@ -226,6 +226,72 @@ export async function createBackendUser(
   return res.json();
 }
 
+// ── Album Ratings ──────────────────────────────────────────────────────────
+
+export interface AlbumRatingRes {
+  id: string;
+  albumId: number;
+  albumTitle: string;
+  albumCoverUrl: string | null;
+  artistName: string | null;
+  userId: string;
+  username: string;
+  displayName: string | null;
+  profileImage: string | null;
+  score: number;
+  review: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AlbumRatingCreate {
+  albumId: number;
+  albumTitle: string;
+  albumCoverUrl: string | null;
+  artistName: string | null;
+  score: number;
+  review: string | null;
+}
+
+export async function upsertAlbumRating(
+  data: AlbumRatingCreate,
+  token: string | null,
+): Promise<AlbumRatingRes> {
+  const res = await apiRequest("/album-ratings", token, {
+    method: "POST",
+    body: data,
+  });
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to save rating"));
+  return res.json();
+}
+
+export async function fetchAlbumRatings(
+  albumId: number,
+  token: string | null,
+): Promise<AlbumRatingRes[]> {
+  const res = await apiRequest(`/album-ratings/album/${albumId}`, token);
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to fetch ratings"));
+  return res.json();
+}
+
+export async function fetchMyAlbumRatings(
+  token: string | null,
+): Promise<AlbumRatingRes[]> {
+  const res = await apiRequest("/album-ratings/mine", token);
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to fetch your ratings"));
+  return res.json();
+}
+
+export async function deleteAlbumRating(
+  ratingId: string,
+  token: string | null,
+): Promise<void> {
+  const res = await apiRequest(`/album-ratings/${encodeURIComponent(ratingId)}`, token, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to delete rating"));
+}
+
 export async function updateBackendUser(
   userId: string,
   data: Partial<ProfileCustomization>,

@@ -100,11 +100,14 @@ function ArtistRow({ artist, onPress }: { artist: ArtistRes; onPress: () => void
   );
 }
 
-function AlbumRow({ album }: { album: AlbumRes }) {
+function AlbumRow({ album, onPress }: { album: AlbumRes; onPress: () => void }) {
   const cover = album.coverSmall || album.coverMedium;
 
   return (
-    <div className="flex items-center gap-3 px-4 py-2.5">
+    <button
+      className="flex items-center gap-3 px-4 py-2.5 w-full text-left hover:bg-surface-container-low transition-colors"
+      onClick={onPress}
+    >
       {cover ? (
         <Image
           src={cover}
@@ -126,7 +129,10 @@ function AlbumRow({ album }: { album: AlbumRes }) {
         </p>
         <p className="text-xs text-outline truncate">{album.artist?.name}</p>
       </div>
-    </div>
+      <span className="material-symbols-outlined text-on-surface/25 text-base">
+        chevron_right
+      </span>
+    </button>
   );
 }
 
@@ -387,6 +393,11 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
     router.push(`/discover/artist/${artist.id}`);
   };
 
+  const handleAlbumPress = (album: AlbumRes) => {
+    handleClose();
+    router.push(`/album/${album.id}`);
+  };
+
   const filteredResults = results;
 
   const hasResults =
@@ -486,7 +497,7 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
                 <div className="bg-surface-container-lowest/65 border border-white/80 rounded-2xl overflow-hidden shadow-sm">
                   <SectionLabel label="Albums" />
                   {filteredResults!.albums.map((a) => (
-                    <AlbumRow key={a.id} album={a} />
+                    <AlbumRow key={a.id} album={a} onPress={() => handleAlbumPress(a)} />
                   ))}
                 </div>
               )}

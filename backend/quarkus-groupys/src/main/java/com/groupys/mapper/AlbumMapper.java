@@ -8,6 +8,9 @@ import com.groupys.model.Artist;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import java.util.Collections;
+import java.util.List;
+
 @ApplicationScoped
 public class AlbumMapper {
 
@@ -19,6 +22,9 @@ public class AlbumMapper {
         if (deezer.artist() != null) {
             artistDto = artistMapper.toResDto(deezer.artist());
         }
+        List<String> genres = deezer.genres() != null && deezer.genres().data() != null
+                ? deezer.genres().data().stream().map(g -> g.name()).toList()
+                : Collections.emptyList();
 
         return new AlbumResDto(
                 deezer.id(),
@@ -27,6 +33,12 @@ public class AlbumMapper {
                 deezer.coverMedium(),
                 deezer.coverBig(),
                 deezer.coverXl(),
+                deezer.releaseDate(),
+                deezer.label(),
+                deezer.duration(),
+                deezer.nbTracks(),
+                deezer.fans(),
+                genres,
                 artistDto
         );
     }
@@ -44,6 +56,12 @@ public class AlbumMapper {
                 entity.getCoverMedium(),
                 entity.getCoverBig(),
                 entity.getCoverXl(),
+                entity.getReleaseDate(),
+                entity.getLabel(),
+                entity.getDuration(),
+                entity.getNbTracks(),
+                entity.getFans(),
+                entity.getGenres(),
                 artistDto
         );
     }
@@ -56,6 +74,14 @@ public class AlbumMapper {
         album.setCoverMedium(deezer.coverMedium());
         album.setCoverBig(deezer.coverBig());
         album.setCoverXl(deezer.coverXl());
+        album.setReleaseDate(deezer.releaseDate());
+        album.setLabel(deezer.label());
+        album.setDuration(deezer.duration());
+        album.setNbTracks(deezer.nbTracks());
+        album.setFans(deezer.fans());
+        if (deezer.genres() != null && deezer.genres().data() != null) {
+            album.setGenres(deezer.genres().data().stream().map(g -> g.name()).toList());
+        }
         album.setArtist(artist);
         return album;
     }

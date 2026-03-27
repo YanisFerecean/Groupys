@@ -2,8 +2,10 @@
 
 import { useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
+const rtf = new Intl.RelativeTimeFormat("en", { numeric: "always", style: "narrow" });
+
 function formatTimeAgo(date: Date): string {
-  const rtf = new Intl.RelativeTimeFormat("en", { numeric: "always", style: "narrow" });
   const seconds = Math.round((date.getTime() - Date.now()) / 1000);
   const abs = Math.abs(seconds);
   if (abs < 60) return rtf.format(Math.round(seconds), "second");
@@ -78,11 +80,12 @@ export function ConversationList({ conversations, activeId, hasMore, isLoadingMo
             {/* Avatar */}
             <div className="flex-shrink-0 relative">
               {profileImage ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
+                <Image
                   src={profileImage}
                   alt={displayName}
-                  className="w-12 h-12 rounded-full object-cover bg-surface-container"
+                  width={48}
+                  height={48}
+                  className="rounded-full object-cover bg-surface-container"
                 />
               ) : (
                 <div className="w-12 h-12 rounded-full bg-primary/20 text-primary flex items-center justify-center font-semibold text-lg uppercase">

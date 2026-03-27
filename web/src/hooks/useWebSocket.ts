@@ -11,10 +11,23 @@ export function useWebSocket() {
       return;
     }
 
-    // Pass the getToken callback — ws.ts calls it fresh on every (re)connect
     chatWs.connect(getToken);
 
-    return () => {};
+    // Disconnect when the browser stores the page in bfcache (or unloads),
+    // then reconnect if the page is restored from bfcache.
+    // This is required for the page to be eligible for bfcache.
+    const handlePageHide = () => chatWs.disconnect();
+    const handlePageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) chatWs.connect(getToken);
+    };
+
+    window.addEventListener("pagehide", handlePageHide);
+    window.addEventListener("pageshow", handlePageShow);
+
+    return () => {
+      window.removeEventListener("pagehide", handlePageHide);
+      window.removeEventListener("pageshow", handlePageShow);
+    };
   }, [getToken, isLoaded, isSignedIn]);
 
   return { isConnected: !!(isLoaded && isSignedIn), chatWs };

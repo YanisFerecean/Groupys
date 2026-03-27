@@ -1,56 +1,11 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { SendHorizonal, Smile } from "lucide-react";
 import { chatWs } from "@/lib/ws";
 
-// ── Emoji picker ──────────────────────────────────────────────────────────────
-
-const EMOJI_GROUPS = [
-  { label: "Smileys", emojis: ["😀","😁","😂","🤣","😃","😄","😅","😆","😇","😉","😊","🙂","🙃","😋","😌","😍","🥰","😘","😗","😙","😚","😜","🤪","😝","😛","🤑","🤗","🤭","🤫","🤔","🤐","🤨","😐","😑","😶","😏","😒","🙄","😬","😮","🤯","😳","🥺","😦","😧","😨","😰","😥","😢","😭","😱","😖","😣","😞","😓","😩","😫","🥱","😤","😡","😠","🤬","😈","👿"] },
-  { label: "People", emojis: ["👋","🤚","🖐","✋","🖖","👌","🤌","✌","🤞","🤟","🤘","👈","👉","👆","👇","☝","👍","👎","✊","👊","🤛","🤜","👏","🙌","🤲","🤝","🙏","💪","🦾","🦵","🦶","👂","🦻","👃","🫀","🫁","🧠","🦷","👀","👁","👅","👄"] },
-  { label: "Animals", emojis: ["🐶","🐱","🐭","🐹","🐰","🦊","🐻","🐼","🐨","🐯","🦁","🐮","🐷","🐸","🐵","🐔","🐧","🐦","🦆","🦅","🦉","🦇","🐝","🪱","🐛","🦋","🐌","🐞","🐜","🦟","🦗","🕷","🦂","🐢","🐍","🦎","🦖","🦕","🐙","🦑","🦐","🦞","🦀","🐡","🐠","🐟","🐬","🐳","🐋","🦈","🦭","🐊","🐅","🐆","🦓","🦍","🦧","🦣","🐘","🦛","🦏","🐪","🐫","🦒","🦘","🦬","🐃","🐂","🐄","🐎","🐖","🐏","🐑","🐐","🦙","🐕","🐩","🦮","🐈","🐓","🦃","🦤","🦚","🦜","🦢","🕊","🐇","🦝","🦨","🦡","🦫","🦦","🦥","🐁","🐀","🐿","🦔"] },
-  { label: "Food", emojis: ["🍎","🍊","🍋","🍇","🍓","🫐","🍈","🍒","🍑","🥭","🍍","🥥","🥝","🍅","🍆","🥑","🥦","🥬","🥒","🌶","🫑","🧄","🧅","🥔","🍠","🥐","🥖","🍞","🥨","🥯","🧀","🥚","🍳","🥞","🧇","🥓","🥩","🍗","🍖","🌭","🍔","🍟","🍕","🫓","🥙","🧆","🌮","🌯","🫔","🥗","🥘","🫕","🍝","🍜","🍲","🍛","🍣","🍱","🥟","🦪","🍤","🍙","🍚","🍘","🍥","🥮","🍢","🧁","🍰","🎂","🍮","🍭","🍬","🍫","🍿","🍩","🍪","🌰","🥜","🍯","🧃","🥤","🧋","☕","🍵","🫖","🍺","🍻","🥂","🍷","🥃","🍹","🧉","🍾"] },
-  { label: "Travel", emojis: ["🚗","🚕","🚙","🚌","🚎","🏎","🚓","🚑","🚒","🚐","🛻","🚚","🚛","🚜","🏍","🛵","🚲","🛴","🛺","🚍","🚘","🚖","✈","🛫","🛬","🛩","💺","🚀","🛸","🚁","🛶","⛵","🚤","🛥","🛳","⛴","🚢","🏄","🚣","🤽","🏊","🧗","🚵","🏇","🚴","🏋","🤸","🤼","🤺","⛷","🏂","🪂","🏌","🏄","🤾","🏸","🏒","🏑","🥍","🏓","🏸","🥊","🥋","🎽","🛹","🛼","🛷","⛸","🥅","⛳","🎯","🎱","🎰","🎲"] },
-  { label: "Objects", emojis: ["❤","🧡","💛","💚","💙","💜","🖤","🤍","🤎","💔","❣","💕","💞","💓","💗","💖","💘","💝","✨","⭐","🌟","💫","⚡","🔥","💥","🎉","🎊","🎈","🎁","🎀","🏆","🥇","🥈","🥉","🎖","🏅","🎗","🎫","🎟","🎪","🤹","🎭","🎨","🎬","🎤","🎧","🎼","🎵","🎶","🎹","🥁","🪘","🎷","🎺","🎸","🪕","🎻","🎮","🕹","🎯","🎱","🎳","🎰","🧩","🪆","🪅","🎭","🖼","🧸","🪀","🪁","🏮","🧨","🎑","🎐","🧧"] },
-];
-
-function EmojiPicker({ onSelect }: { onSelect: (emoji: string) => void }) {
-  const [activeGroup, setActiveGroup] = useState(0);
-
-  return (
-    <div className="absolute bottom-full mb-2 right-0 w-72 bg-surface-container border border-white/80 rounded-2xl shadow-lg overflow-hidden z-50">
-      {/* Group tabs */}
-      <div className="flex border-b border-surface-container-high overflow-x-auto no-scrollbar">
-        {EMOJI_GROUPS.map((g, i) => (
-          <button
-            key={g.label}
-            onClick={() => setActiveGroup(i)}
-            className={`shrink-0 px-3 py-2 text-[11px] font-semibold transition-colors ${
-              activeGroup === i
-                ? "text-primary border-b-2 border-primary"
-                : "text-on-surface-variant hover:text-on-surface"
-            }`}
-          >
-            {g.label}
-          </button>
-        ))}
-      </div>
-      {/* Emoji grid */}
-      <div className="grid grid-cols-8 gap-0.5 p-2 max-h-48 overflow-y-auto custom-scrollbar">
-        {EMOJI_GROUPS[activeGroup].emojis.map((emoji) => (
-          <button
-            key={emoji}
-            onClick={() => onSelect(emoji)}
-            className="text-xl leading-none p-1.5 rounded-lg hover:bg-surface-container-high transition-colors"
-          >
-            {emoji}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
+const EmojiPicker = dynamic(() => import("./EmojiPicker"), { ssr: false });
 
 interface MessageInputProps {
   conversationId: string;
@@ -78,15 +33,17 @@ export function MessageInput({ conversationId, onSend, disabled }: MessageInputP
     return () => document.removeEventListener("mousedown", handler);
   }, [emojiOpen]);
 
-  const insertEmoji = (emoji: string) => {
+  const insertEmoji = useCallback((emoji: string) => {
     const el = textareaRef.current;
     if (!el) {
       setContent((c) => c + emoji);
       return;
     }
-    const start = el.selectionStart ?? content.length;
-    const end = el.selectionEnd ?? content.length;
-    const next = content.slice(0, start) + emoji + content.slice(end);
+    // Read from el.value (live DOM) rather than closing over `content`,
+    // so this function can have a stable empty dep array.
+    const start = el.selectionStart ?? el.value.length;
+    const end = el.selectionEnd ?? el.value.length;
+    const next = el.value.slice(0, start) + emoji + el.value.slice(end);
     setContent(next);
     // Restore cursor after the inserted emoji
     requestAnimationFrame(() => {
@@ -94,7 +51,7 @@ export function MessageInput({ conversationId, onSend, disabled }: MessageInputP
       el.selectionEnd = start + emoji.length;
       el.focus();
     });
-  };
+  }, []);
 
   const adjustHeight = () => {
     const el = textareaRef.current;

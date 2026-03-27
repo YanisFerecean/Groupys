@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { ChevronLeft, Info, Lock } from "lucide-react";
 import { useUser } from "@clerk/nextjs";
 import { useAuth } from "@clerk/nextjs";
 import { useMessages } from "@/hooks/useMessages";
+import { Message } from "@/types/chat";
 import { useConversations } from "@/hooks/useConversations";
 import { MessageThread } from "@/components/chat/MessageThread";
 import { MessageInput } from "@/components/chat/MessageInput";
@@ -132,10 +134,19 @@ export default function ConversationPage() {
     update();
   }, [conversation, user, isOnline]);
 
-  const handleSend = (content: string) => {
+  const handleSend = useCallback((content: string) => {
     if (!user) return;
     sendMessage(content, user.id, user.username || "me");
-  };
+  }, [user, sendMessage]);
+
+  const handleLoadMore = useCallback(() => {
+    const nextPage = Math.floor(messages.length / 30);
+    loadMore(nextPage);
+  }, [messages.length, loadMore]);
+
+  const handleRetry = useCallback((msg: Message) => {
+    if (msg.tempId) resendMessage(msg.tempId, msg.content);
+  }, [resendMessage]);
 
   return (
     <div className="flex flex-col h-full bg-surface">
@@ -154,8 +165,7 @@ export default function ConversationPage() {
             className="flex items-center gap-3 hover:opacity-80 transition-opacity"
           >
             {avatarUrl ? (
-               /* eslint-disable-next-line @next/next/no-img-element */
-              <img src={avatarUrl} alt={headerTitle} className="w-10 h-10 rounded-full object-cover" />
+              <Image src={avatarUrl} alt={headerTitle} width={40} height={40} className="rounded-full object-cover" />
             ) : (
               <div className="w-10 h-10 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-lg uppercase">
                 {headerTitle.charAt(0)}
@@ -205,13 +215,8 @@ export default function ConversationPage() {
         hasMore={hasMore}
         isLoadingMore={isLoading}
         otherLastReadAt={otherLastReadAt}
-        onLoadMore={() => {
-          const nextPage = Math.floor(messages.length / 30);
-          loadMore(nextPage);
-        }}
-        onRetry={(msg) => {
-          if (msg.tempId) resendMessage(msg.tempId, msg.content);
-        }}
+        onLoadMore={handleLoadMore}
+        onRetry={handleRetry}
       />
 
       {/* Input */}
