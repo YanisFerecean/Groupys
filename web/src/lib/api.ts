@@ -61,6 +61,9 @@ function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCustomizatio
         }));
         result.albumsContainerColor = w.color ?? undefined;
         break;
+      case "lastRatedAlbum":
+        result.showLastRatedAlbum = true;
+        break;
       case "currentlyListening": {
         const d = w.data as Record<string, string>;
         if (d.title) {
@@ -107,6 +110,10 @@ function profileToWidgets(profile: Partial<ProfileCustomization>): BackendWidget
       pos: pos++,
       data: { items: profile.topSongs },
     });
+  }
+
+  if (profile.showLastRatedAlbum) {
+    widgets.push({ type: "lastRatedAlbum", color: null, pos: pos++, data: {} });
   }
 
   if (profile.topArtists?.length) {
@@ -279,6 +286,15 @@ export async function fetchMyAlbumRatings(
 ): Promise<AlbumRatingRes[]> {
   const res = await apiRequest("/album-ratings/mine", token);
   if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to fetch your ratings"));
+  return res.json();
+}
+
+export async function fetchUserAlbumRatings(
+  username: string,
+  token: string | null,
+): Promise<AlbumRatingRes[]> {
+  const res = await apiRequest(`/album-ratings/user/${encodeURIComponent(username)}`, token);
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to fetch ratings"));
   return res.json();
 }
 

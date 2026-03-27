@@ -9,6 +9,7 @@ import type { ProfileCustomization } from "@/types/profile";
 import {
   type BackendUser,
   backendUserToProfile,
+  fetchUserAlbumRatings,
 } from "@/lib/api";
 import { countryFlag } from "@/lib/countries";
 import ProfileWidgetGrid from "./ProfileWidgetGrid";
@@ -41,6 +42,7 @@ export default function PublicProfileView({
   const [profile, setProfile] = useState<ProfileCustomization>({});
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [albumsRatedCount, setAlbumsRatedCount] = useState<number | null>(null);
   const [messagingLoading, setMessagingLoading] = useState(false);
 
   async function handleMessage() {
@@ -83,6 +85,8 @@ export default function PublicProfileView({
           setBackendUser(data);
           setProfile(backendUserToProfile(data));
         }
+        const ratings = await fetchUserAlbumRatings(username, token).catch(() => []);
+        if (!cancelled) setAlbumsRatedCount(ratings.length);
       } catch (err) {
         console.error("Failed to fetch profile:", err);
         if (!cancelled) setNotFound(true);
@@ -215,7 +219,7 @@ export default function PublicProfileView({
                         "var(--profile-accent, var(--color-primary))",
                     }}
                   >
-                    24
+                    {albumsRatedCount ?? "—"}
                   </span>
                   <span className="text-sm uppercase tracking-wide">
                     Albums Rated
@@ -299,7 +303,7 @@ export default function PublicProfileView({
         </div>
       </section>
 
-      <ProfileWidgetGrid profile={profile} />
+      <ProfileWidgetGrid profile={profile} username={username} />
     </div>
   );
 }

@@ -670,6 +670,31 @@ export default function ProfileEditDrawer({
                 </Button>
               )}
 
+              {/* Last Rated Album */}
+              <div className="flex items-center justify-between p-5 bg-surface-container-low rounded-xl">
+                <div className="flex items-center gap-3">
+                  <span className="material-symbols-outlined text-on-surface-variant text-xl">album</span>
+                  <div>
+                    <Label className="font-bold">Last Rated Album</Label>
+                    <p className="text-xs text-on-surface-variant mt-0.5">Show your most recent album rating</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => set("showLastRatedAlbum", !form.showLastRatedAlbum)}
+                  className={`relative w-11 h-6 rounded-full transition-colors ${
+                    form.showLastRatedAlbum ? "bg-primary" : "bg-surface-container-highest"
+                  }`}
+                  aria-label="Toggle last rated album widget"
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                      form.showLastRatedAlbum ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+
               {/* Top Albums */}
               <div className="space-y-3 p-5 bg-surface-container-low rounded-xl">
                 <div className="flex items-center justify-between">

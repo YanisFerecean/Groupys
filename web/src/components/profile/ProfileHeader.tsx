@@ -10,6 +10,7 @@ interface ProfileHeaderProps {
   clerkName: string;
   username: string;
   memberYear: number;
+  albumsRatedCount?: number | null;
   onEditClick: () => void;
 }
 
@@ -32,6 +33,7 @@ export default function ProfileHeader({
   clerkName,
   username,
   memberYear,
+  albumsRatedCount,
   onEditClick,
 }: ProfileHeaderProps) {
   const displayName = profile.displayName || clerkName;
@@ -102,7 +104,7 @@ export default function ProfileHeader({
             )}
             <div className="flex items-center gap-6 md:gap-8 text-on-surface-variant font-medium flex-wrap justify-center md:justify-start mt-2">
               <div className="flex items-center gap-2">
-                <span className="font-bold text-lg" style={{ color: "var(--profile-accent, var(--color-primary))" }}>24</span>
+                <span className="font-bold text-lg" style={{ color: "var(--profile-accent, var(--color-primary))" }}>{albumsRatedCount ?? "—"}</span>
                 <span className="text-sm uppercase tracking-wide">Albums Rated</span>
               </div>
               <div className="flex items-center gap-2">
