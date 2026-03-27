@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { ProfileCustomization } from "@/types/profile";
 import TopAlbumsWidget from "./widgets/TopAlbumWidget";
 import CurrentlyListeningWidget from "./widgets/CurrentlyListeningWidget";
@@ -10,6 +10,15 @@ import LastRatedAlbumWidget from "./widgets/LastRatedAlbumWidget";
 
 type WidgetType = "topAlbums" | "currentlyListening" | "topSongs" | "topArtists" | "lastRatedAlbum";
 type DropMode = "swap" | "before" | "after";
+
+interface DragState {
+  type: WidgetType;
+  offsetX: number;
+  offsetY: number;
+  width: number;
+  x: number;
+  y: number;
+}
 
 interface ProfileWidgetGridProps {
   profile: ProfileCustomization;
@@ -54,12 +63,20 @@ function renderWidget(
   }
 }
 
+// 1×1 transparent GIF — used to suppress the native drag ghost
+const EMPTY_IMG = (() => {
+  if (typeof window === "undefined") return null;
+  const img = new Image();
+  img.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+  return img;
+})();
+
 interface DraggableWidgetProps {
   isSource: boolean;
   isOverSwap: boolean;
   isOverBefore: boolean;
   isOverAfter: boolean;
-  onDragStart: () => void;
+  onDragStart: (e: React.DragEvent<HTMLDivElement>, rect: DOMRect) => void;
   onDragOver: (e: React.DragEvent<HTMLDivElement>) => void;
   onDrop: () => void;
   onDragEnd: () => void;
@@ -77,29 +94,36 @@ function DraggableWidget({
   onDragEnd,
   children,
 }: DraggableWidgetProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  function handleHandleDragStart(e: React.DragEvent<HTMLDivElement>) {
+    e.stopPropagation();
+    if (EMPTY_IMG) e.dataTransfer.setDragImage(EMPTY_IMG, 0, 0);
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (rect) onDragStart(e, rect);
+  }
+
   return (
     <div
+      ref={containerRef}
       onDragOver={onDragOver}
       onDrop={onDrop}
       className={[
         "relative group transition-all duration-150",
-        isSource ? "opacity-40 scale-[0.97]" : "",
+        isSource ? "opacity-30 scale-[0.97]" : "",
         isOverSwap ? "outline outline-2 outline-offset-2 outline-primary/50 rounded-2xl" : "",
       ].filter(Boolean).join(" ")}
     >
-      {/* Insert-before line in the left gap */}
       {isOverBefore && (
         <div className="absolute -left-3 top-2 bottom-2 w-0.5 bg-primary rounded-full z-20 pointer-events-none" />
       )}
-      {/* Insert-after line in the right gap */}
       {isOverAfter && (
         <div className="absolute -right-3 top-2 bottom-2 w-0.5 bg-primary rounded-full z-20 pointer-events-none" />
       )}
 
-      {/* Drag handle — draggable itself, not the container */}
       <div
         draggable
-        onDragStart={(e) => { e.stopPropagation(); onDragStart(); }}
+        onDragStart={handleHandleDragStart}
         onDragEnd={(e) => { e.stopPropagation(); onDragEnd(); }}
         className="absolute top-3 right-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
       >
@@ -126,20 +150,44 @@ export default function ProfileWidgetGrid({
   const [dragSourceIndex, setDragSourceIndex] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
   const [dropMode, setDropMode] = useState<DropMode>("swap");
+  const [dragState, setDragState] = useState<DragState | null>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setItems(getActiveWidgets(profile));
   }, [profile]);
 
-  function handleDragStart(i: number) {
+  // Track cursor position via dragover and move the overlay directly (no re-render)
+  useEffect(() => {
+    if (!dragState) return;
+    const { offsetX, offsetY } = dragState;
+
+    function onMove(e: DragEvent) {
+      if (!overlayRef.current) return;
+      if (e.clientX === 0 && e.clientY === 0) return; // suppress end-of-drag ghost jump
+      overlayRef.current.style.transform = `translate(${e.clientX - offsetX}px, ${e.clientY - offsetY}px)`;
+    }
+
+    window.addEventListener("dragover", onMove);
+    return () => window.removeEventListener("dragover", onMove);
+  }, [dragState?.offsetX, dragState?.offsetY]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleDragStart(i: number, e: React.DragEvent<HTMLDivElement>, rect: DOMRect) {
     setDragSourceIndex(i);
+    setDragState({
+      type: items[i],
+      offsetX: e.clientX - rect.left,
+      offsetY: e.clientY - rect.top,
+      width: rect.width,
+      x: e.clientX,
+      y: e.clientY,
+    });
   }
 
   function handleDragOver(e: React.DragEvent<HTMLDivElement>, i: number) {
     e.preventDefault();
     if (dragSourceIndex === i) return;
     setOverIndex(i);
-
     const rect = e.currentTarget.getBoundingClientRect();
     const relX = (e.clientX - rect.left) / rect.width;
     if (relX < 0.25) setDropMode("before");
@@ -163,9 +211,9 @@ export default function ProfileWidgetGrid({
       withoutSrc.splice(insertAt, 0, src);
       next = withoutSrc;
     } else {
-      // dragSourceIndex === i, no-op
       setDragSourceIndex(null);
       setOverIndex(null);
+      setDragState(null);
       return;
     }
 
@@ -173,11 +221,13 @@ export default function ProfileWidgetGrid({
     onReorder?.(next);
     setDragSourceIndex(null);
     setOverIndex(null);
+    setDragState(null);
   }
 
   function handleDragEnd() {
     setDragSourceIndex(null);
     setOverIndex(null);
+    setDragState(null);
   }
 
   if (!onReorder) {
@@ -193,28 +243,44 @@ export default function ProfileWidgetGrid({
   }
 
   return (
-    <div
-      className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 px-6 md:px-12 py-10"
-      onDragOver={(e) => e.preventDefault()}
-    >
-      {items.map((type, i) => {
-        const active = overIndex === i && dragSourceIndex !== i;
-        return (
-          <DraggableWidget
-            key={type}
-            isSource={dragSourceIndex === i}
-            isOverSwap={active && dropMode === "swap"}
-            isOverBefore={active && dropMode === "before"}
-            isOverAfter={active && dropMode === "after"}
-            onDragStart={() => handleDragStart(i)}
-            onDragOver={(e) => handleDragOver(e, i)}
-            onDrop={() => handleDrop(i)}
-            onDragEnd={handleDragEnd}
-          >
-            {renderWidget(type, profile, username, spotifyConnected)}
-          </DraggableWidget>
-        );
-      })}
-    </div>
+    <>
+      <div
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 px-6 md:px-12 py-10"
+        onDragOver={(e) => e.preventDefault()}
+      >
+        {items.map((type, i) => {
+          const active = overIndex === i && dragSourceIndex !== i;
+          return (
+            <DraggableWidget
+              key={type}
+              isSource={dragSourceIndex === i}
+              isOverSwap={active && dropMode === "swap"}
+              isOverBefore={active && dropMode === "before"}
+              isOverAfter={active && dropMode === "after"}
+              onDragStart={(e, rect) => handleDragStart(i, e, rect)}
+              onDragOver={(e) => handleDragOver(e, i)}
+              onDrop={() => handleDrop(i)}
+              onDragEnd={handleDragEnd}
+            >
+              {renderWidget(type, profile, username, spotifyConnected)}
+            </DraggableWidget>
+          );
+        })}
+      </div>
+
+      {/* Custom drag overlay — fully opaque widget following the cursor */}
+      {dragState && (
+        <div
+          ref={overlayRef}
+          className="fixed top-0 left-0 z-[9999] pointer-events-none rotate-2 shadow-2xl"
+          style={{
+            width: dragState.width,
+            transform: `translate(${dragState.x - dragState.offsetX}px, ${dragState.y - dragState.offsetY}px)`,
+          }}
+        >
+          {renderWidget(dragState.type, profile, username, spotifyConnected)}
+        </div>
+      )}
+    </>
   );
 }
