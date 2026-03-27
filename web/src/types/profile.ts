@@ -23,4 +23,5 @@ export interface ProfileCustomization {
   artistsContainerColor?: string;
   tags?: string[];
   showLastRatedAlbum?: boolean;
+  widgetOrder?: string[];
 }

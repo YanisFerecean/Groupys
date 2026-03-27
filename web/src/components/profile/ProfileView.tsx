@@ -84,7 +84,12 @@ export default function ProfileView() {
         onEditClick={() => setIsEditing(true)}
       />
 
-      <ProfileWidgetGrid profile={profile} username={user.username ?? ""} spotifyConnected={spotifyConnected} />
+      <ProfileWidgetGrid
+        profile={profile}
+        username={user.username ?? ""}
+        spotifyConnected={spotifyConnected}
+        onReorder={(newOrder) => updateProfile({ ...profile, widgetOrder: newOrder })}
+      />
 
       <ProfileEditDrawer
         open={isEditing}
