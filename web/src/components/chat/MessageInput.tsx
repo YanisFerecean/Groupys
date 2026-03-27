@@ -1,8 +1,11 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { SendHorizonal } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import dynamic from "next/dynamic";
+import { SendHorizonal, Smile } from "lucide-react";
 import { chatWs } from "@/lib/ws";
+
+const EmojiPicker = dynamic(() => import("./EmojiPicker"), { ssr: false });
 
 interface MessageInputProps {
   conversationId: string;
@@ -12,9 +15,43 @@ interface MessageInputProps {
 
 export function MessageInput({ conversationId, onSend, disabled }: MessageInputProps) {
   const [content, setContent] = useState("");
+  const [emojiOpen, setEmojiOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const emojiRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [isTyping, setIsTyping] = useState(false);
+
+  // Close picker on outside click
+  useEffect(() => {
+    if (!emojiOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (emojiRef.current && !emojiRef.current.contains(e.target as Node)) {
+        setEmojiOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [emojiOpen]);
+
+  const insertEmoji = useCallback((emoji: string) => {
+    const el = textareaRef.current;
+    if (!el) {
+      setContent((c) => c + emoji);
+      return;
+    }
+    // Read from el.value (live DOM) rather than closing over `content`,
+    // so this function can have a stable empty dep array.
+    const start = el.selectionStart ?? el.value.length;
+    const end = el.selectionEnd ?? el.value.length;
+    const next = el.value.slice(0, start) + emoji + el.value.slice(end);
+    setContent(next);
+    // Restore cursor after the inserted emoji
+    requestAnimationFrame(() => {
+      el.selectionStart = start + emoji.length;
+      el.selectionEnd = start + emoji.length;
+      el.focus();
+    });
+  }, []);
 
   const adjustHeight = () => {
     const el = textareaRef.current;
@@ -77,7 +114,7 @@ export function MessageInput({ conversationId, onSend, disabled }: MessageInputP
 
   return (
     <div className="p-4 bg-surface border-t border-surface-container-high">
-      <div className="flex items-end gap-2 max-w-4xl mx-auto align-bottom">
+      <div className="flex items-center gap-2 max-w-4xl mx-auto">
         <div className="flex-1 relative">
           <textarea
             ref={textareaRef}
@@ -99,6 +136,21 @@ export function MessageInput({ conversationId, onSend, disabled }: MessageInputP
               {remaining}
             </span>
           )}
+        </div>
+        <div ref={emojiRef} className="relative flex-shrink-0">
+          <button
+            type="button"
+            onClick={() => setEmojiOpen((o) => !o)}
+            disabled={disabled}
+            className={`h-[44px] w-[44px] rounded-full flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+              emojiOpen
+                ? "bg-primary/15 text-primary"
+                : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+            }`}
+          >
+            <Smile className="w-5 h-5" />
+          </button>
+          {emojiOpen && <EmojiPicker onSelect={insertEmoji} />}
         </div>
         <button
           onClick={handleSend}

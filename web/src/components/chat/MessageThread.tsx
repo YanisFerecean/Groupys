@@ -1,11 +1,38 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MessageBubble } from "./MessageBubble";
 import { TypingIndicator } from "./TypingIndicator";
 import { Message } from "@/types/chat";
 import { useUser } from "@clerk/nextjs";
 import { chatWs } from "@/lib/ws";
+
+// ── Module-scope helpers (pure, no component state) ───────────────────────────
+
+function dayKey(ts: string): string {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+function formatDay(ts: string): string {
+  const d = new Date(ts);
+  const now = new Date();
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (dayKey(ts) === dayKey(now.toISOString())) return "Today";
+  if (dayKey(ts) === dayKey(yesterday.toISOString())) return "Yesterday";
+  return d.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
+  });
+}
+
+function minuteBucket(ts: string): number {
+  return Math.floor(new Date(ts).getTime() / 60000);
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 interface MessageThreadProps {
   messages: Message[];
@@ -48,10 +75,11 @@ export function MessageThread({ messages, conversationId, hasMore, isLoadingMore
 
   // Scroll to bottom on mount or new bottom message
   useEffect(() => {
-    // Very simple auto-scroll: if newest message changes or typing changes, scroll down
-    if (bottomRef.current) {
-      bottomRef.current.scrollIntoView({ behavior: "auto" });
-    }
+    if (!bottomRef.current) return;
+    const id = requestAnimationFrame(() => {
+      bottomRef.current?.scrollIntoView({ behavior: "auto" });
+    });
+    return () => cancelAnimationFrame(id);
   }, [newestMessageId, typists.size]);
 
   // After older messages are prepended, restore scroll position so the view doesn't jump
@@ -63,18 +91,34 @@ export function MessageThread({ messages, conversationId, hasMore, isLoadingMore
     }
   }, [isLoadingMore]);
 
-  const handleScroll = () => {
+  const handleScroll = useCallback(() => {
     if (!containerRef.current) return;
     const { scrollTop } = containerRef.current;
     if (scrollTop < 100 && hasMore && !isLoadingMore) {
       prevScrollHeightRef.current = containerRef.current.scrollHeight;
       onLoadMore();
     }
-  };
+  }, [hasMore, isLoadingMore, onLoadMore]);
 
-  // We have newest at index 0. We need to render oldest first (top) to newest (bottom).
-  // So we spread and reverse.
-  const displayMessages = [...messages].reverse();
+  // Oldest first (top → bottom); memoized so reverse() doesn't run on every render
+  const displayMessages = useMemo(() => [...messages].reverse(), [messages]);
+
+  // Index of the last message sent by the current user that the other participant has seen
+  const lastSeenIdx = useMemo(() => {
+    if (!otherLastReadAt) return -1;
+    return displayMessages.reduce((found, msg, idx) => {
+      if (
+        msg.senderUsername === user?.username &&
+        msg.status !== "sending" &&
+        new Date(otherLastReadAt) >= new Date(msg.createdAt)
+      ) {
+        return idx;
+      }
+      return found;
+    }, -1);
+  }, [displayMessages, otherLastReadAt, user?.username]);
+
+  const typistList = useMemo(() => Array.from(typists.values()), [typists]);
 
   return (
     <div
@@ -110,83 +154,51 @@ export function MessageThread({ messages, conversationId, hasMore, isLoadingMore
       )}
 
       <div className="flex flex-col space-y-1">
-        {(() => {
-          // Index of the last message sent by current user that has been seen by the other participant
-          const lastSeenIdx = otherLastReadAt
-            ? displayMessages.reduce((found, msg, idx) => {
-                if (
-                  msg.senderUsername === user?.username &&
-                  msg.status !== "sending" &&
-                  new Date(otherLastReadAt) >= new Date(msg.createdAt)
-                ) {
-                  return idx;
-                }
-                return found;
-              }, -1)
-            : -1;
+        {displayMessages.map((msg, idx) => {
+          const isMine = msg.senderUsername === user?.username;
 
-          const dayKey = (ts: string) => {
-            const d = new Date(ts);
-            return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-          };
-          const formatDay = (ts: string) => {
-            const d = new Date(ts);
-            const now = new Date();
-            const yesterday = new Date(now);
-            yesterday.setDate(now.getDate() - 1);
-            if (dayKey(ts) === dayKey(now.toISOString())) return "Today";
-            if (dayKey(ts) === dayKey(yesterday.toISOString())) return "Yesterday";
-            return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined });
-          };
+          const next = displayMessages[idx + 1];
+          const isLastInGroup =
+            !next ||
+            next.senderUsername !== msg.senderUsername ||
+            minuteBucket(next.createdAt) !== minuteBucket(msg.createdAt);
 
-          return displayMessages.map((msg, idx) => {
-            const isMine = msg.senderUsername === user?.username;
+          const prev = displayMessages[idx - 1];
+          const showDateSeparator = !prev || dayKey(prev.createdAt) !== dayKey(msg.createdAt);
 
-            // A group is a consecutive run of messages from the same sender within the same minute.
-            const minuteBucket = (ts: string) => Math.floor(new Date(ts).getTime() / 60000);
-            const next = displayMessages[idx + 1];
-            const isLastInGroup =
-              !next ||
-              next.senderUsername !== msg.senderUsername ||
-              minuteBucket(next.createdAt) !== minuteBucket(msg.createdAt);
+          return (
+            <div key={msg.id || msg.tempId}>
+              {showDateSeparator && (
+                <div className="flex items-center gap-3 my-4">
+                  <div className="flex-1 h-px bg-surface-container-high" />
+                  <span className="text-[11px] text-on-surface-variant font-medium px-1">
+                    {formatDay(msg.createdAt)}
+                  </span>
+                  <div className="flex-1 h-px bg-surface-container-high" />
+                </div>
+              )}
+              <MessageBubble
+                message={msg}
+                isMine={isMine}
+                showTime={isLastInGroup}
+                isLastInGroup={isLastInGroup}
+                onRetry={msg.status === "failed" && onRetry ? () => onRetry(msg) : undefined}
+              />
+              {idx === lastSeenIdx && (
+                <p className="text-[11px] text-on-surface-variant text-right pr-1 -mt-2 mb-2">
+                  Seen
+                </p>
+              )}
+            </div>
+          );
+        })}
 
-            const prev = displayMessages[idx - 1];
-            const showDateSeparator = !prev || dayKey(prev.createdAt) !== dayKey(msg.createdAt);
-
-            return (
-              <div key={msg.id || msg.tempId}>
-                {showDateSeparator && (
-                  <div className="flex items-center gap-3 my-4">
-                    <div className="flex-1 h-px bg-surface-container-high" />
-                    <span className="text-[11px] text-on-surface-variant font-medium px-1">
-                      {formatDay(msg.createdAt)}
-                    </span>
-                    <div className="flex-1 h-px bg-surface-container-high" />
-                  </div>
-                )}
-                <MessageBubble
-                  message={msg}
-                  isMine={isMine}
-                  showTime={isLastInGroup}
-                  isLastInGroup={isLastInGroup}
-                  onRetry={msg.status === "failed" && onRetry ? () => onRetry(msg) : undefined}
-                />
-                {idx === lastSeenIdx && (
-                  <p className="text-[11px] text-on-surface-variant text-right pr-1 -mt-2 mb-2">
-                    Seen
-                  </p>
-                )}
-              </div>
-            );
-          });
-        })()}
-
-        {Array.from(typists.values()).map(username => (
+        {typistList.map(username => (
           <div key={username} className="mb-4">
             <TypingIndicator username={username} />
           </div>
         ))}
-        
+
         <div ref={bottomRef} className="h-1 w-full" />
       </div>
     </div>

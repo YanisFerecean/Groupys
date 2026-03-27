@@ -100,11 +100,14 @@ function ArtistRow({ artist, onPress }: { artist: ArtistRes; onPress: () => void
   );
 }
 
-function AlbumRow({ album }: { album: AlbumRes }) {
+function AlbumRow({ album, onPress }: { album: AlbumRes; onPress: () => void }) {
   const cover = album.coverSmall || album.coverMedium;
 
   return (
-    <div className="flex items-center gap-3 px-4 py-2.5">
+    <button
+      className="flex items-center gap-3 px-4 py-2.5 w-full text-left hover:bg-surface-container-low transition-colors"
+      onClick={onPress}
+    >
       {cover ? (
         <Image
           src={cover}
@@ -126,7 +129,10 @@ function AlbumRow({ album }: { album: AlbumRes }) {
         </p>
         <p className="text-xs text-outline truncate">{album.artist?.name}</p>
       </div>
-    </div>
+      <span className="material-symbols-outlined text-on-surface/25 text-base">
+        chevron_right
+      </span>
+    </button>
   );
 }
 
@@ -217,12 +223,22 @@ interface SearchOverlayProps {
   onClose: () => void;
 }
 
+type Category = "all" | "artists" | "albums" | "tracks";
+
+const CATEGORIES: { value: Category; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "artists", label: "Artists" },
+  { value: "albums", label: "Albums" },
+  { value: "tracks", label: "Tracks" },
+];
+
 export default function SearchOverlay({ onClose }: SearchOverlayProps) {
   const { getToken } = useAuth();
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [query, setQuery] = useState("");
+  const [category, setCategory] = useState<Category>("all");
   const [results, setResults] = useState<SearchResult | null>(null);
   const [searching, setSearching] = useState(false);
   const [playingId, setPlayingId] = useState<number | null>(null);
@@ -249,7 +265,7 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  // Debounced search
+  // Debounced search — reruns when query or category changes
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
@@ -264,22 +280,42 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
     setResults(null);
 
     debounceRef.current = setTimeout(async () => {
-      if (trimmed === lastFetchedRef.current) return;
+      const fetchKey = `${category}:${trimmed}`;
+      if (fetchKey === lastFetchedRef.current) return;
 
       setSearching(true);
       try {
         const token = await getTokenRef.current();
-        const res = await fetch(
-          `${API_URL}/search?q=${encodeURIComponent(trimmed)}`,
-          { headers: { Authorization: `Bearer ${token}` } },
-        );
-        if (!res.ok) throw new Error("Search failed");
-        const data: SearchResult = await res.json();
-        lastFetchedRef.current = trimmed;
-        setResults({
-          ...data,
-          artists: [...data.artists].sort((a, b) => b.listeners - a.listeners),
-        });
+        const headers = { Authorization: `Bearer ${token}` };
+        const q = encodeURIComponent(trimmed);
+
+        let data: SearchResult;
+
+        if (category === "all") {
+          const res = await fetch(`${API_URL}/search?q=${q}`, { headers });
+          if (!res.ok) throw new Error("Search failed");
+          const raw: SearchResult = await res.json();
+          data = { ...raw, artists: [...raw.artists].sort((a, b) => b.listeners - a.listeners) };
+        } else {
+          const endpointMap: Record<Exclude<Category, "all">, string> = {
+            artists: "artists",
+            albums: "albums",
+            tracks: "tracks",
+          };
+          const res = await fetch(`${API_URL}/${endpointMap[category]}/search?q=${q}`, { headers });
+          if (!res.ok) throw new Error("Search failed");
+          const raw = await res.json();
+          data = {
+            artists: category === "artists"
+              ? ([...raw] as ArtistRes[]).sort((a, b) => (b.listeners ?? 0) - (a.listeners ?? 0))
+              : [],
+            albums: category === "albums" ? (raw as AlbumRes[]) : [],
+            tracks: category === "tracks" ? (raw as TrackRes[]) : [],
+          };
+        }
+
+        lastFetchedRef.current = fetchKey;
+        setResults(data);
       } catch (err) {
         console.error("Search error:", err);
       } finally {
@@ -290,7 +326,7 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [query]);
+  }, [query, category]);
 
   // Cleanup audio on unmount
   useEffect(() => {
@@ -357,11 +393,18 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
     router.push(`/discover/artist/${artist.id}`);
   };
 
+  const handleAlbumPress = (album: AlbumRes) => {
+    handleClose();
+    router.push(`/album/${album.id}`);
+  };
+
+  const filteredResults = results;
+
   const hasResults =
-    results &&
-    (results.artists.length > 0 ||
-      results.albums.length > 0 ||
-      results.tracks.length > 0);
+    filteredResults &&
+    (filteredResults.artists.length > 0 ||
+      filteredResults.albums.length > 0 ||
+      filteredResults.tracks.length > 0);
 
   return (
     <div className="fixed inset-0 z-[100] animate-in fade-in duration-200">
@@ -406,6 +449,23 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
           </button>
         </div>
 
+        {/* Category pills */}
+        <div className="flex gap-2 mb-4 overflow-x-auto no-scrollbar">
+          {CATEGORIES.map(({ value, label }) => (
+            <button
+              key={value}
+              onClick={() => setCategory(value)}
+              className={`shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                category === value
+                  ? "bg-primary text-on-primary"
+                  : "bg-surface-container border border-white/80 text-on-surface-variant hover:bg-surface-container-high"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
         {/* Results area */}
         <div className="flex-1 overflow-y-auto pb-12">
           {searching && <SearchingDots />}
@@ -424,28 +484,28 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
 
           {hasResults && (
             <div className="space-y-2">
-              {results!.artists.length > 0 && (
+              {filteredResults!.artists.length > 0 && (
                 <div className="bg-surface-container-lowest/65 border border-white/80 rounded-2xl overflow-hidden shadow-sm">
                   <SectionLabel label="Artists" />
-                  {results!.artists.map((a) => (
+                  {filteredResults!.artists.map((a) => (
                     <ArtistRow key={a.id} artist={a} onPress={() => handleArtistPress(a)} />
                   ))}
                 </div>
               )}
 
-              {results!.albums.length > 0 && (
+              {filteredResults!.albums.length > 0 && (
                 <div className="bg-surface-container-lowest/65 border border-white/80 rounded-2xl overflow-hidden shadow-sm">
                   <SectionLabel label="Albums" />
-                  {results!.albums.map((a) => (
-                    <AlbumRow key={a.id} album={a} />
+                  {filteredResults!.albums.map((a) => (
+                    <AlbumRow key={a.id} album={a} onPress={() => handleAlbumPress(a)} />
                   ))}
                 </div>
               )}
 
-              {results!.tracks.length > 0 && (
+              {filteredResults!.tracks.length > 0 && (
                 <div className="bg-surface-container-lowest/65 border border-white/80 rounded-2xl overflow-hidden shadow-sm">
                   <SectionLabel label="Tracks" />
-                  {results!.tracks.map((t) => (
+                  {filteredResults!.tracks.map((t) => (
                     <TrackRow
                       key={t.id}
                       track={t}

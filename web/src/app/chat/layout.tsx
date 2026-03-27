@@ -1,13 +1,17 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 import { Plus, MessageCircle } from "lucide-react";
 import { useUser } from "@clerk/nextjs";
 import { useConversations } from "@/hooks/useConversations";
 import { useCrypto } from "@/hooks/useCrypto";
 import { ConversationList } from "@/components/chat/ConversationList";
-import { NewConversationModal } from "@/components/chat/NewConversationModal";
+import dynamic from "next/dynamic";
+const NewConversationModal = dynamic(
+  () => import("@/components/chat/NewConversationModal").then(m => ({ default: m.NewConversationModal })),
+  { ssr: false }
+);
 import AppShell from "@/components/app/AppShell";
 import { isEncrypted } from "@/lib/crypto";
 
@@ -18,18 +22,23 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
 
   // Map of conversationId -> decrypted last message preview
   const [decryptedPreviews, setDecryptedPreviews] = useState<Map<string, string>>(new Map());
+  // Track which (id + lastMessage) pairs have already been decrypted to avoid redundant crypto work
+  const decryptedIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     async function decryptPreviews() {
       const updates = new Map<string, string>();
       await Promise.all(
-        conversations.map(async (convo) => {
-          if (!convo.lastMessage || convo.isGroup || !isEncrypted(convo.lastMessage)) return;
-          const other = convo.participants.find((p) => p.username !== user?.username);
-          if (!other) return;
-          const plain = await decryptForPartner(other.username, convo.lastMessage);
-          updates.set(convo.id, plain);
-        })
+        conversations
+          .filter((convo) => !decryptedIdsRef.current.has(`${convo.id}:${convo.lastMessage ?? ""}`))
+          .map(async (convo) => {
+            if (!convo.lastMessage || convo.isGroup || !isEncrypted(convo.lastMessage)) return;
+            const other = convo.participants.find((p) => p.username !== user?.username);
+            if (!other) return;
+            const plain = await decryptForPartner(other.username, convo.lastMessage);
+            updates.set(convo.id, plain);
+            decryptedIdsRef.current.add(`${convo.id}:${convo.lastMessage}`);
+          })
       );
       if (updates.size > 0) {
         setDecryptedPreviews((prev) => new Map([...prev, ...updates]));

@@ -90,7 +90,8 @@ export function useMessages(
     return () => { isMounted = false; };
   }, [decryptFn]);
 
-  // Real-time subscription — re-registers when conversationId or decryptFn changes
+  // Real-time subscription — only re-registers when conversationId changes.
+  // Uses decryptFnRef so the handler always has the latest key without being a reactive dep.
   useEffect(() => {
     if (!conversationId) return;
 
@@ -99,8 +100,9 @@ export function useMessages(
         if (payload.conversationId !== conversationId) return;
 
         let content = payload.content;
-        if (decryptFn && isEncrypted(content)) {
-          content = await decryptFn(content).catch(() => "[Encrypted message — decryption failed]");
+        const fn = decryptFnRef.current;
+        if (fn && isEncrypted(content)) {
+          content = await fn(content).catch(() => "[Encrypted message — decryption failed]");
         }
         const msg = { ...payload, content };
 
@@ -137,7 +139,7 @@ export function useMessages(
     ];
 
     return () => unsubs.forEach((u) => u());
-  }, [conversationId, decryptFn]);
+  }, [conversationId]);
 
   const loadMore = useCallback(async (page: number) => {
     if (!conversationId || isLoading || !hasMore) return;
