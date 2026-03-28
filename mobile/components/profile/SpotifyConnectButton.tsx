@@ -1,12 +1,15 @@
 import { View, Text, TouchableOpacity } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
 import * as WebBrowser from 'expo-web-browser'
-import * as Linking from 'expo-linking'
+import * as AuthSession from 'expo-auth-session'
 import { useAuth } from '@clerk/expo'
-import { API_URL } from '@/lib/api'
+import { API_URL, syncSpotifyMusic } from '@/lib/api'
 
-// @ts-ignore
-const SpotifyIcon = ({ size, color }: { size: number, color: string }) => <Ionicons name="logo-spotify" size={size} color={color} />
+WebBrowser.maybeCompleteAuthSession()
+
+const SpotifyIcon = ({ size, color }: { size: number, color: string }) => (
+  <MaterialCommunityIcons name="spotify" size={size} color={color} />
+)
 
 interface SpotifyConnectButtonProps {
   connected: boolean
@@ -21,7 +24,10 @@ export function SpotifyConnectButton({ connected, onConnect }: SpotifyConnectBut
       const token = await getToken()
       if (!token) return
 
-      const redirectUri = Linking.createURL('/spotify-auth')
+      const redirectUri = AuthSession.makeRedirectUri({
+        scheme: 'mobile',
+        path: 'spotify-auth',
+      })
       const authUrl = `${API_URL}/spotify/auth-url?redirect_uri=${encodeURIComponent(redirectUri)}`
       
       const res = await fetch(authUrl, {
@@ -45,6 +51,7 @@ export function SpotifyConnectButton({ connected, onConnect }: SpotifyConnectBut
               body: JSON.stringify({ code, redirect_uri: redirectUri })
             })
             onConnect()
+            syncSpotifyMusic(token).catch((err) => console.error('Background sync failed:', err))
           }
         }
       }
