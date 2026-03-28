@@ -21,6 +21,8 @@ export interface ProfileCustomization {
   albumsContainerColor?: string;
   songsContainerColor?: string;
   artistsContainerColor?: string;
+  lastRatedAlbumContainerColor?: string;
+  widgetSizes?: Partial<Record<string, "small" | "normal">>;
   tags?: string[];
   showLastRatedAlbum?: boolean;
   widgetOrder?: string[];

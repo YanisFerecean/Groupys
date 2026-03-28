@@ -39,6 +39,8 @@ function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCustomizatio
   for (const w of sorted) {
     const items = (w.data?.items ?? []) as Record<string, string>[];
 
+    const widgetSize = w.data?.size as string | undefined;
+
     switch (w.type) {
       case "topSongs":
         result.topSongs = items.map((i) => ({
@@ -47,6 +49,7 @@ function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCustomizatio
           coverUrl: i.coverUrl,
         }));
         result.songsContainerColor = w.color ?? undefined;
+        if (widgetSize) result.widgetSizes = { ...result.widgetSizes, topSongs: widgetSize as "small" | "normal" };
         break;
       case "topArtists":
         result.topArtists = items.map((i) => ({
@@ -55,6 +58,7 @@ function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCustomizatio
           imageUrl: i.imageUrl,
         }));
         result.artistsContainerColor = w.color ?? undefined;
+        if (widgetSize) result.widgetSizes = { ...result.widgetSizes, topArtists: widgetSize as "small" | "normal" };
         break;
       case "topAlbums":
         result.topAlbums = items.map((i) => ({
@@ -63,9 +67,12 @@ function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCustomizatio
           coverUrl: i.coverUrl,
         }));
         result.albumsContainerColor = w.color ?? undefined;
+        if (widgetSize) result.widgetSizes = { ...result.widgetSizes, topAlbums: widgetSize as "small" | "normal" };
         break;
       case "lastRatedAlbum":
         result.showLastRatedAlbum = true;
+        result.lastRatedAlbumContainerColor = w.color ?? undefined;
+        if (widgetSize) result.widgetSizes = { ...result.widgetSizes, lastRatedAlbum: widgetSize as "small" | "normal" };
         break;
       case "currentlyListening": {
         const d = w.data as Record<string, string>;
@@ -89,19 +96,19 @@ function profileToWidgets(profile: Partial<ProfileCustomization>): BackendWidget
   const widgetData: Partial<Record<string, W>> = {};
 
   if (profile.topAlbums?.length) {
-    widgetData.topAlbums = { type: "topAlbums", color: profile.albumsContainerColor ?? null, data: { items: profile.topAlbums } };
+    widgetData.topAlbums = { type: "topAlbums", color: profile.albumsContainerColor ?? null, data: { items: profile.topAlbums, size: profile.widgetSizes?.topAlbums ?? null } };
   }
   if (profile.currentlyListening?.title) {
     widgetData.currentlyListening = { type: "currentlyListening", color: null, data: { ...profile.currentlyListening } };
   }
   if (profile.topSongs?.length) {
-    widgetData.topSongs = { type: "topSongs", color: profile.songsContainerColor ?? null, data: { items: profile.topSongs } };
+    widgetData.topSongs = { type: "topSongs", color: profile.songsContainerColor ?? null, data: { items: profile.topSongs, size: profile.widgetSizes?.topSongs ?? null } };
   }
   if (profile.showLastRatedAlbum) {
-    widgetData.lastRatedAlbum = { type: "lastRatedAlbum", color: null, data: {} };
+    widgetData.lastRatedAlbum = { type: "lastRatedAlbum", color: profile.lastRatedAlbumContainerColor ?? null, data: { size: profile.widgetSizes?.lastRatedAlbum ?? null } };
   }
   if (profile.topArtists?.length) {
-    widgetData.topArtists = { type: "topArtists", color: profile.artistsContainerColor ?? null, data: { items: profile.topArtists } };
+    widgetData.topArtists = { type: "topArtists", color: profile.artistsContainerColor ?? null, data: { items: profile.topArtists, size: profile.widgetSizes?.topArtists ?? null } };
   }
 
   const defaultOrder = ["topAlbums", "currentlyListening", "topSongs", "lastRatedAlbum", "topArtists"];

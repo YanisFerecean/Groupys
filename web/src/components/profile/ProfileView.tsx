@@ -88,8 +88,23 @@ export default function ProfileView() {
         profile={profile}
         username={user.username ?? ""}
         spotifyConnected={spotifyConnected}
+        isEditing={true}
         onReorder={(newOrder) => updateProfile({ ...profile, widgetOrder: newOrder })}
+        onSettingsChange={(type, color, size) => {
+          const colorKey =
+            type === "topAlbums" ? "albumsContainerColor" :
+            type === "topSongs" ? "songsContainerColor" :
+            type === "topArtists" ? "artistsContainerColor" :
+            type === "lastRatedAlbum" ? "lastRatedAlbumContainerColor" : null;
+          const updates = { ...profile, widgetSizes: { ...(profile.widgetSizes ?? {}), [type]: size } };
+          if (colorKey) (updates as Record<string, unknown>)[colorKey] = color;
+          updateProfile(updates);
+        }}
       />
+
+      <div className="px-6 md:px-12 py-6 text-center">
+        <p className="text-xs text-on-surface-variant/50 font-medium">Member since {memberYear}</p>
+      </div>
 
       <ProfileEditDrawer
         open={isEditing}

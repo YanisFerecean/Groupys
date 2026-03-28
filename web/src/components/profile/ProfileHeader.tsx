@@ -62,9 +62,6 @@ export default function ProfileHeader({
 
           {/* Info */}
           <div className="flex-1 text-center md:text-left pb-2">
-            <p className="text-sm text-on-surface-variant font-medium mb-2">
-              Member since {memberYear}
-            </p>
             <h1
               className="text-3xl md:text-[3.2rem] font-extrabold tracking-tighter leading-none mb-1"
               style={profile.nameColor ? { color: profile.nameColor } : undefined}

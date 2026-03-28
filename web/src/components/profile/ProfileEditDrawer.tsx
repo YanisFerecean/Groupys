@@ -606,28 +606,6 @@ export default function ProfileEditDrawer({
                 />
               </div>
 
-              <div className="space-y-3">
-                <h4 className="text-sm font-bold uppercase tracking-widest text-on-surface-variant">
-                  Widget Colors
-                </h4>
-                <div className="grid grid-cols-3 gap-4">
-                  <ColorPickerField
-                    label="Albums"
-                    value={form.albumsContainerColor ?? ""}
-                    onChange={(v) => set("albumsContainerColor", v)}
-                  />
-                  <ColorPickerField
-                    label="Songs"
-                    value={form.songsContainerColor ?? ""}
-                    onChange={(v) => set("songsContainerColor", v)}
-                  />
-                  <ColorPickerField
-                    label="Artists"
-                    value={form.artistsContainerColor ?? ""}
-                    onChange={(v) => set("artistsContainerColor", v)}
-                  />
-                </div>
-              </div>
             </TabsContent>
 
             {/* ── Widgets Tab ── */}
