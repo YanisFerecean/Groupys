@@ -94,6 +94,10 @@
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-websockets-next</artifactId>
         </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-scheduler</artifactId>
+        </dependency>
     </dependencies>
 
     <build>
