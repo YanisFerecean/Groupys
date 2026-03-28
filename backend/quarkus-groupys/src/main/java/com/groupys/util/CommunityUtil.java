@@ -15,6 +15,7 @@ public final class CommunityUtil {
                 community.description,
                 community.genre,
                 community.country,
+                community.countryCode,
                 community.imageUrl,
                 community.bannerUrl,
                 community.iconType,
@@ -24,7 +25,11 @@ public final class CommunityUtil {
                 community.artist != null ? community.artist.getId() : null,
                 community.memberCount,
                 community.createdBy != null ? community.createdBy.id : null,
-                community.createdAt
+                community.createdAt,
+                community.visibility,
+                community.discoveryEnabled,
+                community.lastProfileRefreshAt,
+                community.tasteSummaryText
         );
     }
 }
