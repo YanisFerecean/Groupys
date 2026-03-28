@@ -19,6 +19,7 @@ import { TypingIndicator } from '@/components/chat/TypingIndicator'
 import { Colors } from '@/constants/colors'
 import { useChat } from '@/hooks/useChat'
 import { useChatMessages } from '@/hooks/useChatMessages'
+import { logWarn } from '@/lib/logging'
 import { chatWs } from '@/lib/chat-ws'
 import { timeAgo } from '@/lib/timeAgo'
 import type { Message } from '@/models/Chat'
@@ -29,8 +30,10 @@ export default function ChatConversationScreen() {
   const params = useLocalSearchParams<{ conversationId?: string | string[] }>()
   const { user } = useUser()
   const {
+    acceptDirectRequest,
     conversations,
     cryptoReady,
+    denyDirectRequest,
     fetchConversationById,
     getPublicKeyForUsername,
     isUserOnline,
@@ -54,6 +57,7 @@ export default function ChatConversationScreen() {
   const [typingUsers, setTypingUsers] = useState<Map<string, string>>(new Map())
   const [hasPartnerKey, setHasPartnerKey] = useState(false)
   const [isNearBottom, setIsNearBottom] = useState(true)
+  const [requestAction, setRequestAction] = useState<'accept' | 'deny' | null>(null)
   const listRef = useRef<FlatList<Message>>(null)
   const isMountedRef = useRef(true)
 
@@ -141,7 +145,7 @@ export default function ChatConversationScreen() {
       try {
         listRef.current?.scrollToOffset({ offset: 0, animated: true })
       } catch (error) {
-        console.warn('Skipped chat auto-scroll after unmount/layout change:', error)
+        logWarn('Skipped chat auto-scroll after unmount/layout change', error)
       }
     })
 
@@ -174,6 +178,9 @@ export default function ChatConversationScreen() {
   }, [messages, otherParticipant?.lastReadAt, user?.username])
 
   const encryptedActive = cryptoReady && hasPartnerKey
+  const isPendingIncoming = conversation?.requestStatus === 'PENDING_INCOMING'
+  const isPendingOutgoing = conversation?.requestStatus === 'PENDING_OUTGOING'
+  const canMessage = conversation?.requestStatus === 'ACCEPTED'
   const showMessageListLoader = isLoading || isInitialLoadPending
   const renderEmptyState = () => (
     <View
@@ -182,6 +189,22 @@ export default function ChatConversationScreen() {
     >
       {showMessageListLoader ? (
         <ActivityIndicator color={Colors.primary} />
+      ) : isPendingIncoming ? (
+        <>
+          <Ionicons name="mail-unread-outline" size={40} color={Colors.primary} />
+          <Text className="mt-4 text-lg font-bold text-on-surface">Chat request pending</Text>
+          <Text className="mt-2 text-center text-sm font-medium text-on-surface-variant">
+            Accept this request to start messaging {headerTitle}.
+          </Text>
+        </>
+      ) : isPendingOutgoing ? (
+        <>
+          <Ionicons name="time-outline" size={40} color={Colors.onSurfaceVariant} />
+          <Text className="mt-4 text-lg font-bold text-on-surface">Waiting for a reply</Text>
+          <Text className="mt-2 text-center text-sm font-medium text-on-surface-variant">
+            You can message {headerTitle} after they accept your request.
+          </Text>
+        </>
       ) : (
         <>
           <Ionicons name="sparkles-outline" size={40} color={Colors.onSurfaceVariant} />
@@ -260,6 +283,73 @@ export default function ChatConversationScreen() {
         </View>
       ) : (
         <>
+          {isPendingIncoming ? (
+            <View className="mx-4 mt-4 rounded-3xl bg-primary/10 p-4">
+              <Text className="text-base font-bold text-on-surface">
+                {headerTitle} wants to chat
+              </Text>
+              <Text className="mt-2 text-sm font-medium text-on-surface-variant">
+                Accept to open the conversation, or deny to remove this request from your inbox.
+              </Text>
+              <View className="mt-4 flex-row gap-3">
+                <TouchableOpacity
+                  className="flex-1 items-center justify-center rounded-2xl bg-surface px-4 py-3"
+                  disabled={requestAction !== null}
+                  onPress={() => {
+                    setRequestAction('deny')
+                    void denyDirectRequest(conversation.id)
+                      .then(() => {
+                        router.replace('/(home)/(match)/chat')
+                      })
+                      .catch(error => {
+                        console.error('[chat] failed to deny request', error)
+                      })
+                      .finally(() => {
+                        setRequestAction(null)
+                      })
+                  }}
+                >
+                  {requestAction === 'deny' ? (
+                    <ActivityIndicator color={Colors.onSurface} />
+                  ) : (
+                    <Text className="text-sm font-bold text-on-surface">Deny</Text>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  className="flex-1 items-center justify-center rounded-2xl bg-primary px-4 py-3"
+                  disabled={requestAction !== null}
+                  onPress={() => {
+                    setRequestAction('accept')
+                    void acceptDirectRequest(conversation.id)
+                      .catch(error => {
+                        console.error('[chat] failed to accept request', error)
+                      })
+                      .finally(() => {
+                        setRequestAction(null)
+                      })
+                  }}
+                >
+                  {requestAction === 'accept' ? (
+                    <ActivityIndicator color={Colors.onPrimary} />
+                  ) : (
+                    <Text className="text-sm font-bold text-on-primary">Accept</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : null}
+
+          {isPendingOutgoing ? (
+            <View className="mx-4 mt-4 rounded-3xl bg-surface-container p-4">
+              <Text className="text-base font-bold text-on-surface">
+                Request sent
+              </Text>
+              <Text className="mt-2 text-sm font-medium text-on-surface-variant">
+                You&apos;ll be able to send messages here after {headerTitle} accepts your request.
+              </Text>
+            </View>
+          ) : null}
+
           <FlatList
             ref={listRef}
             inverted
@@ -314,6 +404,7 @@ export default function ChatConversationScreen() {
           <View style={{ paddingBottom: insets.bottom }}>
             <MessageComposer
               conversationId={conversationId}
+              disabled={!canMessage}
               onSend={(content) => {
                 void sendMessage(content)
               }}
