@@ -71,6 +71,7 @@ interface ProfileEditDrawerProps {
   onRemoveProfileImage: () => Promise<void>;
   isSaving: boolean;
   spotifyConnected?: boolean;
+  initialTab?: "profile" | "customization" | "widgets";
 }
 
 export default function ProfileEditDrawer({
@@ -85,7 +86,9 @@ export default function ProfileEditDrawer({
   onRemoveProfileImage,
   isSaving,
   spotifyConnected,
+  initialTab = "profile",
 }: ProfileEditDrawerProps) {
+  const [activeTab, setActiveTab] = useState<string>(initialTab);
   const [form, setForm] = useState<ProfileCustomization>({ ...profile });
   const [username, setUsername] = useState(currentUsername);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
@@ -144,6 +147,7 @@ export default function ProfileEditDrawer({
       setForm({ ...profile });
       setUsername(currentUsername);
       setAvatarPreview(null);
+      setActiveTab(initialTab);
       setPendingAvatarFile(null);
       setRemoveAvatar(false);
       setErrors({});
@@ -359,7 +363,7 @@ export default function ProfileEditDrawer({
           <DialogTitle className="text-xl">Edit Profile</DialogTitle>
         </DialogHeader>
 
-        <Tabs defaultValue="profile" className="flex-1 min-h-0 flex flex-col">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 flex flex-col">
           <TabsList className="w-full justify-start shrink-0 px-6">
             <TabsTrigger value="profile">
               <span className="material-symbols-outlined text-base">person</span>

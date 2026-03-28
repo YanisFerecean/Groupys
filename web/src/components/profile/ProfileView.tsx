@@ -118,6 +118,7 @@ export default function ProfileView() {
         onRemoveProfileImage={removeProfileImage}
         isSaving={isSaving}
         spotifyConnected={spotifyConnected}
+        initialTab={spotifyCallback === "connected" ? "widgets" : "profile"}
       />
     </div>
   );
