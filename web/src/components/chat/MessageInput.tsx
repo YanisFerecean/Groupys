@@ -125,7 +125,7 @@ export function MessageInput({ conversationId, onSend, disabled }: MessageInputP
             disabled={disabled}
             rows={1}
             maxLength={MAX_LENGTH}
-            className={`w-full max-h-[120px] min-h-[44px] bg-surface-container resize-none rounded-2xl px-4 py-3 text-[15px] text-on-surface focus:outline-none focus:ring-2 placeholder:text-on-surface-variant disabled:opacity-50 transition-all custom-scrollbar ${
+            className={`w-full max-h-30 min-h-11 bg-surface-container resize-none rounded-2xl px-4 py-3 text-[15px] text-on-surface focus:outline-none focus:ring-2 placeholder:text-on-surface-variant disabled:opacity-50 transition-all custom-scrollbar ${
               remaining < 0 ? "focus:ring-error/40 ring-2 ring-error/30" : "focus:ring-primary/20"
             }`}
           />
@@ -137,12 +137,12 @@ export function MessageInput({ conversationId, onSend, disabled }: MessageInputP
             </span>
           )}
         </div>
-        <div ref={emojiRef} className="relative flex-shrink-0">
+        <div ref={emojiRef} className="relative shrink-0">
           <button
             type="button"
             onClick={() => setEmojiOpen((o) => !o)}
             disabled={disabled}
-            className={`h-[44px] w-[44px] rounded-full flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+            className={`h-11 w-11 rounded-full flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
               emojiOpen
                 ? "bg-primary/15 text-primary"
                 : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
@@ -150,12 +150,12 @@ export function MessageInput({ conversationId, onSend, disabled }: MessageInputP
           >
             <Smile className="w-5 h-5" />
           </button>
-          {emojiOpen && <EmojiPicker onSelect={insertEmoji} />}
+          {emojiOpen && <EmojiPicker onSelectAction={insertEmoji} />}
         </div>
         <button
           onClick={handleSend}
           disabled={!content.trim() || disabled || remaining < 0}
-          className="h-[44px] w-[44px] rounded-full bg-primary text-primary-foreground flex items-center justify-center flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"
+          className="h-11 w-11 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"
         >
           <SendHorizonal className="w-5 h-5 ml-0.5" />
         </button>

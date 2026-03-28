@@ -79,7 +79,11 @@ export default function PublicProfileView({
           if (!cancelled) setNotFound(true);
           return;
         }
-        if (!res.ok) throw new Error("Failed to fetch user");
+        if (!res.ok) {
+          console.error("Failed to fetch profile:", res.status);
+          if (!cancelled) setNotFound(true);
+          return;
+        }
         const data: BackendUser = await res.json();
         if (!cancelled) {
           setBackendUser(data);
@@ -170,9 +174,6 @@ export default function PublicProfileView({
 
             {/* Info */}
             <div className="flex-1 text-center md:text-left pb-2">
-              <p className="text-sm text-on-surface-variant font-medium mb-2">
-                Member since {memberYear}
-              </p>
               <h1
                 className="text-3xl md:text-[3.2rem] font-extrabold tracking-tighter leading-none mb-1"
                 style={
@@ -304,6 +305,10 @@ export default function PublicProfileView({
       </section>
 
       <ProfileWidgetGrid profile={profile} username={username} />
+
+      <div className="px-6 md:px-12 py-6 text-center">
+        <p className="text-xs text-on-surface-variant/50 font-medium">Member since {memberYear}</p>
+      </div>
     </div>
   );
 }

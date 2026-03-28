@@ -71,6 +71,7 @@ interface ProfileEditDrawerProps {
   onRemoveProfileImage: () => Promise<void>;
   isSaving: boolean;
   spotifyConnected?: boolean;
+  initialTab?: "profile" | "customization" | "widgets";
 }
 
 export default function ProfileEditDrawer({
@@ -85,7 +86,9 @@ export default function ProfileEditDrawer({
   onRemoveProfileImage,
   isSaving,
   spotifyConnected,
+  initialTab = "profile",
 }: ProfileEditDrawerProps) {
+  const [activeTab, setActiveTab] = useState<string>(initialTab);
   const [form, setForm] = useState<ProfileCustomization>({ ...profile });
   const [username, setUsername] = useState(currentUsername);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
@@ -144,6 +147,7 @@ export default function ProfileEditDrawer({
       setForm({ ...profile });
       setUsername(currentUsername);
       setAvatarPreview(null);
+      setActiveTab(initialTab);
       setPendingAvatarFile(null);
       setRemoveAvatar(false);
       setErrors({});
@@ -218,6 +222,21 @@ export default function ProfileEditDrawer({
 
   // ── Music helpers ─────────────────────────────────────────────────────────
 
+  const clearSynced = (key: string) =>
+    setForm((prev) => ({ ...prev, spotifySynced: { ...prev.spotifySynced, [key]: false } }));
+
+  const isWidgetHidden = (key: string) => (form.hiddenWidgets ?? []).includes(key);
+  const toggleWidgetHidden = (key: string) =>
+    setForm((prev) => {
+      const current = prev.hiddenWidgets ?? [];
+      return {
+        ...prev,
+        hiddenWidgets: current.includes(key)
+          ? current.filter((k) => k !== key)
+          : [...current, key],
+      };
+    });
+
   const addSongFromSearch = (result: TrackResult) => {
     const songs = [...(form.topSongs ?? [])];
     if (songs.length < 3) {
@@ -227,6 +246,7 @@ export default function ProfileEditDrawer({
         coverUrl: result.coverUrl,
       });
       set("topSongs", songs);
+      clearSynced("topSongs");
     }
   };
 
@@ -234,16 +254,19 @@ export default function ProfileEditDrawer({
     const songs = [...(form.topSongs ?? [])];
     songs.splice(index, 1);
     set("topSongs", songs);
+    clearSynced("topSongs");
   };
 
   const addArtistFromSearch = (result: ArtistResult) => {
     const artists = [...(form.topArtists ?? [])];
     if (artists.length < 3) {
       artists.push({
+        id: result.id,
         name: result.name,
         imageUrl: result.imageUrl,
       });
       set("topArtists", artists);
+      clearSynced("topArtists");
     }
   };
 
@@ -251,17 +274,20 @@ export default function ProfileEditDrawer({
     const artists = [...(form.topArtists ?? [])];
     artists.splice(index, 1);
     set("topArtists", artists);
+    clearSynced("topArtists");
   };
 
   const addAlbumFromSearch = (result: AlbumResult) => {
     const albums = [...(form.topAlbums ?? [])];
     if (albums.length < 3) {
       albums.push({
+        id: result.id,
         title: result.title,
         artist: result.artist,
         coverUrl: result.coverUrl,
       });
       set("topAlbums", albums);
+      clearSynced("topAlbums");
     }
   };
 
@@ -269,6 +295,7 @@ export default function ProfileEditDrawer({
     const albums = [...(form.topAlbums ?? [])];
     albums.splice(index, 1);
     set("topAlbums", albums);
+    clearSynced("topAlbums");
   };
 
   const setListeningFromSearch = (result: TrackResult) => {
@@ -277,9 +304,13 @@ export default function ProfileEditDrawer({
       artist: result.artist,
       coverUrl: result.coverUrl,
     });
+    clearSynced("currentlyListening");
   };
 
   // ── Spotify sync handlers ──────────────────────────────────────────────────
+
+  const setSynced = (key: string) =>
+    setForm((prev) => ({ ...prev, spotifySynced: { ...prev.spotifySynced, [key]: true } }));
 
   const syncTopArtists = async () => {
     const token = await getToken();
@@ -291,6 +322,7 @@ export default function ProfileEditDrawer({
         "topArtists",
         artists.map((a) => ({ name: a.name, imageUrl: a.imageUrl })),
       );
+      setSynced("topArtists");
     } catch (err) {
       console.error("Failed to sync top artists:", err);
     } finally {
@@ -308,6 +340,7 @@ export default function ProfileEditDrawer({
         "topSongs",
         tracks.map((t) => ({ title: t.title, artist: t.artist, coverUrl: t.coverUrl })),
       );
+      setSynced("topSongs");
     } catch (err) {
       console.error("Failed to sync top tracks:", err);
     } finally {
@@ -325,6 +358,7 @@ export default function ProfileEditDrawer({
         "topAlbums",
         albums.map((a) => ({ title: a.title, artist: a.artist, coverUrl: a.coverUrl })),
       );
+      setSynced("topAlbums");
     } catch (err) {
       console.error("Failed to sync saved albums:", err);
     } finally {
@@ -344,6 +378,7 @@ export default function ProfileEditDrawer({
           artist: track.artist,
           coverUrl: track.coverUrl,
         });
+        setSynced("currentlyListening");
       }
     } catch (err) {
       console.error("Failed to sync currently playing:", err);
@@ -359,7 +394,7 @@ export default function ProfileEditDrawer({
           <DialogTitle className="text-xl">Edit Profile</DialogTitle>
         </DialogHeader>
 
-        <Tabs defaultValue="profile" className="flex-1 min-h-0 flex flex-col">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 flex flex-col">
           <TabsList className="w-full justify-start shrink-0 px-6">
             <TabsTrigger value="profile">
               <span className="material-symbols-outlined text-base">person</span>
@@ -606,28 +641,6 @@ export default function ProfileEditDrawer({
                 />
               </div>
 
-              <div className="space-y-3">
-                <h4 className="text-sm font-bold uppercase tracking-widest text-on-surface-variant">
-                  Widget Colors
-                </h4>
-                <div className="grid grid-cols-3 gap-4">
-                  <ColorPickerField
-                    label="Albums"
-                    value={form.albumsContainerColor ?? ""}
-                    onChange={(v) => set("albumsContainerColor", v)}
-                  />
-                  <ColorPickerField
-                    label="Songs"
-                    value={form.songsContainerColor ?? ""}
-                    onChange={(v) => set("songsContainerColor", v)}
-                  />
-                  <ColorPickerField
-                    label="Artists"
-                    value={form.artistsContainerColor ?? ""}
-                    onChange={(v) => set("artistsContainerColor", v)}
-                  />
-                </div>
-              </div>
             </TabsContent>
 
             {/* ── Widgets Tab ── */}
@@ -654,6 +667,13 @@ export default function ProfileEditDrawer({
                         topSongs: tracks.map((t) => ({ title: t.title, artist: t.artist, coverUrl: t.coverUrl })),
                         topAlbums: albums.map((a) => ({ title: a.title, artist: a.artist, coverUrl: a.coverUrl })),
                         ...(playing ? { currentlyListening: { title: playing.title, artist: playing.artist, coverUrl: playing.coverUrl } } : {}),
+                        spotifySynced: {
+                          ...prev.spotifySynced,
+                          topArtists: true,
+                          topSongs: true,
+                          topAlbums: true,
+                          ...(playing ? { currentlyListening: true } : {}),
+                        },
                       }));
                     } catch (err) {
                       console.error("Failed to sync all from Spotify:", err);
@@ -698,7 +718,19 @@ export default function ProfileEditDrawer({
               {/* Top Albums */}
               <div className="space-y-3 p-5 bg-surface-container-low rounded-xl">
                 <div className="flex items-center justify-between">
-                  <Label className="font-bold">Top Albums</Label>
+                  <div className="flex items-center gap-2">
+                    <Label className="font-bold">Top Albums</Label>
+                    <button
+                      type="button"
+                      onClick={() => toggleWidgetHidden("topAlbums")}
+                      className="text-on-surface-variant/50 hover:text-on-surface-variant transition-colors"
+                      title={isWidgetHidden("topAlbums") ? "Show widget" : "Hide widget"}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                        {isWidgetHidden("topAlbums") ? "visibility_off" : "visibility"}
+                      </span>
+                    </button>
+                  </div>
                   {spotifyConnected && (
                     <Button
                       type="button"
@@ -758,7 +790,19 @@ export default function ProfileEditDrawer({
               {/* Currently Listening */}
               <div className="space-y-3 p-5 bg-surface-container-low rounded-xl">
                 <div className="flex items-center justify-between">
-                  <Label className="font-bold">Currently Listening</Label>
+                  <div className="flex items-center gap-2">
+                    <Label className="font-bold">Currently Listening</Label>
+                    <button
+                      type="button"
+                      onClick={() => toggleWidgetHidden("currentlyListening")}
+                      className="text-on-surface-variant/50 hover:text-on-surface-variant transition-colors"
+                      title={isWidgetHidden("currentlyListening") ? "Show widget" : "Hide widget"}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                        {isWidgetHidden("currentlyListening") ? "visibility_off" : "visibility"}
+                      </span>
+                    </button>
+                  </div>
                   {spotifyConnected && (
                     <Button
                       type="button"
@@ -796,7 +840,7 @@ export default function ProfileEditDrawer({
                     </div>
                     <button
                       type="button"
-                      onClick={() => set("currentlyListening", undefined)}
+                      onClick={() => { set("currentlyListening", undefined); clearSynced("currentlyListening"); }}
                       className="text-on-surface-variant hover:text-error transition-colors shrink-0"
                     >
                       <span className="material-symbols-outlined text-lg">close</span>
@@ -814,7 +858,19 @@ export default function ProfileEditDrawer({
               {/* Top Songs */}
               <div className="space-y-3 p-5 bg-surface-container-low rounded-xl">
                 <div className="flex items-center justify-between">
-                  <Label className="font-bold">Top Songs</Label>
+                  <div className="flex items-center gap-2">
+                    <Label className="font-bold">Top Songs</Label>
+                    <button
+                      type="button"
+                      onClick={() => toggleWidgetHidden("topSongs")}
+                      className="text-on-surface-variant/50 hover:text-on-surface-variant transition-colors"
+                      title={isWidgetHidden("topSongs") ? "Show widget" : "Hide widget"}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                        {isWidgetHidden("topSongs") ? "visibility_off" : "visibility"}
+                      </span>
+                    </button>
+                  </div>
                   {spotifyConnected && (
                     <Button
                       type="button"
@@ -875,7 +931,19 @@ export default function ProfileEditDrawer({
               {/* Top Artists */}
               <div className="space-y-3 p-5 bg-surface-container-low rounded-xl">
                 <div className="flex items-center justify-between">
-                  <Label className="font-bold">Top Artists</Label>
+                  <div className="flex items-center gap-2">
+                    <Label className="font-bold">Top Artists</Label>
+                    <button
+                      type="button"
+                      onClick={() => toggleWidgetHidden("topArtists")}
+                      className="text-on-surface-variant/50 hover:text-on-surface-variant transition-colors"
+                      title={isWidgetHidden("topArtists") ? "Show widget" : "Hide widget"}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                        {isWidgetHidden("topArtists") ? "visibility_off" : "visibility"}
+                      </span>
+                    </button>
+                  </div>
                   {spotifyConnected && (
                     <Button
                       type="button"
