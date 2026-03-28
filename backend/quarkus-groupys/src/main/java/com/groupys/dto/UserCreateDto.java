@@ -8,6 +8,11 @@ public record UserCreateDto(
         @NotBlank @Size(min = 3, max = 30) String username,
         @Size(max = 50) String displayName,
         @Size(max = 300) String bio,
-        String profileImage
+        String profileImage,
+        String country,
+        @Size(min = 2, max = 2) String countryCode,
+        String tasteSummaryText,
+        Boolean recommendationOptOut,
+        Boolean discoveryVisible
 ) {
 }
