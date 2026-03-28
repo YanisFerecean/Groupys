@@ -11,13 +11,25 @@ public record UserResDto(
         String displayName,
         String bio,
         String country,
+        String countryCode,
         String bannerUrl,
+        String bannerText,
         String accentColor,
         String nameColor,
         String profileImage,
         String widgets,
         List<String> tags,
         Instant dateJoined,
-        boolean spotifyConnected
+        boolean isVerified,
+        String website,
+        String jobTitle,
+        String location,
+        boolean spotifyConnected,
+        Instant lastMusicSyncAt,
+        String tasteSummaryText,
+        boolean recommendationOptOut,
+        boolean discoveryVisible,
+        long followerCount,
+        long followingCount
 ) {
 }
