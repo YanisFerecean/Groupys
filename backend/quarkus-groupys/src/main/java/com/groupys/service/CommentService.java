@@ -32,6 +32,9 @@ public class CommentService {
     @Inject
     UserRepository userRepository;
 
+    @Inject
+    DiscoveryService discoveryService;
+
     public List<CommentResDto> getByPost(UUID postId, String clerkId) {
         User user = userRepository.findByClerkId(clerkId).orElse(null);
         List<Comment> all = commentRepository.findByPost(postId);
@@ -81,6 +84,7 @@ public class CommentService {
         }
 
         commentRepository.persist(comment);
+        discoveryService.refreshAfterCommunityActivity(post.community.id);
         return toDto(comment, author, List.of());
     }
 
@@ -108,6 +112,8 @@ public class CommentService {
             commentReactionRepository.persist(reaction);
         }
 
+        discoveryService.refreshAfterCommunityActivity(comment.post.community.id);
+
         // Rebuild replies for this comment
         List<Comment> children = commentRepository.findByParent(commentId);
         List<CommentResDto> replies = children.stream()
@@ -127,7 +133,9 @@ public class CommentService {
         if (!comment.author.id.equals(user.id)) {
             throw new jakarta.ws.rs.ForbiddenException("Not the author");
         }
+        UUID communityId = comment.post.community.id;
         deleteRecursive(comment);
+        discoveryService.refreshAfterCommunityActivity(communityId);
     }
 
     private void deleteRecursive(Comment comment) {
