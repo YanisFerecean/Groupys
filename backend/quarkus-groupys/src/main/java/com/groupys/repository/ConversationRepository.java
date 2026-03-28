@@ -37,7 +37,6 @@ public class ConversationRepository implements PanacheRepositoryBase<Conversatio
         String jpql = "SELECT DISTINCT c FROM Conversation c " +
                 "JOIN c.participants cp " +
                 "WHERE cp.user.id = :userId " +
-                "AND (c.match IS NULL OR c.match.status = 'ACTIVE') " +
                 (cursor != null ? "AND c.updatedAt < :cursor " : "") +
                 "ORDER BY c.updatedAt DESC NULLS LAST";
         var query = getEntityManager().createQuery(jpql, Conversation.class)
@@ -70,5 +69,19 @@ public class ConversationRepository implements PanacheRepositoryBase<Conversatio
                 "SELECT cp FROM ConversationParticipant cp WHERE cp.conversation.id = :cid AND cp.user.id = :uid",
                 ConversationParticipant.class
         ).setParameter("cid", conversationId).setParameter("uid", userId).getResultStream().findFirst();
+    }
+
+    public List<UUID> findDirectConversationPartnerIds(UUID userId) {
+        return getEntityManager().createQuery("""
+                SELECT DISTINCT cpOther.user.id
+                FROM Conversation c
+                JOIN c.participants cpMine
+                JOIN c.participants cpOther
+                WHERE c.isGroup = false
+                  AND cpMine.user.id = :userId
+                  AND cpOther.user.id <> :userId
+                """, UUID.class)
+                .setParameter("userId", userId)
+                .getResultList();
     }
 }
