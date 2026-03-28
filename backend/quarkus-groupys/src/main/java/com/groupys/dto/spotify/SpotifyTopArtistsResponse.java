@@ -8,6 +8,12 @@ import java.util.List;
 public record SpotifyTopArtistsResponse(List<SpotifyArtistItem> items) {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record SpotifyArtistItem(String name, List<SpotifyImage> images) {
+    public record SpotifyArtistItem(
+            String id,
+            String name,
+            List<String> genres,
+            Integer popularity,
+            List<SpotifyImage> images
+    ) {
     }
 }
