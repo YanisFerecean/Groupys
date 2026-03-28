@@ -64,8 +64,24 @@ export default function DiscoverScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Trending Now */}
+        <View className="pt-6">
+          <View className="px-5">
+            <SectionHeader
+              title="Trending Now"
+              actionText={!artistsLoading && artists.length > 3 ? (expanded ? 'Show Less' : 'View All') : undefined}
+              onAction={toggleExpand}
+            />
+          </View>
+          {artistsLoading ? (
+            <TopArtistsSkeleton />
+          ) : (
+            <TopArtistRows artists={artists} expanded={expanded} />
+          )}
+        </View>
+
         {/* Explore Communities (Recommendations) */}
-        <View className="px-5 pt-6 pb-2">
+        <View className="px-5 pt-8 pb-2">
           <SectionHeader title="Suggested for you" actionText={communities.length > 0 ? "Refresh" : undefined} onAction={() => loadCommunities(true)} />
           {communitiesLoading ? (
             <View className="mt-4 items-center py-6">
@@ -88,22 +104,6 @@ export default function DiscoverScreen() {
                 />
               ))}
             </View>
-          )}
-        </View>
-
-        {/* Trending Now */}
-        <View className="pt-6">
-          <View className="px-5">
-            <SectionHeader
-              title="Trending Now"
-              actionText={!artistsLoading && artists.length > 3 ? (expanded ? 'Show Less' : 'View All') : undefined}
-              onAction={toggleExpand}
-            />
-          </View>
-          {artistsLoading ? (
-            <TopArtistsSkeleton />
-          ) : (
-            <TopArtistRows artists={artists} expanded={expanded} />
           )}
         </View>
 
