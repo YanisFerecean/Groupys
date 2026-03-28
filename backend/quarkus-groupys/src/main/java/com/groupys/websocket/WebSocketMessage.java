@@ -64,4 +64,16 @@ public record WebSocketMessage(
     public static WebSocketMessage error(String message) {
         return new WebSocketMessage("ERROR", Map.of("message", message));
     }
+
+    public static WebSocketMessage matchNew(String matchId, String conversationId,
+            String otherUserId, String otherUsername, String otherDisplayName, String otherProfileImage) {
+        Map<String, Object> payload = new java.util.HashMap<>();
+        payload.put("matchId", matchId);
+        payload.put("conversationId", conversationId);
+        payload.put("otherUserId", otherUserId);
+        payload.put("otherUsername", otherUsername);
+        payload.put("otherDisplayName", otherDisplayName != null ? otherDisplayName : "");
+        payload.put("otherProfileImage", otherProfileImage != null ? otherProfileImage : "");
+        return new WebSocketMessage("MATCH_NEW", payload);
+    }
 }
