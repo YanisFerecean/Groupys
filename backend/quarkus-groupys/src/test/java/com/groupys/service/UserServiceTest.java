@@ -77,6 +77,23 @@ class UserServiceTest {
         assertEquals(20, capped.size());
     }
 
+    @Test
+    void searchStillWorksWhenAuthenticatedUserHasNoLocalRowYet() {
+        StubUserRepository userRepository = new StubUserRepository(
+                user("friend-1", "clerk-f1", "amywine", "Amy"),
+                user("friend-2", "clerk-f2", "luna", "Luna")
+        );
+
+        UserService service = new UserService();
+        service.userRepository = userRepository;
+        service.userFollowRepository = new StubUserFollowRepository();
+
+        List<UserResDto> results = service.search("clerk-missing", "amy", 10);
+
+        assertEquals(List.of("amywine"), results.stream().map(UserResDto::username).toList());
+        assertEquals(10, userRepository.lastLimit);
+    }
+
     private static User user(String idSeed, String clerkId, String username, String displayName) {
         User user = new User();
         user.id = UUID.nameUUIDFromBytes(idSeed.getBytes());
@@ -105,7 +122,7 @@ class UserServiceTest {
             lastLimit = limit;
             String lowered = query.toLowerCase();
             return users.stream()
-                    .filter(user -> !user.id.equals(excludeUserId))
+                    .filter(user -> excludeUserId == null || !user.id.equals(excludeUserId))
                     .filter(user -> user.username.toLowerCase().contains(lowered)
                             || (user.displayName != null && user.displayName.toLowerCase().contains(lowered)))
                     .sorted(Comparator.comparing(user -> user.username))
