@@ -22,4 +22,41 @@ public class CommunityMemberRepository implements PanacheRepositoryBase<Communit
     public List<CommunityMember> findByUser(UUID userId) {
         return find("user.id", userId).list();
     }
+
+    public long countSharedMembers(UUID candidateCommunityId, List<UUID> joinedCommunityIds) {
+        if (joinedCommunityIds == null || joinedCommunityIds.isEmpty()) {
+            return 0L;
+        }
+        return getEntityManager().createQuery("""
+                select count(distinct candidate.user.id)
+                from CommunityMember candidate
+                where candidate.community.id = :candidateCommunityId
+                  and exists (
+                    select 1
+                    from CommunityMember joined
+                    where joined.user.id = candidate.user.id
+                      and joined.community.id in :joinedCommunityIds
+                  )
+                """, Long.class)
+                .setParameter("candidateCommunityId", candidateCommunityId)
+                .setParameter("joinedCommunityIds", joinedCommunityIds)
+                .getSingleResult();
+    }
+
+    public long countSharedCommunities(UUID userId, UUID candidateUserId) {
+        return getEntityManager().createQuery("""
+                select count(distinct mine.community.id)
+                from CommunityMember mine
+                where mine.user.id = :userId
+                  and exists (
+                    select 1
+                    from CommunityMember theirs
+                    where theirs.user.id = :candidateUserId
+                      and theirs.community.id = mine.community.id
+                  )
+                """, Long.class)
+                .setParameter("userId", userId)
+                .setParameter("candidateUserId", candidateUserId)
+                .getSingleResult();
+    }
 }
