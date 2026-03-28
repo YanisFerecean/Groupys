@@ -4,6 +4,7 @@ import com.groupys.dto.AlbumRatingCreateDto;
 import com.groupys.dto.AlbumRatingResDto;
 import com.groupys.service.AlbumRatingService;
 import io.quarkus.security.Authenticated;
+import jakarta.annotation.security.PermitAll;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
@@ -34,7 +35,7 @@ public class AlbumRatingResource {
 
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
-    public Response upsert(AlbumRatingCreateDto dto) {
+    public Response upsert(@jakarta.validation.Valid AlbumRatingCreateDto dto) {
         AlbumRatingResDto result = albumRatingService.upsert(dto, jwt.getSubject());
         return Response.ok(result).build();
     }
@@ -49,6 +50,13 @@ public class AlbumRatingResource {
     @Path("/mine")
     public List<AlbumRatingResDto> getMyRatings() {
         return albumRatingService.getMyRatings(jwt.getSubject());
+    }
+
+    @GET
+    @Path("/user/{username}")
+    @PermitAll
+    public List<AlbumRatingResDto> getByUsername(@PathParam("username") String username) {
+        return albumRatingService.getByUsername(username);
     }
 
     @DELETE

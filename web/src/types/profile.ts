@@ -22,4 +22,6 @@ export interface ProfileCustomization {
   songsContainerColor?: string;
   artistsContainerColor?: string;
   tags?: string[];
+  showLastRatedAlbum?: boolean;
+  widgetOrder?: string[];
 }

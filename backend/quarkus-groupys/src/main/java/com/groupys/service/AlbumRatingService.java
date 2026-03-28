@@ -76,6 +76,14 @@ public class AlbumRatingService {
                 .toList();
     }
 
+    public List<AlbumRatingResDto> getByUsername(String username) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        return albumRatingRepository.findByUserId(user.id).stream()
+                .map(this::toDto)
+                .toList();
+    }
+
     @Transactional
     public void delete(UUID ratingId, String clerkId) {
         AlbumRating rating = albumRatingRepository.findByIdOptional(ratingId)

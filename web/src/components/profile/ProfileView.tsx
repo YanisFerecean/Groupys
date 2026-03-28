@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useProfileCustomization } from "@/hooks/useProfileCustomization";
-import { useUser } from "@clerk/nextjs";
+import { useUser, useAuth } from "@clerk/nextjs";
+import { fetchMyAlbumRatings } from "@/lib/api";
 import ProfileHeader from "./ProfileHeader";
 import ProfileWidgetGrid from "./ProfileWidgetGrid";
 import ProfileEditDrawer from "./ProfileEditDrawer";
@@ -31,8 +32,22 @@ export default function ProfileView() {
     setSpotifyConnected,
   } = useProfileCustomization();
   const { user } = useUser();
+  const { getToken } = useAuth();
   const router = useRouter();
   const spotifyCallback = useSpotifyCallback();
+  const [albumsRatedCount, setAlbumsRatedCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = await getToken();
+        const ratings = await fetchMyAlbumRatings(token);
+        setAlbumsRatedCount(ratings.length);
+      } catch {
+        // silently fail
+      }
+    })();
+  }, [getToken]);
 
   // Open the editor drawer when arriving from Spotify OAuth callback
   const [isEditing, setIsEditing] = useState(spotifyCallback === "connected");
@@ -65,10 +80,16 @@ export default function ProfileView() {
         clerkName={clerkName}
         username={user.username ?? ""}
         memberYear={memberYear}
+        albumsRatedCount={albumsRatedCount}
         onEditClick={() => setIsEditing(true)}
       />
 
-      <ProfileWidgetGrid profile={profile} spotifyConnected={spotifyConnected} />
+      <ProfileWidgetGrid
+        profile={profile}
+        username={user.username ?? ""}
+        spotifyConnected={spotifyConnected}
+        onReorder={(newOrder) => updateProfile({ ...profile, widgetOrder: newOrder })}
+      />
 
       <ProfileEditDrawer
         open={isEditing}

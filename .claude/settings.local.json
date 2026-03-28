@@ -33,7 +33,8 @@
       "Bash(find /c/Uni/Projects/groupys-web-app/web/src -type f \\\\\\(-iname *chat* -o -iname *message* -o -iname *direct* \\\\\\))",
       "Bash(find /c/Uni/Projects/groupys-web-app/web/src/app -type f -name *.tsx -o -name *.ts)",
       "Bash(find /c/Uni/Projects/groupys-web-app/backend/quarkus-groupys/src/main/resources -name *.* -type f)",
-      "Bash(java -version)"
+      "Bash(java -version)",
+      "Bash(find C:UniProjectsgroupys-web-appwebsrclib -type f \\\\\\(-name *.ts -o -name *.tsx \\\\\\))"
     ]
   }
 }

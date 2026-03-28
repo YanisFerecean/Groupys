@@ -19,8 +19,21 @@ public record DeezerAlbumDto(
         Integer duration,
         Integer fans,
         DeezerArtistDto artist,
-        GenresWrapper genres
+        GenresWrapper genres,
+        TracksWrapper tracks
 ) {
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record GenresWrapper(List<DeezerGenreDto> data) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record TracksWrapper(List<AlbumTrackDto> data) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record AlbumTrackDto(
+            Long id,
+            String title,
+            Integer duration,
+            String preview,
+            @JsonProperty("track_position") Integer trackPosition
+    ) {}
 }

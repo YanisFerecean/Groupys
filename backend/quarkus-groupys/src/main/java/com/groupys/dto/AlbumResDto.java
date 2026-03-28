@@ -15,6 +15,14 @@ public record AlbumResDto(
         Integer nbTracks,
         Integer fans,
         List<String> genres,
-        ArtistResDto artist
+        ArtistResDto artist,
+        List<TrackDto> tracks
 ) {
+    public record TrackDto(
+            Long id,
+            String title,
+            Integer duration,
+            String preview,
+            Integer trackPosition
+    ) {}
 }

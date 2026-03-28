@@ -31,9 +31,12 @@ export interface BackendUser {
 // ── Widget ↔ ProfileCustomization conversion ───────────────────────────────
 
 function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCustomization> {
+  const sorted = [...widgets].sort((a, b) => a.pos - b.pos);
   const result: Partial<ProfileCustomization> = {};
 
-  for (const w of widgets) {
+  result.widgetOrder = sorted.map((w) => w.type);
+
+  for (const w of sorted) {
     const items = (w.data?.items ?? []) as Record<string, string>[];
 
     switch (w.type) {
@@ -61,6 +64,9 @@ function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCustomizatio
         }));
         result.albumsContainerColor = w.color ?? undefined;
         break;
+      case "lastRatedAlbum":
+        result.showLastRatedAlbum = true;
+        break;
       case "currentlyListening": {
         const d = w.data as Record<string, string>;
         if (d.title) {
@@ -79,43 +85,43 @@ function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCustomizatio
 }
 
 function profileToWidgets(profile: Partial<ProfileCustomization>): BackendWidget[] {
+  type W = Omit<BackendWidget, "pos">;
+  const widgetData: Partial<Record<string, W>> = {};
+
+  if (profile.topAlbums?.length) {
+    widgetData.topAlbums = { type: "topAlbums", color: profile.albumsContainerColor ?? null, data: { items: profile.topAlbums } };
+  }
+  if (profile.currentlyListening?.title) {
+    widgetData.currentlyListening = { type: "currentlyListening", color: null, data: { ...profile.currentlyListening } };
+  }
+  if (profile.topSongs?.length) {
+    widgetData.topSongs = { type: "topSongs", color: profile.songsContainerColor ?? null, data: { items: profile.topSongs } };
+  }
+  if (profile.showLastRatedAlbum) {
+    widgetData.lastRatedAlbum = { type: "lastRatedAlbum", color: null, data: {} };
+  }
+  if (profile.topArtists?.length) {
+    widgetData.topArtists = { type: "topArtists", color: profile.artistsContainerColor ?? null, data: { items: profile.topArtists } };
+  }
+
+  const defaultOrder = ["topAlbums", "currentlyListening", "topSongs", "lastRatedAlbum", "topArtists"];
+  const order = profile.widgetOrder ?? defaultOrder;
+
   const widgets: BackendWidget[] = [];
   let pos = 0;
 
-  if (profile.topAlbums?.length) {
-    widgets.push({
-      type: "topAlbums",
-      color: profile.albumsContainerColor ?? null,
-      pos: pos++,
-      data: { items: profile.topAlbums },
-    });
+  // Emit widgets in the saved order first
+  for (const type of order) {
+    const w = widgetData[type];
+    if (w) {
+      widgets.push({ ...w, pos: pos++ });
+      delete widgetData[type];
+    }
   }
 
-  if (profile.currentlyListening?.title) {
-    widgets.push({
-      type: "currentlyListening",
-      color: null,
-      pos: pos++,
-      data: { ...profile.currentlyListening },
-    });
-  }
-
-  if (profile.topSongs?.length) {
-    widgets.push({
-      type: "topSongs",
-      color: profile.songsContainerColor ?? null,
-      pos: pos++,
-      data: { items: profile.topSongs },
-    });
-  }
-
-  if (profile.topArtists?.length) {
-    widgets.push({
-      type: "topArtists",
-      color: profile.artistsContainerColor ?? null,
-      pos: pos++,
-      data: { items: profile.topArtists },
-    });
+  // Then any remaining widgets not covered by the order
+  for (const w of Object.values(widgetData)) {
+    if (w) widgets.push({ ...w, pos: pos++ });
   }
 
   return widgets;
@@ -279,6 +285,15 @@ export async function fetchMyAlbumRatings(
 ): Promise<AlbumRatingRes[]> {
   const res = await apiRequest("/album-ratings/mine", token);
   if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to fetch your ratings"));
+  return res.json();
+}
+
+export async function fetchUserAlbumRatings(
+  username: string,
+  token: string | null,
+): Promise<AlbumRatingRes[]> {
+  const res = await apiRequest(`/album-ratings/user/${encodeURIComponent(username)}`, token);
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to fetch ratings"));
   return res.json();
 }
 
