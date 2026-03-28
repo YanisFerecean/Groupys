@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import type { ProfileCustomization } from "@/types/profile";
 import TopAlbumsWidget from "./widgets/TopAlbumWidget";
@@ -56,10 +57,27 @@ function WidgetSettingsButton({ colorValue, sizeValue, onChange }: WidgetSetting
   const [open, setOpen] = useState(false);
   const [localColor, setLocalColor] = useState(colorValue);
   const [localSize, setLocalSize] = useState<WidgetSize>(sizeValue);
-  const ref = useRef<HTMLDivElement>(null);
+  const [popoverPos, setPopoverPos] = useState<{ top: number; left: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setLocalColor(colorValue); }, [colorValue]);
   useEffect(() => { setLocalSize(sizeValue); }, [sizeValue]);
+
+  function openPopover(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (open) { close(); return; }
+    const rect = btnRef.current?.getBoundingClientRect();
+    if (rect) {
+      const maxH = window.innerHeight * 0.8;
+      const spaceBelow = window.innerHeight - rect.bottom - 8;
+      const top = spaceBelow >= maxH
+        ? rect.bottom + 8
+        : Math.max(8, window.innerHeight - maxH - 8);
+      setPopoverPos({ top, left: Math.max(8, rect.right - 288) });
+    }
+    setOpen(true);
+  }
 
   function close() {
     setOpen(false);
@@ -69,7 +87,10 @@ function WidgetSettingsButton({ colorValue, sizeValue, onChange }: WidgetSetting
   useEffect(() => {
     if (!open) return;
     function onDown(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) close();
+      if (
+        popoverRef.current && !popoverRef.current.contains(e.target as Node) &&
+        btnRef.current && !btnRef.current.contains(e.target as Node)
+      ) close();
     }
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
@@ -77,11 +98,60 @@ function WidgetSettingsButton({ colorValue, sizeValue, onChange }: WidgetSetting
 
   const sizes: WidgetSize[] = ["small", "normal"];
 
+  const popover = open && popoverPos ? createPortal(
+    <div
+      ref={popoverRef}
+      className="fixed z-[9999] w-72 rounded-2xl bg-surface border border-surface-container-high shadow-2xl p-4 overflow-y-auto"
+      style={{ top: popoverPos.top, left: popoverPos.left, maxHeight: "80vh" }}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-sm font-semibold">Widget Settings</span>
+        <button
+          type="button"
+          onClick={close}
+          className="text-on-surface-variant hover:text-on-surface transition-colors"
+        >
+          <span className="material-symbols-outlined text-base">close</span>
+        </button>
+      </div>
+
+      {/* Size selector */}
+      <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant opacity-60 mb-2">Size</p>
+      <div className="flex gap-1.5 mb-5">
+        {sizes.map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => setLocalSize(s)}
+            className={cn(
+              "flex-1 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors",
+              localSize === s
+                ? "bg-primary text-on-primary"
+                : "bg-surface-container hover:bg-surface-container-high text-on-surface-variant",
+            )}
+          >
+            {s.charAt(0).toUpperCase() + s.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      {/* Divider */}
+      <div className="border-t border-surface-container-high mb-4" />
+
+      {/* Color picker */}
+      <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant opacity-60 mb-3">Color</p>
+      <ColorPickerField label="" value={localColor} onChange={setLocalColor} />
+    </div>,
+    document.body,
+  ) : null;
+
   return (
-    <div ref={ref} className="absolute top-3 right-10 z-10">
+    <div className="absolute top-3 right-10 z-10">
       <button
+        ref={btnRef}
         type="button"
-        onClick={(e) => { e.stopPropagation(); setOpen((p) => !p); }}
+        onClick={openPopover}
         className="opacity-0 group-hover:opacity-100 transition-opacity w-7 h-7 rounded-lg bg-surface-container/80 backdrop-blur-sm flex items-center justify-center hover:bg-surface-container-high"
       >
         <span
@@ -91,51 +161,7 @@ function WidgetSettingsButton({ colorValue, sizeValue, onChange }: WidgetSetting
           palette
         </span>
       </button>
-
-      {open && (
-        <div
-          className="absolute top-9 right-0 z-50 w-72 rounded-2xl bg-surface border border-surface-container-high shadow-2xl p-4"
-          onMouseDown={(e) => e.stopPropagation()}
-        >
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-sm font-semibold">Widget Settings</span>
-            <button
-              type="button"
-              onClick={close}
-              className="text-on-surface-variant hover:text-on-surface transition-colors"
-            >
-              <span className="material-symbols-outlined text-base">close</span>
-            </button>
-          </div>
-
-          {/* Size selector */}
-          <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant opacity-60 mb-2">Size</p>
-          <div className="flex gap-1.5 mb-5">
-            {sizes.map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => setLocalSize(s)}
-                className={cn(
-                  "flex-1 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors",
-                  localSize === s
-                    ? "bg-primary text-on-primary"
-                    : "bg-surface-container hover:bg-surface-container-high text-on-surface-variant",
-                )}
-              >
-                {s.charAt(0).toUpperCase() + s.slice(1)}
-              </button>
-            ))}
-          </div>
-
-          {/* Divider */}
-          <div className="border-t border-surface-container-high mb-4" />
-
-          {/* Color picker */}
-          <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant opacity-60 mb-3">Color</p>
-          <ColorPickerField label="" value={localColor} onChange={setLocalColor} />
-        </div>
-      )}
+      {popover}
     </div>
   );
 }
