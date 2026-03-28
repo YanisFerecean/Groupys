@@ -21,6 +21,28 @@ public class UserRepository implements PanacheRepositoryBase<User, UUID> {
         return find("clerkId", clerkId).firstResultOptional();
     }
 
+    public List<User> searchByUsernameOrDisplayName(String query, UUID excludeUserId, int limit) {
+        String normalized = "%" + query.toLowerCase() + "%";
+        return getEntityManager().createQuery(
+                "SELECT u FROM User u " +
+                "WHERE u.id <> :excludeUserId " +
+                "AND (" +
+                "LOWER(u.username) LIKE :query " +
+                "OR LOWER(COALESCE(u.displayName, '')) LIKE :query" +
+                ") " +
+                "ORDER BY LOWER(u.username) ASC",
+                User.class
+        )
+                .setParameter("excludeUserId", excludeUserId)
+                .setParameter("query", normalized)
+                .setMaxResults(limit)
+                .getResultList();
+    }
+
+    public List<User> listDiscoveryVisible(UUID excludeUserId) {
+        return find("id <> ?1 and discoveryVisible = true and recommendationOptOut = false", excludeUserId).list();
+    }
+
     /** Single query: returns a map of userId -> clerkId for all given user IDs. */
     public Map<UUID, String> findClerkIdsByUserIds(List<UUID> userIds) {
         if (userIds.isEmpty()) return Map.of();
