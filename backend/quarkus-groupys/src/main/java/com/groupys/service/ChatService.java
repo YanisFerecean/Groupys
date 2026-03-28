@@ -9,7 +9,6 @@ import com.groupys.model.Message;
 import com.groupys.model.User;
 import com.groupys.repository.ConversationRepository;
 import com.groupys.repository.MessageRepository;
-import com.groupys.repository.UserMatchRepository;
 import com.groupys.repository.UserRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -27,6 +26,11 @@ import java.util.stream.Collectors;
 @ApplicationScoped
 public class ChatService {
 
+    private static final String REQUEST_STATUS_ACCEPTED = "ACCEPTED";
+    private static final String REQUEST_STATUS_PENDING = "PENDING";
+    private static final String REQUEST_STATUS_PENDING_INCOMING = "PENDING_INCOMING";
+    private static final String REQUEST_STATUS_PENDING_OUTGOING = "PENDING_OUTGOING";
+
     @Inject
     ConversationRepository conversationRepository;
 
@@ -37,7 +41,7 @@ public class ChatService {
     UserRepository userRepository;
 
     @Inject
-    UserMatchRepository userMatchRepository;
+    DiscoveryService discoveryService;
 
     // ── Rate limiting ─────────────────────────────────────────────────────────
 
@@ -98,6 +102,17 @@ public class ChatService {
         );
     }
 
+    private String resolveRequestStatus(Conversation conversation, UUID currentUserId) {
+        if (conversation.isGroup || REQUEST_STATUS_ACCEPTED.equals(conversation.requestStatus)
+                || conversation.requestStatus == null || conversation.requestedByUser == null) {
+            return REQUEST_STATUS_ACCEPTED;
+        }
+
+        return conversation.requestedByUser.id.equals(currentUserId)
+                ? REQUEST_STATUS_PENDING_OUTGOING
+                : REQUEST_STATUS_PENDING_INCOMING;
+    }
+
     private ConversationResDto toConversationDto(Conversation c, UUID currentUserId) {
         Message latest = messageRepository.findLatestInConversation(c.id);
         long unread = 0;
@@ -119,6 +134,7 @@ public class ChatService {
                 c.isGroup,
                 c.groupName,
                 participants,
+                resolveRequestStatus(c, currentUserId),
                 latest != null ? latest.content : null,
                 latest != null ? latest.createdAt : null,
                 unread,
@@ -155,7 +171,7 @@ public class ChatService {
                     List<ParticipantDto> participants = c.participants.stream()
                             .map(this::toParticipantDto).collect(Collectors.toList());
                     return new ConversationResDto(
-                            c.id, c.isGroup, c.groupName, participants,
+                            c.id, c.isGroup, c.groupName, participants, resolveRequestStatus(c, userId),
                             latest != null ? latest.content : null,
                             latest != null ? latest.createdAt : null,
                             unread, c.createdAt, c.updatedAt
@@ -178,16 +194,14 @@ public class ChatService {
         User target = userRepository.findByIdOptional(targetUserId)
                 .orElseThrow(() -> new NotFoundException("Target user not found"));
 
-        if (!userMatchRepository.matchExists(me.id, target.id)) {
-            throw new ForbiddenException("Cannot start a conversation without a mutual match");
-        }
-
         // Return existing conversation if found
         return conversationRepository.findDirectConversation(me.id, target.id)
                 .map(c -> toConversationDto(c, me.id))
                 .orElseGet(() -> {
                     Conversation conv = new Conversation();
                     conv.isGroup = false;
+                    conv.requestStatus = REQUEST_STATUS_PENDING;
+                    conv.requestedByUser = me;
                     conversationRepository.persist(conv);
 
                     ConversationParticipant p1 = new ConversationParticipant();
@@ -203,8 +217,53 @@ public class ChatService {
                     // Re-fetch with participants loaded
                     conversationRepository.getEntityManager().flush();
                     conversationRepository.getEntityManager().refresh(conv);
+                    refreshDiscoveryCandidates(me.id, target.id);
                     return toConversationDto(conv, me.id);
                 });
+    }
+
+    @Transactional
+    public ConversationResDto acceptConversationRequest(UUID conversationId, String clerkId) {
+        User currentUser = requireUserByClerkId(clerkId);
+        requireParticipant(conversationId, currentUser.id);
+
+        Conversation conversation = conversationRepository.findByIdOptional(conversationId)
+                .orElseThrow(() -> new NotFoundException("Conversation not found"));
+
+        if (!REQUEST_STATUS_PENDING.equals(conversation.requestStatus) || conversation.requestedByUser == null) {
+            return toConversationDto(conversation, currentUser.id);
+        }
+
+        if (conversation.requestedByUser.id.equals(currentUser.id)) {
+            throw new ForbiddenException("You cannot accept your own chat request");
+        }
+
+        conversation.requestStatus = REQUEST_STATUS_ACCEPTED;
+        conversation.acceptedAt = Instant.now();
+        conversation.requestedByUser = null;
+
+        return toConversationDto(conversation, currentUser.id);
+    }
+
+    @Transactional
+    public void denyConversationRequest(UUID conversationId, String clerkId) {
+        User currentUser = requireUserByClerkId(clerkId);
+        requireParticipant(conversationId, currentUser.id);
+
+        Conversation conversation = conversationRepository.findByIdOptional(conversationId)
+                .orElseThrow(() -> new NotFoundException("Conversation not found"));
+
+        if (!REQUEST_STATUS_PENDING.equals(conversation.requestStatus)) {
+            throw new ForbiddenException("Only pending chat requests can be removed");
+        }
+
+        List<UUID> participantIds = conversation.participants.stream()
+                .map(cp -> cp.user.id)
+                .distinct()
+                .toList();
+        conversationRepository.delete(conversation);
+        conversationRepository.getEntityManager().flush();
+        refreshDiscoveryCandidates(participantIds.toArray(UUID[]::new));
     }
 
     // ── Messages ──────────────────────────────────────────────────────────────
@@ -227,9 +286,8 @@ public class ChatService {
         Conversation conv = conversationRepository.findByIdOptional(conversationId)
                 .orElseThrow(() -> new NotFoundException("Conversation not found"));
 
-        // For match-linked DMs, block messaging if the match has been unmatched
-        if (!conv.isGroup && conv.match != null && !"ACTIVE".equals(conv.match.status)) {
-            throw new ForbiddenException("This conversation is no longer active");
+        if (REQUEST_STATUS_PENDING.equals(conv.requestStatus)) {
+            throw new ForbiddenException("Chat request must be accepted before messaging");
         }
 
         // Validate content
@@ -311,5 +369,17 @@ public class ChatService {
         if (partnerIds.isEmpty()) return List.of();
 
         return new java.util.ArrayList<>(userRepository.findClerkIdsByUserIds(partnerIds).values());
+    }
+
+    private void refreshDiscoveryCandidates(UUID... userIds) {
+        if (discoveryService == null) {
+            return;
+        }
+
+        for (UUID userId : userIds) {
+            if (userId != null) {
+                discoveryService.refreshAfterUserChange(userId);
+            }
+        }
     }
 }
