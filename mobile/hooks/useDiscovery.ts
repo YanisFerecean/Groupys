@@ -1,5 +1,6 @@
 import { useCallback, useRef } from 'react'
 import { useAuth } from '@clerk/expo'
+import { useChat } from '@/hooks/useChat'
 import { useDiscoveryStore } from '@/store/discoveryStore'
 import { useMatchStore } from '@/store/matchStore'
 import {
@@ -14,6 +15,7 @@ import type { SuggestedUser } from '@/models/SuggestedUser'
 
 export function useDiscovery() {
   const { getToken } = useAuth()
+  const { fetchConversationById } = useChat()
   const getTokenRef = useRef(getToken)
   getTokenRef.current = getToken
 
@@ -90,7 +92,7 @@ export function useDiscovery() {
       const token = await getTokenRef.current()
       const response = await likeUser(user.userId, token)
       if (response.isMatch && response.matchId && response.conversationId) {
-        useMatchStore.getState().setPendingMatchModal({
+        const match = {
           matchId: response.matchId,
           otherUserId: user.userId,
           otherUsername: user.username,
@@ -100,12 +102,15 @@ export function useDiscovery() {
           status: 'ACTIVE',
           matchedAt: new Date().toISOString(),
           unreadCount: 0,
-        })
+        }
+        useMatchStore.getState().addMatch(match)
+        useMatchStore.getState().setPendingMatchModal(match)
+        await fetchConversationById(response.conversationId)
       }
     } catch (err) {
       console.error('Failed to like user:', err)
     }
-  }, [])
+  }, [fetchConversationById])
 
   const triggerMusicSync = useCallback(async () => {
     try {
