@@ -29,4 +29,9 @@ public interface SpotifyApiClient {
     @GET
     @Path("/me/player/currently-playing")
     Response getCurrentlyPlaying(@HeaderParam("Authorization") String bearer);
+
+    @GET
+    @Path("/me/player/recently-played")
+    Response getRecentlyPlayed(@HeaderParam("Authorization") String bearer,
+                               @QueryParam("limit") int limit);
 }
