@@ -39,8 +39,7 @@ export default function SettingsDialog({
     try {
       const token = await getToken();
       if (!token) return;
-      const url = await fetchSpotifyAuthUrl(token);
-      window.location.href = url;
+      window.location.href = await fetchSpotifyAuthUrl(token);
     } catch (err) {
       console.error("Failed to connect Spotify:", err);
     } finally {

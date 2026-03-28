@@ -79,7 +79,6 @@ export default function ProfileView() {
         avatarUrl={user.imageUrl}
         clerkName={clerkName}
         username={user.username ?? ""}
-        memberYear={memberYear}
         albumsRatedCount={albumsRatedCount}
         onEditClick={() => setIsEditing(true)}
       />

@@ -9,7 +9,6 @@ interface ProfileHeaderProps {
   avatarUrl: string;
   clerkName: string;
   username: string;
-  memberYear: number;
   albumsRatedCount?: number | null;
   onEditClick: () => void;
 }
@@ -32,7 +31,6 @@ export default function ProfileHeader({
   avatarUrl,
   clerkName,
   username,
-  memberYear,
   albumsRatedCount,
   onEditClick,
 }: ProfileHeaderProps) {

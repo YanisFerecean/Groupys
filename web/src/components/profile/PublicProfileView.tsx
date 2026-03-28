@@ -79,7 +79,11 @@ export default function PublicProfileView({
           if (!cancelled) setNotFound(true);
           return;
         }
-        if (!res.ok) throw new Error("Failed to fetch user");
+        if (!res.ok) {
+          console.error("Failed to fetch profile:", res.status);
+          if (!cancelled) setNotFound(true);
+          return;
+        }
         const data: BackendUser = await res.json();
         if (!cancelled) {
           setBackendUser(data);
