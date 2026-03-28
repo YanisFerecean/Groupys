@@ -26,4 +26,8 @@ public class CommunityRepository implements PanacheRepositoryBase<Community, UUI
     public List<Community> findByArtist(Long artistId) {
         return find("artist.id", artistId).list();
     }
+
+    public List<Community> listDiscoverable() {
+        return find("visibility = 'PUBLIC' and discoveryEnabled = true").list();
+    }
 }
