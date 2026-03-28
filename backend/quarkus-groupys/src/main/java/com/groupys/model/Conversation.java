@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+
 @Entity
 @Table(name = "conversations")
 public class Conversation {
@@ -25,6 +26,10 @@ public class Conversation {
 
     @Column(name = "updated_at")
     public Instant updatedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "match_id")
+    public UserMatch match;
 
     @OneToMany(mappedBy = "conversation", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     public List<ConversationParticipant> participants = new ArrayList<>();
