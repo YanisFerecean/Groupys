@@ -21,4 +21,12 @@ public class CommentRepository implements PanacheRepositoryBase<Comment, UUID> {
     public List<Comment> findByParent(UUID parentCommentId) {
         return find("parentComment.id", parentCommentId).list();
     }
+
+    public long countByAuthor(UUID authorId) {
+        return count("author.id", authorId);
+    }
+
+    public long countByCommunity(UUID communityId) {
+        return count("post.community.id", communityId);
+    }
 }
