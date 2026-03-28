@@ -22,4 +22,12 @@ public class PostRepository implements PanacheRepositoryBase<Post, UUID> {
         if (communityIds.isEmpty()) return List.of();
         return find("community.id in ?1 order by createdAt desc", communityIds).list();
     }
+
+    public long countByAuthor(UUID authorId) {
+        return count("author.id", authorId);
+    }
+
+    public long countByCommunity(UUID communityId) {
+        return count("community.id", communityId);
+    }
 }
