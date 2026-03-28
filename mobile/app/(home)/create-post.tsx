@@ -23,6 +23,7 @@ import { Colors } from '@/constants/colors'
 import type { CommunityResDto } from '@/models/CommunityRes'
 import AuthImageWithToken from '@/components/ui/AuthImageWithToken'
 import MarkdownEditor, { type MarkdownEditorRef, type FormatType } from '@/components/post/MarkdownEditor'
+import GlassModalBackdrop from '@/components/ui/GlassModalBackdrop'
 import { Ionicons as IoniconType } from '@expo/vector-icons'
 
 interface ToolbarButton {
@@ -202,11 +203,7 @@ export default function CreatePostScreen() {
         onRequestClose={() => setShowCommunitySelector(false)}
       >
         <View className="flex-1 justify-end">
-          <TouchableOpacity 
-            className="flex-1" 
-            activeOpacity={1} 
-            onPress={() => setShowCommunitySelector(false)} 
-          />
+          <GlassModalBackdrop onPress={() => setShowCommunitySelector(false)} />
           <View 
             className="bg-surface rounded-t-3xl overflow-hidden shadow-2xl" 
             style={{ height: '70%', paddingBottom: insets.bottom }}
