@@ -1,8 +1,10 @@
 package com.groupys.resource;
 
 import com.groupys.dto.UserCreateDto;
+import com.groupys.dto.UserFollowResDto;
 import com.groupys.dto.UserResDto;
 import com.groupys.dto.UserUpdateDto;
+import com.groupys.service.DiscoveryService;
 import com.groupys.service.UserService;
 import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
@@ -10,6 +12,7 @@ import jakarta.validation.Valid;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 
 import java.net.URI;
@@ -26,9 +29,22 @@ public class UserResource {
     @Inject
     UserService userService;
 
+    @Inject
+    DiscoveryService discoveryService;
+
+    @Inject
+    JsonWebToken jwt;
+
     @GET
     public List<UserResDto> list() {
         return userService.listAll();
+    }
+
+    @GET
+    @Path("/search")
+    public List<UserResDto> search(@QueryParam("q") String query,
+                                   @QueryParam("limit") @DefaultValue("10") int limit) {
+        return userService.search(jwt.getSubject(), query, limit);
     }
 
     @GET
@@ -64,6 +80,12 @@ public class UserResource {
     @Path("/{id}")
     public UserResDto update(@PathParam("id") UUID id, @Valid UserUpdateDto dto) {
         return userService.update(id, dto);
+    }
+
+    @POST
+    @Path("/{id}/follow")
+    public UserFollowResDto follow(@PathParam("id") UUID id) {
+        return discoveryService.followUser(jwt.getSubject(), id);
     }
 
     @DELETE
