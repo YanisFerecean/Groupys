@@ -1,13 +1,18 @@
 package com.groupys.model;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.ColumnDefault;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
 @Entity
-@Table(name = "communities")
+@Table(name = "communities", indexes = {
+        @Index(name = "idx_communities_country_code", columnList = "country_code"),
+        @Index(name = "idx_communities_visibility", columnList = "visibility,discovery_enabled"),
+        @Index(name = "idx_communities_last_profile_refresh_at", columnList = "last_profile_refresh_at")
+})
 public class Community {
 
     @Id
@@ -23,6 +28,9 @@ public class Community {
     public String genre;
 
     public String country;
+
+    @Column(name = "country_code", length = 2)
+    public String countryCode;
 
     @Column(name = "banner_url")
     public String bannerUrl;
@@ -46,6 +54,20 @@ public class Community {
 
     @Column(name = "member_count", nullable = false)
     public int memberCount = 0;
+
+    @Column(nullable = false, length = 20)
+    @ColumnDefault("'PUBLIC'")
+    public String visibility = "PUBLIC";
+
+    @Column(name = "discovery_enabled", nullable = false)
+    @ColumnDefault("true")
+    public boolean discoveryEnabled = true;
+
+    @Column(name = "last_profile_refresh_at")
+    public Instant lastProfileRefreshAt;
+
+    @Column(name = "taste_summary_text", columnDefinition = "TEXT")
+    public String tasteSummaryText;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "artist_id")
