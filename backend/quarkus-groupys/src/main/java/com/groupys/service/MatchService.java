@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.groupys.dto.LikeResponseDto;
 import com.groupys.dto.MatchResDto;
+import com.groupys.dto.SentLikeResDto;
 import com.groupys.model.*;
 import com.groupys.repository.*;
 import com.groupys.websocket.WebSocketMessage;
@@ -48,6 +49,9 @@ public class MatchService {
 
     @Inject
     PresenceService presenceService;
+
+    @Inject
+    DiscoveryService discoveryService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -102,7 +106,10 @@ public class MatchService {
 
         // Re-check after potential lock
         return userMatchRepository.findByUsers(userA.id, userB.id)
-                .map(existing -> new LikeResponseDto(true, existing.id, existing.conversation != null ? existing.conversation.id : null))
+                .map(existing -> {
+                    Conversation conversation = ensureMatchConversation(existing, userA, userB);
+                    return new LikeResponseDto(true, existing.id, conversation != null ? conversation.id : null);
+                })
                 .orElseGet(() -> {
                     // Create UserMatch
                     UserMatch match = new UserMatch();
@@ -111,26 +118,7 @@ public class MatchService {
                     match.status = "ACTIVE";
                     userMatchRepository.persist(match);
 
-                    // Create Conversation linked to match
-                    Conversation conv = new Conversation();
-                    conv.isGroup = false;
-                    conv.match = match;
-                    conversationRepository.persist(conv);
-
-                    ConversationParticipant p1 = new ConversationParticipant();
-                    p1.conversation = conv;
-                    p1.user = userA;
-                    conversationRepository.getEntityManager().persist(p1);
-
-                    ConversationParticipant p2 = new ConversationParticipant();
-                    p2.conversation = conv;
-                    p2.user = userB;
-                    conversationRepository.getEntityManager().persist(p2);
-
-                    match.conversation = conv;
-                    conversationRepository.getEntityManager().flush();
-                    conversationRepository.getEntityManager().refresh(conv);
-                    conversationRepository.getEntityManager().refresh(match);
+                    Conversation conv = ensureMatchConversation(match, userA, userB);
 
                     // Push MATCH_NEW to both parties via WebSocket
                     sendMatchEvent(liker, target, match.id, conv.id);
@@ -138,6 +126,49 @@ public class MatchService {
 
                     return new LikeResponseDto(true, match.id, conv.id);
                 });
+    }
+
+    private Conversation ensureMatchConversation(UserMatch match, User userA, User userB) {
+        Conversation conversation = match.conversation;
+        if (conversation == null) {
+            conversation = conversationRepository.findDirectConversation(userA.id, userB.id).orElse(null);
+        }
+
+        Instant now = Instant.now();
+
+        if (conversation != null) {
+            conversation.match = match;
+            conversation.requestStatus = "ACCEPTED";
+            conversation.requestedByUser = null;
+            if (conversation.acceptedAt == null) {
+                conversation.acceptedAt = now;
+            }
+            conversation.updatedAt = now;
+            match.conversation = conversation;
+            return conversation;
+        }
+
+        Conversation createdConversation = new Conversation();
+        createdConversation.isGroup = false;
+        createdConversation.match = match;
+        createdConversation.requestStatus = "ACCEPTED";
+        conversationRepository.persist(createdConversation);
+
+        ConversationParticipant p1 = new ConversationParticipant();
+        p1.conversation = createdConversation;
+        p1.user = userA;
+        conversationRepository.getEntityManager().persist(p1);
+
+        ConversationParticipant p2 = new ConversationParticipant();
+        p2.conversation = createdConversation;
+        p2.user = userB;
+        conversationRepository.getEntityManager().persist(p2);
+
+        match.conversation = createdConversation;
+        conversationRepository.getEntityManager().flush();
+        conversationRepository.getEntityManager().refresh(createdConversation);
+        conversationRepository.getEntityManager().refresh(match);
+        return createdConversation;
     }
 
     private void sendMatchEvent(User recipient, User otherUser, UUID matchId, UUID conversationId) {
@@ -183,18 +214,19 @@ public class MatchService {
     public List<MatchResDto> getMatches(String clerkId) {
         User user = requireUserByClerkId(clerkId);
         List<UserMatch> matches = userMatchRepository.findActiveMatchesByUser(user.id);
-        if (matches.isEmpty()) return List.of();
+        return toMatchResDtos(matches, user.id);
+    }
 
-        List<UUID> conversationIds = matches.stream()
-                .filter(m -> m.conversation != null)
-                .map(m -> m.conversation.id)
-                .toList();
-        Map<UUID, Long> unreadMap = conversationIds.isEmpty()
-                ? Map.of()
-                : messageRepository.countUnreadPerConversations(conversationIds, user.id);
+    public List<MatchResDto> getMatchHistory(String clerkId, int page, int size) {
+        User user = requireUserByClerkId(clerkId);
+        List<UserMatch> matches = userMatchRepository.findMatchesByUserPaged(user.id, Math.max(page, 0), Math.max(size, 1));
+        return toMatchResDtos(matches, user.id);
+    }
 
-        return matches.stream()
-                .map(m -> toMatchResDto(m, user.id, unreadMap))
+    public List<SentLikeResDto> getPendingSentLikes(String clerkId, int page, int size) {
+        User user = requireUserByClerkId(clerkId);
+        return userLikeRepository.findPendingOutgoingLikesByUser(user.id, Math.max(page, 0), Math.max(size, 1)).stream()
+                .map(this::toSentLikeResDto)
                 .toList();
     }
 
@@ -221,6 +253,29 @@ public class MatchService {
         match.status = "UNMATCHED";
     }
 
+    @Transactional
+    public void withdrawLike(String clerkId, UUID targetUserId) {
+        User user = requireUserByClerkId(clerkId);
+        UserLike like = userLikeRepository.findActiveByPair(user.id, targetUserId)
+                .orElseThrow(() -> new NotFoundException("Like not found"));
+
+        if (userMatchRepository.matchExists(user.id, targetUserId)) {
+            throw new BadRequestException("Cannot remove a like after the users have matched");
+        }
+
+        userLikeRepository.delete(like);
+        userDiscoveryActionRepository.delete(
+                "user.id = ?1 and targetType = 'USER' and targetUser.id = ?2 and actionType = 'LIKE'",
+                user.id,
+                targetUserId
+        );
+        userSimilarityCacheRepository.deleteByUser(user.id);
+
+        if (discoveryService != null) {
+            discoveryService.refreshAfterUserChange(user.id);
+        }
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private User requireUserByClerkId(String clerkId) {
@@ -242,6 +297,34 @@ public class MatchService {
                 match.status,
                 match.createdAt,
                 unread
+        );
+    }
+
+    private List<MatchResDto> toMatchResDtos(List<UserMatch> matches, UUID currentUserId) {
+        if (matches.isEmpty()) {
+            return List.of();
+        }
+
+        List<UUID> conversationIds = matches.stream()
+                .filter(m -> m.conversation != null)
+                .map(m -> m.conversation.id)
+                .toList();
+        Map<UUID, Long> unreadMap = conversationIds.isEmpty()
+                ? Map.of()
+                : messageRepository.countUnreadPerConversations(conversationIds, currentUserId);
+
+        return matches.stream()
+                .map(m -> toMatchResDto(m, currentUserId, unreadMap))
+                .toList();
+    }
+
+    private SentLikeResDto toSentLikeResDto(UserLike like) {
+        return new SentLikeResDto(
+                like.toUser.id,
+                like.toUser.username,
+                like.toUser.displayName,
+                like.toUser.profileImage,
+                like.createdAt
         );
     }
 }
