@@ -5,10 +5,7 @@ import com.groupys.model.User;
 
 public final class UserUtil {
 
-    private UserUtil() {
-    }
-
-    public static UserResDto toDto(User user) {
+    public static UserResDto toDto(User user, long followerCount, long followingCount) {
         return new UserResDto(
                 user.id,
                 user.clerkId,
@@ -16,14 +13,28 @@ public final class UserUtil {
                 user.displayName,
                 user.bio,
                 user.country,
+                user.countryCode,
                 user.bannerUrl,
+                user.bannerText,
                 user.accentColor,
                 user.nameColor,
                 user.profileImage,
                 user.widgets,
                 user.tags,
                 user.dateJoined,
-                user.spotifyRefreshToken != null
-        );
+                user.isVerified,
+                user.website,
+                user.jobTitle,
+                user.location,
+                user.spotifyRefreshToken != null,
+                user.lastMusicSyncAt,
+                user.tasteSummaryText,
+                user.recommendationOptOut,
+                user.discoveryVisible,
+                followerCount,
+                followingCount);
+    }
+
+    private UserUtil() {
     }
 }
