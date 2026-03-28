@@ -222,6 +222,9 @@ export default function ProfileEditDrawer({
 
   // ── Music helpers ─────────────────────────────────────────────────────────
 
+  const clearSynced = (key: string) =>
+    setForm((prev) => ({ ...prev, spotifySynced: { ...prev.spotifySynced, [key]: false } }));
+
   const addSongFromSearch = (result: TrackResult) => {
     const songs = [...(form.topSongs ?? [])];
     if (songs.length < 3) {
@@ -231,6 +234,7 @@ export default function ProfileEditDrawer({
         coverUrl: result.coverUrl,
       });
       set("topSongs", songs);
+      clearSynced("topSongs");
     }
   };
 
@@ -238,6 +242,7 @@ export default function ProfileEditDrawer({
     const songs = [...(form.topSongs ?? [])];
     songs.splice(index, 1);
     set("topSongs", songs);
+    clearSynced("topSongs");
   };
 
   const addArtistFromSearch = (result: ArtistResult) => {
@@ -248,6 +253,7 @@ export default function ProfileEditDrawer({
         imageUrl: result.imageUrl,
       });
       set("topArtists", artists);
+      clearSynced("topArtists");
     }
   };
 
@@ -255,6 +261,7 @@ export default function ProfileEditDrawer({
     const artists = [...(form.topArtists ?? [])];
     artists.splice(index, 1);
     set("topArtists", artists);
+    clearSynced("topArtists");
   };
 
   const addAlbumFromSearch = (result: AlbumResult) => {
@@ -266,6 +273,7 @@ export default function ProfileEditDrawer({
         coverUrl: result.coverUrl,
       });
       set("topAlbums", albums);
+      clearSynced("topAlbums");
     }
   };
 
@@ -273,6 +281,7 @@ export default function ProfileEditDrawer({
     const albums = [...(form.topAlbums ?? [])];
     albums.splice(index, 1);
     set("topAlbums", albums);
+    clearSynced("topAlbums");
   };
 
   const setListeningFromSearch = (result: TrackResult) => {
@@ -281,9 +290,13 @@ export default function ProfileEditDrawer({
       artist: result.artist,
       coverUrl: result.coverUrl,
     });
+    clearSynced("currentlyListening");
   };
 
   // ── Spotify sync handlers ──────────────────────────────────────────────────
+
+  const setSynced = (key: string) =>
+    setForm((prev) => ({ ...prev, spotifySynced: { ...prev.spotifySynced, [key]: true } }));
 
   const syncTopArtists = async () => {
     const token = await getToken();
@@ -295,6 +308,7 @@ export default function ProfileEditDrawer({
         "topArtists",
         artists.map((a) => ({ name: a.name, imageUrl: a.imageUrl })),
       );
+      setSynced("topArtists");
     } catch (err) {
       console.error("Failed to sync top artists:", err);
     } finally {
@@ -312,6 +326,7 @@ export default function ProfileEditDrawer({
         "topSongs",
         tracks.map((t) => ({ title: t.title, artist: t.artist, coverUrl: t.coverUrl })),
       );
+      setSynced("topSongs");
     } catch (err) {
       console.error("Failed to sync top tracks:", err);
     } finally {
@@ -329,6 +344,7 @@ export default function ProfileEditDrawer({
         "topAlbums",
         albums.map((a) => ({ title: a.title, artist: a.artist, coverUrl: a.coverUrl })),
       );
+      setSynced("topAlbums");
     } catch (err) {
       console.error("Failed to sync saved albums:", err);
     } finally {
@@ -348,6 +364,7 @@ export default function ProfileEditDrawer({
           artist: track.artist,
           coverUrl: track.coverUrl,
         });
+        setSynced("currentlyListening");
       }
     } catch (err) {
       console.error("Failed to sync currently playing:", err);
@@ -636,6 +653,13 @@ export default function ProfileEditDrawer({
                         topSongs: tracks.map((t) => ({ title: t.title, artist: t.artist, coverUrl: t.coverUrl })),
                         topAlbums: albums.map((a) => ({ title: a.title, artist: a.artist, coverUrl: a.coverUrl })),
                         ...(playing ? { currentlyListening: { title: playing.title, artist: playing.artist, coverUrl: playing.coverUrl } } : {}),
+                        spotifySynced: {
+                          ...prev.spotifySynced,
+                          topArtists: true,
+                          topSongs: true,
+                          topAlbums: true,
+                          ...(playing ? { currentlyListening: true } : {}),
+                        },
                       }));
                     } catch (err) {
                       console.error("Failed to sync all from Spotify:", err);
@@ -778,7 +802,7 @@ export default function ProfileEditDrawer({
                     </div>
                     <button
                       type="button"
-                      onClick={() => set("currentlyListening", undefined)}
+                      onClick={() => { set("currentlyListening", undefined); clearSynced("currentlyListening"); }}
                       className="text-on-surface-variant hover:text-error transition-colors shrink-0"
                     >
                       <span className="material-symbols-outlined text-lg">close</span>

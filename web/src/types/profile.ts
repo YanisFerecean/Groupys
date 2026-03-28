@@ -23,6 +23,7 @@ export interface ProfileCustomization {
   artistsContainerColor?: string;
   lastRatedAlbumContainerColor?: string;
   widgetSizes?: Partial<Record<string, "small" | "normal">>;
+  spotifySynced?: Partial<Record<string, boolean>>;
   tags?: string[];
   showLastRatedAlbum?: boolean;
   widgetOrder?: string[];
