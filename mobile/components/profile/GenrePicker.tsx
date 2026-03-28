@@ -106,7 +106,7 @@ export function GenrePicker({ onSelect }: GenrePickerProps) {
             >
               <Ionicons name="add-circle-outline" size={18} color={Colors.primary} />
               <Text className="text-base text-primary">
-                Add "{query.trim()}"
+                Add &quot;{query.trim()}&quot;
               </Text>
             </TouchableOpacity>
           )}
