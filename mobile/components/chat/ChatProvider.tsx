@@ -11,6 +11,8 @@ import {
 } from 'react'
 import type { BackendUser } from '@/lib/api'
 import {
+  acceptConversationRequest,
+  denyConversationRequest,
   fetchConversation,
   fetchConversations,
   fetchPublicKey,
@@ -43,6 +45,8 @@ interface ChatContextValue {
   loadMoreConversations: () => Promise<void>
   fetchConversationById: (conversationId: string) => Promise<Conversation | null>
   startDirectConversation: (targetUserId: string) => Promise<Conversation>
+  acceptDirectRequest: (conversationId: string) => Promise<Conversation>
+  denyDirectRequest: (conversationId: string) => Promise<void>
   searchChatUsers: (query: string, limit?: number) => Promise<BackendUser[]>
   markConversationRead: (conversationId: string) => Promise<void>
   upsertConversation: (conversation: Conversation, moveToTop?: boolean) => void
@@ -97,6 +101,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
       return [...next, conversation]
     })
+  }, [])
+
+  const removeConversation = useCallback((conversationId: string) => {
+    setConversations(prev => prev.filter(conversation => conversation.id !== conversationId))
   }, [])
 
   const refreshConversations = useCallback(async () => {
@@ -175,6 +183,27 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     upsertConversation(conversation)
     return conversation
   }, [upsertConversation])
+
+  const acceptDirectRequest = useCallback(async (conversationId: string) => {
+    const token = await getTokenRef.current()
+    if (!token) {
+      throw new Error('Missing auth token')
+    }
+
+    const conversation = await acceptConversationRequest(conversationId, token)
+    upsertConversation(conversation)
+    return conversation
+  }, [upsertConversation])
+
+  const denyDirectRequest = useCallback(async (conversationId: string) => {
+    const token = await getTokenRef.current()
+    if (!token) {
+      throw new Error('Missing auth token')
+    }
+
+    await denyConversationRequest(conversationId, token)
+    removeConversation(conversationId)
+  }, [removeConversation])
 
   const searchChatUsers = useCallback(async (query: string, limit: number = 10) => {
     const token = await getTokenRef.current()
@@ -435,6 +464,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     loadMoreConversations,
     fetchConversationById,
     startDirectConversation,
+    acceptDirectRequest,
+    denyDirectRequest,
     searchChatUsers,
     markConversationRead,
     upsertConversation,
@@ -454,6 +485,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     loadMoreConversations,
     fetchConversationById,
     startDirectConversation,
+    acceptDirectRequest,
+    denyDirectRequest,
     searchChatUsers,
     markConversationRead,
     upsertConversation,
