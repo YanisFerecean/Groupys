@@ -5,6 +5,7 @@ import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -15,6 +16,14 @@ public class UserLikeRepository implements PanacheRepositoryBase<UserLike, UUID>
 
     public Optional<UserLike> findByPair(UUID fromUserId, UUID toUserId) {
         return find("fromUser.id = ?1 and toUser.id = ?2", fromUserId, toUserId)
+                .firstResultOptional();
+    }
+
+    public Optional<UserLike> findActiveByPair(UUID fromUserId, UUID toUserId) {
+        return find("""
+                fromUser.id = ?1 and toUser.id = ?2
+                and (expiresAt is null or expiresAt > ?3)
+                """, fromUserId, toUserId, Instant.now())
                 .firstResultOptional();
     }
 
@@ -40,5 +49,29 @@ public class UserLikeRepository implements PanacheRepositoryBase<UserLike, UUID>
                 fromUser.id = ?1 and toUser.id = ?2
                 and (expiresAt is null or expiresAt > ?3)
                 """, fromUserId, toUserId, Instant.now()) > 0;
+    }
+
+    public List<UserLike> findPendingOutgoingLikesByUser(UUID userId, int page, int size) {
+        return getEntityManager().createQuery("""
+                select l
+                from UserLike l
+                where l.fromUser.id = :userId
+                  and (l.expiresAt is null or l.expiresAt > :now)
+                  and not exists (
+                    select 1
+                    from UserMatch m
+                    where (
+                      (m.userA.id = :userId and m.userB.id = l.toUser.id)
+                      or (m.userB.id = :userId and m.userA.id = l.toUser.id)
+                    )
+                    and m.status = 'ACTIVE'
+                  )
+                order by l.createdAt desc
+                """, UserLike.class)
+                .setParameter("userId", userId)
+                .setParameter("now", Instant.now())
+                .setFirstResult(page * size)
+                .setMaxResults(size)
+                .getResultList();
     }
 }
