@@ -9,6 +9,7 @@ import com.groupys.model.Message;
 import com.groupys.model.User;
 import com.groupys.repository.ConversationRepository;
 import com.groupys.repository.MessageRepository;
+import com.groupys.repository.UserMatchRepository;
 import com.groupys.repository.UserRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -34,6 +35,9 @@ public class ChatService {
 
     @Inject
     UserRepository userRepository;
+
+    @Inject
+    UserMatchRepository userMatchRepository;
 
     // ── Rate limiting ─────────────────────────────────────────────────────────
 
@@ -174,6 +178,10 @@ public class ChatService {
         User target = userRepository.findByIdOptional(targetUserId)
                 .orElseThrow(() -> new NotFoundException("Target user not found"));
 
+        if (!userMatchRepository.matchExists(me.id, target.id)) {
+            throw new ForbiddenException("Cannot start a conversation without a mutual match");
+        }
+
         // Return existing conversation if found
         return conversationRepository.findDirectConversation(me.id, target.id)
                 .map(c -> toConversationDto(c, me.id))
@@ -218,6 +226,11 @@ public class ChatService {
 
         Conversation conv = conversationRepository.findByIdOptional(conversationId)
                 .orElseThrow(() -> new NotFoundException("Conversation not found"));
+
+        // For match-linked DMs, block messaging if the match has been unmatched
+        if (!conv.isGroup && conv.match != null && !"ACTIVE".equals(conv.match.status)) {
+            throw new ForbiddenException("This conversation is no longer active");
+        }
 
         // Validate content
         if (content == null || content.isBlank()) {
