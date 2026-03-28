@@ -2,6 +2,7 @@ import '@/global.css'
 import { ClerkProvider } from '@clerk/expo'
 import { tokenCache } from '@clerk/expo/token-cache'
 import { Slot } from 'expo-router'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { AuthTokenProvider } from '@/hooks/AuthTokenContext'
 import { useFonts, DMSans_400Regular, DMSans_500Medium, DMSans_700Bold } from '@expo-google-fonts/dm-sans'
@@ -16,12 +17,14 @@ export default function RootLayout() {
   useFonts({ DMSans_400Regular, DMSans_500Medium, DMSans_700Bold })
 
   return (
-    <SafeAreaProvider>
-      <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
-        <AuthTokenProvider>
-          <Slot />
-        </AuthTokenProvider>
-      </ClerkProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
+          <AuthTokenProvider>
+            <Slot />
+          </AuthTokenProvider>
+        </ClerkProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   )
 }
