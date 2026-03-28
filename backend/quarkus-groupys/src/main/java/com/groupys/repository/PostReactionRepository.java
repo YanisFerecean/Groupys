@@ -17,4 +17,12 @@ public class PostReactionRepository implements PanacheRepositoryBase<PostReactio
     public long countByPostAndType(UUID postId, String reactionType) {
         return count("post.id = ?1 and reactionType = ?2", postId, reactionType);
     }
+
+    public long countByUser(UUID userId) {
+        return count("user.id", userId);
+    }
+
+    public long countByCommunity(UUID communityId) {
+        return count("post.community.id", communityId);
+    }
 }
