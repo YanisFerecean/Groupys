@@ -84,6 +84,7 @@ export function MessageComposer({
       <View className="flex-row items-end gap-3">
         <View className="flex-1 rounded-[28px] bg-surface-container px-4 py-2">
           <TextInput
+            editable={!disabled}
             multiline
             maxLength={MAX_LENGTH}
             className="max-h-28 text-[15px] text-on-surface"
