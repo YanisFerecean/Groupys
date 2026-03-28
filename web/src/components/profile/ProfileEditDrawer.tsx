@@ -249,6 +249,7 @@ export default function ProfileEditDrawer({
     const artists = [...(form.topArtists ?? [])];
     if (artists.length < 3) {
       artists.push({
+        id: result.id,
         name: result.name,
         imageUrl: result.imageUrl,
       });
@@ -268,6 +269,7 @@ export default function ProfileEditDrawer({
     const albums = [...(form.topAlbums ?? [])];
     if (albums.length < 3) {
       albums.push({
+        id: result.id,
         title: result.title,
         artist: result.artist,
         coverUrl: result.coverUrl,

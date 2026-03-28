@@ -54,6 +54,7 @@ function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCustomizatio
         break;
       case "topArtists":
         result.topArtists = items.map((i) => ({
+          id: i.id,
           name: i.name,
           genre: i.genre,
           imageUrl: i.imageUrl,
@@ -64,6 +65,7 @@ function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCustomizatio
         break;
       case "topAlbums":
         result.topAlbums = items.map((i) => ({
+          id: i.id,
           title: i.title,
           artist: i.artist,
           coverUrl: i.coverUrl,

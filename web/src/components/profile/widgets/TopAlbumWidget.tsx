@@ -1,3 +1,6 @@
+"use client";
+
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import type { ProfileCustomization } from "@/types/profile";
 import { getContrastColor } from "@/lib/utils";
@@ -10,8 +13,24 @@ interface TopAlbumsWidgetProps {
 }
 
 export default function TopAlbumsWidget({ albums, containerColor, size = "normal" }: TopAlbumsWidgetProps) {
+  const router = useRouter();
   const textColor = containerColor ? getContrastColor(containerColor) : undefined;
   const visibleAlbums = albums?.slice(0, size === "small" ? 1 : 3) ?? [];
+
+  async function handleAlbumClick(album: NonNullable<TopAlbumsWidgetProps["albums"]>[number]) {
+    if (album.id) {
+      router.push(`/album/${album.id}`);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/music-search?q=${encodeURIComponent(album.title)}&type=album`);
+      const data = await res.json();
+      const match = data.results?.[0];
+      if (match?.id) router.push(`/album/${match.id}`);
+    } catch {
+      // silently ignore
+    }
+  }
 
   return (
     <WidgetCard
@@ -22,7 +41,11 @@ export default function TopAlbumsWidget({ albums, containerColor, size = "normal
     >
       {visibleAlbums.length > 0 ? (
         size === "small" ? (
-          <div className="flex flex-col gap-3">
+          <button
+            type="button"
+            onClick={() => handleAlbumClick(visibleAlbums[0])}
+            className="flex flex-col gap-3 w-full text-left cursor-pointer hover:opacity-80 transition-opacity"
+          >
             {visibleAlbums[0].coverUrl ? (
               <div className="relative w-full aspect-square rounded-xl overflow-hidden shadow-md">
                 <Image alt={visibleAlbums[0].title} fill className="object-cover" src={visibleAlbums[0].coverUrl} />
@@ -38,11 +61,16 @@ export default function TopAlbumsWidget({ albums, containerColor, size = "normal
                 {visibleAlbums[0].artist}
               </p>
             </div>
-          </div>
+          </button>
         ) : (
           <div className="space-y-3">
             {visibleAlbums.map((album, i) => (
-              <div key={i} className="flex items-center gap-3">
+              <button
+                key={i}
+                type="button"
+                onClick={() => handleAlbumClick(album)}
+                className="flex items-center gap-3 w-full text-left cursor-pointer hover:opacity-80 transition-opacity"
+              >
                 {album.coverUrl ? (
                   <Image alt={album.title} src={album.coverUrl} width={48} height={48} className="rounded-lg object-cover shrink-0 shadow" />
                 ) : (
@@ -56,7 +84,7 @@ export default function TopAlbumsWidget({ albums, containerColor, size = "normal
                     {album.artist}
                   </p>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         )
