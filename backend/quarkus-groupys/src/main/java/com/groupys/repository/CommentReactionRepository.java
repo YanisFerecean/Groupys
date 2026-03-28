@@ -17,4 +17,12 @@ public class CommentReactionRepository implements PanacheRepositoryBase<CommentR
     public long countByCommentAndType(UUID commentId, String reactionType) {
         return count("comment.id = ?1 and reactionType = ?2", commentId, reactionType);
     }
+
+    public long countByUser(UUID userId) {
+        return count("user.id", userId);
+    }
+
+    public long countByCommunity(UUID communityId) {
+        return count("comment.post.community.id", communityId);
+    }
 }
