@@ -25,7 +25,7 @@ public class UserRepository implements PanacheRepositoryBase<User, UUID> {
         String normalized = "%" + query.toLowerCase() + "%";
         return getEntityManager().createQuery(
                 "SELECT u FROM User u " +
-                "WHERE u.id <> :excludeUserId " +
+                "WHERE (:excludeUserId IS NULL OR u.id <> :excludeUserId) " +
                 "AND (" +
                 "LOWER(u.username) LIKE :query " +
                 "OR LOWER(COALESCE(u.displayName, '')) LIKE :query" +

@@ -15,3 +15,11 @@ export interface LikeResponse {
   matchId: string | null
   conversationId: string | null
 }
+
+export interface SentLike {
+  targetUserId: string
+  targetUsername: string
+  targetDisplayName: string | null
+  targetProfileImage: string | null
+  likedAt: string
+}

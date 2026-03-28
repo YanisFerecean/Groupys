@@ -58,16 +58,16 @@ public class UserService {
     }
 
     public List<UserResDto> search(String clerkId, String query, int limit) {
-        User currentUser = userRepository.findByClerkId(clerkId)
-                .orElseThrow(() -> new NotFoundException("User not found"));
-
         String normalizedQuery = query == null ? "" : query.trim();
         if (normalizedQuery.isBlank()) {
             return List.of();
         }
 
         int cappedLimit = Math.max(1, Math.min(limit, 20));
-        return userRepository.searchByUsernameOrDisplayName(normalizedQuery, currentUser.id, cappedLimit)
+        UUID excludeUserId = userRepository.findByClerkId(clerkId)
+                .map(user -> user.id)
+                .orElse(null);
+        return userRepository.searchByUsernameOrDisplayName(normalizedQuery, excludeUserId, cappedLimit)
                 .stream()
                 .map(this::mapUser)
                 .toList();

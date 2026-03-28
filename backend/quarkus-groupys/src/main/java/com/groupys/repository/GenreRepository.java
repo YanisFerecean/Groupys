@@ -21,4 +21,11 @@ public class GenreRepository implements PanacheRepository<Genre> {
     public Optional<Genre> findByNameIgnoreCase(String name) {
         return find("LOWER(name) = LOWER(?1)", name).firstResultOptional();
     }
+
+    public Optional<Genre> findByDeezerId(Long deezerId) {
+        if (deezerId == null) {
+            return Optional.empty();
+        }
+        return find("deezerId", deezerId).firstResultOptional();
+    }
 }

@@ -1,3 +1,8 @@
+export type ConversationRequestStatus =
+  | 'ACCEPTED'
+  | 'PENDING_INCOMING'
+  | 'PENDING_OUTGOING'
+
 export interface Participant {
   userId: string
   username: string
@@ -12,6 +17,7 @@ export interface Conversation {
   isGroup: boolean
   groupName: string | null
   participants: Participant[]
+  requestStatus: ConversationRequestStatus
   lastMessage: string | null
   lastMessageAt: string | null
   unreadCount: number

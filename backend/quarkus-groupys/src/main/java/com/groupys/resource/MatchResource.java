@@ -1,6 +1,7 @@
 package com.groupys.resource;
 
 import com.groupys.dto.MatchResDto;
+import com.groupys.dto.SentLikeResDto;
 import com.groupys.service.MatchService;
 import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
@@ -29,6 +30,20 @@ public class MatchResource {
     @GET
     public List<MatchResDto> getMatches() {
         return matchService.getMatches(jwt.getSubject());
+    }
+
+    @GET
+    @Path("/history")
+    public List<MatchResDto> getMatchHistory(@DefaultValue("0") @QueryParam("page") int page,
+                                             @DefaultValue("20") @QueryParam("size") int size) {
+        return matchService.getMatchHistory(jwt.getSubject(), page, Math.min(size, 50));
+    }
+
+    @GET
+    @Path("/sent-likes")
+    public List<SentLikeResDto> getPendingSentLikes(@DefaultValue("0") @QueryParam("page") int page,
+                                                    @DefaultValue("20") @QueryParam("size") int size) {
+        return matchService.getPendingSentLikes(jwt.getSubject(), page, Math.min(size, 50));
     }
 
     @GET

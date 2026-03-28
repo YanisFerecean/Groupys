@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '@clerk/expo'
 import { Ionicons } from '@expo/vector-icons'
 import { API_URL } from '@/lib/api'
+import { logError } from '@/lib/logging'
 
 function SoundWaveBar({ delay }: { delay: number }) {
   const height = useRef(new Animated.Value(4)).current
@@ -86,6 +87,7 @@ export default function CurrentlyListeningWidget({ track: manualTrack, spotifyCo
   const [coverSlideDistance, setCoverSlideDistance] = useState(DEFAULT_COVER_SLIDE_DISTANCE)
   const slideAnim = useRef(new Animated.Value(0)).current
   const isCoverAnimatingRef = useRef(false)
+  const isFetchingRef = useRef(false)
 
   const outgoingTranslateX = slideAnim.interpolate({
     inputRange: [0, 1],
@@ -119,10 +121,18 @@ export default function CurrentlyListeningWidget({ track: manualTrack, spotifyCo
       setIncomingCoverUrl(undefined)
       slideAnim.setValue(0)
       isCoverAnimatingRef.current = false
+      isFetchingRef.current = false
       return
     }
 
+    let cancelled = false
+
     const fetchSpotify = async () => {
+      if (isFetchingRef.current) {
+        return
+      }
+
+      isFetchingRef.current = true
       try {
         const token = await getTokenRef.current()
         if (!token) return
@@ -149,7 +159,7 @@ export default function CurrentlyListeningWidget({ track: manualTrack, spotifyCo
         }
 
         const data = JSON.parse(raw) as TrackInfo | null
-        if (data?.title) {
+        if (!cancelled && data?.title) {
           const prev = spotifyTrackRef.current
           if (isSameSong(prev, data)) return
 
@@ -193,13 +203,20 @@ export default function CurrentlyListeningWidget({ track: manualTrack, spotifyCo
           setActiveCoverUrl(data.coverUrl)
         }
       } catch (err) {
-        console.error('Failed to fetch Spotify status:', err)
+        if (!cancelled) {
+          logError('Failed to fetch Spotify status', err)
+        }
+      } finally {
+        isFetchingRef.current = false
       }
     }
 
     fetchSpotify()
     const interval = setInterval(fetchSpotify, 30000) // refresh every 30s
-    return () => clearInterval(interval)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
   }, [spotifyConnected, slideAnim])
 
   const track = spotifyConnected ? spotifyTrack : manualTrack

@@ -1,9 +1,12 @@
 package com.groupys.service;
 
 import com.groupys.dto.ConversationResDto;
+import com.groupys.dto.MessageResDto;
 import com.groupys.model.Conversation;
 import com.groupys.model.ConversationParticipant;
+import com.groupys.model.Message;
 import com.groupys.model.User;
+import com.groupys.model.UserMatch;
 import com.groupys.repository.ConversationRepository;
 import com.groupys.repository.MessageRepository;
 import com.groupys.repository.UserRepository;
@@ -17,6 +20,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 class ChatServiceTest {
 
@@ -46,6 +50,34 @@ class ChatServiceTest {
         assertFalse(conversationRepository.persistCalled);
     }
 
+    @Test
+    void sendMessageAllowsConversationAfterMatchBecomesInactive() {
+        User me = user("me", "clerk-me", "alex");
+        User other = user("other", "clerk-other", "luna");
+        Conversation existing = conversation(me, other);
+        existing.match = inactiveMatch(existing, me, other);
+
+        StubConversationRepository conversationRepository = new StubConversationRepository(existing);
+        StubMessageRepository messageRepository = new StubMessageRepository();
+
+        ChatService service = new ChatService();
+        service.userRepository = new StubUserRepository(Map.of(
+                me.clerkId, me,
+                other.clerkId, other
+        ), Map.of(
+                me.id, me,
+                other.id, other
+        ));
+        service.conversationRepository = conversationRepository;
+        service.messageRepository = messageRepository;
+
+        MessageResDto result = service.sendMessage(existing.id, me.clerkId, "still here");
+
+        assertEquals("still here", result.content());
+        assertEquals(existing.id, result.conversationId());
+        assertNotNull(messageRepository.persistedMessage);
+    }
+
     private static User user(String seed, String clerkId, String username) {
         User user = new User();
         user.id = UUID.nameUUIDFromBytes(seed.getBytes());
@@ -60,6 +92,7 @@ class ChatServiceTest {
         conversation.id = UUID.nameUUIDFromBytes("conversation".getBytes());
         conversation.createdAt = Instant.parse("2025-01-01T00:00:00Z");
         conversation.updatedAt = Instant.parse("2025-01-01T00:00:00Z");
+        conversation.isGroup = false;
 
         ConversationParticipant myParticipant = new ConversationParticipant();
         myParticipant.conversation = conversation;
@@ -73,6 +106,18 @@ class ChatServiceTest {
 
         conversation.participants = List.of(myParticipant, otherParticipant);
         return conversation;
+    }
+
+    private static UserMatch inactiveMatch(Conversation conversation, User me, User other) {
+        UserMatch match = new UserMatch();
+        match.id = UUID.nameUUIDFromBytes("match".getBytes());
+        match.userA = me;
+        match.userB = other;
+        match.conversation = conversation;
+        match.status = "UNMATCHED";
+        match.createdAt = Instant.parse("2025-01-01T00:00:00Z");
+        match.updatedAt = Instant.parse("2025-01-02T00:00:00Z");
+        return match;
     }
 
     private static final class StubConversationRepository extends ConversationRepository {
@@ -89,12 +134,26 @@ class ChatServiceTest {
         }
 
         @Override
+        public Optional<ConversationParticipant> findParticipant(UUID conversationId, UUID userId) {
+            return existingConversation.participants.stream()
+                    .filter(cp -> cp.conversation.id.equals(conversationId) && cp.user.id.equals(userId))
+                    .findFirst();
+        }
+
+        @Override
+        public Optional<Conversation> findByIdOptional(UUID id) {
+            return existingConversation.id.equals(id) ? Optional.of(existingConversation) : Optional.empty();
+        }
+
+        @Override
         public void persist(Conversation entity) {
             persistCalled = true;
         }
     }
 
     private static final class StubMessageRepository extends MessageRepository {
+        private Message persistedMessage;
+
         @Override
         public com.groupys.model.Message findLatestInConversation(UUID conversationId) {
             return null;
@@ -103,6 +162,17 @@ class ChatServiceTest {
         @Override
         public long countUnread(UUID conversationId, UUID userId, Instant lastReadAt) {
             return 0;
+        }
+
+        @Override
+        public void persist(Message entity) {
+            persistedMessage = entity;
+            if (entity.createdAt == null) {
+                entity.createdAt = Instant.parse("2025-01-03T00:00:00Z");
+            }
+            if (entity.id == null) {
+                entity.id = UUID.nameUUIDFromBytes((entity.content + entity.createdAt).getBytes());
+            }
         }
     }
 

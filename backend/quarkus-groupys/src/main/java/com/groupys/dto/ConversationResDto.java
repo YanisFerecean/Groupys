@@ -9,6 +9,7 @@ public record ConversationResDto(
         boolean isGroup,
         String groupName,
         List<ParticipantDto> participants,
+        String requestStatus,
         String lastMessage,
         Instant lastMessageAt,
         long unreadCount,

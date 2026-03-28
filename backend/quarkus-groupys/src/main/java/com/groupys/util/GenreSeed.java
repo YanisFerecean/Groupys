@@ -26,21 +26,35 @@ public class GenreSeed {
 
     @Transactional
     void onStart(@Observes StartupEvent ev) {
-        genreRepository.deleteAll();
-
         try {
             var response = deezerClient.getGenres();
             if (response != null && response.data() != null) {
+                int created = 0;
+                int updated = 0;
+
                 for (DeezerGenreDto dto : response.data()) {
                     // Skip "All" genre (usually id 0)
                     if (dto.id() == 0) continue;
+                    if (dto.name() == null || dto.name().isBlank()) continue;
 
-                    Genre g = new Genre();
-                    g.name = dto.name();
-                    g.deezerId = dto.id();
-                    genreRepository.persist(g);
+                    String genreName = dto.name().trim();
+                    Genre genre = genreRepository.findByDeezerId(dto.id())
+                            .or(() -> genreRepository.findByNameIgnoreCase(genreName))
+                            .orElseGet(Genre::new);
+
+                    boolean isNew = genre.id == null;
+                    genre.name = genreName;
+                    genre.deezerId = dto.id();
+
+                    if (isNew) {
+                        genreRepository.persist(genre);
+                        created++;
+                    } else {
+                        updated++;
+                    }
                 }
-                LOG.info("Seeded " + response.data().size() + " genres from Deezer.");
+                LOG.infof("Synced Deezer genres. created=%d updated=%d received=%d", created, updated,
+                        response.data().size());
             }
         } catch (Exception e) {
             LOG.error("Failed to seed genres from Deezer", e);

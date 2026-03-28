@@ -27,6 +27,16 @@ public class Conversation {
     @Column(name = "updated_at")
     public Instant updatedAt;
 
+    @Column(name = "request_status", length = 32)
+    public String requestStatus = "ACCEPTED";
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "requested_by_user_id")
+    public User requestedByUser;
+
+    @Column(name = "accepted_at")
+    public Instant acceptedAt;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "match_id")
     public UserMatch match;
@@ -38,10 +48,16 @@ public class Conversation {
     void onCreate() {
         createdAt = Instant.now();
         updatedAt = Instant.now();
+        if (acceptedAt == null && "ACCEPTED".equals(requestStatus)) {
+            acceptedAt = createdAt;
+        }
     }
 
     @PreUpdate
     void onUpdate() {
         updatedAt = Instant.now();
+        if (acceptedAt == null && "ACCEPTED".equals(requestStatus)) {
+            acceptedAt = updatedAt;
+        }
     }
 }

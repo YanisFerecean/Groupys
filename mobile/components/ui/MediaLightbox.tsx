@@ -6,12 +6,10 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Text,
-  StyleSheet,
   FlatList,
   Dimensions,
   ViewToken,
 } from 'react-native'
-import { BlurView } from 'expo-blur'
 import { Ionicons } from '@expo/vector-icons'
 import { Audio, AVPlaybackStatus } from 'expo-av'
 import { useVideoPlayer, VideoView } from 'expo-video'
@@ -19,6 +17,7 @@ import { Image } from 'expo-image'
 import * as Haptics from 'expo-haptics'
 import { Colors } from '@/constants/colors'
 import { useAuthToken } from '@/hooks/useAuthToken'
+import GlassModalBackdrop from '@/components/ui/GlassModalBackdrop'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
@@ -307,13 +306,7 @@ export default function MediaLightbox({
       onRequestClose={onClose}
     >
       <View className="flex-1">
-        <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill}>
-          <TouchableOpacity
-            activeOpacity={1}
-            onPress={onClose}
-            style={StyleSheet.absoluteFill}
-          />
-        </BlurView>
+        <GlassModalBackdrop onPress={onClose} intensity={78} tint="dark" />
 
         <View className="flex-1">
           <FlatList

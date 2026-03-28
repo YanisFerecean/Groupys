@@ -85,6 +85,9 @@ public class DiscoveryService {
     UserFollowRepository userFollowRepository;
 
     @Inject
+    ConversationRepository conversationRepository;
+
+    @Inject
     UserLikeRepository userLikeRepository;
 
     @Inject
@@ -176,7 +179,10 @@ public class DiscoveryService {
         if (refresh || userSimilarityCacheRepository.findFreshByUser(user.id, pageSize).isEmpty()) {
             refreshForUser(user.id);
         }
-        return userSimilarityCacheRepository.findFreshByUser(user.id, pageSize).stream()
+        Set<UUID> excludedUserIds = buildExcludedSuggestedUserIds(user.id);
+        return userSimilarityCacheRepository.findFreshByUser(user.id, 100).stream()
+                .filter(cache -> !excludedUserIds.contains(cache.candidateUser.id))
+                .limit(pageSize)
                 .map(this::toSuggestedUser)
                 .toList();
     }
@@ -272,6 +278,20 @@ public class DiscoveryService {
     @Transactional
     public void refreshAfterUserChange(UUID userId) {
         refreshForUser(userId);
+    }
+
+    private Set<UUID> buildExcludedSuggestedUserIds(UUID userId) {
+        Set<UUID> excluded = new HashSet<>();
+        userFollowRepository.findActiveByFollower(userId).stream()
+                .map(follow -> follow.followedUser.id)
+                .forEach(excluded::add);
+        conversationRepository.findDirectConversationPartnerIds(userId)
+                .forEach(excluded::add);
+        userDiscoveryActionRepository.findSuppressedUserIds(userId)
+                .forEach(excluded::add);
+        userLikeRepository.findLikedUserIds(userId)
+                .forEach(excluded::add);
+        return excluded;
     }
 
     @Transactional
@@ -389,6 +409,7 @@ public class DiscoveryService {
         Set<UUID> followedIds = userFollowRepository.findActiveByFollower(userId).stream()
                 .map(follow -> follow.followedUser.id)
                 .collect(Collectors.toSet());
+        Set<UUID> connectedUserIds = new HashSet<>(conversationRepository.findDirectConversationPartnerIds(userId));
         Set<UUID> suppressedUserIds = userDiscoveryActionRepository.findSuppressedUserIds(userId);
         Set<UUID> likedUserIds = userLikeRepository.findLikedUserIds(userId);
 
@@ -396,7 +417,8 @@ public class DiscoveryService {
 
         List<UserSimilarityCache> caches = new ArrayList<>();
         for (User candidate : userRepository.listDiscoveryVisible(userId)) {
-            if (followedIds.contains(candidate.id) || suppressedUserIds.contains(candidate.id)
+            if (followedIds.contains(candidate.id) || connectedUserIds.contains(candidate.id)
+                    || suppressedUserIds.contains(candidate.id)
                     || likedUserIds.contains(candidate.id)) {
                 continue;
             }

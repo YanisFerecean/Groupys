@@ -68,6 +68,19 @@ public class ConversationResource {
         return Response.ok(dto).build();
     }
 
+    @POST
+    @Path("/conversations/{id}/accept")
+    public ConversationResDto acceptConversationRequest(@PathParam("id") UUID id) {
+        return chatService.acceptConversationRequest(id, jwt.getSubject());
+    }
+
+    @DELETE
+    @Path("/conversations/{id}/request")
+    public Response denyConversationRequest(@PathParam("id") UUID id) {
+        chatService.denyConversationRequest(id, jwt.getSubject());
+        return Response.noContent().build();
+    }
+
     // ── Messages ──────────────────────────────────────────────────────────────
 
     @GET
