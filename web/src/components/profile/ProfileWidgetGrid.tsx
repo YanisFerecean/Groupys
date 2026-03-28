@@ -168,12 +168,13 @@ function WidgetSettingsButton({ colorValue, sizeValue, iconColor, onChange }: Wi
 }
 
 function getActiveWidgets(profile: ProfileCustomization): WidgetType[] {
+  const hidden = profile.hiddenWidgets ?? [];
   const all: { type: WidgetType; active: boolean }[] = [
-    { type: "topAlbums", active: !!profile.topAlbums?.length },
-    { type: "currentlyListening", active: !!profile.currentlyListening?.title },
-    { type: "topSongs", active: !!profile.topSongs?.length },
-    { type: "topArtists", active: !!profile.topArtists?.length },
-    { type: "lastRatedAlbum", active: !!profile.showLastRatedAlbum },
+    { type: "topAlbums", active: !!profile.topAlbums?.length && !hidden.includes("topAlbums") },
+    { type: "currentlyListening", active: !!profile.currentlyListening?.title && !hidden.includes("currentlyListening") },
+    { type: "topSongs", active: !!profile.topSongs?.length && !hidden.includes("topSongs") },
+    { type: "topArtists", active: !!profile.topArtists?.length && !hidden.includes("topArtists") },
+    { type: "lastRatedAlbum", active: !!profile.showLastRatedAlbum && !hidden.includes("lastRatedAlbum") },
   ];
   const defaultOrder: WidgetType[] = ["topAlbums", "currentlyListening", "topSongs", "topArtists", "lastRatedAlbum"];
   const order = (profile.widgetOrder as WidgetType[] | undefined) ?? defaultOrder;

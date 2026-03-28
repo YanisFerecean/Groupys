@@ -225,6 +225,18 @@ export default function ProfileEditDrawer({
   const clearSynced = (key: string) =>
     setForm((prev) => ({ ...prev, spotifySynced: { ...prev.spotifySynced, [key]: false } }));
 
+  const isWidgetHidden = (key: string) => (form.hiddenWidgets ?? []).includes(key);
+  const toggleWidgetHidden = (key: string) =>
+    setForm((prev) => {
+      const current = prev.hiddenWidgets ?? [];
+      return {
+        ...prev,
+        hiddenWidgets: current.includes(key)
+          ? current.filter((k) => k !== key)
+          : [...current, key],
+      };
+    });
+
   const addSongFromSearch = (result: TrackResult) => {
     const songs = [...(form.topSongs ?? [])];
     if (songs.length < 3) {
@@ -706,7 +718,19 @@ export default function ProfileEditDrawer({
               {/* Top Albums */}
               <div className="space-y-3 p-5 bg-surface-container-low rounded-xl">
                 <div className="flex items-center justify-between">
-                  <Label className="font-bold">Top Albums</Label>
+                  <div className="flex items-center gap-2">
+                    <Label className="font-bold">Top Albums</Label>
+                    <button
+                      type="button"
+                      onClick={() => toggleWidgetHidden("topAlbums")}
+                      className="text-on-surface-variant/50 hover:text-on-surface-variant transition-colors"
+                      title={isWidgetHidden("topAlbums") ? "Show widget" : "Hide widget"}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                        {isWidgetHidden("topAlbums") ? "visibility_off" : "visibility"}
+                      </span>
+                    </button>
+                  </div>
                   {spotifyConnected && (
                     <Button
                       type="button"
@@ -766,7 +790,19 @@ export default function ProfileEditDrawer({
               {/* Currently Listening */}
               <div className="space-y-3 p-5 bg-surface-container-low rounded-xl">
                 <div className="flex items-center justify-between">
-                  <Label className="font-bold">Currently Listening</Label>
+                  <div className="flex items-center gap-2">
+                    <Label className="font-bold">Currently Listening</Label>
+                    <button
+                      type="button"
+                      onClick={() => toggleWidgetHidden("currentlyListening")}
+                      className="text-on-surface-variant/50 hover:text-on-surface-variant transition-colors"
+                      title={isWidgetHidden("currentlyListening") ? "Show widget" : "Hide widget"}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                        {isWidgetHidden("currentlyListening") ? "visibility_off" : "visibility"}
+                      </span>
+                    </button>
+                  </div>
                   {spotifyConnected && (
                     <Button
                       type="button"
@@ -822,7 +858,19 @@ export default function ProfileEditDrawer({
               {/* Top Songs */}
               <div className="space-y-3 p-5 bg-surface-container-low rounded-xl">
                 <div className="flex items-center justify-between">
-                  <Label className="font-bold">Top Songs</Label>
+                  <div className="flex items-center gap-2">
+                    <Label className="font-bold">Top Songs</Label>
+                    <button
+                      type="button"
+                      onClick={() => toggleWidgetHidden("topSongs")}
+                      className="text-on-surface-variant/50 hover:text-on-surface-variant transition-colors"
+                      title={isWidgetHidden("topSongs") ? "Show widget" : "Hide widget"}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                        {isWidgetHidden("topSongs") ? "visibility_off" : "visibility"}
+                      </span>
+                    </button>
+                  </div>
                   {spotifyConnected && (
                     <Button
                       type="button"
@@ -883,7 +931,19 @@ export default function ProfileEditDrawer({
               {/* Top Artists */}
               <div className="space-y-3 p-5 bg-surface-container-low rounded-xl">
                 <div className="flex items-center justify-between">
-                  <Label className="font-bold">Top Artists</Label>
+                  <div className="flex items-center gap-2">
+                    <Label className="font-bold">Top Artists</Label>
+                    <button
+                      type="button"
+                      onClick={() => toggleWidgetHidden("topArtists")}
+                      className="text-on-surface-variant/50 hover:text-on-surface-variant transition-colors"
+                      title={isWidgetHidden("topArtists") ? "Show widget" : "Hide widget"}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                        {isWidgetHidden("topArtists") ? "visibility_off" : "visibility"}
+                      </span>
+                    </button>
+                  </div>
                   {spotifyConnected && (
                     <Button
                       type="button"
