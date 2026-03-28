@@ -14,6 +14,8 @@ import {
 import type { BackendUser } from '@/lib/api'
 import { Colors } from '@/constants/colors'
 import { useChat } from '@/hooks/useChat'
+import GlassModalBackdrop from '@/components/ui/GlassModalBackdrop'
+import { useDiscoveryStore } from '@/store/discoveryStore'
 
 interface NewConversationModalProps {
   visible: boolean
@@ -63,8 +65,13 @@ export function NewConversationModal({ visible, onClose }: NewConversationModalP
     try {
       setStartingUserId(targetUserId)
       const conversation = await startDirectConversation(targetUserId)
+      useDiscoveryStore.getState().removeUser(targetUserId)
       onClose()
-      router.push(`/(home)/(match)/chat/${conversation.id}` as never)
+      if (conversation.requestStatus === 'ACCEPTED') {
+        router.push(`/(home)/(match)/chat/${conversation.id}` as never)
+      } else {
+        router.push('/(home)/(match)/chat')
+      }
     } catch (error) {
       console.error('[chat] failed to start conversation', error)
     } finally {
@@ -79,14 +86,15 @@ export function NewConversationModal({ visible, onClose }: NewConversationModalP
       transparent
       onRequestClose={onClose}
     >
-      <View className="flex-1 justify-end bg-black/35">
+      <View className="flex-1 justify-end">
+        <GlassModalBackdrop onPress={onClose} />
         <View className="max-h-[82%] rounded-t-[32px] bg-surface-container-lowest px-5 pb-6 pt-4">
           <View className="mb-4 items-center">
             <View className="h-1.5 w-12 rounded-full bg-surface-container-highest" />
           </View>
 
           <View className="mb-4 flex-row items-center justify-between">
-            <Text className="text-xl font-extrabold text-on-surface">New message</Text>
+            <Text className="text-xl font-extrabold text-on-surface">New chat request</Text>
             <TouchableOpacity
               className="h-10 w-10 items-center justify-center rounded-full bg-surface-container"
               onPress={onClose}
@@ -146,6 +154,9 @@ export function NewConversationModal({ visible, onClose }: NewConversationModalP
                       </Text>
                       <Text className="text-xs font-medium text-on-surface-variant">
                         @{result.username}
+                      </Text>
+                      <Text className="mt-1 text-xs font-medium text-on-surface-variant">
+                        Send a request to start chatting
                       </Text>
                     </View>
 
