@@ -44,6 +44,9 @@ public class PostService {
     @Inject
     StorageService storageService;
 
+    @Inject
+    DiscoveryService discoveryService;
+
     public List<PostResDto> getFeed(String clerkId) {
         User user = userRepository.findByClerkId(clerkId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
@@ -93,6 +96,7 @@ public class PostService {
         post.community = community;
         post.author = author;
         postRepository.persist(post);
+        discoveryService.refreshAfterCommunityActivity(communityId);
 
         return toDto(post, author);
     }
@@ -121,6 +125,8 @@ public class PostService {
             postReactionRepository.persist(reaction);
         }
 
+        discoveryService.refreshAfterCommunityActivity(post.community.id);
+
         return toDto(post, user);
     }
 
@@ -136,6 +142,7 @@ public class PostService {
         if (!isAuthor && !isCommunityOwner) {
             throw new jakarta.ws.rs.ForbiddenException("Not authorized to delete this post");
         }
+        UUID communityId = post.community.id;
         commentService.deleteAllByPost(postId);
         postReactionRepository.delete("post.id", postId);
         if (post.media != null && !post.media.isEmpty()) {
@@ -144,6 +151,7 @@ public class PostService {
             }
         }
         postRepository.delete(post);
+        discoveryService.refreshAfterCommunityActivity(communityId);
     }
 
     private PostResDto toDto(Post post, User currentUser) {
