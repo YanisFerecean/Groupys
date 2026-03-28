@@ -43,6 +43,15 @@ public class UserMatchRepository implements PanacheRepositoryBase<UserMatch, UUI
                 .list();
     }
 
+    public List<UserMatch> findMatchesByUserPaged(UUID userId, int page, int size) {
+        return find("""
+                (userA.id = ?1 or userB.id = ?1)
+                order by createdAt desc
+                """, userId)
+                .page(page, size)
+                .list();
+    }
+
     /**
      * Finds a specific match by ID, verifying the requesting user is a participant.
      */
