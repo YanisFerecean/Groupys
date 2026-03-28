@@ -64,6 +64,13 @@ public class DiscoveryResource {
         return matchService.likeUser(jwt.getSubject(), targetId);
     }
 
+    @DELETE
+    @Path("/users/{id}/like")
+    public Response withdrawLike(@PathParam("id") UUID targetId) {
+        matchService.withdrawLike(jwt.getSubject(), targetId);
+        return Response.noContent().build();
+    }
+
     @POST
     @Path("/users/{id}/pass")
     public Response passUser(@PathParam("id") UUID targetId) {
