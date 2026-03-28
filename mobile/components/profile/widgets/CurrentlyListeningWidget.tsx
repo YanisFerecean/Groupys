@@ -1,9 +1,11 @@
-import { View, Text, Animated, Easing } from 'react-native'
+import { View, Text, Animated, Easing, StyleSheet } from 'react-native'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
+import { BlurView } from 'expo-blur'
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '@clerk/expo'
-import { apiFetch } from '@/lib/api'
+import { Ionicons } from '@expo/vector-icons'
+import { API_URL } from '@/lib/api'
 
 function SoundWaveBar({ delay }: { delay: number }) {
   const height = useRef(new Animated.Value(4)).current
@@ -63,10 +65,48 @@ interface CurrentlyListeningWidgetProps {
   spotifyConnected?: boolean
 }
 
+const DEFAULT_COVER_SLIDE_DISTANCE = 220
+
+function isSameSong(a: TrackInfo | null, b: TrackInfo | null): boolean {
+  if (!a || !b) return false
+  return (
+    a.title.trim().toLowerCase() === b.title.trim().toLowerCase() &&
+    a.artist.trim().toLowerCase() === b.artist.trim().toLowerCase()
+  )
+}
+
 export default function CurrentlyListeningWidget({ track: manualTrack, spotifyConnected }: CurrentlyListeningWidgetProps) {
   const { getToken } = useAuth()
   const getTokenRef = useRef(getToken)
   const [spotifyTrack, setSpotifyTrack] = useState<TrackInfo | null>(null)
+  const spotifyTrackRef = useRef<TrackInfo | null>(null)
+  const [activeCoverUrl, setActiveCoverUrl] = useState<string | undefined>(undefined)
+  const activeCoverUrlRef = useRef<string | undefined>(undefined)
+  const [incomingCoverUrl, setIncomingCoverUrl] = useState<string | undefined>(undefined)
+  const [coverSlideDistance, setCoverSlideDistance] = useState(DEFAULT_COVER_SLIDE_DISTANCE)
+  const slideAnim = useRef(new Animated.Value(0)).current
+  const isCoverAnimatingRef = useRef(false)
+
+  const outgoingTranslateX = slideAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -coverSlideDistance],
+  })
+  const incomingTranslateX = slideAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [coverSlideDistance, 0],
+  })
+  const incomingOpacity = slideAnim.interpolate({
+    inputRange: [0, 0.12, 1],
+    outputRange: [0, 0, 1],
+  })
+
+  useEffect(() => {
+    spotifyTrackRef.current = spotifyTrack
+  }, [spotifyTrack])
+
+  useEffect(() => {
+    activeCoverUrlRef.current = activeCoverUrl
+  }, [activeCoverUrl])
 
   useEffect(() => {
     getTokenRef.current = getToken
@@ -75,6 +115,10 @@ export default function CurrentlyListeningWidget({ track: manualTrack, spotifyCo
   useEffect(() => {
     if (!spotifyConnected) {
       setSpotifyTrack(null)
+      setActiveCoverUrl(undefined)
+      setIncomingCoverUrl(undefined)
+      slideAnim.setValue(0)
+      isCoverAnimatingRef.current = false
       return
     }
 
@@ -82,8 +126,72 @@ export default function CurrentlyListeningWidget({ track: manualTrack, spotifyCo
       try {
         const token = await getTokenRef.current()
         if (!token) return
-        const data = await apiFetch<TrackInfo | null>('/spotify/currently-playing', token)
-        setSpotifyTrack(data)
+
+        const res = await fetch(`${API_URL}/spotify/currently-playing`, {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        // Keep last known track when playback stops.
+        if (res.status === 204) {
+          return
+        }
+
+        if (!res.ok) {
+          throw new Error(`API error ${res.status}: ${res.statusText}`)
+        }
+
+        const raw = await res.text()
+        if (!raw.trim()) {
+          return
+        }
+
+        const data = JSON.parse(raw) as TrackInfo | null
+        if (data?.title) {
+          const prev = spotifyTrackRef.current
+          if (isSameSong(prev, data)) return
+
+          const prevCover = activeCoverUrlRef.current ?? prev?.coverUrl
+          const nextCover = data.coverUrl
+          if (isCoverAnimatingRef.current) {
+            return
+          }
+
+          const shouldAnimateCoverSwap =
+            !!prev?.title &&
+            !!prevCover &&
+            !!nextCover &&
+            prevCover !== nextCover
+
+          if (shouldAnimateCoverSwap) {
+            isCoverAnimatingRef.current = true
+            setIncomingCoverUrl(nextCover)
+            slideAnim.stopAnimation(() => {
+              slideAnim.setValue(0)
+
+              Animated.timing(slideAnim, {
+                toValue: 1,
+                duration: 420,
+                easing: Easing.inOut(Easing.ease),
+                useNativeDriver: true,
+              }).start(() => {
+                setSpotifyTrack(data)
+                spotifyTrackRef.current = data
+                setActiveCoverUrl(data.coverUrl)
+                setIncomingCoverUrl(undefined)
+                slideAnim.setValue(0)
+                isCoverAnimatingRef.current = false
+              })
+            })
+            return
+          }
+
+          setSpotifyTrack(data)
+          spotifyTrackRef.current = data
+          setActiveCoverUrl(data.coverUrl)
+        }
       } catch (err) {
         console.error('Failed to fetch Spotify status:', err)
       }
@@ -92,63 +200,104 @@ export default function CurrentlyListeningWidget({ track: manualTrack, spotifyCo
     fetchSpotify()
     const interval = setInterval(fetchSpotify, 30000) // refresh every 30s
     return () => clearInterval(interval)
-  }, [spotifyConnected])
+  }, [spotifyConnected, slideAnim])
 
-  const track = spotifyTrack || manualTrack
+  const track = spotifyConnected ? spotifyTrack : manualTrack
+  const isCurrentlyPlaying = !!spotifyTrack?.title
+  const displayCoverUrl = spotifyConnected ? (activeCoverUrl ?? track?.coverUrl) : track?.coverUrl
   if (!track?.title) return null
 
   return (
-    <View className="rounded-2xl overflow-hidden">
-      {track.coverUrl ? (
-        <View className="h-36">
-          <Image
-            source={{ uri: track.coverUrl }}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' }}
-            contentFit="cover"
-          />
+    <View className="rounded-[28px] overflow-hidden bg-surface-container-lowest">
+      {displayCoverUrl ? (
+        <View
+          className="h-40"
+          onLayout={(event) => {
+            const width = Math.round(event.nativeEvent.layout.width)
+            if (width > 0 && width !== coverSlideDistance) {
+              setCoverSlideDistance(width)
+            }
+          }}
+        >
+          <Animated.View
+            style={[
+              StyleSheet.absoluteFillObject,
+              {
+                transform: [{ translateX: outgoingTranslateX }],
+              },
+            ]}
+          >
+            <Image
+              source={{ uri: displayCoverUrl }}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' }}
+              contentFit="cover"
+            />
+          </Animated.View>
+          {incomingCoverUrl ? (
+            <Animated.View
+              style={[
+                StyleSheet.absoluteFillObject,
+                {
+                  opacity: incomingOpacity,
+                  transform: [{ translateX: incomingTranslateX }],
+                },
+              ]}
+            >
+              <Image
+                source={{ uri: incomingCoverUrl }}
+                style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' }}
+                contentFit="cover"
+              />
+            </Animated.View>
+          ) : null}
+          <BlurView intensity={28} tint="dark" style={StyleSheet.absoluteFillObject} />
           <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.75)']}
+            colors={['rgba(255,255,255,0.06)', 'rgba(0,0,0,0.45)']}
             className="absolute inset-0"
           />
-          <View className="absolute bottom-0 left-0 right-0 p-4 flex-row items-end justify-between">
+          <View className="absolute bottom-0 left-0 right-0 p-5 flex-row items-end justify-between">
             <View className="flex-1 mr-4">
-              <Text className="text-white/70 text-sm font-extrabold uppercase tracking-wider mb-0.5">
+              <Text className="text-white/70 text-[10px] font-semibold uppercase tracking-widest mb-1">
                 Currently Listening
               </Text>
-              <Text className="text-white font-bold text-base" numberOfLines={1}>
+              <Text className="text-white font-bold text-lg mb-0.5" numberOfLines={1}>
                 {track.title}
               </Text>
-              <Text className="text-white/80 text-xs" numberOfLines={1}>
+              <Text className="text-white/85 text-[15px]" numberOfLines={1}>
                 {track.artist}
               </Text>
             </View>
-            <View className="pb-0.5">
-              <SoundWaveAnimation />
+            <View className="pb-1">
+              {isCurrentlyPlaying ? (
+                <SoundWaveAnimation color="#fff" />
+              ) : (
+                <Ionicons name="pause" size={20} color="#fff" />
+              )}
             </View>
           </View>
         </View>
       ) : (
-        <View className="bg-surface-container-high rounded-2xl p-4 flex-row items-center gap-3">
-          <View className="w-12 h-12 rounded-lg bg-surface-container items-center justify-center shrink-0">
-            <Text className="text-2xl">🎵</Text>
+        <View className="p-4 flex-row items-center gap-4">
+          <View className="w-14 h-14 rounded-2xl bg-surface-container items-center justify-center shrink-0">
+            <Ionicons name="musical-notes" size={24} color="#888" />
           </View>
-          <View className="flex-1 min-w-0">
-            <Text className="text-sm font-extrabold text-on-surface-variant uppercase tracking-wider mb-0.5">
+          <View className="flex-1 min-w-0 justify-center">
+            <Text className="text-xs font-semibold text-on-surface-variant uppercase tracking-widest mb-1">
               Currently Listening
             </Text>
-            <Text className="text-sm font-bold text-on-surface" numberOfLines={1}>
+            <Text className="text-[17px] font-bold text-on-surface mb-0.5" numberOfLines={1}>
               {track.title}
             </Text>
-            <Text className="text-xs text-on-surface-variant" numberOfLines={1}>
+            <Text className="text-[15px] text-on-surface-variant" numberOfLines={1}>
               {track.artist}
             </Text>
           </View>
-          <View className="mr-1">
-            <View style={{ transform: [{ scale: 0.8 }] }}>
-              <View style={{ backgroundColor: '#222', borderRadius: 8, padding: 4 }}>
-                <SoundWaveAnimation />
-              </View>
-            </View>
+          <View className="bg-primary/10 rounded-xl p-2 mr-1">
+            {isCurrentlyPlaying ? (
+              <SoundWaveAnimation color="#ba002b" />
+            ) : (
+              <Ionicons name="pause" size={20} color="#ba002b" />
+            )}
           </View>
         </View>
       )}
