@@ -19,6 +19,7 @@ import { useAuth } from '@clerk/expo'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Colors } from '@/constants/colors'
 import type { TopAlbum } from '@/models/ProfileCustomization'
+import GlassModalBackdrop from '@/components/ui/GlassModalBackdrop'
 import {
   deleteAlbumRating,
   fetchAlbumRatings,
@@ -176,7 +177,8 @@ export default function AlbumRatingModal({
 
   return (
     <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
-      <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.35)' }}>
+      <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+        <GlassModalBackdrop onPress={onClose} />
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={{ maxHeight: screenHeight * 0.88 }}
