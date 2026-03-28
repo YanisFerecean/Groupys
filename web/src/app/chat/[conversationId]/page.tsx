@@ -222,7 +222,7 @@ export default function ConversationPage() {
       {/* Input */}
       <MessageInput 
         conversationId={conversationId || ""} 
-        onSend={handleSend} 
+        onSend={handleSend}
       />
     </div>
   );
