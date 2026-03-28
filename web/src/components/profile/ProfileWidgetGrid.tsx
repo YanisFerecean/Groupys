@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { cn } from "@/lib/utils";
+import { cn, getContrastColor } from "@/lib/utils";
 import type { ProfileCustomization } from "@/types/profile";
 import TopAlbumsWidget from "./widgets/TopAlbumWidget";
 import CurrentlyListeningWidget from "./widgets/CurrentlyListeningWidget";
@@ -50,10 +50,11 @@ function getWidgetColSpan(_type: WidgetType, size: WidgetSize): string {
 interface WidgetSettingsButtonProps {
   colorValue: string;
   sizeValue: WidgetSize;
+  iconColor: string;
   onChange: (color: string, size: WidgetSize) => void;
 }
 
-function WidgetSettingsButton({ colorValue, sizeValue, onChange }: WidgetSettingsButtonProps) {
+function WidgetSettingsButton({ colorValue, sizeValue, iconColor, onChange }: WidgetSettingsButtonProps) {
   const [open, setOpen] = useState(false);
   const [localColor, setLocalColor] = useState(colorValue);
   const [localSize, setLocalSize] = useState<WidgetSize>(sizeValue);
@@ -147,16 +148,16 @@ function WidgetSettingsButton({ colorValue, sizeValue, onChange }: WidgetSetting
   ) : null;
 
   return (
-    <div className="absolute top-3 right-10 z-10">
+    <div>
       <button
         ref={btnRef}
         type="button"
         onClick={openPopover}
-        className="opacity-0 group-hover:opacity-100 transition-opacity w-7 h-7 rounded-lg bg-surface-container/80 backdrop-blur-sm flex items-center justify-center hover:bg-surface-container-high"
+        className="w-7 h-7 flex items-center justify-center"
       >
         <span
-          className="material-symbols-outlined text-on-surface-variant/40 select-none"
-          style={{ fontSize: 20 }}
+          className="material-symbols-outlined select-none"
+          style={{ fontSize: 20, color: iconColor, opacity: 0.5 }}
         >
           palette
         </span>
@@ -257,6 +258,7 @@ interface DraggableWidgetProps {
   settingsColor?: string;
   settingsSize?: WidgetSize;
   onSettingsChange?: (color: string, size: WidgetSize) => void;
+  containerColor?: string;
   children: React.ReactNode;
 }
 
@@ -273,9 +275,11 @@ function DraggableWidget({
   settingsColor,
   settingsSize,
   onSettingsChange,
+  containerColor,
   children,
 }: DraggableWidgetProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const iconColor = containerColor ? getContrastColor(containerColor) : "var(--color-on-surface-variant)";
 
   function handleHandleDragStart(e: React.DragEvent<HTMLDivElement>) {
     e.stopPropagation();
@@ -303,27 +307,29 @@ function DraggableWidget({
         <div className="absolute -right-3 top-2 bottom-2 w-0.5 bg-primary rounded-full z-20 pointer-events-none" />
       )}
 
-      <div
-        draggable
-        onDragStart={handleHandleDragStart}
-        onDragEnd={(e) => { e.stopPropagation(); onDragEnd(); }}
-        className="absolute top-3 right-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
-      >
-        <span
-          className="material-symbols-outlined text-on-surface-variant/40 select-none"
-          style={{ fontSize: 20 }}
+      <div className="absolute top-3 right-3 z-10 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        {settingsColor !== undefined && settingsSize !== undefined && onSettingsChange && (
+          <WidgetSettingsButton
+            colorValue={settingsColor}
+            sizeValue={settingsSize}
+            iconColor={iconColor}
+            onChange={onSettingsChange}
+          />
+        )}
+        <div
+          draggable
+          onDragStart={handleHandleDragStart}
+          onDragEnd={(e) => { e.stopPropagation(); onDragEnd(); }}
+          className="w-7 h-7 flex items-center justify-center cursor-grab active:cursor-grabbing"
         >
-          drag_indicator
-        </span>
+          <span
+            className="material-symbols-outlined select-none"
+            style={{ fontSize: 20, color: iconColor, opacity: 0.5 }}
+          >
+            drag_indicator
+          </span>
+        </div>
       </div>
-
-      {settingsColor !== undefined && settingsSize !== undefined && onSettingsChange && (
-        <WidgetSettingsButton
-          colorValue={settingsColor}
-          sizeValue={settingsSize}
-          onChange={onSettingsChange}
-        />
-      )}
 
       {children}
     </div>
@@ -469,6 +475,7 @@ export default function ProfileWidgetGrid({
               settingsColor={isEditing && hasSettings ? containerColor ?? "" : undefined}
               settingsSize={isEditing && hasSettings ? size : undefined}
               onSettingsChange={isEditing && hasSettings && onSettingsChange ? (color, sz) => onSettingsChange(type, color, sz) : undefined}
+              containerColor={containerColor}
             >
               {renderWidget(type, profile, username, spotifyConnected)}
               {isSynced && <SpotifySyncBadge containerColor={containerColor} />}
