@@ -34,7 +34,8 @@
       "Bash(find /c/Uni/Projects/groupys-web-app/web/src/app -type f -name *.tsx -o -name *.ts)",
       "Bash(find /c/Uni/Projects/groupys-web-app/backend/quarkus-groupys/src/main/resources -name *.* -type f)",
       "Bash(java -version)",
-      "Bash(find C:UniProjectsgroupys-web-appwebsrclib -type f \\\\\\(-name *.ts -o -name *.tsx \\\\\\))"
+      "Bash(find C:UniProjectsgroupys-web-appwebsrclib -type f \\\\\\(-name *.ts -o -name *.tsx \\\\\\))",
+      "Bash(find /Users/kyaw/Desktop/groupys-web-app/backend/quarkus-groupys/src/main/java/com/groupys -type f -name *Service.java)"
     ]
   }
 }
