@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { Colors } from '@/constants/colors'
 import { useMatchStore } from '@/store/matchStore'
+import GlassModalBackdrop from '@/components/ui/GlassModalBackdrop'
 
 export default function MatchCelebrationModal() {
   const router = useRouter()
@@ -29,7 +30,8 @@ export default function MatchCelebrationModal() {
       transparent
       statusBarTranslucent
     >
-      <View className="flex-1 items-center justify-center bg-black/70 px-6">
+      <View className="flex-1 items-center justify-center px-6">
+        <GlassModalBackdrop onPress={handleKeepSwiping} intensity={50} />
         <View className="w-full rounded-3xl bg-surface px-6 py-8 items-center gap-6">
           {/* Match icon */}
           <View className="h-16 w-16 rounded-full bg-primary items-center justify-center">
