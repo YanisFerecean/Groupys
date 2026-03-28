@@ -1,10 +1,10 @@
-import { useState } from 'react'
-import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native'
-import { Image } from 'expo-image'
-import { LinearGradient } from 'expo-linear-gradient'
-import { Ionicons } from '@expo/vector-icons'
 import { Colors } from '@/constants/colors'
 import type { ProfileCustomization } from '@/models/ProfileCustomization'
+import { Ionicons } from '@expo/vector-icons'
+import { Image } from 'expo-image'
+import { LinearGradient } from 'expo-linear-gradient'
+import { useMemo, useState } from 'react'
+import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native'
 
 // Preset gradients matching web app
 const PRESET_GRADIENTS: { value: string; colors: [string, string, ...string[]] }[] = [
@@ -43,16 +43,19 @@ function getBannerColors(bannerUrl?: string): [string, string, ...string[]] | nu
   if (bannerUrl.startsWith('linear-gradient') || bannerUrl.startsWith('radial-gradient')) {
     return DEFAULT_GRADIENT
   }
-  // If it's a hex color, we don't return colors for LinearGradient, we handle it as a solid view
   return null
 }
 
-interface ProfileHeaderProps {
+export interface ProfileHeaderProps {
   profile: ProfileCustomization
   avatarUrl?: string | null
   displayName: string
   username: string
-  memberYear?: number
+  memberYear?: number | string
+  communitiesCount: number
+  postsCount: number
+  followingCount?: number
+  followersCount?: number
   onEditPress: () => void
   onAvatarPress?: () => void
   isUploadingAvatar?: boolean
@@ -64,26 +67,47 @@ export default function ProfileHeader({
   displayName,
   username,
   memberYear,
+  followingCount = 0,
+  followersCount = 0,
   onEditPress,
   onAvatarPress,
   isUploadingAvatar = false,
 }: ProfileHeaderProps) {
   const [avatarError, setAvatarError] = useState(false)
+  const [isBioExpanded, setIsBioExpanded] = useState(false)
   const accentColor = profile.accentColor ?? Colors.primary
+
   const bannerColors = getBannerColors(profile.bannerUrl)
   const isBannerImage = profile.bannerUrl && !bannerColors
   const gradientColors = bannerColors ?? DEFAULT_GRADIENT
+  const bio = profile.bio?.trim() ?? ''
+
+  // Bio truncation logic
+  const bioPreview = bio.length > 60 ? bio.slice(0, 60) + '...' : bio
+  const hasMoreBio = bio.length > 60
+  const visibleBio = isBioExpanded || !hasMoreBio ? bio : bioPreview
+
+  const joinedDateFormatted = useMemo(() => {
+    if (!memberYear) return ''
+    if (typeof memberYear === 'number') return `${memberYear}`
+    try {
+      const date = new Date(memberYear)
+      return new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(date)
+    } catch {
+      return memberYear
+    }
+  }, [memberYear])
 
   return (
     <View>
       {/* Banner */}
-      <View className="h-36 w-full overflow-hidden">
+      <View className="h-44 w-full overflow-hidden justify-center items-center">
         {profile.bannerUrl?.startsWith('#') ? (
-          <View style={{ flex: 1, backgroundColor: profile.bannerUrl }} />
+          <View className="absolute inset-0" style={{ backgroundColor: profile.bannerUrl }} />
         ) : isBannerImage ? (
           <Image
             source={{ uri: profile.bannerUrl }}
-            style={{ width: '100%', height: '100%' }}
+            style={{ width: '100%', height: '100%', position: 'absolute' }}
             contentFit="cover"
           />
         ) : (
@@ -91,21 +115,32 @@ export default function ProfileHeader({
             colors={gradientColors}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={{ flex: 1 }}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
           />
+        )}
+        {profile.bannerText && (
+          <Text
+            className="text-white text-[38px] font-black italic tracking-tighter text-center px-8"
+            style={{ lineHeight: 42 }}
+          >
+            {profile.bannerText}
+          </Text>
         )}
       </View>
 
-      {/* Avatar + info */}
+      {/* Profile Info Container */}
       <View className="px-5">
-        {/* Avatar centered */}
-        <View className="items-center -mt-16 mb-3">
+        {/* Avatar aligned left */}
+        <View className="-mt-12 mb-4 items-start">
           <TouchableOpacity
             onPress={onAvatarPress}
             activeOpacity={onAvatarPress ? 0.8 : 1}
             disabled={!onAvatarPress || isUploadingAvatar}
           >
-            <View className="w-[120px] h-[120px] rounded-2xl overflow-hidden border-4 border-surface bg-surface-container-high">
+            <View
+              className="w-[96px] h-[96px] rounded-full overflow-hidden bg-surface-container-high border-4"
+              style={{ borderColor: Colors.surface }}
+            >
               {avatarUrl && !avatarError ? (
                 <Image
                   source={{ uri: avatarUrl }}
@@ -115,104 +150,102 @@ export default function ProfileHeader({
                 />
               ) : (
                 <View className="w-full h-full items-center justify-center">
-                  <Ionicons name="person" size={48} color={Colors.onSurfaceVariant} />
+                  <Ionicons name="person" size={40} color={Colors.onSurfaceVariant} />
                 </View>
               )}
             </View>
 
-            {/* Camera badge overlay */}
+            {/* Camera badge overlay - adjusted for left alignment */}
             {onAvatarPress && (
               <View
-                className="absolute -bottom-1 -right-1 w-9 h-9 rounded-full items-center justify-center"
+                className="absolute bottom-1 right-1 w-7 h-7 rounded-full items-center justify-center border-2 border-surface"
                 style={{ backgroundColor: accentColor }}
               >
                 {isUploadingAvatar ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Ionicons name="camera" size={16} color="#fff" />
+                  <Ionicons name="camera" size={12} color="#fff" />
                 )}
               </View>
             )}
           </TouchableOpacity>
-
-          {/* Edit button */}
-          <TouchableOpacity
-            onPress={onEditPress}
-            className="flex-row items-center gap-1.5 px-4 py-2 rounded-2xl mt-3"
-            style={{ backgroundColor: accentColor + '18' }}
-          >
-            <Ionicons name="pencil-sharp" size={14} color={accentColor} />
-            <Text className="text-sm font-bold" style={{ color: accentColor }}>
-              Edit Profile
-            </Text>
-          </TouchableOpacity>
         </View>
 
-        {/* Name & bio */}
-        {memberYear && (
-          <Text className="text-xs text-on-surface-variant font-medium mb-1">
-            Member since {memberYear}
-          </Text>
-        )}
-        <Text
-          className="text-2xl font-extrabold tracking-tight"
-          style={{ color: profile.nameColor ?? Colors.onSurface }}
-        >
-          {displayName}
-        </Text>
-        {username ? (
-          <Text className="text-sm text-on-surface-variant mt-0.5">@{username}</Text>
-        ) : null}
-        {profile.bio ? (
+        {/* Name & Username */}
+        <View className="flex-row items-center gap-2">
           <Text
-            className="text-sm text-on-surface-variant mt-2 leading-5"
-            style={{ fontFamily: 'DMSans_700Bold' }}
+            className="text-[28px] font-extrabold tracking-tight text-on-surface"
+            style={{ color: profile.nameColor ?? Colors.onSurface }}
           >
-            {profile.bio}
+            {displayName}
           </Text>
+          {profile.isVerified && (
+            <Ionicons name="checkmark-circle" size={20} color="#3897f0" />
+          )}
+        </View>
+        {username ? (
+          <Text className="text-[17px] font-medium text-on-surface-variant mt-0.5">@{username}</Text>
         ) : null}
-        {profile.country || (profile.tags && profile.tags.length > 0) ? (
-          <View className="flex-row flex-wrap gap-2 mt-3">
-            {profile.country && (
-              <View className="rounded-full px-3 py-1 bg-surface-container-high flex-row items-center gap-1">
-                <Ionicons name="location-outline" size={12} color={Colors.onSurfaceVariant} />
-                <Text className="text-xs font-semibold text-on-surface-variant">{profile.country}</Text>
-              </View>
-            )}
-            {profile.tags?.map((tag) => (
-              <View key={tag} className="rounded-full px-3 py-1 bg-primary/10 border border-primary/20">
-                <Text className="text-xs font-bold text-primary">{tag}</Text>
-              </View>
-            ))}
+
+        {/* Bio */}
+        {bio ? (
+          <View className="mt-4">
+            <Text
+              className="text-[16px] text-on-surface leading-6"
+              style={{ fontFamily: 'Inter_400Regular' }}
+            >
+              {visibleBio}
+              {hasMoreBio && (
+                <Text
+                  onPress={() => setIsBioExpanded(!isBioExpanded)}
+                  className="text-primary font-medium"
+                >
+                  {' '}{isBioExpanded ? 'Show less' : 'See more'}
+                </Text>
+              )}
+            </Text>
           </View>
         ) : null}
 
-        {/* Stats */}
-        <View className="flex-row gap-6 mt-4">
-          <View>
-            <Text className="text-lg font-bold" style={{ color: accentColor }}>
-              20
+        {/* Metadata section */}
+        <View className="mt-4 gap-2.5">
+          {profile.jobTitle && (
+            <View className="flex-row items-center gap-2.5">
+              <Ionicons name="briefcase-outline" size={20} color={Colors.onSurfaceVariant} />
+              <Text className="text-[15px] text-on-surface-variant font-medium">{profile.jobTitle}</Text>
+            </View>
+          )}
+          {profile.location && (
+            <View className="flex-row items-center gap-2.5">
+              <Ionicons name="location-outline" size={20} color={Colors.onSurfaceVariant} />
+              <Text className="text-[15px] text-on-surface-variant font-medium">{profile.location}</Text>
+            </View>
+          )}
+          {profile.website && (
+            <View className="flex-row items-center gap-2.5">
+              <Ionicons name="link-outline" size={20} color={Colors.onSurfaceVariant} />
+              <Text className="text-[15px] text-primary font-medium">{profile.website}</Text>
+            </View>
+          )}
+          <View className="flex-row items-center gap-2.5">
+            <Ionicons name="calendar-outline" size={20} color={Colors.onSurfaceVariant} />
+            <Text className="text-[15px] text-on-surface-variant font-medium">
+              Joined {joinedDateFormatted}
             </Text>
-            <Text className="text-xs uppercase tracking-wide text-on-surface-variant">
-              Albums Rated
-            </Text>
+            <Ionicons name="chevron-forward" size={14} color={Colors.onSurfaceVariant} />
           </View>
-          <View>
-            <Text className="text-lg font-bold" style={{ color: accentColor }}>
-              5
-            </Text>
-            <Text className="text-xs uppercase tracking-wide text-on-surface-variant">
-              Communities
-            </Text>
-          </View>
-          <View>
-            <Text className="text-lg font-bold" style={{ color: accentColor }}>
-              78
-            </Text>
-            <Text className="text-xs uppercase tracking-wide text-on-surface-variant">
-              Posts
-            </Text>
-          </View>
+        </View>
+
+        {/* Stats Row */}
+        <View className="flex-row items-center gap-4 mt-5 mb-2">
+          <TouchableOpacity className="flex-row items-center gap-1.5">
+            <Text className="text-[16px] font-bold text-on-surface">{followingCount}</Text>
+            <Text className="text-[16px] text-on-surface-variant">Following</Text>
+          </TouchableOpacity>
+          <TouchableOpacity className="flex-row items-center gap-1.5">
+            <Text className="text-[16px] font-bold text-on-surface">{followersCount}</Text>
+            <Text className="text-[16px] text-on-surface-variant">Followers</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </View>
