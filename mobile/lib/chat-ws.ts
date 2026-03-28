@@ -1,4 +1,5 @@
 import { API_URL } from '@/lib/api'
+import { logError } from '@/lib/logging'
 import type { WsInbound, WsOutbound } from '@/models/Chat'
 
 type GetToken = () => Promise<string | null>
@@ -21,6 +22,7 @@ export class ChatWebSocketClient {
   private getToken: GetToken | null = null
   private backoff = 1000
   private readonly maxBackoff = 30000
+  private reconnectTimeout: ReturnType<typeof setTimeout> | null = null
   private isConnecting = false
   private isIntentionalClose = false
   private isAuthenticated = false
@@ -32,6 +34,7 @@ export class ChatWebSocketClient {
 
   connect(getToken: GetToken) {
     this.getToken = getToken
+    this.clearReconnectTimer()
 
     if (this.ws?.readyState === WebSocket.OPEN || this.isConnecting) {
       return
@@ -57,7 +60,7 @@ export class ChatWebSocketClient {
 
           this.ws?.send(JSON.stringify({ type: 'AUTH', token }))
         } catch (error) {
-          console.error('[chat-ws] auth failed', error)
+          logError('[chat-ws] auth failed', error)
           this.ws?.close()
         }
       }
@@ -78,7 +81,7 @@ export class ChatWebSocketClient {
 
           this.emit(message.type, message.payload ?? message)
         } catch (error) {
-          console.error('[chat-ws] failed to parse message', error)
+          logError('[chat-ws] failed to parse message', error)
         }
       }
 
@@ -93,10 +96,10 @@ export class ChatWebSocketClient {
       }
 
       this.ws.onerror = (error) => {
-        console.error('[chat-ws] websocket error', error)
+        logError('[chat-ws] websocket error', error)
       }
     } catch (error) {
-      console.error('[chat-ws] failed to connect', error)
+      logError('[chat-ws] failed to connect', error)
       this.isConnecting = false
       this.scheduleReconnect()
     }
@@ -105,6 +108,8 @@ export class ChatWebSocketClient {
   disconnect(resetSession: boolean = true) {
     this.isIntentionalClose = true
     this.isAuthenticated = false
+    this.isConnecting = false
+    this.clearReconnectTimer()
     if (resetSession) {
       this.hasConnectedBefore = false
       this.messageQueue = []
@@ -120,6 +125,9 @@ export class ChatWebSocketClient {
     }
 
     if (!ChatWebSocketClient.EPHEMERAL_TYPES.has(message.type)) {
+      if (this.messageQueue.length >= ChatWebSocketClient.MAX_QUEUE_LENGTH) {
+        this.messageQueue.shift()
+      }
       this.messageQueue.push(message)
     }
   }
@@ -158,7 +166,9 @@ export class ChatWebSocketClient {
       return
     }
 
-    setTimeout(() => {
+    this.clearReconnectTimer()
+    this.reconnectTimeout = setTimeout(() => {
+      this.reconnectTimeout = null
       if (this.getToken) {
         this.connect(this.getToken)
       }
@@ -167,7 +177,15 @@ export class ChatWebSocketClient {
     this.backoff = Math.min(this.backoff * 2, this.maxBackoff)
   }
 
+  private clearReconnectTimer() {
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout)
+      this.reconnectTimeout = null
+    }
+  }
+
   private static readonly EPHEMERAL_TYPES = new Set(['TYPING_START', 'TYPING_STOP'])
+  private static readonly MAX_QUEUE_LENGTH = 100
 }
 
 export const chatWs = new ChatWebSocketClient(deriveWsUrl())
