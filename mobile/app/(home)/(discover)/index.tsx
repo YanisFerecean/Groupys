@@ -1,51 +1,37 @@
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '@clerk/expo'
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native'
+import { useEffect, useState } from 'react'
+import { ScrollView, Text, TouchableOpacity, View, RefreshControl } from 'react-native'
 import { router } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import SectionHeader from '@/components/ui/SectionHeader'
 import { TopArtistRows, TopArtistsSkeleton, useTopArtists } from '@/components/discover/TopArtistsSection'
-import CommunityCard from '@/components/discover/CommunityCard'
+import CommunityRecommendationCard from '@/components/discover/CommunityRecommendationCard'
 import UserOnlineCard from '@/components/discover/UserOnlineCard'
 import SearchOverlay from '@/components/discover/SearchOverlay'
-import { apiFetch } from '@/lib/api'
-import { communityResToCard } from '@/lib/communityUtils'
 import { Colors } from '@/constants/colors'
 import { activeUsers } from '@/constants/mockData'
-import type { CommunityResDto } from '@/models/CommunityRes'
+import { useDiscovery } from '@/hooks/useDiscovery'
 
 export default function DiscoverScreen() {
   const insets = useSafeAreaInsets()
-  const { getToken, isLoaded: isAuthLoaded } = useAuth()
-  const getTokenRef = useRef(getToken)
-  const { artists, expanded, loading, toggleExpand } = useTopArtists()
+  const { isLoaded: isAuthLoaded } = useAuth()
+  const { artists, expanded, loading: artistsLoading, toggleExpand } = useTopArtists()
   const [searchOpen, setSearchOpen] = useState(false)
-  const [communities, setCommunities] = useState<CommunityResDto[]>([])
-  const [communitiesLoading, setCommunitiesLoading] = useState(true)
-
-  useEffect(() => {
-    getTokenRef.current = getToken
-  }, [getToken])
-
-  const fetchCommunities = useCallback(async () => {
-    try {
-      const token = await getTokenRef.current()
-      const data = await apiFetch<CommunityResDto[]>('/communities', token)
-      setCommunities(data)
-    } catch (err) {
-      console.error('Failed to fetch communities:', err)
-    } finally {
-      setCommunitiesLoading(false)
-    }
-  }, [])
+  
+  const {
+    communities,
+    communitiesLoading,
+    communitiesRefreshing,
+    loadCommunities,
+    joinCommunity,
+    dismiss
+  } = useDiscovery()
 
   useEffect(() => {
     if (!isAuthLoaded) return
-    fetchCommunities()
-  }, [isAuthLoaded, fetchCommunities])
-
-  const communityCards = communities.slice(0, 4).map(communityResToCard)
+    loadCommunities()
+  }, [isAuthLoaded, loadCommunities])
 
   const navigateToCommunity = (communityId: string) => {
     router.push(`/(home)/(discover)/community/${communityId}` as any)
@@ -57,6 +43,13 @@ export default function DiscoverScreen() {
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl 
+            refreshing={communitiesRefreshing} 
+            onRefresh={() => loadCommunities(true)} 
+            tintColor={Colors.primary} 
+          />
+        }
       >
         {/* Header */}
         <View
@@ -64,11 +57,38 @@ export default function DiscoverScreen() {
           style={{ paddingTop: insets.top + 8 }}
         >
           <Text className="text-4xl font-extrabold tracking-tighter text-primary">
-            {"Tap In"}
+            Tap In
           </Text>
           <TouchableOpacity onPress={() => setSearchOpen(true)}>
             <Ionicons name="search" size={24} color={Colors.primary} />
           </TouchableOpacity>
+        </View>
+
+        {/* Explore Communities (Recommendations) */}
+        <View className="px-5 pt-6 pb-2">
+          <SectionHeader title="Suggested for you" actionText={communities.length > 0 ? "Refresh" : undefined} onAction={() => loadCommunities(true)} />
+          {communitiesLoading ? (
+            <View className="mt-4 items-center py-6">
+              <Text className="text-on-surface-variant text-sm font-medium">Finding communities...</Text>
+            </View>
+          ) : communities.length === 0 ? (
+            <View className="mt-4 items-center py-6">
+              <Ionicons name="people-outline" size={32} color={Colors.onSurfaceVariant} />
+              <Text className="text-on-surface-variant text-sm mt-2 font-medium">No suggestions right now</Text>
+            </View>
+          ) : (
+            <View className="mt-4 gap-4">
+              {communities.map((community) => (
+                <CommunityRecommendationCard
+                  key={community.communityId}
+                  community={community}
+                  onPress={() => navigateToCommunity(community.communityId)}
+                  onJoin={() => joinCommunity(community.communityId)}
+                  onDismiss={() => dismiss('community', community.communityId)}
+                />
+              ))}
+            </View>
+          )}
         </View>
 
         {/* Trending Now */}
@@ -76,52 +96,14 @@ export default function DiscoverScreen() {
           <View className="px-5">
             <SectionHeader
               title="Trending Now"
-              actionText={!loading && artists.length > 3 ? (expanded ? 'Show Less' : 'View All') : undefined}
+              actionText={!artistsLoading && artists.length > 3 ? (expanded ? 'Show Less' : 'View All') : undefined}
               onAction={toggleExpand}
             />
           </View>
-          {loading ? (
+          {artistsLoading ? (
             <TopArtistsSkeleton />
           ) : (
             <TopArtistRows artists={artists} expanded={expanded} />
-          )}
-        </View>
-
-        {/* Explore Communities */}
-        <View className="px-5 pt-8 pb-2">
-          <SectionHeader title="Explore Communities" actionText="See All" />
-          {communitiesLoading ? (
-            <View className="mt-4 items-center py-6">
-              <Text className="text-on-surface-variant text-sm">Loading communities...</Text>
-            </View>
-          ) : communityCards.length === 0 ? (
-            <View className="mt-4 items-center py-6">
-              <Ionicons name="people-outline" size={32} color={Colors.onSurfaceVariant} />
-              <Text className="text-on-surface-variant text-sm mt-2">No communities yet</Text>
-            </View>
-          ) : (
-            <View className="mt-4 gap-3">
-              <View className="flex-row gap-3">
-                {communityCards.slice(0, 2).map((community, idx) => (
-                  <CommunityCard
-                    key={community.id}
-                    community={community}
-                    onPress={() => navigateToCommunity(communities[idx].id)}
-                  />
-                ))}
-              </View>
-              {communityCards.length > 2 ? (
-                <View className="flex-row gap-3">
-                  {communityCards.slice(2, 4).map((community, idx) => (
-                    <CommunityCard
-                      key={community.id}
-                      community={community}
-                      onPress={() => navigateToCommunity(communities[idx + 2].id)}
-                    />
-                  ))}
-                </View>
-              ) : null}
-            </View>
           )}
         </View>
 
