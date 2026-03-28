@@ -150,7 +150,7 @@ export function MessageInput({ conversationId, onSend, disabled }: MessageInputP
           >
             <Smile className="w-5 h-5" />
           </button>
-          {emojiOpen && <EmojiPicker onSelect={insertEmoji} />}
+          {emojiOpen && <EmojiPicker onSelectAction={insertEmoji} />}
         </div>
         <button
           onClick={handleSend}

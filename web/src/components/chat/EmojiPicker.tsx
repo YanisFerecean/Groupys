@@ -11,7 +11,7 @@ const EMOJI_GROUPS = [
   { label: "Objects", emojis: ["❤","🧡","💛","💚","💙","💜","🖤","🤍","🤎","💔","❣","💕","💞","💓","💗","💖","💘","💝","✨","⭐","🌟","💫","⚡","🔥","💥","🎉","🎊","🎈","🎁","🎀","🏆","🥇","🥈","🥉","🎖","🏅","🎗","🎫","🎟","🎪","🤹","🎭","🎨","🎬","🎤","🎧","🎼","🎵","🎶","🎹","🥁","🪘","🎷","🎺","🎸","🪕","🎻","🎮","🕹","🎯","🎱","🎳","🎰","🧩","🪆","🪅","🎭","🖼","🧸","🪀","🪁","🏮","🧨","🎑","🎐","🧧"] },
 ];
 
-export default function EmojiPicker({ onSelect }: { onSelect: (emoji: string) => void }) {
+export default function EmojiPicker({ onSelectAction }: { onSelectAction: (emoji: string) => void }) {
   const [activeGroup, setActiveGroup] = useState(0);
 
   return (
@@ -37,7 +37,7 @@ export default function EmojiPicker({ onSelect }: { onSelect: (emoji: string) =>
         {EMOJI_GROUPS[activeGroup].emojis.map((emoji) => (
           <button
             key={emoji}
-            onClick={() => onSelect(emoji)}
+            onClick={() => onSelectAction(emoji)}
             className="text-xl leading-none p-1.5 rounded-lg hover:bg-surface-container-high transition-colors"
           >
             {emoji}
