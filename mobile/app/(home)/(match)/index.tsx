@@ -1,13 +1,13 @@
 import { Ionicons } from '@expo/vector-icons'
-import { useRouter } from 'expo-router'
-import { useEffect, useRef } from 'react'
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'
+import { useFocusEffect, useRouter } from 'expo-router'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '@clerk/expo'
 import UserRecommendationCard, { type CardHandle } from '@/components/match/UserRecommendationCard'
 import ActionButtons from '@/components/match/ActionButtons'
 import MatchCelebrationModal from '@/components/match/MatchCelebrationModal'
-import MatchListItem from '@/components/match/MatchListItem'
 import { Colors } from '@/constants/colors'
 import { useChat } from '@/hooks/useChat'
 import { useDiscovery } from '@/hooks/useDiscovery'
@@ -15,12 +15,15 @@ import { useMatches } from '@/hooks/useMatches'
 
 export default function MatchScreen() {
   const insets = useSafeAreaInsets()
+  const tabBarHeight = useBottomTabBarHeight()
   const router = useRouter()
   const { isLoaded } = useAuth()
-  const { totalUnread } = useChat()
-  const { width } = useWindowDimensions()
+  const { conversations, totalUnread } = useChat()
+  const { width, height } = useWindowDimensions()
 
   const cardRef = useRef<CardHandle>(null)
+  const [headerHeight, setHeaderHeight] = useState(88)
+  const [actionsHeight, setActionsHeight] = useState(140)
 
   const {
     users,
@@ -30,68 +33,108 @@ export default function MatchScreen() {
     dismiss,
   } = useDiscovery()
 
-  const { matches, matchesLoading, loadMatches } = useMatches()
+  const { matches, loadMatches } = useMatches()
 
-  useEffect(() => {
-    if (!isLoaded) return
-    loadUsers()
-    loadMatches()
-  }, [isLoaded, loadUsers, loadMatches])
+  const excludedUserIds = useMemo(() => {
+    const ids = new Set<string>()
+    conversations.forEach((conversation) => {
+      if (conversation.isGroup) return
+      conversation.participants.forEach((participant) => {
+        ids.add(participant.userId)
+      })
+    })
+    matches.forEach((match) => {
+      ids.add(match.otherUserId)
+    })
+    return ids
+  }, [conversations, matches])
+
+  const filteredUsers = useMemo(
+    () => users.filter((user) => !excludedUserIds.has(user.userId)),
+    [excludedUserIds, users],
+  )
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!isLoaded) {
+        return
+      }
+
+      void loadUsers()
+      void loadMatches()
+    }, [isLoaded, loadMatches, loadUsers]),
+  )
 
   // Card dimensions: full width minus horizontal padding, 3:4 aspect ratio
-  const CARD_WIDTH = width - 40
-  const CARD_HEIGHT = (CARD_WIDTH * 4) / 3
+  const cardAspectRatio = 3 / 4
+  const footerHeight = !usersLoading && filteredUsers.length > 0
+    ? actionsHeight
+    : tabBarHeight + 24
+  const availableCardHeight = Math.max(
+    0,
+    height - headerHeight - footerHeight - 32,
+  )
+  const CARD_WIDTH = Math.max(
+    0,
+    Math.min(width - 40, availableCardHeight * cardAspectRatio),
+  )
+  const CARD_HEIGHT = CARD_WIDTH / cardAspectRatio
 
   const handleLike = () => {
-    if (users.length === 0) return
+    if (filteredUsers.length === 0) return
     cardRef.current?.swipeRight()
   }
 
   const handlePass = () => {
-    if (users.length === 0) return
+    if (filteredUsers.length === 0) return
     cardRef.current?.swipeLeft()
   }
 
-  const visibleUsers = users.slice(0, 3)
+  const visibleUsers = filteredUsers.slice(0, 3)
 
   return (
     <View className="flex-1 bg-surface">
       {/* Header */}
       <View
+        onLayout={(event) => setHeaderHeight(event.nativeEvent.layout.height)}
         className="flex-row items-center justify-between px-5"
         style={{ paddingTop: insets.top + 8 }}
       >
-        <Text className="text-4xl font-extrabold tracking-tighter text-primary">People</Text>
-        <TouchableOpacity
-          className="relative h-11 w-11 items-center justify-center rounded-full bg-surface-container"
-          onPress={() => router.push('/(home)/(match)/chat')}
-        >
-          <Ionicons name="chatbubble-ellipses-outline" size={22} color={Colors.primary} />
-          {totalUnread > 0 ? (
-            <View
-              className="absolute -right-1 -top-1 items-center justify-center rounded-full bg-primary"
-              style={{ minWidth: 20, height: 20, paddingHorizontal: 5 }}
-            >
-              <Text className="text-[11px] font-bold text-on-primary">
-                {totalUnread > 99 ? '99+' : totalUnread}
-              </Text>
-            </View>
-          ) : null}
-        </TouchableOpacity>
+        <Text className="text-4xl font-extrabold tracking-tighter text-primary">Mutuals</Text>
+        <View className="flex-row items-center gap-3">
+          <TouchableOpacity
+            className="h-11 w-11 items-center justify-center rounded-full bg-surface-container"
+            onPress={() => router.push('/(home)/(match)/history')}
+          >
+            <Ionicons name="time-outline" size={22} color={Colors.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            className="relative h-11 w-11 items-center justify-center rounded-full bg-surface-container"
+            onPress={() => router.push('/(home)/(match)/chat')}
+          >
+            <Ionicons name="chatbubble-ellipses-outline" size={22} color={Colors.primary} />
+            {totalUnread > 0 ? (
+              <View
+                className="absolute -right-1 -top-1 items-center justify-center rounded-full bg-primary"
+                style={{ minWidth: 20, height: 20, paddingHorizontal: 5 }}
+              >
+                <Text className="text-[11px] font-bold text-on-primary">
+                  {totalUnread > 99 ? '99+' : totalUnread}
+                </Text>
+              </View>
+            ) : null}
+          </TouchableOpacity>
+        </View>
       </View>
 
-      <Text className="px-5 pt-2 pb-4 text-[15px] text-on-surface-variant font-medium">
-        People with your taste in music.
-      </Text>
-
       {/* Card stack area */}
-      <View className="flex-1 items-center justify-center px-5">
+      <View className="flex-1 items-center justify-center px-5 py-4" style={{ minHeight: 0 }}>
         {usersLoading ? (
           <View className="items-center gap-3">
             <ActivityIndicator size="large" color={Colors.primary} />
-            <Text className="text-on-surface-variant font-medium">Finding people...</Text>
+            <Text className="text-on-surface-variant font-medium">Finding mutuals...</Text>
           </View>
-        ) : users.length === 0 ? (
+        ) : filteredUsers.length === 0 ? (
           <View className="items-center gap-3">
             <Ionicons name="musical-notes-outline" size={52} color={Colors.onSurfaceVariant} />
             <Text className="text-on-surface-variant text-base font-medium text-center">
@@ -124,34 +167,16 @@ export default function MatchScreen() {
       </View>
 
       {/* Action buttons */}
-      {!usersLoading && users.length > 0 && (
+      {!usersLoading && filteredUsers.length > 0 && (
         <View
-          className="items-center pb-6 pt-4"
-          style={{ paddingBottom: insets.bottom + 90 }}
+          onLayout={(event) => setActionsHeight(event.nativeEvent.layout.height)}
+          className="items-center pt-4"
+          style={{ paddingBottom: tabBarHeight + 12 }}
         >
           <ActionButtons
             onPass={handlePass}
             onLike={handleLike}
           />
-        </View>
-      )}
-
-      {/* Matches section */}
-      {matches.length > 0 && (
-        <View
-          className="border-t border-outline-variant"
-          style={{ paddingBottom: insets.bottom + 80 }}
-        >
-          <Text className="px-5 pt-4 pb-2 text-sm font-semibold uppercase tracking-wider text-on-surface-variant">
-            Your Matches
-          </Text>
-          {matchesLoading ? (
-            <ActivityIndicator size="small" color={Colors.primary} className="py-3" />
-          ) : (
-            matches.map((match) => (
-              <MatchListItem key={match.matchId} match={match} />
-            ))
-          )}
         </View>
       )}
 
