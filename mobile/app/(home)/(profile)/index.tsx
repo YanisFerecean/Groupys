@@ -6,6 +6,7 @@ import TopAlbumsWidget from '@/components/profile/widgets/TopAlbumsWidget'
 import TopArtistsWidget from '@/components/profile/widgets/TopArtistsWidget'
 import TopSongsWidget from '@/components/profile/widgets/TopSongsWidget'
 import AlbumRatingModal from '@/components/album/AlbumRatingModal'
+import SwipeableTabScreen from '@/components/navigation/SwipeableTabScreen'
 import { Colors } from '@/constants/colors'
 import { useProfileCustomization } from '@/hooks/useProfileCustomization'
 import { useSpotifyTopMusic } from '@/hooks/useSpotifyTopMusic'
@@ -104,7 +105,7 @@ export default function ProfileScreen() {
   const [joinedCommunitiesCount, setJoinedCommunitiesCount] = useState(0)
   const [loadingPosts, setLoadingPosts] = useState(true)
   const [postSearch, setPostSearch] = useState('')
-  const [postMediaFilter, setPostMediaFilter] = useState<'all' | 'text' | 'photo' | 'video'>('all')
+  const [postMediaFilter, setPostMediaFilter] = useState<'all' | 'photo' | 'video'>('all')
   const [postSort, setPostSort] = useState<'newest' | 'oldest' | 'top'>('newest')
   const { getToken } = useAuth()
   const getTokenRef = useRef(getToken)
@@ -168,7 +169,6 @@ export default function ProfileScreen() {
 
     if (postMediaFilter !== 'all') {
       posts = posts.filter((p) => {
-        if (postMediaFilter === 'text') return p.media.length === 0
         if (postMediaFilter === 'photo') return p.media.some((m) => m.type.startsWith('image'))
         if (postMediaFilter === 'video') return p.media.some((m) => m.type.startsWith('video'))
         return true
@@ -403,135 +403,135 @@ export default function ProfileScreen() {
   }
 
   return (
-    <View className="flex-1 bg-surface">
-      {/* Top bar overlay */}
-      <View
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          zIndex: 10,
-          paddingTop: insets.top + 8,
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          paddingHorizontal: 20,
-        }}
-      >
-        <TouchableOpacity
-          onPress={() => router.back()}
-          className="w-10 h-10 rounded-full bg-black/30 items-center justify-center border border-white/10"
+    <SwipeableTabScreen tab="(profile)">
+      <View className="flex-1 bg-surface">
+        {/* Top bar overlay */}
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 10,
+            paddingTop: insets.top + 8,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingHorizontal: 20,
+          }}
         >
-          <Ionicons name="arrow-back" size={22} color="#fff" />
-        </TouchableOpacity>
-        <View className="flex-row items-center gap-3">
           <TouchableOpacity
-            onPress={() => setEditOpen(true)}
+            onPress={() => router.back()}
             className="w-10 h-10 rounded-full bg-black/30 items-center justify-center border border-white/10"
           >
-            <Ionicons name="pencil" size={20} color="#fff" />
+            <Ionicons name="arrow-back" size={22} color="#fff" />
           </TouchableOpacity>
-          <TouchableOpacity className="w-10 h-10 rounded-full bg-black/30 items-center justify-center border border-white/10">
-            <Ionicons name="share-outline" size={22} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => router.push('/(home)/(profile)/settings')}
-            className="w-10 h-10 rounded-full bg-black/30 items-center justify-center border border-white/10"
-          >
-            <Ionicons name="settings-outline" size={20} color="#fff" />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <ScrollView
-        className="flex-1"
-        contentContainerStyle={{ paddingBottom: 100 }}
-        showsVerticalScrollIndicator={false}
-        onScrollBeginDrag={() => setOpenWidgetMenu(null)}
-        keyboardShouldPersistTaps="handled"
-      >
-
-        {!isLoaded ? (
-          <View className="items-center justify-center pt-24">
-            <ActivityIndicator size="large" color={Colors.primary} />
+          <View className="flex-row items-center gap-3">
+            <TouchableOpacity
+              onPress={() => setEditOpen(true)}
+              className="w-10 h-10 rounded-full bg-black/30 items-center justify-center border border-white/10"
+            >
+              <Ionicons name="pencil" size={20} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity className="w-10 h-10 rounded-full bg-black/30 items-center justify-center border border-white/10">
+              <Ionicons name="share-outline" size={22} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => router.push('/(home)/(profile)/settings')}
+              className="w-10 h-10 rounded-full bg-black/30 items-center justify-center border border-white/10"
+            >
+              <Ionicons name="settings-outline" size={20} color="#fff" />
+            </TouchableOpacity>
           </View>
-        ) : (
-          <>
-            {/* Profile header */}
-            <View>
-              <ProfileHeader
-                profile={profile}
-                avatarUrl={user?.imageUrl}
-                displayName={displayName}
-                username={username}
-                memberYear={memberYear}
-                communitiesCount={joinedCommunitiesCount}
-                postsCount={myPosts.length}
-                followingCount={profile.followingCount}
-                followersCount={profile.followersCount}
-                onEditPress={() => setEditOpen(true)}
-                onAvatarPress={handleAvatarPress}
-                isUploadingAvatar={isUploadingAvatar}
-              />
+        </View>
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{ paddingBottom: 100 }}
+          showsVerticalScrollIndicator={false}
+          onScrollBeginDrag={() => setOpenWidgetMenu(null)}
+          keyboardShouldPersistTaps="handled"
+        >
+
+          {!isLoaded ? (
+            <View className="items-center justify-center pt-24">
+              <ActivityIndicator size="large" color={Colors.primary} />
             </View>
-
-            {/* Widgets */}
-            {hasWidgets ? (
-              <View className="px-5 pt-8 gap-6">
-                {orderedWidgets}
+          ) : (
+            <>
+              {/* Profile header */}
+              <View>
+                <ProfileHeader
+                  profile={profile}
+                  avatarUrl={user?.imageUrl}
+                  displayName={displayName}
+                  username={username}
+                  memberYear={memberYear}
+                  communitiesCount={joinedCommunitiesCount}
+                  postsCount={myPosts.length}
+                  followingCount={profile.followingCount}
+                  followersCount={profile.followersCount}
+                  onEditPress={() => setEditOpen(true)}
+                  onAvatarPress={handleAvatarPress}
+                  isUploadingAvatar={isUploadingAvatar}
+                />
               </View>
-            ) : (
-              <View className="px-6 pt-10 items-center">
-                <View
-                  className="rounded-[32px] bg-surface-container-lowest p-8 items-center gap-3 w-full border border-black/5"
-                >
-                  <View className="w-16 h-16 rounded-full bg-surface-container-low flex items-center justify-center mb-1">
-                    <Ionicons name="musical-notes" size={28} color={Colors.onSurfaceVariant} />
-                  </View>
-                  <Text className="text-[20px] font-bold text-on-surface tracking-tight">
-                    No Music Added
-                  </Text>
-                  <Text className="text-[15px] leading-6 text-on-surface-variant text-center max-w-[90%]">
-                    Build your sonic identity. Add your top albums, songs, and artists to your profile.
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => setEditOpen(true)}
-                    className="mt-6 rounded-full px-6 py-3 bg-surface-container border border-outlineVariant/20"
-                  >
-                    <Text className="text-on-surface font-semibold text-[15px]">Add Music</Text>
-                  </TouchableOpacity>
+
+              {/* Widgets */}
+              {hasWidgets ? (
+                <View className="px-5 pt-8 gap-6">
+                  {orderedWidgets}
                 </View>
-              </View>
-            )}
-
-            {/* My Posts */}
-            <View className="px-6 pt-12 pb-4">
-              <View className="flex-row items-center justify-between mb-5">
-                <Text className="text-on-surface font-bold text-[22px] tracking-tight">
-                  Posts
-                  {!loadingPosts && myPosts.length > 0 && (
-                    <Text className="text-on-surface-variant font-medium text-[16px]">   {myPosts.length}</Text>
-                  )}
-                </Text>
-                {!loadingPosts && myPosts.length > 0 && (
-                  <TouchableOpacity
-                    onPress={() =>
-                      setPostSort((s) => (s === 'newest' ? 'oldest' : s === 'oldest' ? 'top' : 'newest'))
-                    }
-                    className="flex-row items-center gap-1.5 px-3.5 py-2 rounded-full bg-surface-container-low"
+              ) : (
+                <View className="px-6 pt-10 items-center">
+                  <View
+                    className="rounded-[32px] bg-surface-container-lowest p-8 items-center gap-3 w-full border border-black/5"
                   >
-                    <Ionicons
-                      name={postSort === 'top' ? 'trending-up' : 'time-outline'}
-                      size={14}
-                      color={Colors.onSurface}
-                    />
-                    <Text className="text-[13px] font-semibold text-on-surface">
-                      {postSort === 'newest' ? 'Newest' : postSort === 'oldest' ? 'Oldest' : 'Top'}
+                    <View className="w-16 h-16 rounded-full bg-surface-container-low flex items-center justify-center mb-1">
+                      <Ionicons name="musical-notes" size={28} color={Colors.onSurfaceVariant} />
+                    </View>
+                    <Text className="text-[20px] font-bold text-on-surface tracking-tight">
+                      No Music Added
                     </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+                    <Text className="text-[15px] leading-6 text-on-surface-variant text-center max-w-[90%]">
+                      Build your sonic identity. Add your top albums, songs, and artists to your profile.
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => setEditOpen(true)}
+                      className="mt-6 rounded-full px-6 py-3 bg-surface-container border border-outlineVariant/20"
+                    >
+                      <Text className="text-on-surface font-semibold text-[15px]">Add Music</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
+              {/* My Posts */}
+              <View className="px-6 pt-12 pb-4">
+                <View className="flex-row items-center justify-between mb-5">
+                  <Text className="text-on-surface font-bold text-[22px] tracking-tight">
+                    Posts
+                    {!loadingPosts && myPosts.length > 0 && (
+                      <Text className="text-on-surface-variant font-medium text-[16px]">   {myPosts.length}</Text>
+                    )}
+                  </Text>
+                  {!loadingPosts && myPosts.length > 0 && (
+                    <TouchableOpacity
+                      onPress={() =>
+                        setPostSort((s) => (s === 'newest' ? 'oldest' : s === 'oldest' ? 'top' : 'newest'))
+                      }
+                      className="flex-row items-center gap-1.5 px-3.5 py-2 rounded-full bg-surface-container-low"
+                    >
+                      <Ionicons
+                        name={postSort === 'top' ? 'trending-up' : 'time-outline'}
+                        size={14}
+                        color={Colors.onSurface}
+                      />
+                      <Text className="text-[13px] font-semibold text-on-surface">
+                        {postSort === 'newest' ? 'Newest' : postSort === 'oldest' ? 'Oldest' : 'Top'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
 
               {loadingPosts ? (
                 <View className="py-8 items-center">
@@ -575,7 +575,7 @@ export default function ProfileScreen() {
                     className="mb-6"
                     contentContainerStyle={{ gap: 10 }}
                   >
-                    {(['all', 'text', 'photo', 'video'] as const).map((f) => {
+                    {(['all', 'photo', 'video'] as const).map((f) => {
                       const active = postMediaFilter === f
                       const label = f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)
                       return (
@@ -620,84 +620,85 @@ export default function ProfileScreen() {
                   )}
                 </>
               )}
-            </View>
-          </>
-        )}
-      </ScrollView>
+              </View>
+            </>
+          )}
+        </ScrollView>
 
-      {openWidgetMenu ? (
-        <Pressable
-          onPress={() => setOpenWidgetMenu(null)}
-          style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 40 }}
-        >
+        {openWidgetMenu ? (
           <Pressable
-            onPress={(event) => event.stopPropagation()}
-            className="rounded-2xl bg-surface p-1"
-            style={{
-              position: 'absolute',
-              top: openWidgetMenu.y,
-              left: openWidgetMenuLeft,
-              width: WIDGET_MENU_WIDTH,
-              borderWidth: 1,
-              borderColor: Colors.outlineVariant,
-              shadowColor: '#000',
-              shadowOpacity: 0.12,
-              shadowRadius: 12,
-              shadowOffset: { width: 0, height: 6 },
-              elevation: 12,
-            }}
+            onPress={() => setOpenWidgetMenu(null)}
+            style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 40 }}
           >
-            {WIDGET_SIZE_OPTIONS.map((size) => {
-              const active = (profile.widgetSizes?.[openWidgetMenu.type] ?? 'normal') === size
-              return (
-                <TouchableOpacity
-                  key={size}
-                  disabled={isSaving}
-                  onPress={() => {
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                    void handleWidgetSizeChange(openWidgetMenu.type, size)
-                  }}
-                  className="rounded-xl px-3 py-2"
-                  style={{ backgroundColor: active ? Colors.surfaceContainerHigh : 'transparent' }}
-                  activeOpacity={0.8}
-                >
-                  <Text className="text-xs font-semibold" style={{ color: active ? Colors.primary : Colors.onSurface }}>
-                    {size === 'small' ? 'Small' : 'Normal'}
-                  </Text>
-                </TouchableOpacity>
-              )
-            })}
+            <Pressable
+              onPress={(event) => event.stopPropagation()}
+              className="rounded-2xl bg-surface p-1"
+              style={{
+                position: 'absolute',
+                top: openWidgetMenu.y,
+                left: openWidgetMenuLeft,
+                width: WIDGET_MENU_WIDTH,
+                borderWidth: 1,
+                borderColor: Colors.outlineVariant,
+                shadowColor: '#000',
+                shadowOpacity: 0.12,
+                shadowRadius: 12,
+                shadowOffset: { width: 0, height: 6 },
+                elevation: 12,
+              }}
+            >
+              {WIDGET_SIZE_OPTIONS.map((size) => {
+                const active = (profile.widgetSizes?.[openWidgetMenu.type] ?? 'normal') === size
+                return (
+                  <TouchableOpacity
+                    key={size}
+                    disabled={isSaving}
+                    onPress={() => {
+                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                      void handleWidgetSizeChange(openWidgetMenu.type, size)
+                    }}
+                    className="rounded-xl px-3 py-2"
+                    style={{ backgroundColor: active ? Colors.surfaceContainerHigh : 'transparent' }}
+                    activeOpacity={0.8}
+                  >
+                    <Text className="text-xs font-semibold" style={{ color: active ? Colors.primary : Colors.onSurface }}>
+                      {size === 'small' ? 'Small' : 'Normal'}
+                    </Text>
+                  </TouchableOpacity>
+                )
+              })}
+            </Pressable>
           </Pressable>
-        </Pressable>
-      ) : null}
+        ) : null}
 
-      <EditProfileModal
-        visible={editOpen}
-        onClose={() => setEditOpen(false)}
-        profile={profile}
-        isSaving={isSaving}
-        onSave={handleSaveProfile}
-        onAvatarPress={handleAvatarPress}
-        isUploadingAvatar={isUploadingAvatar}
-        avatarUrl={user?.imageUrl ?? null}
-      />
+        <EditProfileModal
+          visible={editOpen}
+          onClose={() => setEditOpen(false)}
+          profile={profile}
+          isSaving={isSaving}
+          onSave={handleSaveProfile}
+          onAvatarPress={handleAvatarPress}
+          isUploadingAvatar={isUploadingAvatar}
+          avatarUrl={user?.imageUrl ?? null}
+        />
 
-      <AlbumRatingModal
-        visible={ratingAlbum !== null}
-        album={ratingAlbum}
-        currentUserId={backendUser?.id}
-        onClose={() => setRatingAlbum(null)}
-        onRatingChange={(albumId, score) => {
-          setMyRatingScores((prev) => {
-            if (score === null) {
-              const next = { ...prev }
-              delete next[albumId]
-              return next
-            }
-            return { ...prev, [albumId]: score }
-          })
-        }}
-      />
-    </View>
+        <AlbumRatingModal
+          visible={ratingAlbum !== null}
+          album={ratingAlbum}
+          currentUserId={backendUser?.id}
+          onClose={() => setRatingAlbum(null)}
+          onRatingChange={(albumId, score) => {
+            setMyRatingScores((prev) => {
+              if (score === null) {
+                const next = { ...prev }
+                delete next[albumId]
+                return next
+              }
+              return { ...prev, [albumId]: score }
+            })
+          }}
+        />
+      </View>
+    </SwipeableTabScreen>
   )
 }
