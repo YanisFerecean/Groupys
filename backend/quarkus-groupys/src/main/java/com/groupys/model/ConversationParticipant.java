@@ -7,7 +7,11 @@ import java.util.UUID;
 @Entity
 @Table(
     name = "conversation_participants",
-    uniqueConstraints = @UniqueConstraint(columnNames = {"conversation_id", "user_id"})
+    uniqueConstraints = @UniqueConstraint(columnNames = {"conversation_id", "user_id"}),
+    indexes = {
+        @Index(name = "idx_cp_user_id", columnList = "user_id"),
+        @Index(name = "idx_cp_conversation_id", columnList = "conversation_id")
+    }
 )
 public class ConversationParticipant {
 

@@ -51,11 +51,10 @@ public class MessageRepository implements PanacheRepositoryBase<Message, UUID> {
     public Map<UUID, Message> findLatestPerConversations(List<UUID> conversationIds) {
         if (conversationIds.isEmpty()) return Map.of();
         List<Message> results = getEntityManager().createQuery(
-                "SELECT m FROM Message m WHERE m.conversation.id IN :ids " +
-                "AND m.isDeleted = false " +
-                "AND m.createdAt = (" +
-                "  SELECT MAX(m2.createdAt) FROM Message m2 " +
-                "  WHERE m2.conversation.id = m.conversation.id AND m2.isDeleted = false" +
+                "SELECT m FROM Message m WHERE m.isDeleted = false AND m.conversation.id IN :ids " +
+                "AND NOT EXISTS (" +
+                "  SELECT 1 FROM Message m2 WHERE m2.conversation = m.conversation " +
+                "  AND m2.isDeleted = false AND m2.createdAt > m.createdAt" +
                 ")",
                 Message.class
         ).setParameter("ids", conversationIds).getResultList();
