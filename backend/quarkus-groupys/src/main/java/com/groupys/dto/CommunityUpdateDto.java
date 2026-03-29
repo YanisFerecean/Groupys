@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 
 public record CommunityUpdateDto(
+        @Size(min = 2, max = 60) String name,
         @Size(max = 500) String description,
         @Size(max = 50) String genre,
         @Size(max = 60) String country,

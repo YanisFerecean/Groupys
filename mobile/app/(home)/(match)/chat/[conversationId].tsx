@@ -20,6 +20,7 @@ import { Colors } from '@/constants/colors'
 import { useChat } from '@/hooks/useChat'
 import { useChatMessages } from '@/hooks/useChatMessages'
 import { logWarn } from '@/lib/logging'
+import { publicProfilePath } from '@/lib/profileRoutes'
 import { chatWs } from '@/lib/chat-ws'
 import { timeAgo } from '@/lib/timeAgo'
 import type { Message } from '@/models/Chat'
@@ -241,24 +242,41 @@ export default function ChatConversationScreen() {
           <Ionicons name="arrow-back" size={22} color={Colors.onSurface} />
         </TouchableOpacity>
 
-        {otherParticipant?.profileImage ? (
-          <Image
-            source={{ uri: otherParticipant.profileImage }}
-            style={{ width: 44, height: 44, borderRadius: 22 }}
-            contentFit="cover"
-          />
-        ) : (
-          <View
-            className="items-center justify-center rounded-full bg-primary/10"
-            style={{ width: 44, height: 44 }}
-          >
-            <Text className="text-base font-bold text-primary">
-              {headerTitle.charAt(0).toUpperCase()}
-            </Text>
-          </View>
-        )}
+        <TouchableOpacity
+          activeOpacity={otherParticipant ? 0.8 : 1}
+          disabled={!otherParticipant}
+          onPress={() => {
+            if (!otherParticipant) return
+            router.push(publicProfilePath(otherParticipant.userId, '(match)') as never)
+          }}
+        >
+          {otherParticipant?.profileImage ? (
+            <Image
+              source={{ uri: otherParticipant.profileImage }}
+              style={{ width: 44, height: 44, borderRadius: 22 }}
+              contentFit="cover"
+            />
+          ) : (
+            <View
+              className="items-center justify-center rounded-full bg-primary/10"
+              style={{ width: 44, height: 44 }}
+            >
+              <Text className="text-base font-bold text-primary">
+                {headerTitle.charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
 
-        <View className="flex-1">
+        <TouchableOpacity
+          className="flex-1"
+          activeOpacity={otherParticipant ? 0.8 : 1}
+          disabled={!otherParticipant}
+          onPress={() => {
+            if (!otherParticipant) return
+            router.push(publicProfilePath(otherParticipant.userId, '(match)') as never)
+          }}
+        >
           <View className="flex-row items-center gap-2">
             <Text className="text-lg font-bold text-on-surface" numberOfLines={1}>
               {headerTitle}
@@ -274,7 +292,7 @@ export default function ChatConversationScreen() {
               <Text className="text-xs font-medium text-on-surface-variant">{lastSeenText}</Text>
             ) : null
           ) : null}
-        </View>
+        </TouchableOpacity>
       </View>
 
       {!conversation ? (

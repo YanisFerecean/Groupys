@@ -94,6 +94,15 @@ public class SpotifyService {
 
     public List<SpotifyArtistResDto> getTopArtists(String clerkId) {
         String token = getValidAccessToken(clerkId);
+        return getTopArtistsForToken(token);
+    }
+
+    public List<SpotifyArtistResDto> getTopArtistsByUserId(String userId) {
+        String token = getValidAccessTokenByUserId(userId);
+        return getTopArtistsForToken(token);
+    }
+
+    private List<SpotifyArtistResDto> getTopArtistsForToken(String token) {
         try {
             Response response = spotifyApi.getTopArtists("Bearer " + token, 3, "medium_term");
             if (response.getStatus() != 200) {
@@ -118,8 +127,21 @@ public class SpotifyService {
         return fetchTopTracks(clerkId, 3);
     }
 
+    public List<SpotifyTrackResDto> getTopTracksByUserId(String userId) {
+        return fetchTopTracksByUserId(userId, 3);
+    }
+
     public List<SpotifyAlbumResDto> getTopAlbums(String clerkId) {
         String token = getValidAccessToken(clerkId);
+        return getTopAlbumsForToken(token);
+    }
+
+    public List<SpotifyAlbumResDto> getTopAlbumsByUserId(String userId) {
+        String token = getValidAccessTokenByUserId(userId);
+        return getTopAlbumsForToken(token);
+    }
+
+    private List<SpotifyAlbumResDto> getTopAlbumsForToken(String token) {
         try {
             Response response = spotifyApi.getTopTracks("Bearer " + token, 20, "medium_term");
             if (response.getStatus() != 200) {
@@ -153,6 +175,15 @@ public class SpotifyService {
 
     public SpotifyTrackResDto getCurrentlyPlaying(String clerkId) {
         String token = getValidAccessToken(clerkId);
+        return getCurrentlyPlayingForToken(token);
+    }
+
+    public SpotifyTrackResDto getCurrentlyPlayingByUserId(String userId) {
+        String token = getValidAccessTokenByUserId(userId);
+        return getCurrentlyPlayingForToken(token);
+    }
+
+    private SpotifyTrackResDto getCurrentlyPlayingForToken(String token) {
         try {
             Response response = spotifyApi.getCurrentlyPlaying("Bearer " + token);
             if (response.getStatus() == 200) {
@@ -220,6 +251,15 @@ public class SpotifyService {
 
     private List<SpotifyTrackResDto> fetchTopTracks(String clerkId, int limit) {
         String token = getValidAccessToken(clerkId);
+        return fetchTopTracksForToken(token, limit);
+    }
+
+    private List<SpotifyTrackResDto> fetchTopTracksByUserId(String userId, int limit) {
+        String token = getValidAccessTokenByUserId(userId);
+        return fetchTopTracksForToken(token, limit);
+    }
+
+    private List<SpotifyTrackResDto> fetchTopTracksForToken(String token, int limit) {
         try {
             Response response = spotifyApi.getTopTracks("Bearer " + token, limit, "medium_term");
             if (response.getStatus() != 200) {
@@ -245,7 +285,16 @@ public class SpotifyService {
     public String getValidAccessToken(String clerkId) {
         User user = userRepository.findByClerkId(clerkId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
+        return getValidAccessToken(user);
+    }
 
+    public String getValidAccessTokenByUserId(String userId) {
+        User user = userRepository.findByIdOptional(java.util.UUID.fromString(userId))
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        return getValidAccessToken(user);
+    }
+
+    private String getValidAccessToken(User user) {
         if (user.spotifyRefreshToken == null) {
             throw new BadRequestException("Spotify not connected");
         }

@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons'
-import { useAuth, useUser } from '@clerk/expo'
+import { useAuth } from '@clerk/expo'
 import { useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -24,12 +25,11 @@ import type { CommunityResDto } from '@/models/CommunityRes'
 import AuthImageWithToken from '@/components/ui/AuthImageWithToken'
 import MarkdownEditor, { type MarkdownEditorRef, type FormatType } from '@/components/post/MarkdownEditor'
 import GlassModalBackdrop from '@/components/ui/GlassModalBackdrop'
-import { Ionicons as IoniconType } from '@expo/vector-icons'
 
 interface ToolbarButton {
   format: FormatType
   label?: string
-  icon?: keyof typeof IoniconType.glyphMap
+  icon?: keyof typeof Ionicons.glyphMap
   textStyle?: object
 }
 
@@ -46,6 +46,7 @@ const FORMAT_BUTTONS: ToolbarButton[] = [
 export default function CreatePostScreen() {
   const insets = useSafeAreaInsets()
   const { getToken } = useAuth()
+  const getTokenRef = useRef(getToken)
   
   const [communities, setCommunities] = useState<CommunityResDto[]>([])
   const [selectedCommunity, setSelectedCommunity] = useState<CommunityResDto | null>(null)
@@ -57,25 +58,40 @@ export default function CreatePostScreen() {
   const [media, setMedia] = useState<ImagePicker.ImagePickerAsset[]>([])
   const [files, setFiles] = useState<DocumentPicker.DocumentPickerAsset[]>([])
   const [submitting, setSubmitting] = useState(false)
-  const [loadingCommunities, setLoadingCommunities] = useState(true)
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false)
+
+  useEffect(() => {
+    getTokenRef.current = getToken
+  }, [getToken])
 
   useEffect(() => {
     let cancelled = false
     async function fetchCommunities() {
       try {
-        const token = await getToken()
+        const token = await getTokenRef.current()
         const data = await apiFetch<CommunityResDto[]>('/communities/mine', token)
         if (cancelled) return
         setCommunities(data)
         setSelectedCommunity((prev) => prev || (data.length > 0 ? data[0] : null))
       } catch (err) {
         console.error('Failed to fetch communities:', err)
-      } finally {
-        if (!cancelled) setLoadingCommunities(false)
       }
     }
     fetchCommunities()
     return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
+
+    const showSub = Keyboard.addListener(showEvent, () => setIsKeyboardVisible(true))
+    const hideSub = Keyboard.addListener(hideEvent, () => setIsKeyboardVisible(false))
+
+    return () => {
+      showSub.remove()
+      hideSub.remove()
+    }
   }, [])
 
 
@@ -286,9 +302,13 @@ export default function CreatePostScreen() {
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 44 : 0}
+        keyboardVerticalOffset={0}
       >
-        <ScrollView className="flex-1 px-4 mt-2" keyboardShouldPersistTaps="handled">
+        <ScrollView
+          className="flex-1 px-4 mt-2"
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        >
           <TextInput
             className="text-2xl font-bold text-on-surface py-2"
             placeholder="Title"
@@ -356,7 +376,7 @@ export default function CreatePostScreen() {
         {/* Toolbar */}
         <View
           className="bg-surface border-t border-surface-container-high flex-row items-center px-2 py-1"
-          style={{ paddingBottom: insets.bottom > 0 ? insets.bottom : 8 }}
+          style={{ paddingBottom: isKeyboardVisible ? 8 : insets.bottom > 0 ? insets.bottom : 8 }}
         >
           {/* Left: media */}
           <TouchableOpacity onPress={() => pickMedia('images')} className="p-2.5">

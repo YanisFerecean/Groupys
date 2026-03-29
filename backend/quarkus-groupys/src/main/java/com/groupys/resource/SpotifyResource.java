@@ -81,11 +81,27 @@ public class SpotifyResource {
     }
 
     @GET
+    @Path("/users/{userId}/top-artists")
+    @Authenticated
+    @SecurityRequirement(name = "bearerAuth")
+    public List<SpotifyArtistResDto> topArtistsByUser(@PathParam("userId") String userId) {
+        return spotifyService.getTopArtistsByUserId(userId);
+    }
+
+    @GET
     @Path("/top-tracks")
     @Authenticated
     @SecurityRequirement(name = "bearerAuth")
     public List<SpotifyTrackResDto> topTracks() {
         return spotifyService.getTopTracks(jwt.getSubject());
+    }
+
+    @GET
+    @Path("/users/{userId}/top-tracks")
+    @Authenticated
+    @SecurityRequirement(name = "bearerAuth")
+    public List<SpotifyTrackResDto> topTracksByUser(@PathParam("userId") String userId) {
+        return spotifyService.getTopTracksByUserId(userId);
     }
 
     @GET
@@ -97,11 +113,29 @@ public class SpotifyResource {
     }
 
     @GET
+    @Path("/users/{userId}/saved-albums")
+    @Authenticated
+    @SecurityRequirement(name = "bearerAuth")
+    public List<SpotifyAlbumResDto> savedAlbumsByUser(@PathParam("userId") String userId) {
+        return spotifyService.getTopAlbumsByUserId(userId);
+    }
+
+    @GET
     @Path("/currently-playing")
     @Authenticated
     @SecurityRequirement(name = "bearerAuth")
     public Response currentlyPlaying() {
         SpotifyTrackResDto track = spotifyService.getCurrentlyPlaying(jwt.getSubject());
+        if (track == null) return Response.noContent().build();
+        return Response.ok(track).build();
+    }
+
+    @GET
+    @Path("/users/{userId}/currently-playing")
+    @Authenticated
+    @SecurityRequirement(name = "bearerAuth")
+    public Response currentlyPlayingByUser(@PathParam("userId") String userId) {
+        SpotifyTrackResDto track = spotifyService.getCurrentlyPlayingByUserId(userId);
         if (track == null) return Response.noContent().build();
         return Response.ok(track).build();
     }

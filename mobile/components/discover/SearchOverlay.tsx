@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons'
-import { useAuth } from '@clerk/expo'
+import { useAuth, useUser } from '@clerk/expo'
 import { router } from 'expo-router'
 import { BlurView } from 'expo-blur'
 import * as Haptics from 'expo-haptics'
@@ -18,12 +18,17 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Audio, AVPlaybackStatus } from 'expo-av'
 import type { BackendUser } from '@/lib/api'
+import { searchCommunities } from '@/lib/api'
 import { searchUsers } from '@/lib/chat-api'
 import { Colors } from '@/constants/colors'
+import { publicProfilePath } from '@/lib/profileRoutes'
 import type { ArtistRes } from '@/models/ArtistRes'
 import type { AlbumRes } from '@/models/AlbumRes'
 import type { TrackRes } from '@/models/TrackRes'
 import type { SearchResult } from '@/models/SearchResult'
+import type { CommunityResDto } from '@/models/CommunityRes'
+import type { TopAlbum } from '@/models/ProfileCustomization'
+import AlbumRatingModal from '@/components/album/AlbumRatingModal'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -65,11 +70,11 @@ function ArtistRow({ artist, onPress }: { artist: ArtistRes; onPress: () => void
   )
 }
 
-function AlbumRow({ album }: { album: AlbumRes }) {
+function AlbumRow({ album, onPress }: { album: AlbumRes; onPress: () => void }) {
   const cover = album.coverSmall || album.coverMedium
 
   return (
-    <View style={styles.resultRow}>
+    <TouchableOpacity style={styles.resultRow} activeOpacity={0.7} onPress={onPress}>
       {cover ? (
         <Image source={{ uri: cover }} style={styles.square} />
       ) : (
@@ -81,7 +86,8 @@ function AlbumRow({ album }: { album: AlbumRes }) {
         <Text style={styles.rowTitle} numberOfLines={1}>{album.title}</Text>
         <Text style={styles.rowSub} numberOfLines={1}>{album.artist?.name}</Text>
       </View>
-    </View>
+      <Ionicons name="star-outline" size={16} color="rgba(0,0,0,0.25)" />
+    </TouchableOpacity>
   )
 }
 
@@ -148,11 +154,33 @@ function SectionLabel({ label }: { label: string }) {
   return <Text style={styles.sectionLabel}>{label}</Text>
 }
 
-function UserRow({ user }: { user: BackendUser }) {
+function CommunityRow({ community, onPress }: { community: CommunityResDto; onPress: () => void }) {
+  return (
+    <TouchableOpacity style={styles.resultRow} activeOpacity={0.7} onPress={onPress}>
+      {community.imageUrl ? (
+        <Image source={{ uri: community.imageUrl }} style={styles.square} />
+      ) : (
+        <View style={[styles.square, styles.placeholder]}>
+          <Ionicons name="people" size={18} color="#aaa" />
+        </View>
+      )}
+      <View style={styles.rowText}>
+        <Text style={styles.rowTitle} numberOfLines={1}>{community.name}</Text>
+        <Text style={styles.rowSub} numberOfLines={1}>
+          {community.memberCount} {community.memberCount === 1 ? 'member' : 'members'}
+          {community.genre ? ` · ${community.genre}` : ''}
+        </Text>
+      </View>
+      <Ionicons name="chevron-forward" size={16} color="rgba(0,0,0,0.25)" />
+    </TouchableOpacity>
+  )
+}
+
+function UserRow({ user, onPress }: { user: BackendUser; onPress: () => void }) {
   const initial = (user.displayName || user.username).charAt(0).toUpperCase()
 
   return (
-    <View style={styles.resultRow}>
+    <TouchableOpacity style={styles.resultRow} activeOpacity={0.7} onPress={onPress}>
       {user.profileImage ? (
         <Image source={{ uri: user.profileImage }} style={styles.circle} />
       ) : (
@@ -168,7 +196,8 @@ function UserRow({ user }: { user: BackendUser }) {
           @{user.username}
         </Text>
       </View>
-    </View>
+      <Ionicons name="chevron-forward" size={16} color="rgba(0,0,0,0.25)" />
+    </TouchableOpacity>
   )
 }
 
@@ -178,18 +207,20 @@ interface SearchOverlayProps {
   onClose: () => void
 }
 
-type Category = 'all' | 'artists' | 'songs' | 'albums' | 'users'
+type Category = 'all' | 'artists' | 'songs' | 'albums' | 'users' | 'communities'
 
 type SearchOverlayResult = SearchResult & {
   users: BackendUser[]
+  communities: CommunityResDto[]
 }
 
 const CATEGORIES: { value: Category; label: string }[] = [
   { value: 'all', label: 'All' },
+  { value: 'communities', label: 'Communities' },
+  { value: 'users', label: 'Users' },
+  { value: 'albums', label: 'Albums' },
   { value: 'artists', label: 'Artists' },
   { value: 'songs', label: 'Songs' },
-  { value: 'albums', label: 'Albums' },
-  { value: 'users', label: 'Users' },
 ]
 
 function SearchingDots() {
@@ -229,8 +260,10 @@ function SearchingDots() {
 
 export default function SearchOverlay({ onClose }: SearchOverlayProps) {
   const { getToken, isLoaded: isAuthLoaded } = useAuth()
+  const { user } = useUser()
   const insets = useSafeAreaInsets()
   const inputRef = useRef<TextInput>(null)
+  const [ratingAlbum, setRatingAlbum] = useState<TopAlbum | null>(null)
   const getTokenRef = useRef(getToken)
 
   const [query, setQuery] = useState('')
@@ -317,42 +350,43 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
         let data: SearchOverlayResult
 
         if (category === 'all') {
-          const [searchRes, users] = await Promise.all([
+          const [searchRes, users, communities] = await Promise.all([
             fetch(
               `${process.env.EXPO_PUBLIC_API_URL}/search?q=${encodeURIComponent(debouncedQuery)}`,
-              {
-                headers,
-                signal: controller.signal,
-              },
+              { headers, signal: controller.signal },
             ),
             searchUsers(debouncedQuery, token, 8),
+            searchCommunities(debouncedQuery, token),
           ])
 
           if (!searchRes.ok) throw new Error(`API error ${searchRes.status}`)
           const searchData = (await searchRes.json()) as SearchResult
-          data = {
-            ...searchData,
-            users,
-          }
+          data = { ...searchData, users, communities }
         } else if (category === 'users') {
           data = {
             artists: [],
             albums: [],
             tracks: [],
             users: await searchUsers(debouncedQuery, token, 12),
+            communities: [],
+          }
+        } else if (category === 'communities') {
+          data = {
+            artists: [],
+            albums: [],
+            tracks: [],
+            users: [],
+            communities: await searchCommunities(debouncedQuery, token),
           }
         } else {
-          const endpointMap: Record<Exclude<Category, 'all' | 'users'>, string> = {
+          const endpointMap: Record<Exclude<Category, 'all' | 'users' | 'communities'>, string> = {
             artists: 'artists',
             albums: 'albums',
             songs: 'tracks',
           }
           const res = await fetch(
             `${process.env.EXPO_PUBLIC_API_URL}/${endpointMap[category]}/search?q=${encodeURIComponent(debouncedQuery)}`,
-            {
-              headers,
-              signal: controller.signal,
-            },
+            { headers, signal: controller.signal },
           )
           if (!res.ok) throw new Error(`API error ${res.status}`)
           const raw = await res.json()
@@ -361,6 +395,7 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
             albums: category === 'albums' ? raw as AlbumRes[] : [],
             tracks: category === 'songs' ? raw as TrackRes[] : [],
             users: [],
+            communities: [],
           }
         }
 
@@ -479,13 +514,28 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
     }, 200)
   }
 
+  const handleUserPress = (user: BackendUser) => {
+    handleClose()
+    setTimeout(() => {
+      router.push(publicProfilePath(user.id, '(discover)') as any)
+    }, 200)
+  }
+
+  const handleCommunityPress = (community: CommunityResDto) => {
+    handleClose()
+    setTimeout(() => {
+      router.push(`/(home)/(discover)/community/${community.id}` as any)
+    }, 200)
+  }
+
   const visibleResults = displayedResults
   const hasResults =
     visibleResults && (
       visibleResults.artists.length > 0 ||
       visibleResults.albums.length > 0 ||
       visibleResults.tracks.length > 0 ||
-      visibleResults.users.length > 0
+      visibleResults.users.length > 0 ||
+      visibleResults.communities.length > 0
     )
 
   // Show "no results" only when we've actually completed a search for the current input
@@ -594,7 +644,18 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
                   <View style={styles.section}>
                     <SectionLabel label="Albums" />
                     {visibleResults!.albums.map((a) => (
-                      <AlbumRow key={a.id} album={a} />
+                      <AlbumRow
+                        key={a.id}
+                        album={a}
+                        onPress={() =>
+                          setRatingAlbum({
+                            id: a.id,
+                            title: a.title,
+                            artist: a.artist?.name ?? '',
+                            coverUrl: a.coverMedium || a.coverSmall || undefined,
+                          })
+                        }
+                      />
                     ))}
                   </View>
                 )}
@@ -618,7 +679,16 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
                   <View style={styles.section}>
                     <SectionLabel label="Users" />
                     {visibleResults!.users.map((user) => (
-                      <UserRow key={user.id} user={user} />
+                      <UserRow key={user.id} user={user} onPress={() => handleUserPress(user)} />
+                    ))}
+                  </View>
+                )}
+
+                {visibleResults!.communities.length > 0 && (
+                  <View style={styles.section}>
+                    <SectionLabel label="Communities" />
+                    {visibleResults!.communities.map((c) => (
+                      <CommunityRow key={c.id} community={c} onPress={() => handleCommunityPress(c)} />
                     ))}
                   </View>
                 )}
@@ -627,6 +697,13 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
           </ScrollView>
         </Animated.View>
       </View>
+
+      <AlbumRatingModal
+        visible={ratingAlbum !== null}
+        onClose={() => setRatingAlbum(null)}
+        album={ratingAlbum}
+        currentUserId={user?.id}
+      />
     </Animated.View>
   )
 }
@@ -681,10 +758,9 @@ const styles = StyleSheet.create({
   categoryTabs: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
     gap: 8,
     paddingBottom: 2,
-    paddingRight: 8,
+    paddingRight: 16,
   },
   categoryTab: {
     borderRadius: 999,

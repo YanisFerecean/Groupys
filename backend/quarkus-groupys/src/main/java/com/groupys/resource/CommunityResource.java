@@ -46,6 +46,13 @@ public class CommunityResource {
     }
 
     @GET
+    @Path("/search")
+    public List<CommunityResDto> search(@QueryParam("q") String q) {
+        if (q == null || q.isBlank()) return List.of();
+        return communityService.search(q);
+    }
+
+    @GET
     @Path("/mine")
     public List<CommunityResDto> getMine() {
         return communityService.getJoinedCommunities(jwt.getSubject());
@@ -120,13 +127,13 @@ public class CommunityResource {
     @PUT
     @Path("/{id}")
     public CommunityResDto update(@PathParam("id") UUID id, @Valid CommunityUpdateDto dto) {
-        return communityService.update(id, dto);
+        return communityService.update(id, dto, jwt.getSubject());
     }
 
     @DELETE
     @Path("/{id}")
     public Response delete(@PathParam("id") UUID id) {
-        communityService.delete(id);
+        communityService.delete(id, jwt.getSubject());
         return Response.noContent().build();
     }
 

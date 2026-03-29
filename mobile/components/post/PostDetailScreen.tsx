@@ -1,6 +1,6 @@
-import { Ionicons } from '@expo/vector-icons'
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
 import { useUser } from '@clerk/expo'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
@@ -14,10 +14,11 @@ import {
   View,
 } from 'react-native'
 import { MarkdownDisplay } from '@/components/ui/MarkdownDisplay'
-import { router } from 'expo-router'
+import { router, useSegments } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
 import { apiDelete, apiFetch, apiPost, mediaUrl } from '@/lib/api'
+import { communityDetailPath, publicProfilePath, resolveHomeTab } from '@/lib/profileRoutes'
 import { timeAgo } from '@/lib/timeAgo'
 import { Colors } from '@/constants/colors'
 import AuthImageWithToken from '@/components/ui/AuthImageWithToken'
@@ -26,7 +27,38 @@ import { useAuthToken } from '@/hooks/useAuthToken'
 import CommentItem from '@/components/post/CommentItem'
 import type { PostResDto } from '@/models/PostRes'
 import type { CommentResDto } from '@/models/CommentRes'
+import type { CommunityResDto } from '@/models/CommunityRes'
 import MediaLightbox from '@/components/ui/MediaLightbox'
+
+const HERO_COLORS = [
+  '#7c3aed', '#be185d', '#0891b2', '#b45309', '#059669', '#6366f1',
+  '#dc2626', '#2563eb', '#7c2d12', '#4f46e5',
+]
+
+function heroColor(id: string): string {
+  let hash = 0
+  for (let i = 0; i < id.length; i += 1) {
+    hash = (hash * 31 + id.charCodeAt(i)) | 0
+  }
+  return HERO_COLORS[Math.abs(hash) % HERO_COLORS.length]
+}
+
+function updateCommentInTree(tree: CommentResDto[], updated: CommentResDto): CommentResDto[] {
+  return tree.map((c) => {
+    if (c.id === updated.id) return updated
+    if (c.replies?.length) return { ...c, replies: updateCommentInTree(c.replies, updated) }
+    return c
+  })
+}
+
+function removeCommentFromTree(tree: CommentResDto[], commentId: string): CommentResDto[] {
+  return tree
+    .filter((c) => c.id !== commentId)
+    .map((c) => {
+      if (c.replies?.length) return { ...c, replies: removeCommentFromTree(c.replies, commentId) }
+      return c
+    })
+}
 
 interface Props {
   postId: string
@@ -34,14 +66,18 @@ interface Props {
 
 export default function PostDetailScreen({ postId }: Props) {
   const insets = useSafeAreaInsets()
+  const segments = useSegments()
+  const currentTab = resolveHomeTab(segments)
   const { user } = useUser()
   const { refreshToken } = useAuthToken()
 
+  const commentInputRef = useRef<TextInput>(null)
   const [post, setPost] = useState<PostResDto | null>(null)
+  const [community, setCommunity] = useState<CommunityResDto | null>(null)
   const [comments, setComments] = useState<CommentResDto[]>([])
   const [loading, setLoading] = useState(true)
   const [commentText, setCommentText] = useState('')
-  const [replyTo, setReplyTo] = useState<string | null>(null)
+  const [replyTo, setReplyTo] = useState<{ id: string; username: string } | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [initialIndex, setInitialIndex] = useState<number | null>(null)
@@ -54,7 +90,9 @@ export default function PostDetailScreen({ postId }: Props) {
         apiFetch<PostResDto>(`/posts/${postId}`, token),
         apiFetch<CommentResDto[]>(`/comments/post/${postId}`, token),
       ])
+      const communityData = await apiFetch<CommunityResDto>(`/communities/${postData.communityId}`, token)
       setPost(postData)
+      setCommunity(communityData)
       setComments(commentsData)
     } catch (err) {
       console.error('Failed to fetch post:', err)
@@ -69,7 +107,11 @@ export default function PostDetailScreen({ postId }: Props) {
 
   const handleReact = useCallback(
     async (type: 'like' | 'dislike') => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+      void Haptics.impactAsync(
+        type === 'like'
+          ? Haptics.ImpactFeedbackStyle.Light
+          : Haptics.ImpactFeedbackStyle.Medium,
+      )
       try {
         const token = await refreshToken()
         if (!token) return
@@ -94,7 +136,7 @@ export default function PostDetailScreen({ postId }: Props) {
         token,
         {
           content: commentText.trim(),
-          parentCommentId: replyTo,
+          parentCommentId: replyTo?.id ?? null,
         },
       )
       const updatedComments = await apiFetch<CommentResDto[]>(`/comments/post/${postId}`, token)
@@ -134,8 +176,22 @@ export default function PostDetailScreen({ postId }: Props) {
     ])
   }
 
+  const handleCommentUpdated = useCallback((updated: CommentResDto) => {
+    setComments((prev) => updateCommentInTree(prev, updated))
+  }, [])
+
+  const handleCommentDeleted = useCallback((commentId: string) => {
+    setComments((prev) => removeCommentFromTree(prev, commentId))
+  }, [])
+
+  const handleVisitAuthor = useCallback(() => {
+    if (!post) return
+    router.push(publicProfilePath(post.authorId, currentTab) as any)
+  }, [currentTab, post])
+
   const hasMedia = post?.media && post.media.length > 0
   const isAuthor = user && post && user.id === post.authorClerkId
+  const communityColor = community ? heroColor(community.id) : '#4f46e5'
 
   if (loading) {
     return (
@@ -166,29 +222,115 @@ export default function PostDetailScreen({ postId }: Props) {
       {/* Back button */}
       <TouchableOpacity
         onPress={() => router.back()}
-        className="absolute z-10 left-5 items-center justify-center w-9 h-9 rounded-full bg-surface-container-high"
+        className="absolute z-10 left-5 h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-black/30"
         style={{ top: insets.top + 8 }}
       >
-        <Ionicons name="chevron-back" size={22} color={Colors.onSurface} />
+        <Ionicons name="chevron-back" size={22} color="#fff" />
       </TouchableOpacity>
 
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingTop: insets.top + 56, paddingBottom: 100 }}
+        contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
+        {post ? (
+          <View className="mb-5">
+            <TouchableOpacity
+              activeOpacity={0.92}
+              onPress={() => router.push(communityDetailPath(post.communityId, currentTab) as never)}
+            >
+              <View
+                style={{ backgroundColor: communityColor, height: 280, paddingTop: insets.top + 56 }}
+                className="justify-end"
+              >
+                {community?.bannerUrl ? (
+                  <AuthImageWithToken
+                    uri={mediaUrl(community.bannerUrl.replace(/^\/api\/posts\/media\//, ''))}
+                    className="absolute"
+                    style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
+                  />
+                ) : null}
+                <View className="absolute inset-0 bg-black/35" />
+
+                <View className="px-5 pb-5 flex-row items-end gap-3">
+                  {community?.iconType === 'EMOJI' && community.iconEmoji ? (
+                    <View className="mb-1 h-16 w-16 items-center justify-center rounded-2xl bg-white/20">
+                      <Text className="text-3xl">{community.iconEmoji}</Text>
+                    </View>
+                  ) : community?.iconUrl ? (
+                    <AuthImageWithToken
+                      uri={mediaUrl(community.iconUrl.replace(/^\/api\/posts\/media\//, ''))}
+                      style={{ width: 64, height: 64, borderRadius: 16, marginBottom: 4 }}
+                    />
+                  ) : (
+                    <View className="mb-1 h-16 w-16 items-center justify-center rounded-2xl bg-white/20">
+                      <Ionicons name="people" size={26} color="#fff" />
+                    </View>
+                  )}
+
+                  <View className="flex-1">
+                    <Text className="text-3xl font-extrabold tracking-tight text-white" numberOfLines={2}>
+                      {community?.name ?? post.communityName}
+                    </Text>
+                    {community?.description ? (
+                      <Text className="mt-1 text-sm text-white/80" numberOfLines={2}>
+                        {community.description}
+                      </Text>
+                    ) : (
+                      <Text className="mt-1 text-sm text-white/80" numberOfLines={1}>
+                        Open community
+                      </Text>
+                    )}
+
+                    <View className="mt-3 flex-row flex-wrap items-center gap-4">
+                      {community ? (
+                        <View className="flex-row items-center gap-1">
+                          <Ionicons name="people" size={14} color="rgba(255,255,255,0.82)" />
+                          <Text className="text-xs font-semibold text-white/80">
+                            {community.memberCount} members
+                          </Text>
+                        </View>
+                      ) : null}
+                      {community?.genre ? (
+                        <View className="flex-row items-center gap-1">
+                          <Ionicons name="musical-notes" size={14} color="rgba(255,255,255,0.82)" />
+                          <Text className="text-xs font-semibold text-white/80">{community.genre}</Text>
+                        </View>
+                      ) : null}
+                      {community?.country ? (
+                        <View className="flex-row items-center gap-1">
+                          <Ionicons name="location-outline" size={14} color="rgba(255,255,255,0.82)" />
+                          <Text className="text-xs font-semibold text-white/80">{community.country}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </TouchableOpacity>
+
+            {community?.tags?.length ? (
+              <View className="flex-row flex-wrap gap-2 px-5 pb-2 pt-4">
+                {community.tags.slice(0, 4).map((tag) => (
+                  <View key={tag} className="rounded-full bg-surface-container-high px-3 py-1">
+                    <Text className="text-xs font-semibold text-on-surface-variant">{tag}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
         {/* Post content */}
         <View className="px-5">
-          {/* Community badge */}
-          <View className="flex-row items-center gap-1.5 mb-2">
-            <Ionicons name="people" size={14} color={Colors.primary} />
-            <Text className="text-xs font-semibold text-primary">{post.communityName}</Text>
-          </View>
-
           {/* Author */}
           <View className="flex-row items-center justify-between mb-4">
-            <View className="flex-row items-center gap-3">
+            <TouchableOpacity
+              activeOpacity={0.8}
+              className="flex-row items-center gap-3"
+              onPress={handleVisitAuthor}
+            >
               {post.authorProfileImage ? (
                 <Image
                   source={{ uri: post.authorProfileImage }}
@@ -206,7 +348,7 @@ export default function PostDetailScreen({ postId }: Props) {
                 </Text>
                 <Text className="text-xs text-on-surface-variant">{timeAgo(post.createdAt)}</Text>
               </View>
-            </View>
+            </TouchableOpacity>
 
             {isAuthor && (
               <TouchableOpacity onPress={handleDelete} disabled={deleting} className="p-2">
@@ -289,7 +431,7 @@ export default function PostDetailScreen({ postId }: Props) {
               activeOpacity={0.7}
             >
               <Ionicons
-                name={post.userReaction === 'like' ? 'thumbs-up' : 'thumbs-up-outline'}
+                name={post.userReaction === 'like' ? 'heart' : 'heart-outline'}
                 size={18}
                 color={post.userReaction === 'like' ? Colors.primary : Colors.onSurfaceVariant}
               />
@@ -307,8 +449,8 @@ export default function PostDetailScreen({ postId }: Props) {
               }`}
               activeOpacity={0.7}
             >
-              <Ionicons
-                name={post.userReaction === 'dislike' ? 'thumbs-down' : 'thumbs-down-outline'}
+              <MaterialCommunityIcons
+                name={post.userReaction === 'dislike' ? 'heart-broken' : 'heart-broken-outline'}
                 size={18}
                 color={post.userReaction === 'dislike' ? Colors.secondary : Colors.onSurfaceVariant}
               />
@@ -319,12 +461,16 @@ export default function PostDetailScreen({ postId }: Props) {
               ) : null}
             </TouchableOpacity>
 
-            <View className="flex-row items-center gap-1.5 px-4 py-2 ml-auto">
+            <TouchableOpacity
+              onPress={() => commentInputRef.current?.focus()}
+              className="flex-row items-center gap-1.5 px-4 py-2 ml-auto"
+              activeOpacity={0.7}
+            >
               <Ionicons name="chatbubble-outline" size={18} color={Colors.onSurfaceVariant} />
               <Text className="text-sm font-semibold text-on-surface-variant">
-                {comments.length}
+                {post.commentCount}
               </Text>
-            </View>
+            </TouchableOpacity>
           </View>
 
           {/* Comments */}
@@ -336,7 +482,10 @@ export default function PostDetailScreen({ postId }: Props) {
               <CommentItem
                 key={comment.id}
                 comment={comment}
-                onReply={(id) => setReplyTo(id)}
+                onReply={(id, username) => setReplyTo({ id, username })}
+                onCommentUpdated={handleCommentUpdated}
+                onCommentDeleted={handleCommentDeleted}
+                currentUsername={user?.username ?? undefined}
               />
             ))
           )}
@@ -350,7 +499,9 @@ export default function PostDetailScreen({ postId }: Props) {
       >
         {replyTo ? (
           <View className="flex-row items-center justify-between mb-2">
-            <Text className="text-xs text-on-surface-variant">Replying to comment</Text>
+            <Text className="text-xs text-on-surface-variant">
+              Replying to <Text className="font-semibold">@{replyTo.username}</Text>
+            </Text>
             <TouchableOpacity onPress={() => setReplyTo(null)}>
               <Ionicons name="close" size={16} color={Colors.onSurfaceVariant} />
             </TouchableOpacity>
@@ -358,6 +509,7 @@ export default function PostDetailScreen({ postId }: Props) {
         ) : null}
         <View className="flex-row items-center gap-2">
           <TextInput
+            ref={commentInputRef}
             className="flex-1 bg-surface-container-low rounded-full px-4 py-2.5 text-sm text-on-surface"
             placeholder="Add a comment..."
             placeholderTextColor={Colors.onSurfaceVariant}

@@ -6,6 +6,6 @@ public record AlbumRatingCreateDto(
         String albumCoverUrl,
         String artistName,
         int score,
-        @jakarta.validation.constraints.NotBlank String review
+        String review
 ) {
 }

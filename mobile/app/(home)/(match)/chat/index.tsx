@@ -16,6 +16,7 @@ import { NewConversationModal } from '@/components/chat/NewConversationModal'
 import { Colors } from '@/constants/colors'
 import { useChat } from '@/hooks/useChat'
 import { isEncrypted } from '@/lib/chat-crypto'
+import { publicProfilePath } from '@/lib/profileRoutes'
 
 export default function ChatInboxScreen() {
   const insets = useSafeAreaInsets()
@@ -136,11 +137,22 @@ export default function ChatInboxScreen() {
               Chat Requests
             </Text>
             {requestConversations.map(conversation => (
+              (() => {
+                const otherParticipant = conversation.participants.find(
+                  participant => participant.username !== user?.username,
+                )
+
+                return (
               <ChatRequestListItem
                 key={conversation.id}
                 conversation={conversation}
                 currentUsername={user?.username}
                 busyAction={requestAction?.conversationId === conversation.id ? requestAction.action : null}
+                onProfilePress={otherParticipant
+                  ? () => {
+                      router.push(publicProfilePath(otherParticipant.userId, '(match)') as never)
+                    }
+                  : undefined}
                 onPress={() => {
                   router.push(`/(home)/(match)/chat/${conversation.id}` as never)
                 }}
@@ -169,6 +181,8 @@ export default function ChatInboxScreen() {
                     })
                 }}
               />
+                )
+              })()
             ))}
             {activeConversations.length > 0 ? (
               <Text className="px-5 pb-3 pt-3 text-sm font-semibold uppercase tracking-wider text-on-surface-variant">
@@ -178,14 +192,27 @@ export default function ChatInboxScreen() {
           </View>
         ) : null}
         renderItem={({ item }) => (
-          <ConversationListItem
-            conversation={item}
-            currentUsername={user?.username}
-            preview={decryptedPreviews[item.id]}
-            onPress={() => {
-              router.push(`/(home)/(match)/chat/${item.id}` as never)
-            }}
-          />
+          (() => {
+            const otherParticipant = item.participants.find(
+              participant => participant.username !== user?.username,
+            )
+
+            return (
+              <ConversationListItem
+                conversation={item}
+                currentUsername={user?.username}
+                preview={decryptedPreviews[item.id]}
+                onProfilePress={otherParticipant
+                  ? () => {
+                      router.push(publicProfilePath(otherParticipant.userId, '(match)') as never)
+                    }
+                  : undefined}
+                onPress={() => {
+                  router.push(`/(home)/(match)/chat/${item.id}` as never)
+                }}
+              />
+            )
+          })()
         )}
         ListEmptyComponent={requestConversations.length === 0 ? (
           <View className="flex-1 items-center justify-center px-10">
