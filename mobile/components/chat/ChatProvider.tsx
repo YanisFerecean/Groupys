@@ -15,7 +15,7 @@ import {
   denyConversationRequest,
   fetchConversation,
   fetchConversations,
-  fetchPublicKey,
+  fetchPublicKey as fetchRemotePublicKey,
   markRead,
   searchUsers,
   startConversation,
@@ -63,7 +63,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const { getToken, isLoaded, isSignedIn } = useAuth()
   const getTokenRef = useRef(getToken)
   const cursorRef = useRef<string | undefined>(undefined)
-  const publicKeyCacheRef = useRef(new Map<string, string | null>())
+  const publicKeyCacheRef = useRef(new Map<string, string>())
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
@@ -247,36 +247,48 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     })
   }, [fetchConversationById])
 
-  const getPublicKeyForUsername = useCallback(async (username: string) => {
-    if (publicKeyCacheRef.current.has(username)) {
-      return publicKeyCacheRef.current.get(username) ?? null
+  const fetchPublicKeyForUsername = useCallback(async (username: string, forceRefresh: boolean = false) => {
+    if (!forceRefresh) {
+      const cachedKey = publicKeyCacheRef.current.get(username)
+      if (cachedKey) {
+        return cachedKey
+      }
     }
 
     const token = await getTokenRef.current()
-    const publicKey = await fetchPublicKey(username, token)
-    publicKeyCacheRef.current.set(username, publicKey)
-    return publicKey
+    const publicKey = await fetchRemotePublicKey(username, token)
+    if (publicKey) {
+      publicKeyCacheRef.current.set(username, publicKey)
+      return publicKey
+    }
+
+    publicKeyCacheRef.current.delete(username)
+    return null
   }, [])
 
+  const getPublicKeyForUsername = useCallback(async (username: string) => {
+    return fetchPublicKeyForUsername(username)
+  }, [fetchPublicKeyForUsername])
+
   const encryptForUsername = useCallback(async (username: string, plaintext: string) => {
-    if (!keyPair) {
+    if (!keyPair || !cryptoReady) {
       return plaintext
     }
 
-    const publicKey = await getPublicKeyForUsername(username)
+    const publicKey = await fetchPublicKeyForUsername(username)
     if (!publicKey) {
       return plaintext
     }
 
     return encryptMessage(keyPair.privateKey, publicKey, plaintext)
-  }, [getPublicKeyForUsername, keyPair])
+  }, [cryptoReady, fetchPublicKeyForUsername, keyPair])
 
   const decryptForUsername = useCallback(async (username: string, content: string) => {
     if (!keyPair || !isEncrypted(content)) {
       return content
     }
 
-    const publicKey = await getPublicKeyForUsername(username)
+    let publicKey = await fetchPublicKeyForUsername(username)
     if (!publicKey) {
       return content
     }
@@ -284,9 +296,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     try {
       return await decryptMessage(keyPair.privateKey, publicKey, content)
     } catch {
-      return '[Encrypted message]'
+      publicKeyCacheRef.current.delete(username)
+      publicKey = await fetchPublicKeyForUsername(username, true)
+      if (!publicKey) {
+        return '[Encrypted message]'
+      }
+
+      try {
+        return await decryptMessage(keyPair.privateKey, publicKey, content)
+      } catch {
+        return '[Encrypted message]'
+      }
     }
-  }, [getPublicKeyForUsername, keyPair])
+  }, [fetchPublicKeyForUsername, keyPair])
 
   const isUserOnline = useCallback((userId: string) => onlineUsers.has(userId), [onlineUsers])
 
@@ -320,11 +342,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }
 
         setKeyPair(pair)
-        setCryptoReady(true)
 
         const token = await getTokenRef.current()
         if (token) {
           await uploadPublicKey(pair.publicKey, token)
+        }
+
+        if (!cancelled) {
+          setCryptoReady(true)
         }
       } catch (error) {
         console.error('[chat] failed to initialise crypto', error)
