@@ -4,6 +4,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Modal,
+  PanResponder,
   Platform,
   ScrollView,
   Text,
@@ -27,17 +28,133 @@ import {
   type AlbumRatingRes,
 } from '@/lib/api'
 
-const SCORE_LABELS = [
-  '', 'Terrible', 'Bad', 'Poor', 'Below Average',
-  'Average', 'Fine', 'Good', 'Great', 'Excellent', 'Masterpiece',
-]
+// Backend uses integer 1–10. UI uses 0.5 steps on a 1–5 scale.
+function to5Star(backendScore: number): number {
+  return backendScore / 2
+}
+function to10Scale(displayScore: number): number {
+  return Math.round(displayScore * 2)
+}
 
-function scoreColor(score: number): string {
-  if (score >= 8) return Colors.tertiary
-  if (score >= 6) return Colors.primary
-  if (score >= 4) return Colors.secondary
+const SCORE_LABELS: Record<number, string> = {
+  1: 'Dreadful', 2: 'Terrible', 3: 'Bad', 4: 'Poor', 5: 'Average',
+  6: 'Fine', 7: 'Good', 8: 'Great', 9: 'Excellent', 10: 'Masterpiece',
+}
+
+function scoreColor(backendScore: number): string {
+  if (backendScore >= 8) return Colors.tertiary
+  if (backendScore >= 6) return Colors.primary
+  if (backendScore >= 4) return Colors.secondary
   return '#ef4444'
 }
+
+// ─── Star display (read-only) ────────────────────────────────────────────────
+
+function StarRow({
+  displayScore,
+  size = 14,
+}: {
+  displayScore: number
+  size?: number
+}) {
+  const color = displayScore > 0 ? scoreColor(to10Scale(displayScore)) : Colors.outlineVariant
+  return (
+    <View style={{ flexDirection: 'row', gap: 2 }}>
+      {Array.from({ length: 5 }, (_, i) => {
+        const val = i + 1
+        const filled = displayScore >= val
+        const half = !filled && displayScore >= val - 0.5
+        return (
+          <Ionicons
+            key={i}
+            name={filled ? 'star' : half ? 'star-half' : 'star-outline'}
+            size={size}
+            color={color}
+          />
+        )
+      })}
+    </View>
+  )
+}
+
+// ─── Interactive star picker with swipe ──────────────────────────────────────
+
+function InteractiveStarPicker({
+  displayScore,
+  onChange,
+}: {
+  displayScore: number
+  onChange: (score: number) => void
+}) {
+  const containerRef = useRef<View>(null)
+  const containerX = useRef(0)
+  const containerWidth = useRef(0)
+  const lastFiredScore = useRef(-1)
+  const onChangeRef = useRef(onChange)
+
+  useEffect(() => {
+    onChangeRef.current = onChange
+  }, [onChange])
+
+  const handlePosition = useRef((pageX: number, isRelease = false) => {
+    if (containerWidth.current === 0) return
+    const relX = pageX - containerX.current
+    const ratio = Math.max(0, Math.min(1, relX / containerWidth.current))
+    const halfStars = Math.round(ratio * 5 * 2) / 2
+    const newScore = Math.max(0.5, Math.min(5, halfStars))
+    if (newScore !== lastFiredScore.current) {
+      lastFiredScore.current = newScore
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+      onChangeRef.current(newScore)
+    }
+    if (isRelease) {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    }
+  })
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (evt) => handlePosition.current(evt.nativeEvent.pageX),
+      onPanResponderMove: (evt) => handlePosition.current(evt.nativeEvent.pageX),
+      onPanResponderRelease: (evt) => handlePosition.current(evt.nativeEvent.pageX, true),
+    }),
+  )
+
+  const filledColor = displayScore > 0 ? Colors.primary : Colors.outlineVariant
+  const outlineColor = Colors.outlineVariant
+
+  return (
+    <View
+      ref={containerRef}
+      onLayout={() => {
+        containerRef.current?.measure((_x, _y, width, _height, pageX) => {
+          containerX.current = pageX
+          containerWidth.current = width
+        })
+      }}
+      {...panResponder.current.panHandlers}
+      style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10 }}
+    >
+      {Array.from({ length: 5 }, (_, i) => {
+        const val = i + 1
+        const filled = displayScore >= val
+        const half = !filled && displayScore >= val - 0.5
+        return (
+          <Ionicons
+            key={i}
+            name={filled ? 'star' : half ? 'star-half' : 'star-outline'}
+            size={42}
+            color={filled || half ? filledColor : outlineColor}
+          />
+        )
+      })}
+    </View>
+  )
+}
+
+// ─── Main modal ──────────────────────────────────────────────────────────────
 
 interface AlbumRatingModalProps {
   visible: boolean
@@ -60,7 +177,8 @@ export default function AlbumRatingModal({
   const getTokenRef = useRef(getToken)
 
   const [activeTab, setActiveTab] = useState<'rate' | 'community'>('rate')
-  const [score, setScore] = useState(0)
+  // displayScore: 0 = unset, 0.5–5.0 in half-star increments
+  const [displayScore, setDisplayScore] = useState(0)
   const [review, setReview] = useState('')
   const [ratings, setRatings] = useState<AlbumRatingRes[]>([])
   const [loading, setLoading] = useState(false)
@@ -71,13 +189,15 @@ export default function AlbumRatingModal({
     getTokenRef.current = getToken
   }, [getToken])
 
-  const myRating = currentUserId ? (ratings.find((r) => r.userId === currentUserId) ?? null) : null
+  const myRating = currentUserId
+    ? (ratings.find((r) => r.userId === currentUserId) ?? null)
+    : null
 
   useEffect(() => {
     if (!visible || !album?.id) return
 
     setActiveTab('rate')
-    setScore(0)
+    setDisplayScore(0)
     setReview('')
     setRatings([])
     setError(null)
@@ -93,7 +213,7 @@ export default function AlbumRatingModal({
         setRatings(data)
         const mine = currentUserId ? data.find((r) => r.userId === currentUserId) : null
         if (mine) {
-          setScore(mine.score)
+          setDisplayScore(to5Star(mine.score))
           setReview(mine.review ?? '')
         }
       } catch {
@@ -107,11 +227,6 @@ export default function AlbumRatingModal({
     return () => { cancelled = true }
   }, [visible, album?.id, currentUserId])
 
-  const handleStarPress = (star: number) => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-    setScore(star)
-  }
-
   const refreshRatings = async () => {
     if (!album?.id) return
     const token = await getTokenRef.current()
@@ -120,7 +235,8 @@ export default function AlbumRatingModal({
   }
 
   const handleSubmit = async () => {
-    if (!album?.id || score === 0) return
+    if (!album?.id || displayScore === 0) return
+    const backendScore = to10Scale(displayScore)
     setError(null)
     setSubmitting(true)
     try {
@@ -131,14 +247,14 @@ export default function AlbumRatingModal({
           albumTitle: album.title,
           albumCoverUrl: album.coverUrl ?? null,
           artistName: album.artist ?? null,
-          score,
+          score: backendScore,
           review: review.trim() || null,
         },
         token,
       )
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       await refreshRatings()
-      onRatingChange?.(album.id, score)
+      onRatingChange?.(album.id, backendScore)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {
@@ -158,7 +274,7 @@ export default function AlbumRatingModal({
           try {
             const token = await getTokenRef.current()
             await deleteAlbumRating(myRating.id, token)
-            setScore(0)
+            setDisplayScore(0)
             setReview('')
             await refreshRatings()
             onRatingChange?.(album.id!, null)
@@ -174,6 +290,7 @@ export default function AlbumRatingModal({
 
   const otherRatings = ratings.filter((r) => r.userId !== currentUserId)
   const communityCount = ratings.length
+  const backendScore = to10Scale(displayScore)
 
   return (
     <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
@@ -258,38 +375,32 @@ export default function AlbumRatingModal({
               {activeTab === 'rate' ? (
                 <View className="gap-4">
                   {/* Star picker */}
-                  <View className="gap-2">
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                      {Array.from({ length: 10 }, (_, i) => i + 1).map((star) => (
-                        <TouchableOpacity
-                          key={star}
-                          onPress={() => handleStarPress(star)}
-                          style={{ padding: 6 }}
-                          hitSlop={{ top: 4, bottom: 4, left: 2, right: 2 }}
-                          activeOpacity={0.7}
-                        >
-                          <Ionicons
-                            name={star <= score ? 'star' : 'star-outline'}
-                            size={26}
-                            color={star <= score ? scoreColor(score) : Colors.onSurfaceVariant}
-                          />
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                    {score > 0 ? (
+                  <View
+                    className="rounded-3xl p-4 gap-3"
+                    style={{
+                      backgroundColor: Colors.surfaceContainerLow,
+                      borderWidth: 1,
+                      borderColor: Colors.outlineVariant,
+                    }}
+                  >
+                    <InteractiveStarPicker displayScore={displayScore} onChange={setDisplayScore} />
+
+                    {displayScore > 0 ? (
                       <View className="flex-row items-baseline gap-2">
                         <Text
-                          className="text-2xl font-extrabold tabular-nums"
-                          style={{ color: scoreColor(score) }}
+                          className="text-3xl font-extrabold tabular-nums"
+                          style={{ color: scoreColor(backendScore) }}
                         >
-                          {score}
+                          {displayScore.toFixed(1)}
                         </Text>
-                        <Text className="text-sm text-on-surface-variant">
-                          /10 · {SCORE_LABELS[score]}
+                        <Text className="text-sm" style={{ color: Colors.onSurfaceVariant }}>
+                          /5 · {SCORE_LABELS[backendScore]}
                         </Text>
                       </View>
                     ) : (
-                      <Text className="text-sm text-on-surface-variant">Tap a star to rate</Text>
+                      <Text className="text-sm" style={{ color: Colors.onSurfaceVariant }}>
+                        Swipe across the stars to rate
+                      </Text>
                     )}
                   </View>
 
@@ -333,11 +444,11 @@ export default function AlbumRatingModal({
                   <View className="flex-row gap-3 pb-2">
                     <TouchableOpacity
                       onPress={() => void handleSubmit()}
-                      disabled={submitting || score === 0}
+                      disabled={submitting || displayScore === 0}
                       className="flex-1 rounded-2xl py-3.5 items-center"
                       style={{
                         backgroundColor:
-                          score === 0 ? Colors.surfaceContainerHigh : Colors.primary,
+                          displayScore === 0 ? Colors.surfaceContainerHigh : Colors.primary,
                         opacity: submitting ? 0.6 : 1,
                       }}
                     >
@@ -347,7 +458,8 @@ export default function AlbumRatingModal({
                         <Text
                           className="font-bold text-sm"
                           style={{
-                            color: score === 0 ? Colors.onSurfaceVariant : Colors.onPrimary,
+                            color:
+                              displayScore === 0 ? Colors.onSurfaceVariant : Colors.onPrimary,
                           }}
                         >
                           {myRating ? 'Update Rating' : 'Submit Rating'}
@@ -400,6 +512,8 @@ export default function AlbumRatingModal({
   )
 }
 
+// ─── Community rating row ─────────────────────────────────────────────────────
+
 function RatingRow({ rating, isOwn }: { rating: AlbumRatingRes; isOwn: boolean }) {
   const date = new Date(rating.updatedAt).toLocaleDateString(undefined, {
     year: 'numeric',
@@ -407,6 +521,7 @@ function RatingRow({ rating, isOwn }: { rating: AlbumRatingRes; isOwn: boolean }
     day: 'numeric',
   })
   const initial = ((rating.displayName ?? rating.username)[0] ?? '?').toUpperCase()
+  const display5 = to5Star(rating.score)
 
   return (
     <View
@@ -414,7 +529,7 @@ function RatingRow({ rating, isOwn }: { rating: AlbumRatingRes; isOwn: boolean }
       style={{
         backgroundColor: isOwn ? 'rgba(186,0,43,0.05)' : Colors.surfaceContainerLow,
         borderWidth: 1,
-        borderColor: isOwn ? 'rgba(186,0,43,0.15)' : Colors.outlineVariant,
+        borderColor: isOwn ? 'rgba(186,0,43,0.2)' : Colors.outlineVariant,
       }}
     >
       <View className="flex-row items-center justify-between gap-2">
@@ -440,16 +555,19 @@ function RatingRow({ rating, isOwn }: { rating: AlbumRatingRes; isOwn: boolean }
             <Text className="text-xs text-on-surface-variant">{date}</Text>
           </View>
         </View>
-        <View className="flex-row items-baseline gap-0.5 shrink-0">
-          <Text
-            className="text-xl font-extrabold tabular-nums"
-            style={{ color: scoreColor(rating.score) }}
-          >
-            {rating.score}
-          </Text>
-          <Text className="text-sm" style={{ color: Colors.outline }}>
-            /10
-          </Text>
+        <View className="items-end gap-0.5 shrink-0">
+          <StarRow displayScore={display5} size={13} />
+          <View className="flex-row items-baseline gap-0.5">
+            <Text
+              className="text-base font-extrabold tabular-nums"
+              style={{ color: scoreColor(rating.score) }}
+            >
+              {display5.toFixed(1)}
+            </Text>
+            <Text className="text-xs" style={{ color: Colors.outline }}>
+              /5
+            </Text>
+          </View>
         </View>
       </View>
       {rating.review ? (
