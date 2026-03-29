@@ -59,7 +59,7 @@ export default function ConversationPage() {
     [cryptoReady, otherPublicKey, makeDecrypt]
   );
 
-  const { messages, isLoading, hasMore, loadMore, sendMessage, resendMessage } = useMessages(
+  const { messages, isLoading, hasMore, loadMore, sendMessage, resendMessage, rateLimitError, isDecrypting } = useMessages(
     conversationId,
     decryptFn,
     encryptFn
@@ -239,6 +239,7 @@ export default function ConversationPage() {
         messages={messages}
         hasMore={hasMore}
         isLoadingMore={isLoading}
+        isDecrypting={isDecrypting}
         otherLastReadAt={otherLastReadAt}
         onLoadMore={handleLoadMore}
         onRetry={handleRetry}
@@ -279,6 +280,7 @@ export default function ConversationPage() {
         <MessageInput
           conversationId={conversationId || ""}
           onSend={handleSend}
+          rateLimitError={rateLimitError}
         />
       )}
     </div>

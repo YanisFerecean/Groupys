@@ -3,6 +3,13 @@ import { BackendUser } from "./api"; // we'll reuse the existing BackendUser for
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
 
+export class ApiError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 type JsonRequestInit = Omit<RequestInit, "body"> & {
   body?: unknown;
 };
@@ -82,7 +89,7 @@ export async function postMessage(conversationId: string, content: string, token
     method: "POST",
     body: { content },
   });
-  if (!res.ok) throw new Error("Failed to send message");
+  if (!res.ok) throw new ApiError(res.status, "Failed to send message");
   return res.json();
 }
 

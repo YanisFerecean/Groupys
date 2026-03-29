@@ -113,9 +113,8 @@ public class ConversationResource {
             data.put("messageType", msg.messageType());
             data.put("createdAt", msg.createdAt().toString());
             String json = objectMapper.writeValueAsString(new WebSocketMessage("MESSAGE_NEW", data));
-            chatService.getParticipantUserIds(msg.conversationId()).forEach(pid -> {
-                String clerkId = chatService.getClerkIdByUserId(pid);
-                if (clerkId != null && !clerkId.equals(senderClerkId)) {
+            chatService.getParticipantClerkIds(msg.conversationId()).forEach((pid, clerkId) -> {
+                if (!clerkId.equals(senderClerkId)) {
                     presenceService.sendTo(clerkId, json);
                 }
             });

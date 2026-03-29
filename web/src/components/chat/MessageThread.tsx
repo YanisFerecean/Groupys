@@ -39,12 +39,13 @@ interface MessageThreadProps {
   conversationId: string;
   hasMore: boolean;
   isLoadingMore: boolean;
+  isDecrypting?: boolean;
   onLoadMore: () => void;
   otherLastReadAt?: string | null;
   onRetry?: (msg: Message) => void;
 }
 
-export function MessageThread({ messages, conversationId, hasMore, isLoadingMore, onLoadMore, otherLastReadAt, onRetry }: MessageThreadProps) {
+export function MessageThread({ messages, conversationId, hasMore, isLoadingMore, isDecrypting, onLoadMore, otherLastReadAt, onRetry }: MessageThreadProps) {
   const { user } = useUser();
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -153,7 +154,20 @@ export function MessageThread({ messages, conversationId, hasMore, isLoadingMore
         </div>
       )}
 
-      <div className="flex flex-col space-y-1">
+      {isDecrypting && (
+        <div className="flex flex-col space-y-3 animate-pulse">
+          {[72, 48, 96, 56, 80].map((w, i) => (
+            <div key={i} className={`flex ${i % 2 === 0 ? "justify-end" : "justify-start"}`}>
+              <div
+                className={`h-9 rounded-2xl bg-surface-container-high ${i % 2 === 0 ? "rounded-br-sm" : "rounded-bl-sm"}`}
+                style={{ width: `${w}%`, maxWidth: "75%" }}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className={`flex flex-col space-y-1 ${isDecrypting ? "invisible" : ""}`}>
         {displayMessages.map((msg, idx) => {
           const isMine = msg.senderUsername === user?.username;
 

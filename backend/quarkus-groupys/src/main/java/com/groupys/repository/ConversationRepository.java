@@ -6,7 +6,9 @@ import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -83,5 +85,36 @@ public class ConversationRepository implements PanacheRepositoryBase<Conversatio
                 """, UUID.class)
                 .setParameter("userId", userId)
                 .getResultList();
+    }
+
+    /**
+     * Returns all partner user IDs (across both direct and group conversations)
+     * for the given user, in a single JOIN query.
+     */
+    public List<UUID> findAllConversationPartnerIds(UUID userId) {
+        return getEntityManager().createQuery("""
+                SELECT DISTINCT cpOther.user.id
+                FROM Conversation c
+                JOIN c.participants cpMine
+                JOIN c.participants cpOther
+                WHERE cpMine.user.id = :userId
+                  AND cpOther.user.id <> :userId
+                """, UUID.class)
+                .setParameter("userId", userId)
+                .getResultList();
+    }
+
+    /**
+     * Returns a map of userId -> clerkId for all participants in the given conversation.
+     * Single JOIN query — avoids N separate user lookups.
+     */
+    public Map<UUID, String> findParticipantUserIdToClerkId(UUID conversationId) {
+        List<Object[]> rows = getEntityManager().createQuery(
+                "SELECT cp.user.id, cp.user.clerkId FROM ConversationParticipant cp WHERE cp.conversation.id = :cid",
+                Object[].class
+        ).setParameter("cid", conversationId).getResultList();
+        Map<UUID, String> map = new HashMap<>();
+        for (Object[] row : rows) map.put((UUID) row[0], (String) row[1]);
+        return map;
     }
 }

@@ -1,6 +1,7 @@
 package com.groupys.model;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.BatchSize;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -42,6 +43,7 @@ public class Conversation {
     public UserMatch match;
 
     @OneToMany(mappedBy = "conversation", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @BatchSize(size = 50)
     public List<ConversationParticipant> participants = new ArrayList<>();
 
     @PrePersist
