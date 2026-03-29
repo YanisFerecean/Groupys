@@ -30,4 +30,8 @@ public class CommunityRepository implements PanacheRepositoryBase<Community, UUI
     public List<Community> listDiscoverable() {
         return find("visibility = 'PUBLIC' and discoveryEnabled = true").list();
     }
+
+    public List<Community> searchByQuery(String q) {
+        return find("lower(name) like ?1 or lower(description) like ?1", "%" + q.toLowerCase() + "%").list();
+    }
 }
