@@ -3,6 +3,7 @@ import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { Colors } from '@/constants/colors'
+import { publicProfilePath } from '@/lib/profileRoutes'
 import type { UserMatch } from '@/models/Match'
 
 interface MatchListItemProps {
@@ -34,20 +35,27 @@ export default function MatchListItem({ match }: MatchListItemProps) {
       onPress={handlePress}
       className="flex-row items-center gap-3 px-5 py-3 active:bg-surface-container"
     >
-      {match.otherProfileImage ? (
-        <Image
-          source={{ uri: match.otherProfileImage }}
-          style={{ width: 52, height: 52, borderRadius: 26 }}
-          contentFit="cover"
-        />
-      ) : (
-        <View
-          style={{ width: 52, height: 52, borderRadius: 26 }}
-          className="bg-surface-container-high items-center justify-center"
-        >
-          <Ionicons name="person" size={24} color={Colors.onSurfaceVariant} />
-        </View>
-      )}
+      <Pressable
+        onPress={(event) => {
+          event.stopPropagation()
+          router.push(publicProfilePath(match.otherUserId, '(match)') as never)
+        }}
+      >
+        {match.otherProfileImage ? (
+          <Image
+            source={{ uri: match.otherProfileImage }}
+            style={{ width: 52, height: 52, borderRadius: 26 }}
+            contentFit="cover"
+          />
+        ) : (
+          <View
+            style={{ width: 52, height: 52, borderRadius: 26 }}
+            className="bg-surface-container-high items-center justify-center"
+          >
+            <Ionicons name="person" size={24} color={Colors.onSurfaceVariant} />
+          </View>
+        )}
+      </Pressable>
 
       <View className="flex-1">
         <Text className="text-base font-semibold text-on-surface">
