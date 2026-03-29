@@ -46,7 +46,10 @@
       "Bash(grep -rn \"useProfileCustomization\\\\|updateProfileImage.*function\\\\|const updateProfileImage\" /c/Uni/Projects/groupys-web-app/web/src --include=*.tsx --include=*.ts)",
       "Bash(grep -r \"search\\\\|Search\" /c/Uni/Projects/groupys-web-app/web/src/app/api --include=*.ts)",
       "Bash(JAVA_OPTS=\"\" ./mvnw compile -q)",
-      "Bash(grep -r \"EAGER\\\\|LAZY\\\\|fetch\" /c/Uni/Projects/groupys-web-app/backend/quarkus-groupys/src/main/java/com/groupys/model/*.java)"
+      "Bash(grep -r \"EAGER\\\\|LAZY\\\\|fetch\" /c/Uni/Projects/groupys-web-app/backend/quarkus-groupys/src/main/java/com/groupys/model/*.java)",
+      "Bash(grep -n \"useState\\\\|useEffect\\\\|useCallback\" /c/Uni/Projects/groupys-web-app/web/src/app/chat/[conversationId]/page.tsx)",
+      "Bash(cmd /c \"mvnw.cmd compile -q\")",
+      "Bash(cmd /c \"npm run build\")"
     ]
   }
 }

@@ -21,8 +21,7 @@ export default function MatchPage() {
 
   useEffect(() => {
     if (!isLoaded) return;
-    void loadUsers();
-    void loadMatches();
+    void Promise.all([loadUsers(), loadMatches()]);
   }, [isLoaded, loadMatches, loadUsers]);
 
   const filteredUsers = useMemo(() => {

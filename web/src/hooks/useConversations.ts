@@ -9,6 +9,8 @@ const PAGE_SIZE = 20;
 
 export function useConversations() {
   const { getToken } = useAuth();
+  const getTokenRef = useRef(getToken);
+  useEffect(() => { getTokenRef.current = getToken; }, [getToken]);
   const store = useConversationStore();
   const { conversations, setConversations, appendConversations, updateConversation, removeConversation, bubbleConversation } = store;
 
@@ -16,12 +18,8 @@ export function useConversations() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const cursorRef = useRef<string | undefined>(undefined);
-  const loadedRef = useRef(false);
 
   useEffect(() => {
-    if (loadedRef.current) return;
-    loadedRef.current = true;
-
     let isMounted = true;
 
     async function load() {
@@ -65,7 +63,7 @@ export function useConversations() {
     if (isLoadingMore || !hasMore) return;
     setIsLoadingMore(true);
     try {
-      const token = await getToken();
+      const token = await getTokenRef.current();
       if (!token) return;
       const convos = await fetchConversations(token, cursorRef.current, PAGE_SIZE);
       appendConversations(convos);
@@ -78,30 +76,30 @@ export function useConversations() {
     } finally {
       setIsLoadingMore(false);
     }
-  }, [isLoadingMore, hasMore, getToken, appendConversations]);
+  }, [isLoadingMore, hasMore, appendConversations]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const markAsRead = useCallback(async (conversationId: string) => {
     try {
-      const token = await getToken();
+      const token = await getTokenRef.current();
       await markRead(conversationId, token);
       chatWs.send({ type: "READ_RECEIPT", conversationId });
       updateConversation(conversationId, { unreadCount: 0 });
     } catch (e) {
       console.error("markAsRead failed", e);
     }
-  }, [getToken, updateConversation]);
+  }, [updateConversation]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const acceptRequest = useCallback(async (conversationId: string) => {
-    const token = await getToken();
+    const token = await getTokenRef.current();
     await acceptConversationRequest(conversationId, token);
     updateConversation(conversationId, { requestStatus: "ACCEPTED" });
-  }, [getToken, updateConversation]);
+  }, [updateConversation]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const denyRequest = useCallback(async (conversationId: string) => {
-    const token = await getToken();
+    const token = await getTokenRef.current();
     await denyConversationRequest(conversationId, token);
     removeConversation(conversationId);
-  }, [getToken, removeConversation]);
+  }, [removeConversation]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     conversations,

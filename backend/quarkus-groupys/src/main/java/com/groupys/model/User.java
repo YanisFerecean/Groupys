@@ -104,9 +104,11 @@ public class User {
 
     public String location;
 
-    @ElementCollection(fetch = FetchType.EAGER)
-    @CollectionTable(name = "user_tags", joinColumns = @JoinColumn(name = "user_id"))
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(name = "user_tags", joinColumns = @JoinColumn(name = "user_id"),
+            indexes = @Index(name = "idx_user_tags_user_id", columnList = "user_id"))
     @Column(name = "tag")
+    @org.hibernate.annotations.BatchSize(size = 50)
     public List<String> tags = new ArrayList<>();
 
     @PrePersist

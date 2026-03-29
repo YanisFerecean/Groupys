@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth, useUser } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import SideNav from "@/components/app/SideNav";
@@ -20,6 +20,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   useWebSocket();
 
+  const getTokenRef = useRef(getToken);
+  useEffect(() => { getTokenRef.current = getToken; }, [getToken]);
+
   // Redirect unauthenticated users to home
   useEffect(() => {
     if (isAuthLoaded && !isSignedIn) {
@@ -30,12 +33,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   // Load spotify connection status from backend
   useEffect(() => {
     if (!isLoaded || !isAuthLoaded || !isSignedIn || !user) return;
-    getToken().then((token) => {
+    getTokenRef.current().then((token) => {
       fetchUserByClerkId(user.id, token).then((bu) => {
         if (bu) setSpotifyConnected(bu.spotifyConnected);
       });
     });
-  }, [isLoaded, isAuthLoaded, isSignedIn, user, getToken]);
+  }, [isLoaded, isAuthLoaded, isSignedIn, user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSpotifyDisconnected = useCallback(() => {
     setSpotifyConnected(false);

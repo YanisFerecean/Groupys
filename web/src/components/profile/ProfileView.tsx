@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useProfileCustomization } from "@/hooks/useProfileCustomization";
 import { useUser, useAuth } from "@clerk/nextjs";
@@ -37,17 +37,20 @@ export default function ProfileView() {
   const spotifyCallback = useSpotifyCallback();
   const [albumsRatedCount, setAlbumsRatedCount] = useState<number | null>(null);
 
+  const getTokenRef = useRef(getToken);
+  useEffect(() => { getTokenRef.current = getToken; }, [getToken]);
+
   useEffect(() => {
     (async () => {
       try {
-        const token = await getToken();
+        const token = await getTokenRef.current();
         const ratings = await fetchMyAlbumRatings(token);
         setAlbumsRatedCount(ratings.length);
       } catch {
         // silently fail
       }
     })();
-  }, [getToken]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Open the editor drawer when arriving from Spotify OAuth callback
   const [isEditing, setIsEditing] = useState(spotifyCallback === "connected");

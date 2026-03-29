@@ -74,25 +74,22 @@ export function useMessages(
     if (!decryptFn) return;
     let isMounted = true;
 
-    setMessages((prev) => {
-      const hasEncrypted = prev.some((m) => isEncrypted(m.content));
-      if (!hasEncrypted) return prev;
+    const snapshot = messages; // capture outside setter to avoid async-in-setter
+    const hasEncrypted = snapshot.some((m) => isEncrypted(m.content));
+    if (!hasEncrypted) return;
 
-      Promise.all(
-        prev.map(async (m) => {
-          if (!isEncrypted(m.content)) return m;
-          const content = await decryptFn(m.content).catch(() => "[Encrypted message — decryption failed]");
-          return { ...m, content };
-        })
-      ).then((decrypted) => {
-        if (isMounted) setMessages(decrypted);
-      });
-
-      return prev; // return unchanged immediately; async update follows
+    Promise.all(
+      snapshot.map(async (m) => {
+        if (!isEncrypted(m.content)) return m;
+        const content = await decryptFn(m.content).catch(() => "[Encrypted message — decryption failed]");
+        return { ...m, content };
+      })
+    ).then((decrypted) => {
+      if (isMounted) setMessages(decrypted);
     });
 
     return () => { isMounted = false; };
-  }, [decryptFn]);
+  }, [decryptFn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Real-time subscription — only re-registers when conversationId changes.
   // Uses decryptFnRef so the handler always has the latest key without being a reactive dep.

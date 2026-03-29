@@ -150,8 +150,9 @@ function PostCard({
   onDelete?: (postId: string) => void;
 }) {
   const router = useRouter();
-  const isImage = post.mediaType?.startsWith("image/");
-  const isVideo = post.mediaType?.startsWith("video/");
+  const firstMedia = post.media?.[0];
+  const isImage = firstMedia?.type?.startsWith("image/");
+  const isVideo = firstMedia?.type?.startsWith("video/");
   const isOwner = !!communityOwnerId && communityOwnerId === post.authorId;
   const canDelete =
     !!onDelete &&

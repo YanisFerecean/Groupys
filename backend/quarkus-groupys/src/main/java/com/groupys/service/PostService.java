@@ -50,7 +50,7 @@ public class PostService {
     public List<PostResDto> getFeed(String clerkId, int page, int size) {
         User user = userRepository.findByClerkId(clerkId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
-        List<UUID> communityIds = communityMemberRepository.findByUser(user.id).stream()
+        List<UUID> communityIds = communityMemberRepository.findByUserLimited(user.id, 200).stream()
                 .map(m -> m.community.id)
                 .toList();
         List<Post> posts = postRepository.findByCommunitiesPaged(communityIds, page, size);

@@ -16,7 +16,7 @@ export interface FriendStatusRes {
   friendshipId: string | null;
 }
 
-function auth(token: string | null) {
+function auth(token: string | null): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
