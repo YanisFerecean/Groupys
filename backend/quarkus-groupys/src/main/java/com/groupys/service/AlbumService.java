@@ -58,7 +58,7 @@ public class AlbumService {
             deezerAlbum = null;
         }
 
-        if (deezerAlbum == null) {
+        if (!hasRequiredAlbumData(deezerAlbum, id)) {
             return existing != null ? albumMapper.toResDto(existing) : null;
         }
 
@@ -96,9 +96,20 @@ public class AlbumService {
         if (existing != null) {
             return existing;
         }
+        if (deezer.artist().name() == null || deezer.artist().name().isBlank()) {
+            return null;
+        }
         Artist artist = artistMapper.toEntity(deezer.artist(), null);
         artistRepository.persist(artist);
         return artist;
+    }
+
+    private boolean hasRequiredAlbumData(DeezerAlbumDto deezerAlbum, Long requestedId) {
+        return deezerAlbum != null
+                && deezerAlbum.id() != null
+                && deezerAlbum.id().equals(requestedId)
+                && deezerAlbum.title() != null
+                && !deezerAlbum.title().isBlank();
     }
 
     private AlbumResDto enrichAlbum(DeezerAlbumDto deezer) {

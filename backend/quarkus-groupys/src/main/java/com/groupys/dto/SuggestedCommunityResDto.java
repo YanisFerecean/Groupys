@@ -19,6 +19,9 @@ public record SuggestedCommunityResDto(
         List<DiscoveryMatchDto> matchedArtists,
         List<DiscoveryMatchDto> matchedGenres,
         int sharedCommunityCount,
-        boolean countryMatch
+        boolean countryMatch,
+        String creatorUsername,
+        String creatorDisplayName,
+        String creatorProfileImage
 ) {
 }

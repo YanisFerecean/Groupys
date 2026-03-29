@@ -5,7 +5,10 @@ import { BlurView } from 'expo-blur'
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '@clerk/expo'
 import { Ionicons } from '@expo/vector-icons'
-import { API_URL } from '@/lib/api'
+import {
+  fetchSpotifyCurrentlyPlaying,
+  fetchSpotifyCurrentlyPlayingByUserId,
+} from '@/lib/api'
 import { logError } from '@/lib/logging'
 
 function SoundWaveBar({ delay }: { delay: number }) {
@@ -64,6 +67,8 @@ interface TrackInfo {
 interface CurrentlyListeningWidgetProps {
   track?: TrackInfo
   spotifyConnected?: boolean
+  spotifyUserId?: string
+  autoRefreshMs?: number
 }
 
 const DEFAULT_COVER_SLIDE_DISTANCE = 220
@@ -76,7 +81,12 @@ function isSameSong(a: TrackInfo | null, b: TrackInfo | null): boolean {
   )
 }
 
-export default function CurrentlyListeningWidget({ track: manualTrack, spotifyConnected }: CurrentlyListeningWidgetProps) {
+export default function CurrentlyListeningWidget({
+  track: manualTrack,
+  spotifyConnected,
+  spotifyUserId,
+  autoRefreshMs = 0,
+}: CurrentlyListeningWidgetProps) {
   const { getToken } = useAuth()
   const getTokenRef = useRef(getToken)
   const [spotifyTrack, setSpotifyTrack] = useState<TrackInfo | null>(null)
@@ -137,29 +147,16 @@ export default function CurrentlyListeningWidget({ track: manualTrack, spotifyCo
         const token = await getTokenRef.current()
         if (!token) return
 
-        const res = await fetch(`${API_URL}/spotify/currently-playing`, {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-        })
+        const data = spotifyUserId
+          ? await fetchSpotifyCurrentlyPlayingByUserId(spotifyUserId, token)
+          : await fetchSpotifyCurrentlyPlaying(token)
 
         // Keep last known track when playback stops.
-        if (res.status === 204) {
+        if (!data) {
           return
         }
 
-        if (!res.ok) {
-          throw new Error(`API error ${res.status}: ${res.statusText}`)
-        }
-
-        const raw = await res.text()
-        if (!raw.trim()) {
-          return
-        }
-
-        const data = JSON.parse(raw) as TrackInfo | null
-        if (!cancelled && data?.title) {
+        if (!cancelled && data.title) {
           const prev = spotifyTrackRef.current
           if (isSameSong(prev, data)) return
 
@@ -212,14 +209,21 @@ export default function CurrentlyListeningWidget({ track: manualTrack, spotifyCo
     }
 
     fetchSpotify()
-    const interval = setInterval(fetchSpotify, 30000) // refresh every 30s
+
+    if (!autoRefreshMs || autoRefreshMs <= 0) {
+      return () => {
+        cancelled = true
+      }
+    }
+
+    const interval = setInterval(fetchSpotify, autoRefreshMs)
     return () => {
       cancelled = true
       clearInterval(interval)
     }
-  }, [spotifyConnected, slideAnim])
+  }, [autoRefreshMs, spotifyConnected, spotifyUserId, slideAnim])
 
-  const track = spotifyConnected ? spotifyTrack : manualTrack
+  const track = spotifyConnected ? (spotifyTrack ?? manualTrack) : manualTrack
   const isCurrentlyPlaying = !!spotifyTrack?.title
   const displayCoverUrl = spotifyConnected ? (activeCoverUrl ?? track?.coverUrl) : track?.coverUrl
   if (!track?.title) return null

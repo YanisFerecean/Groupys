@@ -17,6 +17,8 @@ import com.groupys.util.CommunityUtil;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import jakarta.ws.rs.BadRequestException;
+import jakarta.ws.rs.ForbiddenException;
 import jakarta.ws.rs.NotFoundException;
 
 import java.time.Instant;
@@ -48,6 +50,12 @@ public class CommunityService {
                 .orElseThrow(() -> new NotFoundException("User not found"));
         return communityMemberRepository.findByUser(user.id).stream()
                 .map(m -> CommunityUtil.toDto(m.community))
+                .toList();
+    }
+
+    public List<CommunityResDto> search(String q) {
+        return communityRepository.searchByQuery(q).stream()
+                .map(CommunityUtil::toDto)
                 .toList();
     }
 
@@ -250,27 +258,26 @@ public class CommunityService {
         community.iconEmoji = dto.iconEmoji();
         community.iconUrl = dto.iconUrl();
         if (dto.tags() != null) {
-            community.tags = dto.tags();
+            community.tags = new java.util.ArrayList<>(dto.tags());
         }
-        if (dto.artistId() != null) {
-            community.artist = artistRepository.findByIdOptional(dto.artistId())
-                    .orElseThrow(() -> new NotFoundException("Artist not found"));
-        }
+        community.artist = dto.artistId() != null
+                ? artistRepository.findByIdOptional(dto.artistId())
+                .orElseThrow(() -> new NotFoundException("Artist not found"))
+                : null;
         if (dto.visibility() != null) {
             community.visibility = dto.visibility();
         }
         if (dto.discoveryEnabled() != null) {
             community.discoveryEnabled = dto.discoveryEnabled();
         }
-        if (dto.tasteSummaryText() != null) {
-            community.tasteSummaryText = dto.tasteSummaryText();
-        }
+        community.tasteSummaryText = dto.tasteSummaryText();
         discoveryService.refreshAfterCommunityActivity(id);
         return CommunityUtil.toDto(community);
     }
 
     @Transactional
-    public void delete(UUID id) {
+    public void delete(UUID id, String clerkId) {
+        requireOwnedCommunity(id, clerkId);
         java.util.List<UUID> impactedUserIds = communityMemberRepository.findByCommunity(id).stream()
                 .map(member -> member.user.id)
                 .distinct()
@@ -279,5 +286,16 @@ public class CommunityService {
                 .orElseThrow(() -> new NotFoundException("Community not found"));
         communityRepository.delete(community);
         discoveryService.removeCommunityReferences(id, impactedUserIds);
+    }
+
+    private Community requireOwnedCommunity(UUID communityId, String clerkId) {
+        User user = userRepository.findByClerkId(clerkId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        Community community = communityRepository.findByIdOptional(communityId)
+                .orElseThrow(() -> new NotFoundException("Community not found"));
+        if (community.createdBy == null || !community.createdBy.id.equals(user.id)) {
+            throw new ForbiddenException("Only the community owner can modify community settings");
+        }
+        return community;
     }
 }

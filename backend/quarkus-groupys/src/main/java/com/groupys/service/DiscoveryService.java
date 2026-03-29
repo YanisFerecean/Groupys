@@ -13,7 +13,9 @@ import com.groupys.util.CountryUtil;
 import com.groupys.util.DiscoveryScoreUtil;
 import com.groupys.util.MusicIdentityUtil;
 import io.quarkus.logging.Log;
+import io.quarkus.runtime.ShutdownEvent;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.BadRequestException;
@@ -118,7 +120,15 @@ public class DiscoveryService {
     @RestClient
     SpotifyApiClient spotifyApiClient;
 
+    @Inject
+    DiscoveryService self;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private volatile boolean shuttingDown;
+
+    void onShutdown(@Observes ShutdownEvent event) {
+        shuttingDown = true;
+    }
 
     @Transactional
     public DiscoverySyncResDto syncMusic(String clerkId) {
@@ -304,17 +314,21 @@ public class DiscoveryService {
         impactedUserIds.forEach(this::refreshForUser);
     }
 
-    @Transactional
     public void refreshAllActiveUsers() {
-        userRepository.listAll().stream()
-                .filter(user -> user.discoveryVisible && !user.recommendationOptOut)
-                .forEach(user -> {
-                    try {
-                        refreshForUser(user.id);
-                    } catch (Exception e) {
-                        Log.warnf(e, "Failed to refresh discovery for user %s", user.id);
-                    }
-                });
+        if (shuttingDown) {
+            return;
+        }
+
+        for (UUID userId : userRepository.listActiveDiscoveryUserIds()) {
+            if (shuttingDown) {
+                break;
+            }
+            try {
+                self.refreshForUser(userId);
+            } catch (Exception e) {
+                Log.warnf(e, "Failed to refresh discovery for user %s", userId);
+            }
+        }
     }
 
     private int refreshCommunityRecommendations(UUID userId) {
@@ -1052,7 +1066,10 @@ public class DiscoveryService {
                 readMatchList(explanation, "matchedArtists"),
                 readMatchList(explanation, "matchedGenres"),
                 explanation.path("sharedCommunityCount").asInt(0),
-                explanation.path("countryMatch").asBoolean(false)
+                explanation.path("countryMatch").asBoolean(false),
+                cache.community.createdBy != null ? cache.community.createdBy.username : null,
+                cache.community.createdBy != null ? cache.community.createdBy.displayName : null,
+                cache.community.createdBy != null ? cache.community.createdBy.profileImage : null
         );
     }
 

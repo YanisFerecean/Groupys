@@ -43,6 +43,13 @@ public class UserRepository implements PanacheRepositoryBase<User, UUID> {
         return find("id <> ?1 and discoveryVisible = true and recommendationOptOut = false", excludeUserId).list();
     }
 
+    public List<UUID> listActiveDiscoveryUserIds() {
+        return getEntityManager().createQuery(
+                "select u.id from User u where u.discoveryVisible = true and u.recommendationOptOut = false",
+                UUID.class
+        ).getResultList();
+    }
+
     /** Single query: returns a map of userId -> clerkId for all given user IDs. */
     public Map<UUID, String> findClerkIdsByUserIds(List<UUID> userIds) {
         if (userIds.isEmpty()) return Map.of();

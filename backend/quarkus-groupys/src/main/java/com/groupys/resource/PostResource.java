@@ -66,6 +66,12 @@ public class PostResource {
     }
 
     @GET
+    @Path("/author/{userId}")
+    public List<PostResDto> getByAuthor(@PathParam("userId") UUID userId) {
+        return postService.getByAuthor(userId, jwt.getSubject());
+    }
+
+    @GET
     @Path("/{id}")
     public PostResDto getById(@PathParam("id") UUID id) {
         return postService.getById(id, jwt.getSubject());

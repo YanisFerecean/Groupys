@@ -489,6 +489,13 @@ export async function fetchMyPosts(token: string): Promise<any[]> {
   return apiFetch('/posts/mine', token)
 }
 
+export async function fetchPostsByAuthor(
+  userId: string,
+  token: string | null,
+): Promise<any[]> {
+  return apiFetch(`/posts/author/${encodeURIComponent(userId)}`, token, false)
+}
+
 export async function uploadCommunityMedia(
   token: string,
   uri: string,
@@ -517,6 +524,19 @@ export async function fetchUserByClerkId(
 ): Promise<BackendUser | null> {
   const res = await fetch(
     `${API_URL}/users/clerk/${encodeURIComponent(clerkId)}`,
+    { headers: makeHeaders(token) },
+  )
+  if (res.status === 404) return null
+  if (!res.ok) throw new Error(`Failed to fetch user (${res.status})`)
+  return res.json()
+}
+
+export async function fetchUserById(
+  userId: string,
+  token: string | null,
+): Promise<BackendUser | null> {
+  const res = await fetch(
+    `${API_URL}/users/${encodeURIComponent(userId)}`,
     { headers: makeHeaders(token) },
   )
   if (res.status === 404) return null
@@ -608,6 +628,15 @@ export async function updateBackendUser(
 
 import type { SuggestedCommunity } from '@/models/SuggestedCommunity'
 import type { SuggestedUser } from '@/models/SuggestedUser'
+import type { CommunityResDto } from '@/models/CommunityRes'
+
+export async function searchCommunities(query: string, token: string | null): Promise<CommunityResDto[]> {
+  return apiFetch<CommunityResDto[]>(
+    `/communities/search?q=${encodeURIComponent(query)}`,
+    token,
+    false,
+  )
+}
 
 export async function fetchSuggestedCommunities(
   token: string | null,
@@ -656,16 +685,72 @@ export async function fetchSpotifyTopTracks(
   return apiFetch<SpotifyTrackRes[]>('/spotify/top-tracks', token, false)
 }
 
+export async function fetchSpotifyTopTracksByUserId(
+  userId: string,
+  token: string | null,
+): Promise<SpotifyTrackRes[]> {
+  return apiFetch<SpotifyTrackRes[]>(
+    `/spotify/users/${encodeURIComponent(userId)}/top-tracks`,
+    token,
+    false,
+  )
+}
+
 export async function fetchSpotifyTopArtists(
   token: string | null,
 ): Promise<SpotifyArtistRes[]> {
   return apiFetch<SpotifyArtistRes[]>('/spotify/top-artists', token, false)
 }
 
+export async function fetchSpotifyTopArtistsByUserId(
+  userId: string,
+  token: string | null,
+): Promise<SpotifyArtistRes[]> {
+  return apiFetch<SpotifyArtistRes[]>(
+    `/spotify/users/${encodeURIComponent(userId)}/top-artists`,
+    token,
+    false,
+  )
+}
+
 export async function fetchSpotifyTopAlbums(
   token: string | null,
 ): Promise<SpotifyAlbumRes[]> {
   return apiFetch<SpotifyAlbumRes[]>('/spotify/saved-albums', token, false)
+}
+
+export async function fetchSpotifyTopAlbumsByUserId(
+  userId: string,
+  token: string | null,
+): Promise<SpotifyAlbumRes[]> {
+  return apiFetch<SpotifyAlbumRes[]>(
+    `/spotify/users/${encodeURIComponent(userId)}/saved-albums`,
+    token,
+    false,
+  )
+}
+
+export async function fetchSpotifyCurrentlyPlaying(
+  token: string | null,
+): Promise<SpotifyTrackRes | null> {
+  const res = await fetch(`${API_URL}/spotify/currently-playing`, {
+    headers: makeHeaders(token),
+  })
+  if (res.status === 204 || res.status === 404) return null
+  if (!res.ok) throw new Error(`Failed to fetch currently playing (${res.status})`)
+  return res.json()
+}
+
+export async function fetchSpotifyCurrentlyPlayingByUserId(
+  userId: string,
+  token: string | null,
+): Promise<SpotifyTrackRes | null> {
+  const res = await fetch(`${API_URL}/spotify/users/${encodeURIComponent(userId)}/currently-playing`, {
+    headers: makeHeaders(token),
+  })
+  if (res.status === 204 || res.status === 404) return null
+  if (!res.ok) throw new Error(`Failed to fetch currently playing (${res.status})`)
+  return res.json()
 }
 
 export async function followUser(

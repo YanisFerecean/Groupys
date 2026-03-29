@@ -10,6 +10,7 @@ interface ConversationListItemProps {
   currentUsername?: string | null
   preview?: string
   onPress: () => void
+  onProfilePress?: () => void
 }
 
 export function ConversationListItem({
@@ -17,6 +18,7 @@ export function ConversationListItem({
   currentUsername,
   preview,
   onPress,
+  onProfilePress,
 }: ConversationListItemProps) {
   const otherParticipant = conversation.participants.find(participant => participant.username !== currentUsername)
   const displayName = conversation.isGroup
@@ -32,7 +34,14 @@ export function ConversationListItem({
       onPress={onPress}
       activeOpacity={0.85}
     >
-      <View className="relative">
+      <TouchableOpacity
+        className="relative"
+        onPress={(event) => {
+          event.stopPropagation()
+          ;(onProfilePress ?? onPress)()
+        }}
+        activeOpacity={0.8}
+      >
         {avatarUrl ? (
           <Image
             source={{ uri: avatarUrl }}
@@ -57,7 +66,7 @@ export function ConversationListItem({
             </Text>
           </View>
         ) : null}
-      </View>
+      </TouchableOpacity>
 
       <View className="flex-1 gap-1">
         <View className="flex-row items-center justify-between">

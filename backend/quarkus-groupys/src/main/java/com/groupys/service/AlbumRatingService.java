@@ -38,7 +38,9 @@ public class AlbumRatingService {
         User user = userRepository.findByClerkId(clerkId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
 
-        albumService.getById(dto.albumId());
+        if (albumService.getById(dto.albumId()) == null) {
+            throw new NotFoundException("Album not found");
+        }
 
         AlbumRating rating = albumRatingRepository
                 .findByUserAndAlbum(user.id, dto.albumId())

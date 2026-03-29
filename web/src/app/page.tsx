@@ -12,6 +12,14 @@ export const metadata: Metadata = {
   title: "Groupys – Find Your Music Community | Connect with Music Lovers",
   description:
     "Groupys is the music community app where you connect with music lovers, join music fan communities, rate albums with our album rating app, and discover your music social network.",
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+    },
+  },
   alternates: { canonical: "https://groupys.app" },
 };
 

@@ -141,13 +141,13 @@ public class CommunityResource {
     @PUT
     @Path("/{id}")
     public CommunityResDto update(@PathParam("id") UUID id, @Valid CommunityUpdateDto dto) {
-        return communityService.update(id, dto);
+        return communityService.update(id, dto, jwt.getSubject());
     }
 
     @DELETE
     @Path("/{id}")
     public Response delete(@PathParam("id") UUID id) {
-        communityService.delete(id);
+        communityService.delete(id, jwt.getSubject());
         return Response.noContent().build();
     }
 

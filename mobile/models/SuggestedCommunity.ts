@@ -15,4 +15,7 @@ export interface SuggestedCommunity {
   matchedGenres: { id: string; name: string }[]
   sharedCommunityCount: number
   countryMatch: boolean
+  creatorUsername: string | null
+  creatorDisplayName: string | null
+  creatorProfileImage: string | null
 }

@@ -14,7 +14,7 @@ export function useChatMessages(
 ) {
   const { getToken } = useAuth()
   const { user } = useUser()
-  const { applyOutgoingMessage, decryptForUsername, encryptForUsername } = useChat()
+  const { applyOutgoingMessage, cryptoReady, decryptForUsername, encryptForUsername } = useChat()
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
@@ -35,6 +35,41 @@ export function useChatMessages(
   useEffect(() => {
     otherUsernameRef.current = otherUsername
   }, [otherUsername])
+
+  useEffect(() => {
+    if (!cryptoReady || !otherUsername) {
+      return
+    }
+
+    const encryptedMessages = messages.filter(message => isEncrypted(message.content))
+    if (encryptedMessages.length === 0) {
+      return
+    }
+
+    let cancelled = false
+
+    void Promise.all(messages.map(async (message) => {
+      if (!isEncrypted(message.content)) {
+        return message
+      }
+
+      const content = await decryptForUsername(otherUsername, message.content)
+      return { ...message, content }
+    })).then((decrypted) => {
+      if (cancelled) {
+        return
+      }
+
+      const changed = decrypted.some((message, index) => message.content !== messages[index]?.content)
+      if (changed) {
+        setMessages(decrypted)
+      }
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [cryptoReady, decryptForUsername, messages, otherUsername])
 
   const decryptPayload = useCallback(async (message: Message) => {
     const username = otherUsernameRef.current
