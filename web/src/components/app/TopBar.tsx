@@ -4,6 +4,7 @@ import { UserButton } from "@clerk/nextjs";
 import { usePathname, useRouter } from "next/navigation";
 import { History, MessageCircle } from "lucide-react";
 import DmButton from "./DmButton";
+import FriendsSheet from "@/components/friends/FriendsSheet";
 
 interface TopBarProps {
   onMenuClick?: () => void;
@@ -71,6 +72,7 @@ export default function TopBar({ onMenuClick, onSearchClick, onSettingsClick }: 
               </button>
             </>
           )}
+          {isProfile && <FriendsSheet />}
           <UserButton />
         </div>
       </div>

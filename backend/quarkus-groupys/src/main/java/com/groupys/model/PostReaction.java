@@ -5,7 +5,14 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "post_reactions", uniqueConstraints = @UniqueConstraint(columnNames = {"post_id", "user_id"}))
+@Table(
+    name = "post_reactions",
+    uniqueConstraints = @UniqueConstraint(columnNames = {"post_id", "user_id"}),
+    indexes = {
+        @Index(name = "idx_post_reactions_post_type", columnList = "post_id, reaction_type"),
+        @Index(name = "idx_post_reactions_user", columnList = "user_id")
+    }
+)
 public class PostReaction {
 
     @Id

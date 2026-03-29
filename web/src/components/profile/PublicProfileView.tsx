@@ -5,6 +5,14 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth, useUser } from "@clerk/nextjs";
 import { startConversation } from "@/lib/chat-api";
+import {
+  fetchFriendStatus,
+  sendFriendRequest,
+  acceptFriendRequest,
+  declineOrCancelRequest,
+  removeFriend,
+  type FriendStatus,
+} from "@/lib/friends-api";
 import type { ProfileCustomization } from "@/types/profile";
 import {
   type BackendUser,
@@ -45,6 +53,37 @@ export default function PublicProfileView({
   const [albumsRatedCount, setAlbumsRatedCount] = useState<number | null>(null);
   const [messagingLoading, setMessagingLoading] = useState(false);
   const [messagingConversationId, setMessagingConversationId] = useState<string | null>(null);
+  const [friendStatus, setFriendStatus] = useState<FriendStatus>("NONE");
+  const [friendshipId, setFriendshipId] = useState<string | null>(null);
+  const [friendLoading, setFriendLoading] = useState(false);
+
+  async function handleFriend() {
+    if (!backendUser || friendLoading) return;
+    setFriendLoading(true);
+    try {
+      const token = await getToken();
+      if (friendStatus === "NONE") {
+        const res = await sendFriendRequest(backendUser.id, token);
+        setFriendStatus("PENDING_SENT");
+        setFriendshipId(res.friendshipId);
+      } else if (friendStatus === "PENDING_SENT" && friendshipId) {
+        await declineOrCancelRequest(friendshipId, token);
+        setFriendStatus("NONE");
+        setFriendshipId(null);
+      } else if (friendStatus === "PENDING_RECEIVED" && friendshipId) {
+        await acceptFriendRequest(friendshipId, token);
+        setFriendStatus("ACCEPTED");
+      } else if (friendStatus === "ACCEPTED") {
+        await removeFriend(backendUser.id, token);
+        setFriendStatus("NONE");
+        setFriendshipId(null);
+      }
+    } catch (err) {
+      console.error("Friend action failed:", err);
+    } finally {
+      setFriendLoading(false);
+    }
+  }
 
   async function handleMessage() {
     if (!backendUser || messagingLoading) return;
@@ -95,8 +134,17 @@ export default function PublicProfileView({
           setBackendUser(data);
           setProfile(backendUserToProfile(data));
         }
-        const ratings = await fetchUserAlbumRatings(username, token).catch(() => []);
-        if (!cancelled) setAlbumsRatedCount(ratings.length);
+        const [ratings, statusRes] = await Promise.all([
+          fetchUserAlbumRatings(username, token).catch(() => []),
+          token ? fetchFriendStatus(data.id, token).catch(() => null) : Promise.resolve(null),
+        ]);
+        if (!cancelled) {
+          setAlbumsRatedCount(ratings.length);
+          if (statusRes) {
+            setFriendStatus(statusRes.status);
+            setFriendshipId(statusRes.friendshipId);
+          }
+        }
       } catch (err) {
         console.error("Failed to fetch profile:", err);
         if (!cancelled) setNotFound(true);
@@ -265,24 +313,37 @@ export default function PublicProfileView({
 
             {/* Actions */}
             <div className="flex items-center gap-3 shrink-0 mb-2">
-              <button
-                className="px-5 py-2.5 text-sm font-bold rounded-full transition-colors"
-                style={{
-                  backgroundColor:
-                    "var(--profile-accent, var(--color-primary))",
-                  color: "#fff",
-                }}
-              >
-                <span className="flex items-center gap-2">
-                  <span
-                    className="material-symbols-outlined"
-                    style={{ fontSize: 18 }}
-                  >
-                    link
+              {clerkUser && (
+                <button
+                  onClick={handleFriend}
+                  disabled={friendLoading}
+                  className="px-5 py-2.5 text-sm font-bold rounded-full transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  style={
+                    friendStatus === "ACCEPTED"
+                      ? { backgroundColor: "color-mix(in srgb, var(--profile-accent, var(--color-primary)) 15%, transparent)", color: "var(--profile-accent, var(--color-primary))" }
+                      : friendStatus === "PENDING_SENT"
+                      ? { backgroundColor: "transparent", border: "2px solid var(--profile-accent, var(--color-primary))", color: "var(--profile-accent, var(--color-primary))" }
+                      : friendStatus === "PENDING_RECEIVED"
+                      ? { backgroundColor: "var(--profile-accent, var(--color-primary))", color: "#fff" }
+                      : { backgroundColor: "var(--profile-accent, var(--color-primary))", color: "#fff" }
+                  }
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                      {friendLoading ? "hourglass_empty"
+                        : friendStatus === "ACCEPTED" ? "how_to_reg"
+                        : friendStatus === "PENDING_SENT" ? "schedule"
+                        : friendStatus === "PENDING_RECEIVED" ? "person_add"
+                        : "person_add"}
+                    </span>
+                    {friendLoading ? "..."
+                      : friendStatus === "ACCEPTED" ? "Friends"
+                      : friendStatus === "PENDING_SENT" ? "Request Sent"
+                      : friendStatus === "PENDING_RECEIVED" ? "Accept Request"
+                      : "Add Friend"}
                   </span>
-                  Link Up
-                </span>
-              </button>
+                </button>
+              )}
               {clerkUser && (
                 <button
                   onClick={handleMessage}

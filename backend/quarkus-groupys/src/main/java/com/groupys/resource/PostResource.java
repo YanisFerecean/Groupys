@@ -2,6 +2,7 @@ package com.groupys.resource;
 
 import com.groupys.dto.PostResDto;
 import com.groupys.model.PostMedia;
+import com.groupys.service.MediaService;
 import com.groupys.service.PostService;
 import com.groupys.service.StorageService;
 import io.minio.GetObjectArgs;
@@ -38,21 +39,30 @@ public class PostResource {
     StorageService storageService;
 
     @Inject
+    MediaService mediaService;
+
+    @Inject
     MinioClient minioClient;
 
     @Inject
     JsonWebToken jwt;
 
+    private static final long MAX_FILE_BYTES = 25L * 1024 * 1024; // 25 MB
+
     @GET
     @Path("/feed")
-    public List<PostResDto> getFeed() {
-        return postService.getFeed(jwt.getSubject());
+    public List<PostResDto> getFeed(
+            @QueryParam("page") @DefaultValue("0") int page,
+            @QueryParam("size") @DefaultValue("20") int size) {
+        return postService.getFeed(jwt.getSubject(), page, Math.min(size, 50));
     }
 
     @GET
     @Path("/mine")
-    public List<PostResDto> getMyPosts() {
-        return postService.getAccountPosts(jwt.getSubject());
+    public List<PostResDto> getMyPosts(
+            @QueryParam("page") @DefaultValue("0") int page,
+            @QueryParam("size") @DefaultValue("20") int size) {
+        return postService.getAccountPosts(jwt.getSubject(), page, Math.min(size, 50));
     }
 
     @GET
@@ -63,8 +73,11 @@ public class PostResource {
 
     @GET
     @Path("/community/{communityId}")
-    public List<PostResDto> getByCommunity(@PathParam("communityId") UUID communityId) {
-        return postService.getByCommunity(communityId, jwt.getSubject());
+    public List<PostResDto> getByCommunity(
+            @PathParam("communityId") UUID communityId,
+            @QueryParam("page") @DefaultValue("0") int page,
+            @QueryParam("size") @DefaultValue("20") int size) {
+        return postService.getByCommunity(communityId, jwt.getSubject(), page, Math.min(size, 50));
     }
 
     @POST
@@ -85,12 +98,29 @@ public class PostResource {
             }
             int index = 0;
             for (FileUpload file : files) {
+                if (file.size() > MAX_FILE_BYTES) {
+                    throw new BadRequestException("File '" + file.fileName() + "' exceeds the 25 MB limit.");
+                }
                 try {
                     String mediaType = file.contentType();
-                    InputStream is = Files.newInputStream(file.uploadedFile());
-                    String mediaUrl = storageService.upload(file.fileName(), mediaType, is, file.size());
-                    is.close();
-                    mediaList.add(new PostMedia(mediaUrl, mediaType));
+                    MediaService.ProcessedMedia processed;
+                    if (mediaType != null && mediaType.startsWith("image/")) {
+                        try (InputStream is = Files.newInputStream(file.uploadedFile())) {
+                            processed = mediaService.processImage(is, mediaType);
+                        }
+                    } else if (mediaType != null && mediaType.startsWith("video/")) {
+                        processed = mediaService.processVideo(file.uploadedFile());
+                    } else if (mediaType != null && mediaType.startsWith("audio/")) {
+                        processed = mediaService.processAudio(file.uploadedFile());
+                    } else {
+                        try (InputStream is = Files.newInputStream(file.uploadedFile())) {
+                            String url = storageService.upload(file.fileName(), mediaType, is, file.size());
+                            mediaList.add(new PostMedia(url, mediaType));
+                            continue;
+                        }
+                    }
+                    String mediaUrl = storageService.upload(file.fileName(), processed.contentType(), processed.stream(), processed.size());
+                    mediaList.add(new PostMedia(mediaUrl, processed.contentType()));
                 } catch (Exception e) {
                     throw new InternalServerErrorException("File upload failed", e);
                 }

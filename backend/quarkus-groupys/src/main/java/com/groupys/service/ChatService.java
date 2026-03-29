@@ -7,7 +7,9 @@ import com.groupys.model.Conversation;
 import com.groupys.model.ConversationParticipant;
 import com.groupys.model.Message;
 import com.groupys.model.User;
+import com.groupys.model.Friendship;
 import com.groupys.repository.ConversationRepository;
+import com.groupys.repository.FriendshipRepository;
 import com.groupys.repository.MessageRepository;
 import com.groupys.repository.UserRepository;
 import io.quarkus.scheduler.Scheduled;
@@ -40,6 +42,9 @@ public class ChatService {
 
     @Inject
     UserRepository userRepository;
+
+    @Inject
+    FriendshipRepository friendshipRepository;
 
     @Inject
     DiscoveryService discoveryService;
@@ -205,10 +210,14 @@ public class ChatService {
         return conversationRepository.findDirectConversation(me.id, target.id)
                 .map(c -> toConversationDto(c, me.id))
                 .orElseGet(() -> {
+                    boolean areFriends = friendshipRepository.findBetween(me.id, target.id)
+                            .map(f -> f.status == Friendship.Status.ACCEPTED)
+                            .orElse(false);
+
                     Conversation conv = new Conversation();
                     conv.isGroup = false;
-                    conv.requestStatus = REQUEST_STATUS_PENDING;
-                    conv.requestedByUser = me;
+                    conv.requestStatus = areFriends ? REQUEST_STATUS_ACCEPTED : REQUEST_STATUS_PENDING;
+                    conv.requestedByUser = areFriends ? null : me;
                     conversationRepository.persist(conv);
 
                     ConversationParticipant p1 = new ConversationParticipant();

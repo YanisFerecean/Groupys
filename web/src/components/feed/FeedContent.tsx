@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
@@ -8,6 +8,7 @@ import MarkdownContent from "@/components/ui/MarkdownContent";
 import AuthMedia from "@/components/ui/AuthMedia";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
+const PAGE_SIZE = 20;
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -50,7 +51,7 @@ function timeAgo(dateStr: string): string {
 
 // ── FeedPostCard ─────────────────────────────────────────────────────────────
 
-function FeedPostCard({
+const FeedPostCard = memo(function FeedPostCard({
   post,
   onReact,
 }: {
@@ -189,7 +190,7 @@ function FeedPostCard({
       </div>
     </div>
   );
-}
+});
 
 // ── Main component ───────────────────────────────────────────────────────────
 
@@ -197,17 +198,26 @@ export default function FeedContent() {
   const { getToken } = useAuth();
   const [posts, setPosts] = useState<PostRes[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const getTokenRef = useRef(getToken);
+  getTokenRef.current = getToken;
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const token = await getToken();
-        const res = await fetch(`${API_URL}/posts/feed`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const token = await getTokenRef.current();
+        const res = await fetch(
+          `${API_URL}/posts/feed?page=0&size=${PAGE_SIZE}`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
         if (res.ok && !cancelled) {
-          setPosts(await res.json());
+          const data: PostRes[] = await res.json();
+          setPosts(data);
+          setHasMore(data.length === PAGE_SIZE);
+          setPage(1);
         }
       } catch (err) {
         console.error("Failed to fetch feed:", err);
@@ -218,12 +228,34 @@ export default function FeedContent() {
     return () => {
       cancelled = true;
     };
-  }, [getToken]);
+  }, []);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const token = await getTokenRef.current();
+      const res = await fetch(
+        `${API_URL}/posts/feed?page=${page}&size=${PAGE_SIZE}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (res.ok) {
+        const data: PostRes[] = await res.json();
+        setPosts((prev) => [...prev, ...data]);
+        setHasMore(data.length === PAGE_SIZE);
+        setPage((p) => p + 1);
+      }
+    } catch (err) {
+      console.error("Failed to load more:", err);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [page, hasMore, loadingMore]);
 
   const handleReact = useCallback(
     async (postId: string, type: "like" | "dislike") => {
       try {
-        const token = await getToken();
+        const token = await getTokenRef.current();
         const res = await fetch(`${API_URL}/posts/${postId}/react`, {
           method: "POST",
           headers: {
@@ -242,7 +274,7 @@ export default function FeedContent() {
         console.error("React error:", err);
       }
     },
-    [getToken],
+    [],
   );
 
   return (
@@ -277,6 +309,18 @@ export default function FeedContent() {
           {posts.map((post) => (
             <FeedPostCard key={post.id} post={post} onReact={handleReact} />
           ))}
+
+          {hasMore && (
+            <div className="flex justify-center pt-2">
+              <button
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="px-6 py-2 rounded-full text-sm font-semibold text-primary border border-primary/30 hover:bg-primary/10 transition-colors disabled:opacity-50"
+              >
+                {loadingMore ? "Loading…" : "Load more"}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </section>
