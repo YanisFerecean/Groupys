@@ -73,6 +73,13 @@ public class PostService {
                 .toList();
     }
 
+    public List<PostResDto> getByAuthor(UUID authorId, String clerkId) {
+        User currentUser = userRepository.findByClerkId(clerkId).orElse(null);
+        return postRepository.findByAuthor(authorId).stream()
+                .map(post -> toDto(post, currentUser))
+                .toList();
+    }
+
     public PostResDto getById(UUID postId, String clerkId) {
         User user = userRepository.findByClerkId(clerkId).orElse(null);
         Post post = postRepository.findByIdOptional(postId)
