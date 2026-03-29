@@ -1,26 +1,24 @@
 import { Ionicons } from '@expo/vector-icons'
-import { useUser } from '@clerk/expo'
 import { useCallback, useEffect, useState } from 'react'
 import {
   ActivityIndicator,
-  FlatList,
   Image,
   ScrollView,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native'
-import { router } from 'expo-router'
+import { router, useSegments } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
-import { apiFetch, apiPost } from '@/lib/api'
-import { timeAgo, formatCount } from '@/lib/timeAgo'
+import { apiFetch, apiPost, mediaUrl } from '@/lib/api'
+import { formatCount } from '@/lib/timeAgo'
 import { Colors } from '@/constants/colors'
 import FeedPostCard from '@/components/feed/FeedPostCard'
 import { useAuthToken } from '@/hooks/useAuthToken'
 import EditCommunityModal from '@/components/community/EditCommunityModal'
 import AuthImageWithToken from '@/components/ui/AuthImageWithToken'
-import { mediaUrl } from '@/lib/api'
+import { homeTabRootPath, publicProfilePath, resolveHomeTab } from '@/lib/profileRoutes'
 import type { CommunityResDto } from '@/models/CommunityRes'
 import type { CommunityMemberResDto } from '@/models/CommunityMemberRes'
 import type { PostResDto } from '@/models/PostRes'
@@ -46,8 +44,9 @@ interface Props {
 
 export default function CommunityDetailScreen({ communityId, postRoute, communityRoute }: Props) {
   const insets = useSafeAreaInsets()
+  const segments = useSegments()
+  const currentTab = resolveHomeTab(segments)
   const { refreshToken } = useAuthToken()
-  const { user } = useUser()
 
   const [community, setCommunity] = useState<CommunityResDto | null>(null)
   const [members, setMembers] = useState<CommunityMemberResDto[]>([])
@@ -108,9 +107,17 @@ export default function CommunityDetailScreen({ communityId, postRoute, communit
     setPosts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
   }, [])
 
-  const handlePostCreated = useCallback((newPost: PostResDto) => {
-    setPosts((prev) => [newPost, ...prev])
-  }, [])
+  const handleCommunityDeleted = useCallback(() => {
+    setShowEditModal(false)
+    const fallbackRoute = communityRoute.startsWith('/(home)/(feed)')
+      ? homeTabRootPath('(feed)')
+      : communityRoute.startsWith('/(home)/(profile)')
+        ? homeTabRootPath('(profile)')
+        : communityRoute.startsWith('/(home)/(match)')
+          ? homeTabRootPath('(match)')
+          : homeTabRootPath('(discover)')
+    router.replace(fallbackRoute as any)
+  }, [communityRoute])
 
   if (loading) {
     return (
@@ -164,6 +171,7 @@ export default function CommunityDetailScreen({ communityId, postRoute, communit
           {community.bannerUrl ? (
             <AuthImageWithToken 
               uri={mediaUrl(community.bannerUrl.replace(/^\/api\/posts\/media\//, ''))} 
+              className="absolute"
               style={{ position: 'absolute', width: '100%', height: '100%' }}
             />
           ) : null}
@@ -252,7 +260,13 @@ export default function CommunityDetailScreen({ communityId, postRoute, communit
               contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }}
             >
               {members.slice(0, 15).map((member) => (
-                <View key={member.id} className="items-center" style={{ width: 64 }}>
+                <TouchableOpacity
+                  key={member.id}
+                  className="items-center"
+                  style={{ width: 64 }}
+                  activeOpacity={0.8}
+                  onPress={() => router.push(publicProfilePath(member.userId, currentTab) as any)}
+                >
                   {member.profileImage ? (
                     <Image
                       source={{ uri: member.profileImage }}
@@ -272,7 +286,7 @@ export default function CommunityDetailScreen({ communityId, postRoute, communit
                       <Text className="text-primary text-[10px] font-bold">OWNER</Text>
                     </View>
                   ) : null}
-                </View>
+                </TouchableOpacity>
               ))}
             </ScrollView>
           </View>
@@ -314,6 +328,7 @@ export default function CommunityDetailScreen({ communityId, postRoute, communit
           onClose={() => setShowEditModal(false)}
           community={community}
           onUpdated={(updated) => setCommunity(updated)}
+          onDeleted={handleCommunityDeleted}
         />
       )}
     </View>
