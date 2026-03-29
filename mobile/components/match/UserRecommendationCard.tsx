@@ -1,5 +1,5 @@
 import { useImperativeHandle } from 'react'
-import { Dimensions, Text, View } from 'react-native'
+import { Dimensions, Text, TouchableOpacity, View } from 'react-native'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
@@ -30,10 +30,11 @@ interface Props {
   stackIndex: number // 0 = top (interactive), 1, 2 = behind
   onLike: () => void
   onDismiss: () => void
+  onViewProfile?: () => void
   ref?: React.Ref<CardHandle>
 }
 
-export default function UserRecommendationCard({ user, stackIndex, onLike, onDismiss, ref }: Props) {
+export default function UserRecommendationCard({ user, stackIndex, onLike, onDismiss, onViewProfile, ref }: Props) {
   const translateX = useSharedValue(0)
   const translateY = useSharedValue(0)
   const cardRotation = useSharedValue(0)
@@ -295,6 +296,16 @@ export default function UserRecommendationCard({ user, stackIndex, onLike, onDis
               )}
             </View>
           )}
+
+          {onViewProfile ? (
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={onViewProfile}
+              className="self-start mt-2 rounded-full bg-white/15 px-4 py-2"
+            >
+              <Text className="text-xs font-bold text-white">View Profile</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       </Animated.View>
     </GestureDetector>
