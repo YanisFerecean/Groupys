@@ -36,6 +36,9 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
             const other = convo.participants.find((p) => p.username !== user?.username);
             if (!other) return;
             const plain = await decryptForPartner(other.username, convo.lastMessage);
+            // If the result is still encrypted, the key wasn't ready yet — don't
+            // mark as processed so we retry when the key becomes available.
+            if (isEncrypted(plain)) return;
             updates.set(convo.id, plain);
             decryptedIdsRef.current.add(`${convo.id}:${convo.lastMessage}`);
           })

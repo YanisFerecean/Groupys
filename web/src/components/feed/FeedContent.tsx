@@ -11,11 +11,16 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
+interface PostMedia {
+  url: string;
+  type: string;
+  order: number;
+}
+
 interface PostRes {
   id: string;
   content: string;
-  mediaUrl: string | null;
-  mediaType: string | null;
+  media: PostMedia[];
   communityId: string;
   communityName: string;
   authorId: string;
@@ -53,9 +58,6 @@ function FeedPostCard({
   onReact: (postId: string, type: "like" | "dislike") => void;
 }) {
   const router = useRouter();
-  const isImage = post.mediaType?.startsWith("image/");
-  const isVideo = post.mediaType?.startsWith("video/");
-  const isAudio = post.mediaType?.startsWith("audio/");
 
   return (
     <div className="bg-surface-container-lowest/65 border border-white/80 rounded-2xl overflow-hidden shadow-sm">
@@ -120,30 +122,15 @@ function FeedPostCard({
       )}
 
       {/* Media */}
-      {post.mediaUrl && isImage && (
-        <div className="px-4 pb-3">
-          <AuthMedia
-            src={`${API_URL}${post.mediaUrl.replace(/^\/api/, "")}`}
-            type="image"
-            className="w-full rounded-xl"
-          />
-        </div>
-      )}
-      {post.mediaUrl && isVideo && (
-        <div className="px-4 pb-3">
-          <AuthMedia
-            src={`${API_URL}${post.mediaUrl.replace(/^\/api/, "")}`}
-            type="video"
-            className="w-full rounded-xl"
-          />
-        </div>
-      )}
-      {post.mediaUrl && isAudio && (
-        <div className="px-4 pb-3">
-          <AuthMedia
-            src={`${API_URL}${post.mediaUrl.replace(/^\/api/, "")}`}
-            type="audio"
-          />
+      {post.media?.length > 0 && (
+        <div className="px-4 pb-3 space-y-2">
+          {post.media.map((m, i) => {
+            const src = `${API_URL}${m.url.replace(/^\/api/, "")}`;
+            if (m.type.startsWith("image/")) return <AuthMedia key={i} src={src} type="image" className="w-full max-h-96 object-contain rounded-xl" />;
+            if (m.type.startsWith("video/")) return <AuthMedia key={i} src={src} type="video" className="w-full rounded-xl" />;
+            if (m.type.startsWith("audio/")) return <AuthMedia key={i} src={src} type="audio" />;
+            return null;
+          })}
         </div>
       )}
 

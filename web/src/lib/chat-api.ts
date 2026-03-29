@@ -86,6 +86,20 @@ export async function postMessage(conversationId: string, content: string, token
   return res.json();
 }
 
+export async function acceptConversationRequest(conversationId: string, token: string | null): Promise<void> {
+  const res = await apiRequest(`/chat/conversations/${encodeURIComponent(conversationId)}/accept`, token, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error("Failed to accept conversation request");
+}
+
+export async function denyConversationRequest(conversationId: string, token: string | null): Promise<void> {
+  const res = await apiRequest(`/chat/conversations/${encodeURIComponent(conversationId)}/request`, token, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error("Failed to deny conversation request");
+}
+
 export async function searchUsers(query: string, token: string | null): Promise<BackendUser[]> {
   if (!query || query.length < 2) return [];
   const params = new URLSearchParams({ q: query });

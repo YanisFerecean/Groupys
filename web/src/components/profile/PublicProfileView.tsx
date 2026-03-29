@@ -44,13 +44,19 @@ export default function PublicProfileView({
   const [notFound, setNotFound] = useState(false);
   const [albumsRatedCount, setAlbumsRatedCount] = useState<number | null>(null);
   const [messagingLoading, setMessagingLoading] = useState(false);
+  const [messagingConversationId, setMessagingConversationId] = useState<string | null>(null);
 
   async function handleMessage() {
     if (!backendUser || messagingLoading) return;
+    if (messagingConversationId) {
+      router.push(`/chat/${messagingConversationId}`);
+      return;
+    }
     setMessagingLoading(true);
     try {
       const token = await getToken();
       const conversation = await startConversation(backendUser.id, token);
+      setMessagingConversationId(conversation.id);
       router.push(`/chat/${conversation.id}`);
     } catch (err) {
       console.error("Failed to start conversation:", err);

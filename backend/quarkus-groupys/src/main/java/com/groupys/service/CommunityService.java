@@ -19,7 +19,10 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.NotFoundException;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @ApplicationScoped
@@ -50,6 +53,26 @@ public class CommunityService {
 
     public List<CommunityResDto> listAll() {
         return communityRepository.listAll().stream()
+                .map(CommunityUtil::toDto)
+                .toList();
+    }
+
+    public List<CommunityResDto> getTrending(int limit) {
+        Instant since = Instant.now().minus(7, ChronoUnit.DAYS);
+        return communityMemberRepository.findTrendingCommunityIds(since, limit).stream()
+                .map(id -> communityRepository.findByIdOptional(id))
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .map(CommunityUtil::toDto)
+                .toList();
+    }
+
+    public List<CommunityResDto> search(String query, int limit) {
+        String normalizedQuery = query == null ? "" : query.trim();
+        if (normalizedQuery.isBlank()) {
+            return List.of();
+        }
+        return communityRepository.searchByName(normalizedQuery, limit).stream()
                 .map(CommunityUtil::toDto)
                 .toList();
     }
@@ -203,6 +226,14 @@ public class CommunityService {
                         m.joinedAt
                 ))
                 .toList();
+    }
+
+    @Transactional
+    public CommunityResDto updateBanner(UUID id, String bannerUrl) {
+        Community community = communityRepository.findByIdOptional(id)
+                .orElseThrow(() -> new NotFoundException("Community not found"));
+        community.bannerUrl = bannerUrl;
+        return CommunityUtil.toDto(community);
     }
 
     @Transactional

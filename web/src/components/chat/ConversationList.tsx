@@ -105,14 +105,26 @@ export function ConversationList({ conversations, activeId, hasMore, isLoadingMo
                 <h3 className="truncate font-semibold text-on-surface text-sm">
                   {displayName}
                 </h3>
-                {timeAgo && (
+                {convo.requestStatus !== "ACCEPTED" ? (
+                  <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full flex-shrink-0 ml-2 ${
+                    convo.requestStatus === "PENDING_INCOMING"
+                      ? "bg-primary/15 text-primary"
+                      : "bg-surface-container-high text-on-surface-variant"
+                  }`}>
+                    {convo.requestStatus === "PENDING_INCOMING" ? "Pending" : "Sent"}
+                  </span>
+                ) : timeAgo ? (
                   <span className="text-xs text-on-surface-variant flex-shrink-0 ml-2">
                     {timeAgo}
                   </span>
-                )}
+                ) : null}
               </div>
               <p className={`truncate text-sm ${convo.unreadCount > 0 ? "text-on-surface font-medium" : "text-on-surface-variant"}`}>
-                {decryptedPreviews?.get(convo.id) ?? convo.lastMessage ?? "Start a conversation..."}
+                {convo.requestStatus === "PENDING_INCOMING"
+                  ? "Wants to message you"
+                  : convo.requestStatus === "PENDING_OUTGOING"
+                  ? "Request sent"
+                  : decryptedPreviews?.get(convo.id) ?? convo.lastMessage ?? "Start a conversation..."}
               </p>
             </div>
           </Link>

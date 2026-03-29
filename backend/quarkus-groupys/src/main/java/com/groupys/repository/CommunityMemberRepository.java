@@ -4,6 +4,7 @@ import com.groupys.model.CommunityMember;
 import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
 import jakarta.enterprise.context.ApplicationScoped;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -41,6 +42,19 @@ public class CommunityMemberRepository implements PanacheRepositoryBase<Communit
                 .setParameter("candidateCommunityId", candidateCommunityId)
                 .setParameter("joinedCommunityIds", joinedCommunityIds)
                 .getSingleResult();
+    }
+
+    public List<UUID> findTrendingCommunityIds(Instant since, int limit) {
+        return getEntityManager().createQuery("""
+                select cm.community.id
+                from CommunityMember cm
+                where cm.joinedAt >= :since
+                group by cm.community.id
+                order by count(cm) desc
+                """, UUID.class)
+                .setParameter("since", since)
+                .setMaxResults(limit)
+                .getResultList();
     }
 
     public long countSharedCommunities(UUID userId, UUID candidateUserId) {
