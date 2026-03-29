@@ -43,7 +43,8 @@
       "Bash(grep -rn \"onUpdateProfileImage\\\\|/users.*upload\\\\|/media/upload\" /c/Uni/Projects/groupys-web-app/web/src --include=*.tsx --include=*.ts)",
       "Bash(find /c/Uni/Projects/groupys-web-app/web/src -name *profile* -o -name *customization*)",
       "Bash(grep -E \"\\\\.\\(tsx?|js\\)$\")",
-      "Bash(grep -rn \"useProfileCustomization\\\\|updateProfileImage.*function\\\\|const updateProfileImage\" /c/Uni/Projects/groupys-web-app/web/src --include=*.tsx --include=*.ts)"
+      "Bash(grep -rn \"useProfileCustomization\\\\|updateProfileImage.*function\\\\|const updateProfileImage\" /c/Uni/Projects/groupys-web-app/web/src --include=*.tsx --include=*.ts)",
+      "Bash(grep -r \"search\\\\|Search\" /c/Uni/Projects/groupys-web-app/web/src/app/api --include=*.ts)"
     ]
   }
 }

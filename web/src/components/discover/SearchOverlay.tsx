@@ -265,7 +265,8 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
-  const lastFetchedRef = useRef("");
+  const abortRef = useRef<AbortController | null>(null);
+  const resultCacheRef = useRef<Map<string, { music: MusicResult | null; people: PeopleResult | null }>>(new Map());
 
   useEffect(() => {
     const t = setTimeout(() => inputRef.current?.focus(), 50);
@@ -286,18 +287,33 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
       setMusicResults(null);
       setPeopleResults(null);
       setSearching(false);
-      lastFetchedRef.current = "";
       return;
     }
 
-    setMusicResults(null);
-    setPeopleResults(null);
-
     debounceRef.current = setTimeout(async () => {
       const fetchKey = `${category}:${trimmed}`;
-      if (fetchKey === lastFetchedRef.current) return;
 
+      // Serve from cache without hitting the network
+      const cached = resultCacheRef.current.get(fetchKey);
+      if (cached) {
+        setMusicResults(cached.music);
+        setPeopleResults(cached.people);
+        return;
+      }
+
+      // Cancel any previous in-flight request
+      if (abortRef.current) abortRef.current.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      const { signal } = controller;
+
+      setMusicResults(null);
+      setPeopleResults(null);
       setSearching(true);
+
+      let music: MusicResult | null = null;
+      let people: PeopleResult | null = null;
+
       try {
         const token = await getTokenRef.current();
         const headers = { Authorization: `Bearer ${token}` };
@@ -309,13 +325,13 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
         if (isMusicCategory) {
           let data: MusicResult;
           if (category === "all") {
-            const res = await fetch(`${API_URL}/search?q=${q}`, { headers });
+            const res = await fetch(`${API_URL}/search?q=${q}`, { headers, signal });
             if (!res.ok) throw new Error("Search failed");
             const raw: MusicResult = await res.json();
             data = { ...raw, artists: [...raw.artists].sort((a, b) => b.listeners - a.listeners) };
           } else {
             const endpointMap: Record<string, string> = { artists: "artists", albums: "albums", tracks: "tracks" };
-            const res = await fetch(`${API_URL}/${endpointMap[category]}/search?q=${q}`, { headers });
+            const res = await fetch(`${API_URL}/${endpointMap[category]}/search?q=${q}&limit=9`, { headers, signal });
             if (!res.ok) throw new Error("Search failed");
             const raw = await res.json();
             data = {
@@ -324,6 +340,7 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
               tracks: category === "tracks" ? (raw as TrackRes[]) : [],
             };
           }
+          music = data;
           setMusicResults(data);
         }
 
@@ -333,14 +350,16 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
             category === "communities" ? [] : searchUsers(trimmed, token, limit),
             category === "users" ? [] : searchCommunities(trimmed, token, limit),
           ]);
-          setPeopleResults({ users, communities });
+          people = { users, communities };
+          setPeopleResults(people);
         }
 
-        lastFetchedRef.current = fetchKey;
+        resultCacheRef.current.set(fetchKey, { music, people });
       } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
         console.error("Search error:", err);
       } finally {
-        setSearching(false);
+        if (abortRef.current === controller) setSearching(false);
       }
     }, 450);
 
