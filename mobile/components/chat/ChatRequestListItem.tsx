@@ -11,6 +11,7 @@ interface ChatRequestListItemProps {
   onAccept?: () => void
   onDeny?: () => void
   onPress: () => void
+  onProfilePress?: () => void
 }
 
 export function ChatRequestListItem({
@@ -20,6 +21,7 @@ export function ChatRequestListItem({
   onAccept,
   onDeny,
   onPress,
+  onProfilePress,
 }: ChatRequestListItemProps) {
   const otherParticipant = conversation.participants.find(participant => participant.username !== currentUsername)
   const displayName = otherParticipant?.displayName || otherParticipant?.username || 'Unknown user'
@@ -33,20 +35,28 @@ export function ChatRequestListItem({
   return (
     <View className="mx-5 mb-3 rounded-3xl bg-surface-container p-4">
       <TouchableOpacity className="flex-row items-center gap-3" onPress={onPress} activeOpacity={0.9}>
-        {avatarUrl ? (
-          <Image
-            source={{ uri: avatarUrl }}
-            style={{ width: 52, height: 52, borderRadius: 26 }}
-            contentFit="cover"
-          />
-        ) : (
-          <View
-            className="items-center justify-center rounded-full bg-primary/10"
-            style={{ width: 52, height: 52 }}
-          >
-            <Text className="text-lg font-bold text-primary">{initial}</Text>
-          </View>
-        )}
+        <TouchableOpacity
+          onPress={(event) => {
+            event.stopPropagation()
+            ;(onProfilePress ?? onPress)()
+          }}
+          activeOpacity={0.8}
+        >
+          {avatarUrl ? (
+            <Image
+              source={{ uri: avatarUrl }}
+              style={{ width: 52, height: 52, borderRadius: 26 }}
+              contentFit="cover"
+            />
+          ) : (
+            <View
+              className="items-center justify-center rounded-full bg-primary/10"
+              style={{ width: 52, height: 52 }}
+            >
+              <Text className="text-lg font-bold text-primary">{initial}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
 
         <View className="flex-1">
           <View className="flex-row items-center gap-2">
