@@ -10,6 +10,7 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import FeedPostCard from '@/components/feed/FeedPostCard'
+import SwipeableTabScreen from '@/components/navigation/SwipeableTabScreen'
 import { apiFetch } from '@/lib/api'
 import { Colors } from '@/constants/colors'
 import type { PostResDto } from '@/models/PostRes'
@@ -68,44 +69,45 @@ export default function FeedScreen() {
   )
 
   return (
-    <View className="flex-1 bg-surface">
-      {/* Header */}
-      <View
-        className="flex-row items-center justify-between px-5"
-        style={{ paddingTop: insets.top + 8 }}
-      >
-        <Text className="text-4xl font-extrabold tracking-tighter text-primary">
-          Feed
-        </Text>
-        <TouchableOpacity>
-          <Ionicons name="search" size={24} color={Colors.primary} />
-        </TouchableOpacity>
-      </View>
-
-      {loading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={Colors.primary} />
-        </View>
-      ) : posts.length === 0 ? (
-        <View className="flex-1 items-center justify-center px-10">
-          <Ionicons name="people-outline" size={48} color={Colors.onSurfaceVariant} />
-          <Text className="text-on-surface font-bold text-lg mt-3">No posts yet</Text>
-          <Text className="text-on-surface-variant text-sm text-center mt-1">
-            Join some communities to see their posts in your feed.
+    <SwipeableTabScreen tab="(feed)">
+      <View className="flex-1 bg-surface">
+        {/* Header */}
+        <View
+          className="flex-row items-center justify-between px-5"
+          style={{ paddingTop: insets.top + 8 }}
+        >
+          <Text className="text-4xl font-extrabold tracking-tighter text-primary">
+            Feed
           </Text>
+          <TouchableOpacity>
+            <Ionicons name="search" size={24} color={Colors.primary} />
+          </TouchableOpacity>
         </View>
-      ) : (
-        <FlatList
-          data={posts}
-          keyExtractor={(item) => item.id}
-          renderItem={renderPost}
-          contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 100 }}
-          showsVerticalScrollIndicator={false}
-          refreshing={refreshing}
-          onRefresh={handleRefresh}
-        />
-      )}
 
-    </View>
+        {loading ? (
+          <View className="flex-1 items-center justify-center">
+            <ActivityIndicator size="large" color={Colors.primary} />
+          </View>
+        ) : posts.length === 0 ? (
+          <View className="flex-1 items-center justify-center px-10">
+            <Ionicons name="people-outline" size={48} color={Colors.onSurfaceVariant} />
+            <Text className="text-on-surface font-bold text-lg mt-3">No posts yet</Text>
+            <Text className="text-on-surface-variant text-sm text-center mt-1">
+              Join some communities to see their posts in your feed.
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={posts}
+            keyExtractor={(item) => item.id}
+            renderItem={renderPost}
+            contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 100 }}
+            showsVerticalScrollIndicator={false}
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+          />
+        )}
+      </View>
+    </SwipeableTabScreen>
   )
 }
