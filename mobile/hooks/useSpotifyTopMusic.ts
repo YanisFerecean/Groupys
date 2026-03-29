@@ -2,8 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '@clerk/expo'
 import {
   fetchSpotifyTopAlbums,
+  fetchSpotifyTopAlbumsByUserId,
   fetchSpotifyTopArtists,
+  fetchSpotifyTopArtistsByUserId,
   fetchSpotifyTopTracks,
+  fetchSpotifyTopTracksByUserId,
 } from '@/lib/api'
 import { searchTracks } from '@/lib/musicSearch'
 import type { TopAlbum, TopArtist, TopSong } from '@/models/ProfileCustomization'
@@ -15,6 +18,7 @@ interface SpotifyTopMusicState {
 }
 
 interface SpotifyTopMusicOptions {
+  targetUserId?: string
   spotifyConnected?: boolean
   syncTopSongsWithSpotify?: boolean
   syncTopArtistsWithSpotify?: boolean
@@ -22,6 +26,7 @@ interface SpotifyTopMusicOptions {
 }
 
 export function useSpotifyTopMusic({
+  targetUserId,
   spotifyConnected,
   syncTopSongsWithSpotify,
   syncTopArtistsWithSpotify,
@@ -55,9 +60,27 @@ export function useSpotifyTopMusic({
       if (!token) return
 
       const [tracksRes, artistsRes, albumsRes] = await Promise.allSettled([
-        shouldFetchSongs ? fetchSpotifyTopTracks(token) : Promise.resolve([]),
-        shouldFetchArtists ? fetchSpotifyTopArtists(token) : Promise.resolve([]),
-        shouldFetchAlbums ? fetchSpotifyTopAlbums(token) : Promise.resolve([]),
+        shouldFetchSongs
+          ? (
+              targetUserId
+                ? fetchSpotifyTopTracksByUserId(targetUserId, token)
+                : fetchSpotifyTopTracks(token)
+            )
+          : Promise.resolve([]),
+        shouldFetchArtists
+          ? (
+              targetUserId
+                ? fetchSpotifyTopArtistsByUserId(targetUserId, token)
+                : fetchSpotifyTopArtists(token)
+            )
+          : Promise.resolve([]),
+        shouldFetchAlbums
+          ? (
+              targetUserId
+                ? fetchSpotifyTopAlbumsByUserId(targetUserId, token)
+                : fetchSpotifyTopAlbums(token)
+            )
+          : Promise.resolve([]),
       ])
 
       const topSongs: TopSong[] | undefined =
@@ -122,6 +145,7 @@ export function useSpotifyTopMusic({
     syncTopSongsWithSpotify,
     syncTopArtistsWithSpotify,
     syncTopAlbumsWithSpotify,
+    targetUserId,
   ])
 
   useEffect(() => {
