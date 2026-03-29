@@ -1,22 +1,41 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
 import { useAuth, useUser } from '@clerk/expo'
 import { BlurView } from 'expo-blur'
-import { Redirect, Tabs, useSegments } from 'expo-router'
+import { Redirect, Tabs, router, useSegments } from 'expo-router'
+import { useCallback, useRef } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { ChatProvider } from '@/components/chat/ChatProvider'
 import FullscreenSpinner from '@/components/ui/FullscreenSpinner'
 import { Colors } from '@/constants/colors'
 import { hasUsername } from '@/lib/auth'
+import { homeTabRootPath, type HomeTab } from '@/lib/profileRoutes'
+
+const DOUBLE_TAP_DELAY_MS = 320
 
 export default function HomeLayout() {
   const { isSignedIn, isLoaded: isAuthLoaded } = useAuth()
   const { user, isLoaded: isUserLoaded } = useUser()
   const segments = useSegments()
+  const lastTabPressRef = useRef<{ tab: HomeTab | null; at: number }>({ tab: null, at: 0 })
   const isChatThreadRoute =
     segments[0] === '(home)'
     && segments[1] === '(match)'
     && segments[2] === 'chat'
     && segments.length > 3
+
+  const handleTabPress = useCallback((tab: HomeTab) => {
+    const now = Date.now()
+    const lastPress = lastTabPressRef.current
+    const isDoubleTap = lastPress.tab === tab && now - lastPress.at <= DOUBLE_TAP_DELAY_MS
+
+    lastTabPressRef.current = { tab, at: now }
+
+    if (isDoubleTap) {
+      requestAnimationFrame(() => {
+        router.replace(homeTabRootPath(tab) as never)
+      })
+    }
+  }, [])
 
   if (!isAuthLoaded || (isSignedIn && !isUserLoaded)) {
     return <FullscreenSpinner />
@@ -31,6 +50,7 @@ export default function HomeLayout() {
       <Tabs
         screenOptions={{
           headerShown: false,
+          animation: 'shift',
           tabBarShowLabel: false,
           tabBarActiveTintColor: Colors.primary,
           tabBarInactiveTintColor: Colors.onSurfaceVariant,
@@ -57,6 +77,9 @@ export default function HomeLayout() {
       >
         <Tabs.Screen
           name="(feed)"
+          listeners={{
+            tabPress: () => handleTabPress('(feed)'),
+          }}
           options={{
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="newspaper-outline" size={size} color={color} />
@@ -65,6 +88,9 @@ export default function HomeLayout() {
         />
         <Tabs.Screen
           name="(discover)"
+          listeners={{
+            tabPress: () => handleTabPress('(discover)'),
+          }}
           options={{
             tabBarIcon: ({ color, size }) => (
               <MaterialCommunityIcons name="compass-outline" size={size} color={color} />
@@ -92,6 +118,9 @@ export default function HomeLayout() {
           />
         <Tabs.Screen
           name="(match)"
+          listeners={{
+            tabPress: () => handleTabPress('(match)'),
+          }}
           options={{
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="heart-outline" size={size} color={color} />
@@ -101,6 +130,9 @@ export default function HomeLayout() {
 
         <Tabs.Screen
           name="(profile)"
+          listeners={{
+            tabPress: () => handleTabPress('(profile)'),
+          }}
           options={{
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="person-outline" size={size} color={color} />
