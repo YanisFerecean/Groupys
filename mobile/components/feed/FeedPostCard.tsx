@@ -3,8 +3,9 @@ import { useAuth } from '@clerk/expo'
 import { useCallback, useState } from 'react'
 import { Image, ScrollView, Text, TouchableOpacity, View } from 'react-native'
 import * as Haptics from 'expo-haptics'
-import { router } from 'expo-router'
+import { router, useSegments } from 'expo-router'
 import { apiPost, mediaUrl } from '@/lib/api'
+import { publicProfilePath, resolveHomeTab } from '@/lib/profileRoutes'
 import { timeAgo } from '@/lib/timeAgo'
 import { Colors } from '@/constants/colors'
 import AuthImageWithToken from '@/components/ui/AuthImageWithToken'
@@ -53,6 +54,8 @@ export default function FeedPostCard({
   communityRoute = '/(home)/(discover)/community',
   postRoute = '/(home)/(feed)/post',
 }: FeedPostCardProps) {
+  const segments = useSegments()
+  const currentTab = resolveHomeTab(segments)
   const { getToken } = useAuth()
   const [reacting, setReacting] = useState(false)
   const [initialIndex, setInitialIndex] = useState<number | null>(null)
@@ -65,7 +68,11 @@ export default function FeedPostCard({
     async (type: 'like' | 'dislike') => {
       if (reacting) return
       setReacting(true)
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+      void Haptics.impactAsync(
+        type === 'like'
+          ? Haptics.ImpactFeedbackStyle.Light
+          : Haptics.ImpactFeedbackStyle.Medium,
+      )
       try {
         const token = await getToken()
         const updated = await apiPost<PostResDto>(
@@ -83,12 +90,12 @@ export default function FeedPostCard({
     [post.id, reacting, getToken, onPostUpdated],
   )
 
-  const navigateToCommunity = () => {
-    router.push(`${communityRoute}/${post.communityId}` as any)
-  }
-
   const navigateToPost = () => {
     router.push(`${postRoute}/${post.id}` as any)
+  }
+
+  const navigateToAuthor = () => {
+    router.push(publicProfilePath(post.authorId, currentTab) as any)
   }
 
   return (
@@ -96,10 +103,17 @@ export default function FeedPostCard({
       <TouchableOpacity
         onPress={navigateToPost}
         activeOpacity={0.9}
-        className="px-4 pb-4 pt-4"
+        className="px-4 pb-3 pt-4"
       >
         <View className="flex-row items-center justify-between pb-3">
-          <View className="flex-1 flex-row items-center gap-2.5">
+          <TouchableOpacity
+            activeOpacity={0.8}
+            className="flex-1 flex-row items-center gap-2.5"
+            onPress={(event) => {
+              event.stopPropagation()
+              navigateToAuthor()
+            }}
+          >
             {post.authorProfileImage ? (
               <Image
                 source={{ uri: post.authorProfileImage }}
@@ -118,23 +132,14 @@ export default function FeedPostCard({
                   {authorName}
                 </Text>
                 <Text className="mx-1.5 text-[14px] text-on-surface-variant/40">in</Text>
-                <TouchableOpacity
-                  onPress={navigateToCommunity}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  <Text className="text-[14px] font-semibold text-primary" numberOfLines={1}>
-                    {post.communityName}
-                  </Text>
-                </TouchableOpacity>
+                <Text className="text-[14px] font-semibold text-primary" numberOfLines={1}>
+                  {post.communityName}
+                </Text>
               </View>
               <Text className="text-[11px] font-medium tracking-wide text-on-surface-variant/60 uppercase">
                 {timeAgo(post.createdAt)}
               </Text>
             </View>
-          </View>
-
-          <TouchableOpacity className="h-8 w-8 items-center justify-center rounded-full bg-surface-container-lowest active:bg-surface-container-low">
-            <Ionicons name="ellipsis-horizontal" size={18} color={Colors.onSurfaceVariant} />
           </TouchableOpacity>
         </View>
 
@@ -199,8 +204,10 @@ export default function FeedPostCard({
             ))}
           </ScrollView>
         ) : null}
+      </TouchableOpacity>
 
-        <View className="mt-4 flex-row items-center gap-3">
+      {/* Actions row — outside the card touchable to avoid nested touchable conflicts */}
+      <View className="px-4 pb-4 flex-row items-center gap-3">
           <View className="flex-row overflow-hidden rounded-full bg-surface-container-low/50">
             <TouchableOpacity
               onPress={() => handleReact('like')}
@@ -224,9 +231,9 @@ export default function FeedPostCard({
                 </Text>
               )}
             </TouchableOpacity>
-            
+
             <View className="w-[1px] bg-on-surface-variant/10 my-2" />
-            
+
             <TouchableOpacity
               onPress={() => handleReact('dislike')}
               className={`flex-row items-center px-4 py-2 ${
@@ -254,17 +261,16 @@ export default function FeedPostCard({
               </Text>
             )}
           </TouchableOpacity>
-          
+
           <View className="flex-1" />
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             className="h-9 w-9 items-center justify-center rounded-full bg-surface-container-low/50"
             activeOpacity={0.7}
           >
             <Ionicons name="share-outline" size={17} color={Colors.onSurfaceVariant} />
           </TouchableOpacity>
         </View>
-      </TouchableOpacity>
 
       {initialIndex !== null && (
         <MediaLightbox
