@@ -35,7 +35,21 @@
       "Bash(find /c/Uni/Projects/groupys-web-app/backend/quarkus-groupys/src/main/resources -name *.* -type f)",
       "Bash(java -version)",
       "Bash(find C:UniProjectsgroupys-web-appwebsrclib -type f \\\\\\(-name *.ts -o -name *.tsx \\\\\\))",
-      "Bash(find /Users/kyaw/Desktop/groupys-web-app/backend/quarkus-groupys/src/main/java/com/groupys -type f -name *Service.java)"
+      "Bash(find /Users/kyaw/Desktop/groupys-web-app/backend/quarkus-groupys/src/main/java/com/groupys -type f -name *Service.java)",
+      "Bash(find /c/Uni/Projects/groupys-web-app/web/src -type f \\\\\\(-name *.tsx -o -name *.ts -o -name *.jsx -o -name *.js \\\\\\))",
+      "Bash(xargs ls:*)",
+      "Bash(grep -r \"trending\\\\|popular\" /c/Uni/Projects/groupys-web-app/web/src --include=*.ts --include=*.tsx --include=*.js -i)",
+      "Bash(find /c/Uni/Projects/groupys-web-app/web/src -type f -name *.tsx)",
+      "Bash(grep -rn \"onUpdateProfileImage\\\\|/users.*upload\\\\|/media/upload\" /c/Uni/Projects/groupys-web-app/web/src --include=*.tsx --include=*.ts)",
+      "Bash(find /c/Uni/Projects/groupys-web-app/web/src -name *profile* -o -name *customization*)",
+      "Bash(grep -E \"\\\\.\\(tsx?|js\\)$\")",
+      "Bash(grep -rn \"useProfileCustomization\\\\|updateProfileImage.*function\\\\|const updateProfileImage\" /c/Uni/Projects/groupys-web-app/web/src --include=*.tsx --include=*.ts)",
+      "Bash(grep -r \"search\\\\|Search\" /c/Uni/Projects/groupys-web-app/web/src/app/api --include=*.ts)",
+      "Bash(JAVA_OPTS=\"\" ./mvnw compile -q)",
+      "Bash(grep -r \"EAGER\\\\|LAZY\\\\|fetch\" /c/Uni/Projects/groupys-web-app/backend/quarkus-groupys/src/main/java/com/groupys/model/*.java)",
+      "Bash(grep -n \"useState\\\\|useEffect\\\\|useCallback\" /c/Uni/Projects/groupys-web-app/web/src/app/chat/[conversationId]/page.tsx)",
+      "Bash(cmd /c \"mvnw.cmd compile -q\")",
+      "Bash(cmd /c \"npm run build\")"
     ]
   }
 }

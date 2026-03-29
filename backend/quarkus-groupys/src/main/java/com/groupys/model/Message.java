@@ -1,11 +1,16 @@
 package com.groupys.model;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.BatchSize;
 import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "messages")
+@Table(name = "messages", indexes = {
+    @Index(name = "idx_messages_conv_deleted_created", columnList = "conversation_id, is_deleted, created_at DESC"),
+    @Index(name = "idx_messages_sender_id", columnList = "sender_id"),
+    @Index(name = "idx_messages_created_at", columnList = "created_at DESC")
+})
 public class Message {
 
     @Id

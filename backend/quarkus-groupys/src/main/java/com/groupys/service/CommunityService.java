@@ -21,7 +21,10 @@ import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.ForbiddenException;
 import jakarta.ws.rs.NotFoundException;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @ApplicationScoped
@@ -58,6 +61,26 @@ public class CommunityService {
 
     public List<CommunityResDto> listAll() {
         return communityRepository.listAll().stream()
+                .map(CommunityUtil::toDto)
+                .toList();
+    }
+
+    public List<CommunityResDto> getTrending(int limit) {
+        Instant since = Instant.now().minus(7, ChronoUnit.DAYS);
+        return communityMemberRepository.findTrendingCommunityIds(since, limit).stream()
+                .map(id -> communityRepository.findByIdOptional(id))
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .map(CommunityUtil::toDto)
+                .toList();
+    }
+
+    public List<CommunityResDto> search(String query, int limit) {
+        String normalizedQuery = query == null ? "" : query.trim();
+        if (normalizedQuery.isBlank()) {
+            return List.of();
+        }
+        return communityRepository.searchByName(normalizedQuery, limit).stream()
                 .map(CommunityUtil::toDto)
                 .toList();
     }
@@ -214,15 +237,17 @@ public class CommunityService {
     }
 
     @Transactional
-    public CommunityResDto update(UUID id, CommunityUpdateDto dto, String clerkId) {
-        Community community = requireOwnedCommunity(id, clerkId);
-        if (dto.name() != null) {
-            String trimmedName = dto.name().trim();
-            if (trimmedName.isEmpty()) {
-                throw new BadRequestException("Community name cannot be blank");
-            }
-            community.name = trimmedName;
-        }
+    public CommunityResDto updateBanner(UUID id, String bannerUrl) {
+        Community community = communityRepository.findByIdOptional(id)
+                .orElseThrow(() -> new NotFoundException("Community not found"));
+        community.bannerUrl = bannerUrl;
+        return CommunityUtil.toDto(community);
+    }
+
+    @Transactional
+    public CommunityResDto update(UUID id, CommunityUpdateDto dto) {
+        Community community = communityRepository.findByIdOptional(id)
+                .orElseThrow(() -> new NotFoundException("Community not found"));
         community.description = dto.description();
         community.genre = dto.genre();
         community.country = dto.country();

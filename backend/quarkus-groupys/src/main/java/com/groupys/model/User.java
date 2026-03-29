@@ -1,6 +1,7 @@
 package com.groupys.model;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -11,6 +12,7 @@ import java.util.List;
 import java.util.UUID;
 
 @Entity
+@BatchSize(size = 50)
 @Table(name = "users", indexes = {
         @Index(name = "idx_users_country_code", columnList = "country_code"),
         @Index(name = "idx_users_discovery_flags", columnList = "discovery_visible,recommendation_opt_out"),
@@ -102,9 +104,11 @@ public class User {
 
     public String location;
 
-    @ElementCollection(fetch = FetchType.EAGER)
-    @CollectionTable(name = "user_tags", joinColumns = @JoinColumn(name = "user_id"))
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(name = "user_tags", joinColumns = @JoinColumn(name = "user_id"),
+            indexes = @Index(name = "idx_user_tags_user_id", columnList = "user_id"))
     @Column(name = "tag")
+    @org.hibernate.annotations.BatchSize(size = 50)
     public List<String> tags = new ArrayList<>();
 
     @PrePersist

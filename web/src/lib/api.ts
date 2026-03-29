@@ -92,6 +92,8 @@ function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCustomizatio
             coverUrl: d.coverUrl,
           };
         }
+        result.currentlyListeningContainerColor = w.color ?? undefined;
+        if (widgetSize) result.widgetSizes = { ...result.widgetSizes, currentlyListening: widgetSize as "small" | "normal" };
         if (w.data?.synced) result.spotifySynced = { ...result.spotifySynced, currentlyListening: true };
         if (w.data?.hidden) result.hiddenWidgets = [...(result.hiddenWidgets ?? []), "currentlyListening"];
         break;
@@ -112,7 +114,7 @@ function profileToWidgets(profile: Partial<ProfileCustomization>): BackendWidget
     widgetData.topAlbums = { type: "topAlbums", color: profile.albumsContainerColor ?? null, data: { items: profile.topAlbums, size: profile.widgetSizes?.topAlbums ?? null, synced: synced.topAlbums ?? false, hidden: hidden.includes("topAlbums") } };
   }
   if (profile.currentlyListening?.title) {
-    widgetData.currentlyListening = { type: "currentlyListening", color: null, data: { ...profile.currentlyListening, synced: synced.currentlyListening ?? false, hidden: hidden.includes("currentlyListening") } };
+    widgetData.currentlyListening = { type: "currentlyListening", color: profile.currentlyListeningContainerColor ?? null, data: { ...profile.currentlyListening, size: profile.widgetSizes?.currentlyListening ?? null, synced: synced.currentlyListening ?? false, hidden: hidden.includes("currentlyListening") } };
   }
   if (profile.topSongs?.length) {
     widgetData.topSongs = { type: "topSongs", color: profile.songsContainerColor ?? null, data: { items: profile.topSongs, size: profile.widgetSizes?.topSongs ?? null, synced: synced.topSongs ?? false, hidden: hidden.includes("topSongs") } };
@@ -325,6 +327,45 @@ export async function deleteAlbumRating(
     method: "DELETE",
   });
   if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to delete rating"));
+}
+
+// ── Community search ──────────────────────────────────────────────────────
+
+export interface CommunityRes {
+  id: string;
+  name: string;
+  description: string | null;
+  genre: string | null;
+  imageUrl: string | null;
+  iconType: string | null;
+  iconEmoji: string | null;
+  iconUrl: string | null;
+  memberCount: number;
+  tags: string[];
+}
+
+export async function searchCommunities(
+  query: string,
+  token: string | null,
+  limit = 9,
+): Promise<CommunityRes[]> {
+  if (!query || query.length < 2) return [];
+  const params = new URLSearchParams({ q: query, limit: String(limit) });
+  const res = await apiRequest(`/communities/search?${params}`, token);
+  if (!res.ok) throw new Error("Failed to search communities");
+  return res.json();
+}
+
+export async function searchUsers(
+  query: string,
+  token: string | null,
+  limit = 9,
+): Promise<BackendUser[]> {
+  if (!query || query.length < 2) return [];
+  const params = new URLSearchParams({ q: query, limit: String(limit) });
+  const res = await apiRequest(`/users/search?${params}`, token);
+  if (!res.ok) throw new Error("Failed to search users");
+  return res.json();
 }
 
 export async function updateBackendUser(

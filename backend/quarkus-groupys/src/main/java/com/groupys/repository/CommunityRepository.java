@@ -31,7 +31,11 @@ public class CommunityRepository implements PanacheRepositoryBase<Community, UUI
         return find("visibility = 'PUBLIC' and discoveryEnabled = true").list();
     }
 
-    public List<Community> searchByQuery(String q) {
-        return find("lower(name) like ?1 or lower(description) like ?1", "%" + q.toLowerCase() + "%").list();
+    public List<Community> searchByName(String query, int limit) {
+        return find(
+                "LOWER(name) LIKE :query AND visibility = 'PUBLIC'",
+                io.quarkus.panache.common.Parameters.with("query", "%" + query.toLowerCase() + "%"))
+                .page(0, limit)
+                .list();
     }
 }

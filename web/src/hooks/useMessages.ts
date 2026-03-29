@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Message } from "@/types/chat";
-import { fetchMessages, postMessage } from "@/lib/chat-api";
+import { fetchMessages, postMessage, ApiError } from "@/lib/chat-api";
 import { chatWs } from "@/lib/ws";
 import { useAuth } from "@clerk/nextjs";
 import { isEncrypted } from "@/lib/crypto";
+
+const MAX_MESSAGES = 300;
 
 type CryptFn = (content: string) => Promise<string>;
 
@@ -16,6 +18,8 @@ export function useMessages(
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const [rateLimitError, setRateLimitError] = useState(false);
+  const rateLimitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Keep a ref so the load function always uses the latest decryptFn without
   // being a reactive dependency (which would cause unnecessary re-fetches).
@@ -70,25 +74,22 @@ export function useMessages(
     if (!decryptFn) return;
     let isMounted = true;
 
-    setMessages((prev) => {
-      const hasEncrypted = prev.some((m) => isEncrypted(m.content));
-      if (!hasEncrypted) return prev;
+    const snapshot = messages; // capture outside setter to avoid async-in-setter
+    const hasEncrypted = snapshot.some((m) => isEncrypted(m.content));
+    if (!hasEncrypted) return;
 
-      Promise.all(
-        prev.map(async (m) => {
-          if (!isEncrypted(m.content)) return m;
-          const content = await decryptFn(m.content).catch(() => "[Encrypted message — decryption failed]");
-          return { ...m, content };
-        })
-      ).then((decrypted) => {
-        if (isMounted) setMessages(decrypted);
-      });
-
-      return prev; // return unchanged immediately; async update follows
+    Promise.all(
+      snapshot.map(async (m) => {
+        if (!isEncrypted(m.content)) return m;
+        const content = await decryptFn(m.content).catch(() => "[Encrypted message — decryption failed]");
+        return { ...m, content };
+      })
+    ).then((decrypted) => {
+      if (isMounted) setMessages(decrypted);
     });
 
     return () => { isMounted = false; };
-  }, [decryptFn]);
+  }, [decryptFn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Real-time subscription — only re-registers when conversationId changes.
   // Uses decryptFnRef so the handler always has the latest key without being a reactive dep.
@@ -154,7 +155,8 @@ export function useMessages(
       setMessages((prev) => {
         const existingIds = new Set(prev.map((m) => m.id));
         const fresh = decrypted.filter((m) => !existingIds.has(m.id));
-        return [...prev, ...fresh];
+        const combined = [...prev, ...fresh];
+        return combined.length > MAX_MESSAGES ? combined.slice(0, MAX_MESSAGES) : combined;
       });
     } catch (e) {
       console.error("loadMore failed", e);
@@ -197,14 +199,22 @@ export function useMessages(
         return updated;
       });
     } catch (err) {
-      console.error("Failed to send message:", err);
-      setMessages((prev) => {
-        const idx = prev.findIndex((m) => m.tempId === tempId);
-        if (idx === -1) return prev;
-        const updated = [...prev];
-        updated[idx] = { ...updated[idx], status: "failed" };
-        return updated;
-      });
+      if (err instanceof ApiError && err.status === 429) {
+        if (rateLimitTimerRef.current) clearTimeout(rateLimitTimerRef.current);
+        setRateLimitError(true);
+        rateLimitTimerRef.current = setTimeout(() => setRateLimitError(false), 4000);
+        // Remove the optimistic message — it was never accepted by the server
+        setMessages((prev) => prev.filter((m) => m.tempId !== tempId));
+      } else {
+        console.error("Failed to send message:", err);
+        setMessages((prev) => {
+          const idx = prev.findIndex((m) => m.tempId === tempId);
+          if (idx === -1) return prev;
+          const updated = [...prev];
+          updated[idx] = { ...updated[idx], status: "failed" };
+          return updated;
+        });
+      }
     }
   }, [conversationId, getToken, encryptFn]);
 
@@ -239,5 +249,7 @@ export function useMessages(
     }
   }, [conversationId, getToken, encryptFn]);
 
-  return { messages, isLoading, hasMore, loadMore, sendMessage, resendMessage };
+  const isDecrypting = messages.length > 0 && messages.some((m) => isEncrypted(m.content));
+
+  return { messages, isLoading, hasMore, loadMore, sendMessage, resendMessage, rateLimitError, isDecrypting };
 }

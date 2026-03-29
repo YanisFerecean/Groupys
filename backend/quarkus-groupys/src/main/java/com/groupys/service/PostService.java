@@ -14,8 +14,8 @@ import jakarta.ws.rs.NotFoundException;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @ApplicationScoped
 public class PostService {
@@ -47,30 +47,27 @@ public class PostService {
     @Inject
     DiscoveryService discoveryService;
 
-    public List<PostResDto> getFeed(String clerkId) {
+    public List<PostResDto> getFeed(String clerkId, int page, int size) {
         User user = userRepository.findByClerkId(clerkId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
-        List<UUID> communityIds = communityMemberRepository.findByUser(user.id).stream()
+        List<UUID> communityIds = communityMemberRepository.findByUserLimited(user.id, 200).stream()
                 .map(m -> m.community.id)
                 .toList();
-        return postRepository.findByCommunities(communityIds).stream()
-                .map(post -> toDto(post, user))
-                .toList();
+        List<Post> posts = postRepository.findByCommunitiesPaged(communityIds, page, size);
+        return toDtoList(posts, user);
     }
 
-    public List<PostResDto> getByCommunity(UUID communityId, String clerkId) {
+    public List<PostResDto> getByCommunity(UUID communityId, String clerkId, int page, int size) {
         User user = userRepository.findByClerkId(clerkId).orElse(null);
-        return postRepository.findByCommunity(communityId).stream()
-                .map(post -> toDto(post, user))
-                .toList();
+        List<Post> posts = postRepository.findByCommunityPaged(communityId, page, size);
+        return toDtoList(posts, user);
     }
 
-    public List<PostResDto> getAccountPosts(String clerkId) {
+    public List<PostResDto> getAccountPosts(String clerkId, int page, int size) {
         User user = userRepository.findByClerkId(clerkId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
-        return postRepository.findByAuthor(user.id).stream()
-                .map(post -> toDto(post, user))
-                .toList();
+        List<Post> posts = postRepository.findByAuthorPaged(user.id, page, size);
+        return toDtoList(posts, user);
     }
 
     public List<PostResDto> getByAuthor(UUID authorId, String clerkId) {
@@ -84,7 +81,7 @@ public class PostService {
         User user = userRepository.findByClerkId(clerkId).orElse(null);
         Post post = postRepository.findByIdOptional(postId)
                 .orElseThrow(() -> new NotFoundException("Post not found"));
-        return toDto(post, user);
+        return toDtoList(List.of(post), user).get(0);
     }
 
     @Transactional
@@ -105,7 +102,7 @@ public class PostService {
         postRepository.persist(post);
         discoveryService.refreshAfterCommunityActivity(communityId);
 
-        return toDto(post, author);
+        return toDtoList(List.of(post), author).get(0);
     }
 
     @Transactional
@@ -134,7 +131,7 @@ public class PostService {
 
         discoveryService.refreshAfterCommunityActivity(post.community.id);
 
-        return toDto(post, user);
+        return toDtoList(List.of(post), user).get(0);
     }
 
     @Transactional
@@ -161,41 +158,48 @@ public class PostService {
         discoveryService.refreshAfterCommunityActivity(communityId);
     }
 
-    private PostResDto toDto(Post post, User currentUser) {
-        long likes = postReactionRepository.countByPostAndType(post.id, "like");
-        long dislikes = postReactionRepository.countByPostAndType(post.id, "dislike");
-        long comments = commentRepository.countByPost(post.id);
-        String userReaction = null;
-        if (currentUser != null) {
-            userReaction = postReactionRepository.findByPostAndUser(post.id, currentUser.id)
-                    .map(r -> r.reactionType)
-                    .orElse(null);
-        }
-        List<PostResDto.PostMediaDto> mediaDtos = new ArrayList<>();
-        if (post.media != null) {
-            for (int i = 0; i < post.media.size(); i++) {
-                PostMedia m = post.media.get(i);
-                mediaDtos.add(new PostResDto.PostMediaDto(m.url, m.type, i));
-            }
-        }
+    /**
+     * Converts a list of posts to DTOs using 4 batch queries total regardless of list size,
+     * eliminating the previous N×4 query pattern.
+     */
+    private List<PostResDto> toDtoList(List<Post> posts, User currentUser) {
+        if (posts.isEmpty()) return List.of();
 
-        return new PostResDto(
-                post.id,
-                post.content,
-                mediaDtos,
-                post.community.id,
-                post.community.name,
-                post.author.id,
-                post.author.username,
-                post.author.displayName,
-                post.author.profileImage,
-                post.author.clerkId,
-                post.createdAt,
-                likes,
-                dislikes,
-                userReaction,
-                comments,
-                post.title
-        );
+        List<UUID> postIds = posts.stream().map(p -> p.id).toList();
+
+        Map<UUID, Long> likesMap    = postReactionRepository.countsByPostIdsAndType(postIds, "like");
+        Map<UUID, Long> dislikesMap = postReactionRepository.countsByPostIdsAndType(postIds, "dislike");
+        Map<UUID, Long> commentMap  = commentRepository.countsByPostIds(postIds);
+        Map<UUID, String> userReactionMap = currentUser != null
+                ? postReactionRepository.findUserReactionsByPostIds(postIds, currentUser.id)
+                : Map.of();
+
+        return posts.stream().map(post -> {
+            List<PostResDto.PostMediaDto> mediaDtos = new ArrayList<>();
+            if (post.media != null) {
+                for (int i = 0; i < post.media.size(); i++) {
+                    PostMedia m = post.media.get(i);
+                    mediaDtos.add(new PostResDto.PostMediaDto(m.url, m.type, i));
+                }
+            }
+            return new PostResDto(
+                    post.id,
+                    post.content,
+                    mediaDtos,
+                    post.community.id,
+                    post.community.name,
+                    post.author.id,
+                    post.author.username,
+                    post.author.displayName,
+                    post.author.profileImage,
+                    post.author.clerkId,
+                    post.createdAt,
+                    likesMap.getOrDefault(post.id, 0L),
+                    dislikesMap.getOrDefault(post.id, 0L),
+                    userReactionMap.get(post.id),
+                    commentMap.getOrDefault(post.id, 0L),
+                    post.title
+            );
+        }).toList();
     }
 }

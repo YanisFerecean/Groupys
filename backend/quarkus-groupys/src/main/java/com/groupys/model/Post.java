@@ -1,13 +1,17 @@
 package com.groupys.model;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.BatchSize;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
 @Entity
-@Table(name = "posts")
+@Table(name = "posts", indexes = {
+    @Index(name = "idx_posts_community_created", columnList = "community_id, created_at DESC"),
+    @Index(name = "idx_posts_author_created", columnList = "author_id, created_at DESC")
+})
 public class Post {
 
     @Id
@@ -20,9 +24,14 @@ public class Post {
     @Column(columnDefinition = "TEXT")
     public String content;
 
-    @ElementCollection(fetch = FetchType.EAGER)
-    @CollectionTable(name = "post_media", joinColumns = @JoinColumn(name = "post_id"))
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(
+        name = "post_media",
+        joinColumns = @JoinColumn(name = "post_id"),
+        indexes = @Index(name = "idx_post_media_post_id", columnList = "post_id")
+    )
     @OrderColumn(name = "sort_order")
+    @BatchSize(size = 20)
     public List<PostMedia> media = new ArrayList<>();
 
     @ManyToOne(fetch = FetchType.LAZY)

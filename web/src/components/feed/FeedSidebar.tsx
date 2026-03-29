@@ -9,7 +9,8 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
 interface CommunityRes {
   id: string;
   name: string;
-  country: string;
+  genre: string | null;
+  country: string | null;
   memberCount: number;
   tags: string[];
 }
@@ -32,6 +33,7 @@ export default function FeedSidebar() {
   const { getToken } = useAuth();
   const router = useRouter();
   const [communities, setCommunities] = useState<CommunityRes[]>([]);
+  const [trending, setTrending] = useState<CommunityRes[]>([]);
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
@@ -39,12 +41,12 @@ export default function FeedSidebar() {
     (async () => {
       try {
         const token = await getToken();
-        const res = await fetch(`${API_URL}/communities/mine`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.ok && !cancelled) {
-          setCommunities(await res.json());
-        }
+        const [mineRes, trendingRes] = await Promise.all([
+          fetch(`${API_URL}/communities/mine`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`${API_URL}/communities/trending?limit=5`, { headers: { Authorization: `Bearer ${token}` } }),
+        ]);
+        if (mineRes.ok && !cancelled) setCommunities(await mineRes.json());
+        if (trendingRes.ok && !cancelled) setTrending(await trendingRes.json());
       } catch {
         // ignore
       }
@@ -63,30 +65,31 @@ export default function FeedSidebar() {
         <h4 className="text-sm font-bold uppercase tracking-widest text-on-surface-variant/60 mb-6">
           Trending Now
         </h4>
-        <div className="space-y-6">
-          {[
-            { rank: "01", name: "Neon Waves", tag: "Synthwave · Berlin" },
-            { rank: "02", name: "Jazz Heads", tag: "Jazz · New York" },
-            { rank: "03", name: "Sahara Sounds", tag: "Afrobeats · Lagos" },
-          ].map((item) => (
-            <div
-              key={item.rank}
-              className="flex items-center gap-4 group cursor-pointer"
-            >
-              <span className="text-2xl font-black text-surface-container-highest group-hover:text-primary transition-colors">
-                {item.rank}
-              </span>
-              <div>
-                <p className="text-sm font-bold leading-none mb-1">
-                  {item.name}
-                </p>
-                <p className="text-xs text-on-surface-variant/60">
-                  {item.tag}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
+        {trending.length === 0 ? (
+          <p className="text-xs text-on-surface-variant/50">No trending communities this week.</p>
+        ) : (
+          <div className="space-y-6">
+            {trending.map((c, i) => (
+              <button
+                key={c.id}
+                onClick={() => router.push(`/discover/community/${c.id}`)}
+                className="flex items-center gap-4 group w-full text-left"
+              >
+                <span className="text-2xl font-black text-surface-container-highest group-hover:text-primary transition-colors shrink-0">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-bold leading-none mb-1 truncate group-hover:text-primary transition-colors">
+                    {c.name}
+                  </p>
+                  <p className="text-xs text-on-surface-variant/60 truncate">
+                    {[c.genre, c.country].filter(Boolean).join(" · ") || `${c.memberCount} members`}
+                  </p>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Your Communities */}
@@ -146,21 +149,6 @@ export default function FeedSidebar() {
         )}
       </div>
 
-      {/* Promo Card */}
-      <div className="relative rounded-3xl overflow-hidden aspect-[4/5] bg-primary group cursor-pointer">
-        <div className="absolute inset-0 bg-gradient-to-t from-primary via-primary/80 to-primary/40 opacity-60 mix-blend-overlay transition-transform duration-700 group-hover:scale-110" />
-        <div className="absolute bottom-0 left-0 p-6 text-on-primary">
-          <span className="inline-block bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest mb-3">
-            Live Session
-          </span>
-          <h5 className="text-2xl font-black leading-tight mb-2">
-            Groupys Studio Sessions: NYC
-          </h5>
-          <p className="text-sm opacity-90 font-medium">
-            Join the waitlist for the exclusive rooftop vinyl night.
-          </p>
-        </div>
-      </div>
     </aside>
   );
 }

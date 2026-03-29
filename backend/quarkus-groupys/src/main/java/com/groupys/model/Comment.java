@@ -5,7 +5,11 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "comments")
+@Table(name = "comments", indexes = {
+    @Index(name = "idx_comments_post_id", columnList = "post_id"),
+    @Index(name = "idx_comments_author_id", columnList = "author_id"),
+    @Index(name = "idx_comments_parent_id", columnList = "parent_comment_id")
+})
 public class Comment {
 
     @Id

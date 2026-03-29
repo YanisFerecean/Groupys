@@ -7,9 +7,12 @@ import com.groupys.model.Conversation;
 import com.groupys.model.ConversationParticipant;
 import com.groupys.model.Message;
 import com.groupys.model.User;
+import com.groupys.model.Friendship;
 import com.groupys.repository.ConversationRepository;
+import com.groupys.repository.FriendshipRepository;
 import com.groupys.repository.MessageRepository;
 import com.groupys.repository.UserRepository;
+import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -41,6 +44,9 @@ public class ChatService {
     UserRepository userRepository;
 
     @Inject
+    FriendshipRepository friendshipRepository;
+
+    @Inject
     DiscoveryService discoveryService;
 
     // ── Rate limiting ─────────────────────────────────────────────────────────
@@ -61,6 +67,12 @@ public class ChatService {
         if (bucket[0] > RATE_LIMIT_MAX) {
             throw new jakarta.ws.rs.ClientErrorException("Rate limit exceeded: too many messages", 429);
         }
+    }
+
+    @Scheduled(every = "60s")
+    void evictStaleRateLimitEntries() {
+        long now = System.currentTimeMillis();
+        rateLimitMap.entrySet().removeIf(e -> now - e.getValue()[1] >= RATE_LIMIT_WINDOW_MS);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -198,10 +210,14 @@ public class ChatService {
         return conversationRepository.findDirectConversation(me.id, target.id)
                 .map(c -> toConversationDto(c, me.id))
                 .orElseGet(() -> {
+                    boolean areFriends = friendshipRepository.findBetween(me.id, target.id)
+                            .map(f -> f.status == Friendship.Status.ACCEPTED)
+                            .orElse(false);
+
                     Conversation conv = new Conversation();
                     conv.isGroup = false;
-                    conv.requestStatus = REQUEST_STATUS_PENDING;
-                    conv.requestedByUser = me;
+                    conv.requestStatus = areFriends ? REQUEST_STATUS_ACCEPTED : REQUEST_STATUS_PENDING;
+                    conv.requestedByUser = areFriends ? null : me;
                     conversationRepository.persist(conv);
 
                     ConversationParticipant p1 = new ConversationParticipant();
@@ -333,41 +349,30 @@ public class ChatService {
 
     public List<MessageResDto> getMissedMessages(String clerkId, Instant since) {
         User user = requireUserByClerkId(clerkId);
-        List<Conversation> convs = conversationRepository.findByUserId(user.id);
+        // Cap at 100 most-recent conversations to bound the sync query scope
+        List<Conversation> convs = conversationRepository.findByUserIdPaged(user.id, 100, null);
         if (convs.isEmpty()) return List.of();
         List<UUID> ids = convs.stream().map(c -> c.id).toList();
         return messageRepository.findMissedMessages(ids, user.id, since)
                 .stream().map(this::toMessageDto).collect(Collectors.toList());
     }
 
-    public List<UUID> getParticipantUserIds(UUID conversationId) {
-        Conversation conv = conversationRepository.findByIdOptional(conversationId).orElse(null);
-        if (conv == null) return List.of();
-        return conv.participants.stream().map(cp -> cp.user.id).collect(Collectors.toList());
-    }
-
-    public String getClerkIdByUserId(UUID userId) {
-        return userRepository.findByIdOptional(userId).map(u -> u.clerkId).orElse(null);
+    /**
+     * Returns a userId->clerkId map for all participants in the given conversation.
+     * Uses a single JOIN query — avoids N+1 individual user lookups.
+     */
+    public Map<UUID, String> getParticipantClerkIds(UUID conversationId) {
+        return conversationRepository.findParticipantUserIdToClerkId(conversationId);
     }
 
     /**
      * Returns the clerkIds of all users who share at least one conversation with the given user,
-     * excluding the user themselves. Uses two queries instead of N+1.
+     * excluding the user themselves. Uses a single JOIN query instead of loading all conversations.
      */
     public List<String> getConversationPartnerClerkIds(String clerkId) {
         User user = requireUserByClerkId(clerkId);
-        List<Conversation> convs = conversationRepository.findByUserId(user.id);
-        if (convs.isEmpty()) return List.of();
-
-        List<UUID> partnerIds = convs.stream()
-                .flatMap(c -> c.participants.stream())
-                .map(cp -> cp.user.id)
-                .filter(id -> !id.equals(user.id))
-                .distinct()
-                .toList();
-
+        List<UUID> partnerIds = conversationRepository.findAllConversationPartnerIds(user.id);
         if (partnerIds.isEmpty()) return List.of();
-
         return new java.util.ArrayList<>(userRepository.findClerkIdsByUserIds(partnerIds).values());
     }
 

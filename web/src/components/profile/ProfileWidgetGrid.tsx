@@ -35,6 +35,7 @@ interface ProfileWidgetGridProps {
 
 const WIDGET_COLOR_KEY: Partial<Record<WidgetType, keyof ProfileCustomization>> = {
   topAlbums: "albumsContainerColor",
+  currentlyListening: "currentlyListeningContainerColor",
   topSongs: "songsContainerColor",
   topArtists: "artistsContainerColor",
   lastRatedAlbum: "lastRatedAlbumContainerColor",
@@ -199,7 +200,7 @@ function renderWidget(
     case "topAlbums":
       return <TopAlbumsWidget albums={profile.topAlbums} containerColor={profile.albumsContainerColor} size={size} />;
     case "currentlyListening":
-      return <CurrentlyListeningWidget track={profile.currentlyListening} spotifyConnected={spotifyConnected} />;
+      return <CurrentlyListeningWidget track={profile.currentlyListening} spotifyConnected={spotifyConnected} containerColor={profile.currentlyListeningContainerColor} size={size} />;
     case "topSongs":
       return <TopSongsWidget songs={profile.topSongs} containerColor={profile.songsContainerColor} size={size} />;
     case "topArtists":

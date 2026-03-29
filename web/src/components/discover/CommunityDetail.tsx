@@ -10,6 +10,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import TurndownService from "turndown";
 import MarkdownContent from "@/components/ui/MarkdownContent";
 import AuthMedia from "@/components/ui/AuthMedia";
+import { resizeImage } from "@/lib/imageResize";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
 
@@ -22,6 +23,7 @@ interface CommunityRes {
   genre: string;
   country: string;
   imageUrl: string;
+  bannerUrl: string | null;
   tags: string[];
   artistId: number;
   memberCount: number;
@@ -39,11 +41,16 @@ interface MemberRes {
   joinedAt: string;
 }
 
+interface PostMedia {
+  url: string;
+  type: string;
+  order: number;
+}
+
 interface PostRes {
   id: string;
   content: string;
-  mediaUrl: string | null;
-  mediaType: string | null;
+  media: PostMedia[];
   communityId: string;
   communityName: string;
   authorId: string;
@@ -143,14 +150,14 @@ function PostCard({
   onDelete?: (postId: string) => void;
 }) {
   const router = useRouter();
-  const isImage = post.mediaType?.startsWith("image/");
-  const isVideo = post.mediaType?.startsWith("video/");
+  const firstMedia = post.media?.[0];
+  const isImage = firstMedia?.type?.startsWith("image/");
+  const isVideo = firstMedia?.type?.startsWith("video/");
   const isOwner = !!communityOwnerId && communityOwnerId === post.authorId;
   const canDelete =
     !!onDelete &&
     (currentUserId === post.authorId ||
       currentUserId === communityOwnerId);
-  const isAudio = post.mediaType?.startsWith("audio/");
 
   return (
     <div
@@ -223,30 +230,15 @@ function PostCard({
       )}
 
       {/* Media */}
-      {post.mediaUrl && isImage && (
-        <div className="px-4 pb-3">
-          <AuthMedia
-            src={`${API_URL}${post.mediaUrl.replace(/^\/api/, "")}`}
-            type="image"
-            className="w-full rounded-xl"
-          />
-        </div>
-      )}
-      {post.mediaUrl && isVideo && (
-        <div className="px-4 pb-3">
-          <AuthMedia
-            src={`${API_URL}${post.mediaUrl.replace(/^\/api/, "")}`}
-            type="video"
-            className="w-full rounded-xl"
-          />
-        </div>
-      )}
-      {post.mediaUrl && isAudio && (
-        <div className="px-4 pb-3">
-          <AuthMedia
-            src={`${API_URL}${post.mediaUrl.replace(/^\/api/, "")}`}
-            type="audio"
-          />
+      {post.media?.length > 0 && (
+        <div className="px-4 pb-3 space-y-2">
+          {post.media.map((m, i) => {
+            const src = `${API_URL}${m.url.replace(/^\/api/, "")}`;
+            if (m.type.startsWith("image/")) return <AuthMedia key={i} src={src} type="image" className="w-full max-h-96 object-contain rounded-xl" />;
+            if (m.type.startsWith("video/")) return <AuthMedia key={i} src={src} type="video" className="w-full rounded-xl" />;
+            if (m.type.startsWith("audio/")) return <AuthMedia key={i} src={src} type="audio" />;
+            return null;
+          })}
         </div>
       )}
 
@@ -295,12 +287,15 @@ function PostCard({
           {post.dislikeCount}
         </button>
 
-        <span className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-on-surface-variant ml-auto">
+        <button
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-on-surface-variant hover:bg-surface-container-high transition-colors ml-auto"
+          onClick={(e) => { e.stopPropagation(); router.push(`/discover/post/${post.id}`); }}
+        >
           <span className="material-symbols-outlined text-base">
             chat_bubble_outline
           </span>
           {post.commentCount > 0 ? post.commentCount : 0}
-        </span>
+        </button>
       </div>
     </div>
   );
@@ -711,6 +706,8 @@ export default function CommunityDetail({ id }: { id: string }) {
   const [joining, setJoining] = useState(false);
   const [posting, setPosting] = useState(false);
   const [membersExpanded, setMembersExpanded] = useState(false);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest" | "most_liked" | "most_disliked" | "most_commented">("newest");
 
   const sortedPosts = useMemo(() => {
@@ -786,6 +783,29 @@ export default function CommunityDetail({ id }: { id: string }) {
     };
   }, [id, getToken]);
 
+  const handleBannerUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !community) return;
+    setUploadingBanner(true);
+    try {
+      const token = await getToken();
+      const resized = await resizeImage(file, 1500, 500, true);
+      const formData = new FormData();
+      formData.append("file", resized);
+      const res = await fetch(`${API_URL}/communities/${community.id}/banner`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      if (res.ok) setCommunity(await res.json());
+    } catch {
+      // ignore
+    } finally {
+      setUploadingBanner(false);
+      e.target.value = "";
+    }
+  }, [community, getToken]);
+
   const handleToggleJoin = useCallback(async () => {
     setJoining(true);
     try {
@@ -820,7 +840,7 @@ export default function CommunityDetail({ id }: { id: string }) {
         const token = await getToken();
         const formData = new FormData();
         formData.append("content", content);
-        if (file) formData.append("file", file);
+        if (file) formData.append("files", await resizeImage(file, 800, 800));
 
         const res = await fetch(`${API_URL}/posts/community/${id}`, {
           method: "POST",
@@ -932,13 +952,43 @@ export default function CommunityDetail({ id }: { id: string }) {
       <div
         className={`relative h-64 sm:h-80 lg:h-96 -mx-px overflow-hidden rounded-b-3xl lg:rounded-3xl lg:mt-6 lg:mx-6 bg-gradient-to-br ${heroGradient}`}
       >
-        <span
-          className="material-symbols-outlined absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white/5 select-none pointer-events-none"
-          style={{ fontSize: 240, fontVariationSettings: "'FILL' 1" }}
-        >
-          group
-        </span>
+        {community.bannerUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={`${API_URL}${community.bannerUrl.replace(/^\/api/, "")}`}
+            alt={community.name}
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        ) : (
+          <span
+            className="material-symbols-outlined absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white/5 select-none pointer-events-none"
+            style={{ fontSize: 240, fontVariationSettings: "'FILL' 1" }}
+          >
+            group
+          </span>
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+        {currentMember?.role === "owner" && (
+          <>
+            <input
+              ref={bannerInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleBannerUpload}
+            />
+            <button
+              onClick={() => bannerInputRef.current?.click()}
+              disabled={uploadingBanner}
+              className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/40 backdrop-blur-md text-white text-xs font-semibold hover:bg-black/60 transition-colors disabled:opacity-50"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
+                {uploadingBanner ? "hourglass_empty" : "add_photo_alternate"}
+              </span>
+              {uploadingBanner ? "Uploading…" : "Change Banner"}
+            </button>
+          </>
+        )}
         <div className="absolute bottom-0 left-0 right-0 px-6 lg:px-8 pb-6">
           <button
             onClick={() => router.back()}

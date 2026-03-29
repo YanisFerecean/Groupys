@@ -38,8 +38,17 @@ public class CommentService {
     public List<CommentResDto> getByPost(UUID postId, String clerkId) {
         User user = userRepository.findByClerkId(clerkId).orElse(null);
         List<Comment> all = commentRepository.findByPost(postId);
+        if (all.isEmpty()) return List.of();
 
-        // Group by parent
+        // Batch-load all reaction data in 3 queries regardless of comment count
+        List<UUID> commentIds = all.stream().map(c -> c.id).toList();
+        Map<UUID, Long> likesMap    = commentReactionRepository.countsByCommentIdsAndType(commentIds, "like");
+        Map<UUID, Long> dislikesMap = commentReactionRepository.countsByCommentIdsAndType(commentIds, "dislike");
+        Map<UUID, String> userReactionMap = user != null
+                ? commentReactionRepository.findUserReactionsByCommentIds(commentIds, user.id)
+                : Map.of();
+
+        // Group by parent in memory
         Map<UUID, List<Comment>> byParent = new HashMap<>();
         List<Comment> topLevel = new ArrayList<>();
         for (Comment c : all) {
@@ -50,15 +59,21 @@ public class CommentService {
             }
         }
 
-        return buildTree(topLevel, byParent, user);
+        return buildTree(topLevel, byParent, user, likesMap, dislikesMap, userReactionMap);
     }
 
-    private List<CommentResDto> buildTree(List<Comment> comments, Map<UUID, List<Comment>> byParent, User user) {
+    private List<CommentResDto> buildTree(
+            List<Comment> comments,
+            Map<UUID, List<Comment>> byParent,
+            User user,
+            Map<UUID, Long> likesMap,
+            Map<UUID, Long> dislikesMap,
+            Map<UUID, String> userReactionMap) {
         return comments.stream()
                 .map(c -> {
                     List<Comment> children = byParent.getOrDefault(c.id, List.of());
-                    List<CommentResDto> replies = buildTree(children, byParent, user);
-                    return toDto(c, user, replies);
+                    List<CommentResDto> replies = buildTree(children, byParent, user, likesMap, dislikesMap, userReactionMap);
+                    return toDto(c, userReactionMap.get(c.id), likesMap.getOrDefault(c.id, 0L), dislikesMap.getOrDefault(c.id, 0L), replies);
                 })
                 .sorted(Comparator.comparingLong(CommentResDto::likeCount).reversed()
                         .thenComparing(CommentResDto::createdAt))
@@ -85,7 +100,7 @@ public class CommentService {
 
         commentRepository.persist(comment);
         discoveryService.refreshAfterCommunityActivity(post.community.id);
-        return toDto(comment, author, List.of());
+        return toDto(comment, null, 0L, 0L, List.of());
     }
 
     @Transactional
@@ -114,14 +129,19 @@ public class CommentService {
 
         discoveryService.refreshAfterCommunityActivity(comment.post.community.id);
 
-        // Rebuild replies for this comment
+        // Single-comment response — per-comment queries are acceptable here (not N+1)
+        long likes    = commentReactionRepository.countByCommentAndType(commentId, "like");
+        long dislikes = commentReactionRepository.countByCommentAndType(commentId, "dislike");
+        String userReaction = commentReactionRepository.findByCommentAndUser(commentId, user.id)
+                .map(r -> r.reactionType).orElse(null);
+
         List<Comment> children = commentRepository.findByParent(commentId);
         List<CommentResDto> replies = children.stream()
-                .map(c -> toDto(c, user, List.of()))
+                .map(c -> toDto(c, null, 0L, 0L, List.of()))
                 .sorted(Comparator.comparingLong(CommentResDto::likeCount).reversed())
                 .collect(Collectors.toList());
 
-        return toDto(comment, user, replies);
+        return toDto(comment, userReaction, likes, dislikes, replies);
     }
 
     @Transactional
@@ -133,37 +153,48 @@ public class CommentService {
         if (!comment.author.id.equals(user.id)) {
             throw new jakarta.ws.rs.ForbiddenException("Not the author");
         }
+        UUID postId = comment.post.id;
         UUID communityId = comment.post.community.id;
-        deleteRecursive(comment);
+        deleteRecursive(comment, postId);
         discoveryService.refreshAfterCommunityActivity(communityId);
     }
 
-    private void deleteRecursive(Comment comment) {
-        List<Comment> children = commentRepository.findByParent(comment.id);
-        for (Comment child : children) {
-            deleteRecursive(child);
-        }
-        commentReactionRepository.delete("comment.id", comment.id);
-        commentRepository.delete(comment);
+    /**
+     * Loads all comments for the post once, collects the target comment and all its
+     * descendants in memory, then issues a single batch DELETE per table — instead of
+     * the previous recursive per-row deletes.
+     */
+    private void deleteRecursive(Comment root, UUID postId) {
+        List<Comment> allForPost = commentRepository.findByPost(postId);
+        List<UUID> toDelete = new ArrayList<>();
+        toDelete.add(root.id);
+        collectDescendantIds(root.id, allForPost, toDelete);
+        commentReactionRepository.deleteByCommentIds(toDelete);
+        commentRepository.deleteByIds(toDelete);
     }
 
-    public void deleteAllByPost(UUID postId) {
-        List<Comment> all = commentRepository.findByPost(postId);
+    private void collectDescendantIds(UUID parentId, List<Comment> all, List<UUID> acc) {
         for (Comment c : all) {
-            commentReactionRepository.delete("comment.id", c.id);
+            if (c.parentComment != null && c.parentComment.id.equals(parentId)) {
+                acc.add(c.id);
+                collectDescendantIds(c.id, all, acc);
+            }
+        }
+    }
+
+    /**
+     * Deletes all comments (and their reactions) for a post using batch queries —
+     * previously issued one DELETE per comment reaction.
+     */
+    public void deleteAllByPost(UUID postId) {
+        List<UUID> commentIds = commentRepository.findIdsByPost(postId);
+        if (!commentIds.isEmpty()) {
+            commentReactionRepository.deleteByCommentIds(commentIds);
         }
         commentRepository.delete("post.id", postId);
     }
 
-    private CommentResDto toDto(Comment comment, User currentUser, List<CommentResDto> replies) {
-        long likes = commentReactionRepository.countByCommentAndType(comment.id, "like");
-        long dislikes = commentReactionRepository.countByCommentAndType(comment.id, "dislike");
-        String userReaction = null;
-        if (currentUser != null) {
-            userReaction = commentReactionRepository.findByCommentAndUser(comment.id, currentUser.id)
-                    .map(r -> r.reactionType)
-                    .orElse(null);
-        }
+    private CommentResDto toDto(Comment comment, String userReaction, long likes, long dislikes, List<CommentResDto> replies) {
         return new CommentResDto(
                 comment.id,
                 comment.content,

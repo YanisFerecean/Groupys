@@ -12,6 +12,7 @@ export interface Conversation {
   isGroup: boolean;
   groupName: string | null;
   participants: Participant[];
+  requestStatus: "ACCEPTED" | "PENDING_INCOMING" | "PENDING_OUTGOING";
   lastMessage: string | null;
   lastMessageAt: string | null;
   unreadCount: number;

@@ -11,9 +11,10 @@ interface MessageInputProps {
   conversationId: string;
   onSend: (content: string) => void;
   disabled?: boolean;
+  rateLimitError?: boolean;
 }
 
-export function MessageInput({ conversationId, onSend, disabled }: MessageInputProps) {
+export function MessageInput({ conversationId, onSend, disabled, rateLimitError }: MessageInputProps) {
   const [content, setContent] = useState("");
   const [emojiOpen, setEmojiOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -114,6 +115,11 @@ export function MessageInput({ conversationId, onSend, disabled }: MessageInputP
 
   return (
     <div className="p-4 bg-surface border-t border-surface-container-high">
+      {rateLimitError && (
+        <p className="text-xs text-center text-amber-600 dark:text-amber-400 font-medium mb-2">
+          Slow down! You&apos;re sending messages too fast.
+        </p>
+      )}
       <div className="flex items-center gap-2 max-w-4xl mx-auto">
         <div className="flex-1 relative">
           <textarea

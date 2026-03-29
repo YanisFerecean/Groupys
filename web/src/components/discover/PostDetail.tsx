@@ -11,11 +11,16 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
+interface PostMedia {
+  url: string;
+  type: string;
+  order: number;
+}
+
 interface PostRes {
   id: string;
   content: string;
-  mediaUrl: string | null;
-  mediaType: string | null;
+  media: PostMedia[];
   communityId: string;
   communityName: string;
   authorId: string;
@@ -406,9 +411,6 @@ export default function PostDetail({ id }: { id: string }) {
     );
   }
 
-  const isImage = post.mediaType?.startsWith("image/");
-  const isVideo = post.mediaType?.startsWith("video/");
-  const isAudio = post.mediaType?.startsWith("audio/");
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-6 pb-12">
@@ -422,9 +424,22 @@ export default function PostDetail({ id }: { id: string }) {
 
       {/* Post card */}
       <div className="bg-surface-container-lowest/65 border border-white/80 rounded-2xl overflow-hidden shadow-sm">
+        {/* Community */}
+        <div className="px-5 pt-4 pb-1">
+          <button
+            onClick={() => router.push(`/discover/community/${post.communityId}`)}
+            className="flex items-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors"
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
+              group
+            </span>
+            {post.communityName}
+          </button>
+        </div>
+
         {/* Author header */}
         <div
-          className="flex items-center gap-3 px-5 pt-5 pb-3 cursor-pointer"
+          className="flex items-center gap-3 px-5 pt-2 pb-3 cursor-pointer"
           onClick={() => router.push(`/profile/${post.authorUsername}`)}
         >
           {post.authorProfileImage ? (
@@ -461,30 +476,15 @@ export default function PostDetail({ id }: { id: string }) {
         )}
 
         {/* Media */}
-        {post.mediaUrl && isImage && (
-          <div className="px-5 pb-4">
-            <AuthMedia
-              src={`${API_URL}${post.mediaUrl.replace(/^\/api/, "")}`}
-              type="image"
-              className="w-full max-h-[600px] object-cover rounded-xl"
-            />
-          </div>
-        )}
-        {post.mediaUrl && isVideo && (
-          <div className="px-5 pb-4">
-            <AuthMedia
-              src={`${API_URL}${post.mediaUrl.replace(/^\/api/, "")}`}
-              type="video"
-              className="w-full max-h-[600px] rounded-xl"
-            />
-          </div>
-        )}
-        {post.mediaUrl && isAudio && (
-          <div className="px-5 pb-4">
-            <AuthMedia
-              src={`${API_URL}${post.mediaUrl.replace(/^\/api/, "")}`}
-              type="audio"
-            />
+        {post.media?.length > 0 && (
+          <div className="px-5 pb-4 space-y-3">
+            {post.media.map((m, i) => {
+              const src = `${API_URL}${m.url.replace(/^\/api/, "")}`;
+              if (m.type.startsWith("image/")) return <AuthMedia key={i} src={src} type="image" className="w-full max-h-[500px] object-contain rounded-xl" />;
+              if (m.type.startsWith("video/")) return <AuthMedia key={i} src={src} type="video" className="w-full max-h-[600px] rounded-xl" />;
+              if (m.type.startsWith("audio/")) return <AuthMedia key={i} src={src} type="audio" />;
+              return null;
+            })}
           </div>
         )}
 

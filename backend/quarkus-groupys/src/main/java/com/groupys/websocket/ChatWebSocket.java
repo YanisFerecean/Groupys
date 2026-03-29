@@ -250,15 +250,11 @@ public class ChatWebSocket {
         Map<String, Object> messageData = buildMessageData(saved, tempId);
         String json = toJson(WebSocketMessage.messageNew(messageData));
 
-        List<UUID> participantIds = chatService.getParticipantUserIds(conversationId);
-        for (UUID pid : participantIds) {
+        chatService.getParticipantClerkIds(conversationId).forEach((pid, participantClerkId) -> {
             if (!pid.equals(sender.id)) {
-                String participantClerkId = chatService.getClerkIdByUserId(pid);
-                if (participantClerkId != null) {
-                    presenceService.sendTo(participantClerkId, json);
-                }
+                presenceService.sendTo(participantClerkId, json);
             }
-        }
+        });
     }
 
     private void handleTyping(User user, Map<String, Object> msg, boolean isTyping) {
@@ -273,13 +269,9 @@ public class ChatWebSocket {
         String json = toJson(WebSocketMessage.typing(
                 conversationId, user.id.toString(), user.username, isTyping));
 
-        List<UUID> participantIds = chatService.getParticipantUserIds(conversationId);
-        for (UUID pid : participantIds) {
-            if (!pid.equals(user.id)) {
-                String clerkId = chatService.getClerkIdByUserId(pid);
-                if (clerkId != null) presenceService.sendTo(clerkId, json);
-            }
-        }
+        chatService.getParticipantClerkIds(conversationId).forEach((pid, clerkId) -> {
+            if (!pid.equals(user.id)) presenceService.sendTo(clerkId, json);
+        });
     }
 
     private void handleReadReceipt(User user, Map<String, Object> msg) {
@@ -298,13 +290,9 @@ public class ChatWebSocket {
         String readAt = Instant.now().toString();
         String json = toJson(WebSocketMessage.readReceipt(conversationId, user.id.toString(), readAt));
 
-        List<UUID> participantIds = chatService.getParticipantUserIds(conversationId);
-        for (UUID pid : participantIds) {
-            if (!pid.equals(user.id)) {
-                String clerkId = chatService.getClerkIdByUserId(pid);
-                if (clerkId != null) presenceService.sendTo(clerkId, json);
-            }
-        }
+        chatService.getParticipantClerkIds(conversationId).forEach((pid, clerkId) -> {
+            if (!pid.equals(user.id)) presenceService.sendTo(clerkId, json);
+        });
     }
 
     private void handleSync(WebSocketConnection connection, User user) {
