@@ -43,6 +43,27 @@ public class StorageService {
         }
     }
 
+    public String uploadToBucket(String bucket, String fileName, String contentType, InputStream data, long size) {
+        try {
+            boolean exists = minioClient.bucketExists(
+                    BucketExistsArgs.builder().bucket(bucket).build());
+            if (!exists) {
+                minioClient.makeBucket(MakeBucketArgs.builder().bucket(bucket).build());
+            }
+            String key = UUID.randomUUID() + "-" + fileName;
+            minioClient.putObject(
+                    PutObjectArgs.builder()
+                            .bucket(bucket)
+                            .object(key)
+                            .stream(data, size, -1)
+                            .contentType(contentType)
+                            .build());
+            return key;
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to upload file to bucket " + bucket, e);
+        }
+    }
+
     public void delete(String mediaUrl) {
         if (mediaUrl == null || mediaUrl.isBlank()) return;
         try {

@@ -6,7 +6,12 @@ import com.groupys.dto.CommunityResDto;
 import com.groupys.dto.CommunityUpdateDto;
 import com.groupys.service.CommunityService;
 import com.groupys.service.StorageService;
+import io.minio.GetObjectArgs;
+import io.minio.MinioClient;
+import io.minio.StatObjectArgs;
+import io.minio.StatObjectResponse;
 import io.quarkus.security.Authenticated;
+import jakarta.annotation.security.PermitAll;
 import jakarta.inject.Inject;
 import org.jboss.resteasy.reactive.RestForm;
 import org.jboss.resteasy.reactive.multipart.FileUpload;
@@ -38,6 +43,9 @@ public class CommunityResource {
     StorageService storageService;
 
     @Inject
+    MinioClient minioClient;
+
+    @Inject
     JsonWebToken jwt;
 
     @GET
@@ -46,9 +54,22 @@ public class CommunityResource {
     }
 
     @GET
+    @Path("/search")
+    public List<CommunityResDto> search(@QueryParam("q") String query,
+                                        @QueryParam("limit") @DefaultValue("10") int limit) {
+        return communityService.search(query, limit);
+    }
+
+    @GET
     @Path("/mine")
     public List<CommunityResDto> getMine() {
         return communityService.getJoinedCommunities(jwt.getSubject());
+    }
+
+    @GET
+    @Path("/trending")
+    public List<CommunityResDto> getTrending(@QueryParam("limit") @DefaultValue("5") int limit) {
+        return communityService.getTrending(limit);
     }
 
     @GET
@@ -128,6 +149,43 @@ public class CommunityResource {
     public Response delete(@PathParam("id") UUID id) {
         communityService.delete(id);
         return Response.noContent().build();
+    }
+
+    @POST
+    @Path("/{id}/banner")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    public CommunityResDto uploadBanner(@PathParam("id") UUID id, @RestForm("file") FileUpload file) {
+        if (file == null || file.size() == 0) {
+            throw new BadRequestException("No file provided");
+        }
+        try {
+            InputStream is = Files.newInputStream(file.uploadedFile());
+            String key = storageService.uploadToBucket("communitybanners", file.fileName(), file.contentType(), is, file.size());
+            is.close();
+            return communityService.updateBanner(id, "/api/communities/banner/" + key);
+        } catch (Exception e) {
+            throw new InternalServerErrorException("Banner upload failed", e);
+        }
+    }
+
+    @GET
+    @Path("/banner/{key}")
+    @Produces(MediaType.WILDCARD)
+    @PermitAll
+    public Response getBanner(@PathParam("key") String key) {
+        try {
+            StatObjectResponse stat = minioClient.statObject(
+                    StatObjectArgs.builder().bucket("communitybanners").object(key).build());
+            InputStream stream = minioClient.getObject(
+                    GetObjectArgs.builder().bucket("communitybanners").object(key).build());
+            return Response.ok(stream)
+                    .header("Content-Type", stat.contentType())
+                    .header("Content-Length", stat.size())
+                    .header("Cache-Control", "public, max-age=31536000, immutable")
+                    .build();
+        } catch (Exception e) {
+            throw new NotFoundException("Banner not found");
+        }
     }
 
     @POST
