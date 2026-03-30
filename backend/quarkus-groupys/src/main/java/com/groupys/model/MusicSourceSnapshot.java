@@ -35,8 +35,17 @@ public class MusicSourceSnapshot {
     public String sourceCursor;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "payload_json", nullable = false, columnDefinition = "jsonb")
+    @Column(name = "payload_json", columnDefinition = "jsonb")
     public String payloadJson;
+
+    @Column(name = "object_key", columnDefinition = "TEXT")
+    public String objectKey;
+
+    @Column(name = "payload_size_bytes")
+    public Long payloadSizeBytes;
+
+    @Column(name = "checksum", length = 64)
+    public String checksum;
 
     @Column(name = "fetched_at", nullable = false)
     public Instant fetchedAt;
