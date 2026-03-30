@@ -3,6 +3,7 @@ package com.groupys.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.groupys.config.PerformanceFeatureFlags;
 import com.groupys.client.SpotifyApiClient;
 import com.groupys.dto.*;
 import com.groupys.dto.spotify.SpotifyTopArtistsResponse;
@@ -23,7 +24,13 @@ import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -37,6 +44,8 @@ public class DiscoveryService {
     private static final String SOURCE_SPOTIFY_TOP_TRACKS = "SPOTIFY_TOP_TRACKS";
     private static final String SOURCE_COMMUNITY_MEMBERSHIP = "COMMUNITY_MEMBERSHIP";
     private static final int CACHE_TTL_HOURS = 12;
+    private static final DateTimeFormatter YEAR_FORMAT = DateTimeFormatter.ofPattern("yyyy").withZone(ZoneOffset.UTC);
+    private static final DateTimeFormatter MONTH_FORMAT = DateTimeFormatter.ofPattern("MM").withZone(ZoneOffset.UTC);
 
     @Inject
     UserRepository userRepository;
@@ -123,6 +132,18 @@ public class DiscoveryService {
     @Inject
     DiscoveryService self;
 
+    @Inject
+    PerformanceFeatureFlags flags;
+
+    @Inject
+    DiscoveryRedisCacheService redisCacheService;
+
+    @Inject
+    TasteEmbeddingService tasteEmbeddingService;
+
+    @Inject
+    StorageService storageService;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
     private volatile boolean shuttingDown;
 
@@ -138,11 +159,13 @@ public class DiscoveryService {
         String artistsPayload = fetchSpotifyPayload(() -> spotifyApiClient.getTopArtists("Bearer " + token, TOP_ARTIST_LIMIT, "medium_term"));
         String tracksPayload = fetchSpotifyPayload(() -> spotifyApiClient.getTopTracks("Bearer " + token, TOP_TRACK_LIMIT, "medium_term"));
 
-        SpotifyTopArtistsResponse topArtists = readValue(artistsPayload, SpotifyTopArtistsResponse.class);
-        SpotifyTopTracksResponse topTracks = readValue(tracksPayload, SpotifyTopTracksResponse.class);
+        MusicSourceSnapshot artistsSnapshot = persistSnapshot(user, SOURCE_SPOTIFY_TOP_ARTISTS, "TOP_ARTISTS", artistsPayload, "PROCESSED", null);
+        MusicSourceSnapshot tracksSnapshot = persistSnapshot(user, SOURCE_SPOTIFY_TOP_TRACKS, "TOP_TRACKS", tracksPayload, "PROCESSED", null);
 
-        persistSnapshot(user, SOURCE_SPOTIFY_TOP_ARTISTS, "TOP_ARTISTS", artistsPayload, "PROCESSED", null);
-        persistSnapshot(user, SOURCE_SPOTIFY_TOP_TRACKS, "TOP_TRACKS", tracksPayload, "PROCESSED", null);
+        String effectiveArtistsPayload = resolveSnapshotPayloadForProcessing(artistsSnapshot, artistsPayload);
+        String effectiveTracksPayload = resolveSnapshotPayloadForProcessing(tracksSnapshot, tracksPayload);
+        SpotifyTopArtistsResponse topArtists = readValue(effectiveArtistsPayload, SpotifyTopArtistsResponse.class);
+        SpotifyTopTracksResponse topTracks = readValue(effectiveTracksPayload, SpotifyTopTracksResponse.class);
 
         userArtistPreferenceRepository.deleteByUser(user.id);
         userGenrePreferenceRepository.deleteByUser(user.id);
@@ -174,10 +197,30 @@ public class DiscoveryService {
     public List<SuggestedCommunityResDto> getSuggestedCommunities(String clerkId, int limit, boolean refresh) {
         User user = getUserByClerkId(clerkId);
         int pageSize = Math.max(limit, 1);
-        if (refresh || communityRecommendationCacheRepository.findFreshByUser(user.id, pageSize).isEmpty()) {
+        if (refresh) {
             refreshForUser(user.id);
         }
-        return communityRecommendationCacheRepository.findFreshByUser(user.id, pageSize).stream()
+        if (flags.redisEnabled() && flags.redisRecommendationReadEnabled()) {
+            List<SuggestedCommunityResDto> redisResult = loadCommunitySuggestionsFromRedis(user.id, pageSize);
+            if (!redisResult.isEmpty()) {
+                return redisResult;
+            }
+        }
+        if (legacyRecommendationPostgresWriteEnabled()) {
+            List<CommunityRecommendationCache> postgresCaches = communityRecommendationCacheRepository.findFreshByUser(user.id, pageSize);
+            if (postgresCaches.isEmpty()) {
+                refreshForUser(user.id);
+                postgresCaches = communityRecommendationCacheRepository.findFreshByUser(user.id, pageSize);
+            }
+            if (!postgresCaches.isEmpty()) {
+                return postgresCaches.stream()
+                        .map(this::toSuggestedCommunity)
+                        .toList();
+            }
+        }
+
+        return computeCommunityRecommendationCaches(user.id).stream()
+                .limit(pageSize)
                 .map(this::toSuggestedCommunity)
                 .toList();
     }
@@ -186,12 +229,36 @@ public class DiscoveryService {
     public List<SuggestedUserResDto> getSuggestedUsers(String clerkId, int limit, boolean refresh) {
         User user = getUserByClerkId(clerkId);
         int pageSize = Math.max(limit, 1);
-        if (refresh || userSimilarityCacheRepository.findFreshByUser(user.id, pageSize).isEmpty()) {
+        if (refresh) {
             refreshForUser(user.id);
         }
         Set<UUID> excludedUserIds = buildExcludedSuggestedUserIds(user.id);
-        return userSimilarityCacheRepository.findFreshByUser(user.id, 100).stream()
-                .filter(cache -> !excludedUserIds.contains(cache.candidateUser.id))
+        if (flags.redisEnabled() && flags.redisRecommendationReadEnabled()) {
+            List<SuggestedUserResDto> redisResult = loadUserSuggestionsFromRedis(user.id, pageSize, excludedUserIds);
+            if (!redisResult.isEmpty()) {
+                return redisResult;
+            }
+        }
+        if (legacyRecommendationPostgresWriteEnabled()) {
+            List<UserSimilarityCache> postgresCaches = userSimilarityCacheRepository.findFreshByUser(user.id, 100).stream()
+                    .filter(cache -> !excludedUserIds.contains(cache.candidateUser.id))
+                    .limit(pageSize)
+                    .toList();
+            if (postgresCaches.isEmpty()) {
+                refreshForUser(user.id);
+                postgresCaches = userSimilarityCacheRepository.findFreshByUser(user.id, 100).stream()
+                        .filter(cache -> !excludedUserIds.contains(cache.candidateUser.id))
+                        .limit(pageSize)
+                        .toList();
+            }
+            if (!postgresCaches.isEmpty()) {
+                return postgresCaches.stream()
+                        .map(this::toSuggestedUser)
+                        .toList();
+            }
+        }
+
+        return computeUserSimilarityCaches(user.id).stream()
                 .limit(pageSize)
                 .map(this::toSuggestedUser)
                 .toList();
@@ -213,11 +280,21 @@ public class DiscoveryService {
         if ("COMMUNITY".equals(action.targetType)) {
             action.targetCommunity = communityRepository.findByIdOptional(targetId)
                     .orElseThrow(() -> new NotFoundException("Community not found"));
-            communityRecommendationCacheRepository.delete("user.id = ?1 and community.id = ?2", user.id, targetId);
+            if (legacyRecommendationPostgresWriteEnabled()) {
+                communityRecommendationCacheRepository.delete("user.id = ?1 and community.id = ?2", user.id, targetId);
+            }
+            if (flags.redisEnabled() && flags.redisRecommendationWriteEnabled()) {
+                redisCacheService.removeCommunityCandidate(user.id, targetId);
+            }
         } else {
             action.targetUser = userRepository.findByIdOptional(targetId)
                     .orElseThrow(() -> new NotFoundException("User not found"));
-            userSimilarityCacheRepository.delete("user.id = ?1 and candidateUser.id = ?2", user.id, targetId);
+            if (legacyRecommendationPostgresWriteEnabled()) {
+                userSimilarityCacheRepository.delete("user.id = ?1 and candidateUser.id = ?2", user.id, targetId);
+            }
+            if (flags.redisEnabled() && flags.redisRecommendationWriteEnabled()) {
+                redisCacheService.removeUserCandidate(user.id, targetId);
+            }
         }
         userDiscoveryActionRepository.persist(action);
     }
@@ -276,7 +353,7 @@ public class DiscoveryService {
                 .forEach(this::refreshForUser);
     }
 
-    @Transactional
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void refreshAfterCommunityActivity(UUID communityId) {
         refreshCommunityProfile(communityId);
         communityMemberRepository.findByCommunity(communityId).stream()
@@ -307,6 +384,9 @@ public class DiscoveryService {
     @Transactional
     public void removeCommunityReferences(UUID communityId, List<UUID> impactedUserIds) {
         communityRecommendationCacheRepository.delete("community.id", communityId);
+        if (flags.redisEnabled() && flags.redisRecommendationWriteEnabled()) {
+            redisCacheService.removeCommunityFromAllUsers(communityId);
+        }
         communityArtistRepository.deleteByCommunity(communityId);
         communityGenreRepository.deleteByCommunity(communityId);
         communityTasteProfileRepository.delete("community.id", communityId);
@@ -332,6 +412,20 @@ public class DiscoveryService {
     }
 
     private int refreshCommunityRecommendations(UUID userId) {
+        List<CommunityRecommendationCache> sortedCaches = computeCommunityRecommendationCaches(userId);
+
+        if (legacyRecommendationPostgresWriteEnabled()) {
+            communityRecommendationCacheRepository.deleteByUser(userId);
+            sortedCaches.forEach(communityRecommendationCacheRepository::persist);
+        }
+        if (flags.redisEnabled() && flags.redisRecommendationWriteEnabled()) {
+            redisCacheService.clearCommunityRecommendations(userId);
+            redisCacheService.writeCommunityRecommendations(userId, sortedCaches);
+        }
+        return sortedCaches.size();
+    }
+
+    List<CommunityRecommendationCache> computeCommunityRecommendationCaches(UUID userId) {
         User user = userRepository.findByIdOptional(userId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
         Map<Long, UserArtistPreference> userArtists = userArtistPreferenceRepository.findByUser(userId).stream()
@@ -342,7 +436,6 @@ public class DiscoveryService {
                 .map(member -> member.community.id)
                 .toList();
         Set<UUID> suppressedCommunityIds = userDiscoveryActionRepository.findSuppressedCommunityIds(userId);
-        communityRecommendationCacheRepository.deleteByUser(userId);
 
         List<CommunityRecommendationCache> caches = new ArrayList<>();
         for (Community community : communityRepository.listDiscoverable()) {
@@ -408,32 +501,37 @@ public class DiscoveryService {
         for (int index = 0; index < sortedCaches.size(); index++) {
             CommunityRecommendationCache cache = sortedCaches.get(index);
             cache.rankPosition = index + 1;
-            communityRecommendationCacheRepository.persist(cache);
         }
-        return caches.size();
+        return sortedCaches;
     }
 
     private int refreshUserSimilarity(UUID userId) {
+        List<UserSimilarityCache> sortedCaches = computeUserSimilarityCaches(userId);
+
+        if (legacyRecommendationPostgresWriteEnabled()) {
+            userSimilarityCacheRepository.deleteByUser(userId);
+            sortedCaches.forEach(userSimilarityCacheRepository::persist);
+        }
+        if (flags.redisEnabled() && flags.redisRecommendationWriteEnabled()) {
+            redisCacheService.clearUserRecommendations(userId);
+            redisCacheService.writeUserRecommendations(userId, sortedCaches);
+        }
+        return sortedCaches.size();
+    }
+
+    List<UserSimilarityCache> computeUserSimilarityCaches(UUID userId) {
         User user = userRepository.findByIdOptional(userId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
         Map<Long, UserArtistPreference> userArtists = userArtistPreferenceRepository.findByUser(userId).stream()
                 .collect(Collectors.toMap(pref -> pref.artist.getId(), pref -> pref, (left, right) -> left, LinkedHashMap::new));
         Map<Long, UserGenrePreference> userGenres = userGenrePreferenceRepository.findByUser(userId).stream()
                 .collect(Collectors.toMap(pref -> pref.genre.id, pref -> pref, (left, right) -> left, LinkedHashMap::new));
-        Set<UUID> followedIds = userFollowRepository.findActiveByFollower(userId).stream()
-                .map(follow -> follow.followedUser.id)
-                .collect(Collectors.toSet());
-        Set<UUID> connectedUserIds = new HashSet<>(conversationRepository.findDirectConversationPartnerIds(userId));
-        Set<UUID> suppressedUserIds = userDiscoveryActionRepository.findSuppressedUserIds(userId);
-        Set<UUID> likedUserIds = userLikeRepository.findLikedUserIds(userId);
-
-        userSimilarityCacheRepository.deleteByUser(userId);
+        Set<UUID> excludedUserIds = buildExcludedSuggestedUserIds(userId);
 
         List<UserSimilarityCache> caches = new ArrayList<>();
-        for (User candidate : userRepository.listDiscoveryVisible(userId)) {
-            if (followedIds.contains(candidate.id) || connectedUserIds.contains(candidate.id)
-                    || suppressedUserIds.contains(candidate.id)
-                    || likedUserIds.contains(candidate.id)) {
+        List<User> candidatePool = resolveDiscoveryCandidates(userId);
+        for (User candidate : candidatePool) {
+            if (excludedUserIds.contains(candidate.id)) {
                 continue;
             }
             rebuildCommunityDerivedPreferences(candidate);
@@ -499,8 +597,7 @@ public class DiscoveryService {
                 .sorted(Comparator.comparingDouble((UserSimilarityCache item) -> item.score).reversed())
                 .limit(100)
                 .toList();
-        sortedCaches.forEach(userSimilarityCacheRepository::persist);
-        return caches.size();
+        return sortedCaches;
     }
 
     private void refreshRelevantCommunityProfiles(UUID userId) {
@@ -688,6 +785,9 @@ public class DiscoveryService {
         }
 
         user.tasteSummaryText = profile.tasteSummaryText;
+        if (flags.vectorReadEnabled() || flags.vectorBootstrapEnabled()) {
+            tasteEmbeddingService.refreshUserEmbedding(user.id);
+        }
     }
 
     private int persistSpotifyArtistPreferences(User user, SpotifyTopArtistsResponse topArtists, Map<Long, Double> genreWeights) {
@@ -808,16 +908,82 @@ public class DiscoveryService {
         }
     }
 
-    private void persistSnapshot(User user, String source, String snapshotType, String payload, String status, String error) {
+    MusicSourceSnapshot persistSnapshot(User user, String source, String snapshotType, String payload, String status, String error) {
         MusicSourceSnapshot snapshot = new MusicSourceSnapshot();
         snapshot.user = user;
         snapshot.source = source;
         snapshot.snapshotType = snapshotType;
-        snapshot.payloadJson = payload;
+        byte[] bytes = payload == null ? new byte[0] : payload.getBytes(StandardCharsets.UTF_8);
+        boolean blobStored = false;
+        if (flags.snapshotBlobWriteEnabled()) {
+            try {
+                String objectKey = buildSnapshotObjectKey(user.id, source, snapshotType);
+                storageService.putObject(
+                        flags.snapshotBucket(),
+                        objectKey,
+                        "application/json",
+                        new ByteArrayInputStream(bytes),
+                        bytes.length
+                );
+                snapshot.objectKey = objectKey;
+                snapshot.payloadSizeBytes = (long) bytes.length;
+                snapshot.checksum = sha256Hex(bytes);
+                blobStored = true;
+            } catch (Exception e) {
+                Log.warnf(e, "Failed to persist snapshot blob for user %s source=%s type=%s", user.id, source, snapshotType);
+            }
+        }
+        if (flags.snapshotPayloadJsonWriteEnabled() || !blobStored) {
+            snapshot.payloadJson = payload;
+        }
         snapshot.processingStatus = status;
         snapshot.processingError = error;
         snapshot.expiresAt = Instant.now().plus(7, ChronoUnit.DAYS);
         musicSourceSnapshotRepository.persist(snapshot);
+        return snapshot;
+    }
+
+    String resolveSnapshotPayloadForProcessing(MusicSourceSnapshot snapshot, String inMemoryFallback) {
+        if (flags.snapshotBlobReadEnabled()) {
+            String resolved = readSnapshotPayload(snapshot);
+            if (resolved != null && !resolved.isBlank()) {
+                return resolved;
+            }
+        }
+        if (snapshot != null && snapshot.payloadJson != null && !snapshot.payloadJson.isBlank()) {
+            return snapshot.payloadJson;
+        }
+        return inMemoryFallback;
+    }
+
+    private String readSnapshotPayload(MusicSourceSnapshot snapshot) {
+        if (snapshot == null) {
+            return null;
+        }
+        if (snapshot.objectKey != null && !snapshot.objectKey.isBlank()) {
+            try (InputStream stream = storageService.getObject(flags.snapshotBucket(), snapshot.objectKey)) {
+                byte[] bytes = stream.readAllBytes();
+                if (isSnapshotBlobValid(snapshot, bytes)) {
+                    return new String(bytes, StandardCharsets.UTF_8);
+                }
+                Log.warnf("Snapshot blob integrity check failed for snapshot %s object=%s; falling back to payload_json",
+                        snapshot.id, snapshot.objectKey);
+            } catch (Exception e) {
+                Log.warnf(e, "Failed to read snapshot blob for snapshot %s object=%s; falling back to payload_json",
+                        snapshot.id, snapshot.objectKey);
+            }
+        }
+        return snapshot.payloadJson;
+    }
+
+    private boolean isSnapshotBlobValid(MusicSourceSnapshot snapshot, byte[] bytes) {
+        if (snapshot.payloadSizeBytes != null && snapshot.payloadSizeBytes.longValue() != bytes.length) {
+            return false;
+        }
+        if (snapshot.checksum != null && !snapshot.checksum.isBlank()) {
+            return snapshot.checksum.equalsIgnoreCase(sha256Hex(bytes));
+        }
+        return true;
     }
 
     private <T> T readValue(String payload, Class<T> clazz) {
@@ -1048,6 +1214,53 @@ public class DiscoveryService {
         return "Recommended from your taste and community activity";
     }
 
+    private List<User> resolveDiscoveryCandidates(UUID userId) {
+        if (flags.vectorReadEnabled() && tasteEmbeddingService.vectorReadyForUser(userId)) {
+            List<UUID> candidateIds = tasteEmbeddingService.findTopKCandidates(userId, flags.vectorCandidateTopK());
+            if (!candidateIds.isEmpty()) {
+                Map<UUID, User> users = userRepository.findByIdsMap(candidateIds);
+                return candidateIds.stream()
+                        .map(users::get)
+                        .filter(Objects::nonNull)
+                        .toList();
+            }
+        }
+        return userRepository.listDiscoveryVisible(userId);
+    }
+
+    private List<SuggestedUserResDto> loadUserSuggestionsFromRedis(UUID userId, int pageSize, Set<UUID> excludedUserIds) {
+        List<DiscoveryRedisCacheService.RankedRecommendation> ranked = redisCacheService.readUserRecommendations(userId, 100);
+        if (ranked.isEmpty()) {
+            return List.of();
+        }
+        List<DiscoveryRedisCacheService.RankedRecommendation> filtered = ranked.stream()
+                .filter(item -> !excludedUserIds.contains(item.id()))
+                .limit(pageSize)
+                .toList();
+        if (filtered.isEmpty()) {
+            return List.of();
+        }
+        List<UUID> ids = filtered.stream().map(DiscoveryRedisCacheService.RankedRecommendation::id).toList();
+        Map<UUID, User> usersById = userRepository.findByIdsMap(ids);
+        return filtered.stream()
+                .map(item -> toSuggestedUser(usersById.get(item.id()), item.score(), item.explanationJson()))
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    private List<SuggestedCommunityResDto> loadCommunitySuggestionsFromRedis(UUID userId, int pageSize) {
+        List<DiscoveryRedisCacheService.RankedRecommendation> ranked = redisCacheService.readCommunityRecommendations(userId, pageSize);
+        if (ranked.isEmpty()) {
+            return List.of();
+        }
+        List<UUID> ids = ranked.stream().map(DiscoveryRedisCacheService.RankedRecommendation::id).toList();
+        Map<UUID, Community> communitiesById = communityRepository.findByIdsMap(ids);
+        return ranked.stream()
+                .map(item -> toSuggestedCommunity(communitiesById.get(item.id()), item.score(), item.explanationJson()))
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
     private SuggestedCommunityResDto toSuggestedCommunity(CommunityRecommendationCache cache) {
         JsonNode explanation = readJson(cache.explanationJson);
         return new SuggestedCommunityResDto(
@@ -1073,6 +1286,34 @@ public class DiscoveryService {
         );
     }
 
+    private SuggestedCommunityResDto toSuggestedCommunity(Community community, double score, String explanationJson) {
+        if (community == null) {
+            return null;
+        }
+        JsonNode explanation = readJson(explanationJson);
+        return new SuggestedCommunityResDto(
+                community.id,
+                community.name,
+                community.description,
+                community.imageUrl,
+                community.bannerUrl,
+                community.iconType,
+                community.iconEmoji,
+                community.iconUrl,
+                community.memberCount,
+                score,
+                explanation.path("explanation").asText("Recommended from your taste and activity"),
+                readTextList(explanation, "reasonCodes"),
+                readMatchList(explanation, "matchedArtists"),
+                readMatchList(explanation, "matchedGenres"),
+                explanation.path("sharedCommunityCount").asInt(0),
+                explanation.path("countryMatch").asBoolean(false),
+                community.createdBy != null ? community.createdBy.username : null,
+                community.createdBy != null ? community.createdBy.displayName : null,
+                community.createdBy != null ? community.createdBy.profileImage : null
+        );
+    }
+
     private SuggestedUserResDto toSuggestedUser(UserSimilarityCache cache) {
         JsonNode explanation = readJson(cache.explanationJson);
         return new SuggestedUserResDto(
@@ -1081,6 +1322,27 @@ public class DiscoveryService {
                 cache.candidateUser.displayName,
                 cache.candidateUser.profileImage,
                 cache.score,
+                explanation.path("explanation").asText("Recommended from your taste and activity"),
+                readTextList(explanation, "reasonCodes"),
+                readMatchList(explanation, "matchedArtists"),
+                readMatchList(explanation, "matchedGenres"),
+                explanation.path("sharedCommunityCount").asInt(0),
+                explanation.path("countryMatch").asBoolean(false),
+                explanation.path("mutualFollowCount").asInt(0)
+        );
+    }
+
+    private SuggestedUserResDto toSuggestedUser(User candidateUser, double score, String explanationJson) {
+        if (candidateUser == null) {
+            return null;
+        }
+        JsonNode explanation = readJson(explanationJson);
+        return new SuggestedUserResDto(
+                candidateUser.id,
+                candidateUser.username,
+                candidateUser.displayName,
+                candidateUser.profileImage,
+                score,
                 explanation.path("explanation").asText("Recommended from your taste and activity"),
                 readTextList(explanation, "reasonCodes"),
                 readMatchList(explanation, "matchedArtists"),
@@ -1189,6 +1451,41 @@ public class DiscoveryService {
         return null;
     }
 
+    private String buildSnapshotObjectKey(UUID userId, String source, String snapshotType) {
+        Instant now = Instant.now();
+        String year = YEAR_FORMAT.format(now);
+        String month = MONTH_FORMAT.format(now);
+        return "%s/%s/%s/%s/%s/%s.json".formatted(
+                userId,
+                sanitizeKeyPart(source),
+                sanitizeKeyPart(snapshotType),
+                year,
+                month,
+                UUID.randomUUID()
+        );
+    }
+
+    private String sanitizeKeyPart(String value) {
+        if (value == null || value.isBlank()) {
+            return "unknown";
+        }
+        return value.trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9._-]", "-");
+    }
+
+    private String sha256Hex(byte[] payload) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(payload);
+            StringBuilder builder = new StringBuilder(hash.length * 2);
+            for (byte b : hash) {
+                builder.append(String.format(Locale.ROOT, "%02x", b));
+            }
+            return builder.toString();
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to calculate snapshot checksum", e);
+        }
+    }
+
     private String resolveCountryValue(String primaryCode, String fallbackCountry) {
         String countryCode = CountryUtil.resolveCountryCode(primaryCode, fallbackCountry);
         return countryCode != null ? countryCode : firstNonBlank(primaryCode, fallbackCountry);
@@ -1200,6 +1497,10 @@ public class DiscoveryService {
             throw new BadRequestException("Unsupported target type");
         }
         return normalized;
+    }
+
+    private boolean legacyRecommendationPostgresWriteEnabled() {
+        return flags == null || flags.redisRecommendationLegacyPostgresWriteEnabled();
     }
 
     @FunctionalInterface
