@@ -1,5 +1,6 @@
 package com.groupys.service;
 
+import com.groupys.config.PerformanceFeatureFlags;
 import com.groupys.dto.ConversationResDto;
 import com.groupys.dto.MessageResDto;
 import com.groupys.dto.ParticipantDto;
@@ -49,15 +50,30 @@ public class ChatService {
     @Inject
     DiscoveryService discoveryService;
 
+    @Inject
+    PerformanceFeatureFlags flags;
+
+    @Inject
+    ChatRedisStateService chatRedisStateService;
+
     // ── Rate limiting ─────────────────────────────────────────────────────────
 
     private static final int RATE_LIMIT_MAX = 20;
     private static final long RATE_LIMIT_WINDOW_MS = 10_000; // 10 seconds
     private static final ConcurrentHashMap<String, long[]> rateLimitMap = new ConcurrentHashMap<>();
 
-    private void checkRateLimit(String clerkId) {
+    private void checkRateLimit(UUID userId, String clerkId) {
+        if (redisRateLimitEnabled()) {
+            boolean allowed = chatRedisStateService.allowMessageSend(userId, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
+            if (!allowed) {
+                throw new jakarta.ws.rs.ClientErrorException("Rate limit exceeded: too many messages", 429);
+            }
+            return;
+        }
+
         long now = System.currentTimeMillis();
-        long[] bucket = rateLimitMap.compute(clerkId, (k, v) -> {
+        String key = userId != null ? userId.toString() : clerkId;
+        long[] bucket = rateLimitMap.compute(key, (k, v) -> {
             if (v == null || now - v[1] >= RATE_LIMIT_WINDOW_MS) {
                 return new long[]{1, now};
             }
@@ -126,15 +142,27 @@ public class ChatService {
     }
 
     private ConversationResDto toConversationDto(Conversation c, UUID currentUserId) {
-        Message latest = messageRepository.findLatestInConversation(c.id);
-        long unread = 0;
-
         ConversationParticipant myParticipant = c.participants.stream()
                 .filter(cp -> cp.user.id.equals(currentUserId))
                 .findFirst().orElse(null);
+
+        Message latest = null;
+        String latestMessage = c.lastMessagePreview;
+        Instant latestAt = c.lastMessageAt;
+        if (!readModelReadEnabled()) {
+            latest = messageRepository.findLatestInConversation(c.id);
+            latestMessage = latest != null ? latest.content : null;
+            latestAt = latest != null ? latest.createdAt : null;
+        }
+
+        long unread = 0;
         if (myParticipant != null) {
-            Instant since = myParticipant.lastReadAt != null ? myParticipant.lastReadAt : Instant.EPOCH;
-            unread = messageRepository.countUnread(c.id, currentUserId, since);
+            if (readModelReadEnabled()) {
+                unread = Math.max(0L, myParticipant.unreadCount);
+            } else {
+                Instant since = myParticipant.lastReadAt != null ? myParticipant.lastReadAt : Instant.EPOCH;
+                unread = messageRepository.countUnread(c.id, currentUserId, since);
+            }
         }
 
         List<ParticipantDto> participants = c.participants.stream()
@@ -147,8 +175,8 @@ public class ChatService {
                 c.groupName,
                 participants,
                 resolveRequestStatus(c, currentUserId),
-                latest != null ? latest.content : null,
-                latest != null ? latest.createdAt : null,
+                latestMessage,
+                latestAt,
                 unread,
                 c.createdAt,
                 c.updatedAt
@@ -172,20 +200,38 @@ public class ChatService {
     }
 
     private List<ConversationResDto> toConversationDtoList(List<Conversation> convs, UUID userId) {
-        List<UUID> ids = convs.stream().map(c -> c.id).toList();
-        Map<UUID, Message> latestMap = messageRepository.findLatestPerConversations(ids);
-        Map<UUID, Long> unreadMap = messageRepository.countUnreadPerConversations(ids, userId);
+        Map<UUID, Message> latestMapTmp = Map.of();
+        Map<UUID, Long> unreadMapTmp = Map.of();
+        if (!readModelReadEnabled()) {
+            List<UUID> ids = convs.stream().map(c -> c.id).toList();
+            latestMapTmp = messageRepository.findLatestPerConversations(ids);
+            unreadMapTmp = messageRepository.countUnreadPerConversations(ids, userId);
+        }
+        final Map<UUID, Message> latestMap = latestMapTmp;
+        final Map<UUID, Long> unreadMap = unreadMapTmp;
 
         return convs.stream()
                 .map(c -> {
                     Message latest = latestMap.get(c.id);
                     long unread = unreadMap.getOrDefault(c.id, 0L);
+                    String lastMessage = c.lastMessagePreview;
+                    Instant lastMessageAt = c.lastMessageAt;
+                    if (!readModelReadEnabled()) {
+                        lastMessage = latest != null ? latest.content : null;
+                        lastMessageAt = latest != null ? latest.createdAt : null;
+                    } else {
+                        ConversationParticipant mine = c.participants.stream()
+                                .filter(cp -> cp.user.id.equals(userId))
+                                .findFirst()
+                                .orElse(null);
+                        unread = mine != null ? Math.max(0L, mine.unreadCount) : 0L;
+                    }
                     List<ParticipantDto> participants = c.participants.stream()
                             .map(this::toParticipantDto).collect(Collectors.toList());
                     return new ConversationResDto(
                             c.id, c.isGroup, c.groupName, participants, resolveRequestStatus(c, userId),
-                            latest != null ? latest.content : null,
-                            latest != null ? latest.createdAt : null,
+                            lastMessage,
+                            lastMessageAt,
                             unread, c.createdAt, c.updatedAt
                     );
                 })
@@ -294,9 +340,8 @@ public class ChatService {
 
     @Transactional
     public MessageResDto sendMessage(UUID conversationId, String clerkId, String content) {
-        checkRateLimit(clerkId);
-
         User sender = requireUserByClerkId(clerkId);
+        checkRateLimit(sender.id, clerkId);
         requireParticipant(conversationId, sender.id);
 
         Conversation conv = conversationRepository.findByIdOptional(conversationId)
@@ -323,7 +368,26 @@ public class ChatService {
         messageRepository.persist(msg);
 
         // Update conversation updatedAt to bubble it to top of inbox
-        conv.updatedAt = Instant.now();
+        Instant now = msg.createdAt;
+        conv.updatedAt = now;
+        List<UUID> participantIds = conv.participants.stream().map(cp -> cp.user.id).toList();
+        if (readModelWriteEnabled()) {
+            conv.lastMessageAt = now;
+            conv.lastMessagePreview = truncatePreview(msg.content);
+
+            for (ConversationParticipant participant : conv.participants) {
+                if (participant.user.id.equals(sender.id)) {
+                    participant.lastReadAt = now;
+                    participant.unreadCount = 0;
+                } else {
+                    participant.unreadCount = Math.max(0, participant.unreadCount + 1);
+                }
+            }
+        }
+        if (redisUnreadEnabled()) {
+            chatRedisStateService.resetUnread(sender.id, conv.id);
+            chatRedisStateService.incrementUnreadForRecipients(conv.id, sender.id, participantIds);
+        }
 
         return toMessageDto(msg);
     }
@@ -337,6 +401,9 @@ public class ChatService {
             throw new ForbiddenException("Cannot delete another user's message");
         }
         msg.isDeleted = true;
+        if (readModelWriteEnabled()) {
+            recomputeConversationReadModel(msg.conversation.id);
+        }
     }
 
     @Transactional
@@ -345,6 +412,12 @@ public class ChatService {
         ConversationParticipant cp = conversationRepository.findParticipant(conversationId, user.id)
                 .orElseThrow(() -> new ForbiddenException("Not a participant in this conversation"));
         cp.lastReadAt = Instant.now();
+        if (readModelWriteEnabled()) {
+            cp.unreadCount = 0;
+        }
+        if (redisUnreadEnabled()) {
+            chatRedisStateService.resetUnread(user.id, conversationId);
+        }
     }
 
     public List<MessageResDto> getMissedMessages(String clerkId, Instant since) {
@@ -374,6 +447,50 @@ public class ChatService {
         List<UUID> partnerIds = conversationRepository.findAllConversationPartnerIds(user.id);
         if (partnerIds.isEmpty()) return List.of();
         return new java.util.ArrayList<>(userRepository.findClerkIdsByUserIds(partnerIds).values());
+    }
+
+    private String truncatePreview(String content) {
+        if (content == null) {
+            return null;
+        }
+        String normalized = content.strip();
+        return normalized.length() <= 200 ? normalized : normalized.substring(0, 200);
+    }
+
+    private void recomputeConversationReadModel(UUID conversationId) {
+        Conversation conversation = conversationRepository.findByIdOptional(conversationId).orElse(null);
+        if (conversation == null) {
+            return;
+        }
+        Message latest = messageRepository.findLatestInConversation(conversationId);
+        conversation.lastMessageAt = latest != null ? latest.createdAt : null;
+        conversation.lastMessagePreview = latest != null ? truncatePreview(latest.content) : null;
+        conversation.updatedAt = Instant.now();
+
+        for (ConversationParticipant participant : conversation.participants) {
+            Instant since = participant.lastReadAt != null ? participant.lastReadAt : Instant.EPOCH;
+            long unread = messageRepository.countUnread(conversationId, participant.user.id, since);
+            participant.unreadCount = (int) Math.min(Integer.MAX_VALUE, Math.max(0L, unread));
+            if (redisUnreadEnabled()) {
+                chatRedisStateService.setUnread(participant.user.id, conversationId, unread);
+            }
+        }
+    }
+
+    private boolean readModelReadEnabled() {
+        return flags != null && flags.readModelReadEnabled();
+    }
+
+    private boolean readModelWriteEnabled() {
+        return flags != null && flags.readModelWriteEnabled();
+    }
+
+    private boolean redisRateLimitEnabled() {
+        return flags != null && flags.redisEnabled() && flags.redisChatRateLimitEnabled();
+    }
+
+    private boolean redisUnreadEnabled() {
+        return flags != null && flags.redisEnabled() && flags.redisUnreadCountersEnabled();
     }
 
     private void refreshDiscoveryCandidates(UUID... userIds) {
