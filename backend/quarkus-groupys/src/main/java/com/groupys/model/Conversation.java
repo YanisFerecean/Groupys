@@ -28,6 +28,12 @@ public class Conversation {
     @Column(name = "updated_at")
     public Instant updatedAt;
 
+    @Column(name = "last_message_at")
+    public Instant lastMessageAt;
+
+    @Column(name = "last_message_preview", columnDefinition = "TEXT")
+    public String lastMessagePreview;
+
     @Column(name = "request_status", length = 32)
     public String requestStatus = "ACCEPTED";
 
