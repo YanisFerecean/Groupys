@@ -34,6 +34,16 @@ import type { Conversation, Message, PresenceStatus } from '@/models/Chat'
 
 const PAGE_SIZE = 20
 
+function conversationCursor(c: Conversation): string {
+  return c.lastMessageAt ?? c.updatedAt ?? c.createdAt
+}
+
+function sortByActivity(list: Conversation[]): Conversation[] {
+  return [...list].sort((a, b) =>
+    conversationCursor(b).localeCompare(conversationCursor(a)),
+  )
+}
+
 interface ChatContextValue {
   conversations: Conversation[]
   isLoading: boolean
@@ -120,10 +130,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       }
 
       const loaded = await fetchConversations(token, undefined, PAGE_SIZE)
-      setConversations(loaded)
+      setConversations(sortByActivity(loaded))
       setHasMore(loaded.length === PAGE_SIZE)
       cursorRef.current = loaded.length > 0
-        ? (loaded[loaded.length - 1].updatedAt ?? loaded[loaded.length - 1].createdAt)
+        ? conversationCursor(loaded[loaded.length - 1])
         : undefined
     } catch (error) {
       console.error('[chat] failed to refresh conversations', error)
@@ -145,10 +155,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       }
 
       const loaded = await fetchConversations(token, cursorRef.current, PAGE_SIZE)
-      setConversations(prev => [...prev, ...loaded])
+      setConversations(prev => sortByActivity([...prev, ...loaded]))
       setHasMore(loaded.length === PAGE_SIZE)
       cursorRef.current = loaded.length > 0
-        ? (loaded[loaded.length - 1].updatedAt ?? loaded[loaded.length - 1].createdAt)
+        ? conversationCursor(loaded[loaded.length - 1])
         : cursorRef.current
     } catch (error) {
       console.error('[chat] failed to load more conversations', error)
