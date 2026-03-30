@@ -46,6 +46,12 @@ public class CommunityTasteProfile {
     @Column(name = "embedding_status", nullable = false)
     public String embeddingStatus = "NONE";
 
+    @Column(name = "embedding_model", length = 64)
+    public String embeddingModel;
+
+    @Column(name = "embedding_updated_at")
+    public Instant embeddingUpdatedAt;
+
     @Column(name = "refreshed_at", nullable = false)
     public Instant refreshedAt;
 

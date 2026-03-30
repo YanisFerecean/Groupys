@@ -19,9 +19,15 @@ export function useDiscovery() {
   const getTokenRef = useRef(getToken)
   getTokenRef.current = getToken
 
+  const communitiesInflight = useRef(false)
+  const usersInflight = useRef(false)
+
   const store = useDiscoveryStore()
 
   const loadCommunities = useCallback(async (refresh = false) => {
+    if (communitiesInflight.current) return
+    communitiesInflight.current = true
+
     try {
       const state = useDiscoveryStore.getState()
       if (refresh) state.setCommunitiesRefreshing(true)
@@ -29,16 +35,22 @@ export function useDiscovery() {
 
       const token = await getTokenRef.current()
       const data = await fetchSuggestedCommunities(token, 20, refresh)
-      useDiscoveryStore.getState().setCommunities(data)
+      const safe = Array.isArray(data) ? data : []
+      useDiscoveryStore.getState().setCommunities(safe)
     } catch (err) {
       console.error('Failed to load communities:', err)
+      useDiscoveryStore.getState().setCommunitiesError(true)
     } finally {
+      communitiesInflight.current = false
       useDiscoveryStore.getState().setCommunitiesLoading(false)
       useDiscoveryStore.getState().setCommunitiesRefreshing(false)
     }
   }, [])
 
   const loadUsers = useCallback(async (refresh = false) => {
+    if (usersInflight.current) return
+    usersInflight.current = true
+
     try {
       const state = useDiscoveryStore.getState()
       if (refresh) state.setUsersRefreshing(true)
@@ -46,10 +58,13 @@ export function useDiscovery() {
 
       const token = await getTokenRef.current()
       const data = await fetchSuggestedUsers(token, 20, refresh)
-      useDiscoveryStore.getState().setUsers(data)
+      const safe = Array.isArray(data) ? data : []
+      useDiscoveryStore.getState().setUsers(safe)
     } catch (err) {
       console.error('Failed to load users:', err)
+      useDiscoveryStore.getState().setUsersError(true)
     } finally {
+      usersInflight.current = false
       useDiscoveryStore.getState().setUsersLoading(false)
       useDiscoveryStore.getState().setUsersRefreshing(false)
     }

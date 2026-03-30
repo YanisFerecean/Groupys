@@ -56,4 +56,12 @@ public class UserRepository implements PanacheRepositoryBase<User, UUID> {
         return find("id IN ?1", userIds).stream()
                 .collect(Collectors.toMap(u -> u.id, u -> u.clerkId));
     }
+
+    public Map<UUID, User> findByIdsMap(List<UUID> userIds) {
+        if (userIds.isEmpty()) {
+            return Map.of();
+        }
+        return find("id IN ?1", userIds).stream()
+                .collect(Collectors.toMap(u -> u.id, u -> u));
+    }
 }

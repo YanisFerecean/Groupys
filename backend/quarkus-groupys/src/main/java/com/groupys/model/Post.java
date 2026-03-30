@@ -42,6 +42,15 @@ public class Post {
     @JoinColumn(name = "author_id", nullable = false)
     public User author;
 
+    @Column(name = "like_count", nullable = false)
+    public long likeCount;
+
+    @Column(name = "dislike_count", nullable = false)
+    public long dislikeCount;
+
+    @Column(name = "comment_count", nullable = false)
+    public long commentCount;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     public Instant createdAt;
 

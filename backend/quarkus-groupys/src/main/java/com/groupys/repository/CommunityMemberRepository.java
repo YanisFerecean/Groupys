@@ -24,6 +24,12 @@ public class CommunityMemberRepository implements PanacheRepositoryBase<Communit
         return find("user.id", userId).list();
     }
 
+    public List<CommunityMember> findByUserLimited(UUID userId, int limit) {
+        return find("user.id = ?1 order by joinedAt desc", userId)
+                .page(0, limit)
+                .list();
+    }
+
     public long countSharedMembers(UUID candidateCommunityId, List<UUID> joinedCommunityIds) {
         if (joinedCommunityIds == null || joinedCommunityIds.isEmpty()) {
             return 0L;

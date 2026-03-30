@@ -1,36 +1,6 @@
 import type { BackendUser } from '@/lib/api'
-import { API_URL } from '@/lib/api'
+import { apiRequest } from '@/lib/apiRequest'
 import type { Conversation, Message } from '@/models/Chat'
-
-type JsonRequestInit = Omit<RequestInit, 'body'> & {
-  body?: unknown
-}
-
-async function chatRequest(
-  path: string,
-  token: string | null,
-  init: JsonRequestInit = {},
-): Promise<Response> {
-  const headers = new Headers(init.headers)
-  headers.set('Accept', 'application/json')
-
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`)
-  }
-
-  const { body, ...rest } = init
-  const requestInit: RequestInit = {
-    ...rest,
-    headers,
-  }
-
-  if (body !== undefined) {
-    headers.set('Content-Type', 'application/json')
-    requestInit.body = JSON.stringify(body)
-  }
-
-  return fetch(`${API_URL}${path}`, requestInit)
-}
 
 export async function fetchConversations(
   token: string | null,
@@ -40,51 +10,48 @@ export async function fetchConversations(
   const params = new URLSearchParams({ size: String(size) })
   if (cursor) params.set('cursor', cursor)
 
-  const res = await chatRequest(`/chat/conversations?${params.toString()}`, token)
-  if (!res.ok) throw new Error('Failed to fetch conversations')
-  return res.json()
+  return apiRequest<Conversation[]>(`/chat/conversations?${params.toString()}`, { token, cache: false })
 }
 
 export async function fetchConversation(
   conversationId: string,
   token: string | null,
 ): Promise<Conversation> {
-  const res = await chatRequest(`/chat/conversations/${encodeURIComponent(conversationId)}`, token)
-  if (!res.ok) throw new Error('Failed to fetch conversation')
-  return res.json()
+  return apiRequest<Conversation>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}`,
+    { token, cache: false },
+  )
 }
 
 export async function startConversation(
   targetUserId: string,
   token: string | null,
 ): Promise<Conversation> {
-  const res = await chatRequest('/chat/conversations', token, {
+  return apiRequest<Conversation>('/chat/conversations', {
     method: 'POST',
+    token,
     body: { targetUserId },
   })
-  if (!res.ok) throw new Error('Failed to start conversation')
-  return res.json()
 }
 
 export async function acceptConversationRequest(
   conversationId: string,
   token: string | null,
 ): Promise<Conversation> {
-  const res = await chatRequest(`/chat/conversations/${encodeURIComponent(conversationId)}/accept`, token, {
-    method: 'POST',
-  })
-  if (!res.ok) throw new Error('Failed to accept chat request')
-  return res.json()
+  return apiRequest<Conversation>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/accept`,
+    { method: 'POST', token },
+  )
 }
 
 export async function denyConversationRequest(
   conversationId: string,
   token: string | null,
 ): Promise<void> {
-  const res = await chatRequest(`/chat/conversations/${encodeURIComponent(conversationId)}/request`, token, {
-    method: 'DELETE',
-  })
-  if (!res.ok) throw new Error('Failed to deny chat request')
+  return apiRequest<void>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/request`,
+    { method: 'DELETE', token },
+  )
 }
 
 export async function fetchMessages(
@@ -97,12 +64,10 @@ export async function fetchMessages(
     page: String(page),
     size: String(size),
   })
-  const res = await chatRequest(
+  return apiRequest<Message[]>(
     `/chat/conversations/${encodeURIComponent(conversationId)}/messages?${params.toString()}`,
-    token,
+    { token, cache: false },
   )
-  if (!res.ok) throw new Error('Failed to fetch messages')
-  return res.json()
 }
 
 export async function postMessage(
@@ -110,22 +75,20 @@ export async function postMessage(
   content: string,
   token: string | null,
 ): Promise<Message> {
-  const res = await chatRequest(`/chat/conversations/${encodeURIComponent(conversationId)}/messages`, token, {
-    method: 'POST',
-    body: { content },
-  })
-  if (!res.ok) throw new Error('Failed to send message')
-  return res.json()
+  return apiRequest<Message>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/messages`,
+    { method: 'POST', token, body: { content } },
+  )
 }
 
 export async function markRead(
   conversationId: string,
   token: string | null,
 ): Promise<void> {
-  const res = await chatRequest(`/chat/conversations/${encodeURIComponent(conversationId)}/read`, token, {
-    method: 'PUT',
-  })
-  if (!res.ok) throw new Error('Failed to mark conversation read')
+  return apiRequest<void>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/read`,
+    { method: 'PUT', token },
+  )
 }
 
 export async function searchUsers(
@@ -141,9 +104,7 @@ export async function searchUsers(
     q: query.trim(),
     limit: String(limit),
   })
-  const res = await chatRequest(`/users/search?${params.toString()}`, token)
-  if (!res.ok) throw new Error('Failed to search users')
-  return res.json()
+  return apiRequest<BackendUser[]>(`/users/search?${params.toString()}`, { token, cache: false })
 }
 
 export async function fetchPublicKey(
@@ -151,9 +112,10 @@ export async function fetchPublicKey(
   token: string | null,
 ): Promise<string | null> {
   try {
-    const res = await chatRequest(`/chat/keys/${encodeURIComponent(username)}`, token)
-    if (!res.ok) return null
-    const data = await res.json() as { publicKey?: string | null }
+    const data = await apiRequest<{ publicKey?: string | null }>(
+      `/chat/keys/${encodeURIComponent(username)}`,
+      { token },
+    )
     return data.publicKey ?? null
   } catch {
     return null
@@ -164,9 +126,9 @@ export async function uploadPublicKey(
   publicKey: string,
   token: string | null,
 ): Promise<void> {
-  const res = await chatRequest('/chat/keys/me', token, {
+  return apiRequest<void>('/chat/keys/me', {
     method: 'PUT',
+    token,
     body: { publicKey },
   })
-  if (!res.ok) throw new Error('Failed to upload public key')
 }

@@ -2,6 +2,8 @@ package com.groupys.resource;
 
 import com.groupys.dto.PostResDto;
 import com.groupys.model.PostMedia;
+import com.groupys.model.User;
+import com.groupys.repository.UserRepository;
 import com.groupys.service.MediaService;
 import com.groupys.service.PostService;
 import com.groupys.service.StorageService;
@@ -46,6 +48,9 @@ public class PostResource {
 
     @Inject
     JsonWebToken jwt;
+
+    @Inject
+    UserRepository userRepository;
 
     private static final long MAX_FILE_BYTES = 25L * 1024 * 1024; // 25 MB
 
@@ -96,6 +101,8 @@ public class PostResource {
             @RestForm("files") List<FileUpload> files) {
 
         String clerkId = jwt.getSubject();
+        User currentUser = userRepository.findByClerkId(clerkId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
         List<PostMedia> mediaList = new ArrayList<>();
 
         if (files != null && !files.isEmpty()) {
@@ -120,12 +127,12 @@ public class PostResource {
                         processed = mediaService.processAudio(file.uploadedFile());
                     } else {
                         try (InputStream is = Files.newInputStream(file.uploadedFile())) {
-                            String url = storageService.upload(file.fileName(), mediaType, is, file.size());
+                            String url = storageService.uploadPostMedia(currentUser.id, file.fileName(), mediaType, is, file.size());
                             mediaList.add(new PostMedia(url, mediaType));
                             continue;
                         }
                     }
-                    String mediaUrl = storageService.upload(file.fileName(), processed.contentType(), processed.stream(), processed.size());
+                    String mediaUrl = storageService.uploadPostMedia(currentUser.id, file.fileName(), processed.contentType(), processed.stream(), processed.size());
                     mediaList.add(new PostMedia(mediaUrl, processed.contentType()));
                 } catch (Exception e) {
                     throw new InternalServerErrorException("File upload failed", e);
@@ -153,7 +160,7 @@ public class PostResource {
     }
 
     @GET
-    @Path("/media/{key}")
+    @Path("/media/{key:.+}")
     @Produces(MediaType.WILDCARD)
     @PermitAll
     public Response getMedia(

@@ -19,7 +19,8 @@ import * as DocumentPicker from 'expo-document-picker'
 import * as Haptics from 'expo-haptics'
 import { router } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { apiFetch, createPost, mediaUrl } from '@/lib/api'
+import { apiFetch, createPost } from '@/lib/api'
+import { normalizeMediaUrl } from '@/lib/media'
 import { Colors } from '@/constants/colors'
 import type { CommunityResDto } from '@/models/CommunityRes'
 import AuthImageWithToken from '@/components/ui/AuthImageWithToken'
@@ -196,7 +197,7 @@ export default function CreatePostScreen() {
             </View>
           ) : selectedCommunity?.iconUrl ? (
             <AuthImageWithToken 
-              uri={mediaUrl(selectedCommunity.iconUrl.replace(/^\/api\/posts\/media\//, ''))} 
+              uri={normalizeMediaUrl(selectedCommunity.iconUrl)!} 
               style={{ width: 24, height: 24, borderRadius: 12, marginRight: 8 }} 
             />
           ) : (
@@ -268,7 +269,7 @@ export default function CreatePostScreen() {
                         </View>
                       ) : c.iconUrl ? (
                         <AuthImageWithToken 
-                          uri={mediaUrl(c.iconUrl.replace(/^\/api\/posts\/media\//, ''))} 
+                          uri={normalizeMediaUrl(c.iconUrl)!} 
                           style={{ width: 40, height: 40, borderRadius: 20, marginRight: 16 }} 
                         />
                       ) : (

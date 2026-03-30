@@ -18,7 +18,8 @@ import {
 import * as ImagePicker from 'expo-image-picker'
 import * as Haptics from 'expo-haptics'
 import { searchArtists } from '@/lib/musicSearch'
-import { apiDelete, apiFetch, apiPut, mediaUrl, uploadCommunityMedia } from '@/lib/api'
+import { apiDelete, apiFetch, apiPut, uploadCommunityMedia } from '@/lib/api'
+import { normalizeMediaUrl } from '@/lib/media'
 import { Colors } from '@/constants/colors'
 import type { ArtistRes } from '@/models/ArtistRes'
 import type { ArtistSearchResult } from '@/models/ArtistSearchResult'
@@ -108,18 +109,10 @@ export default function EditCommunityModal({
     setVisibility(community.visibility === 'PRIVATE' ? 'PRIVATE' : 'PUBLIC')
     setDiscoveryEnabled(community.discoveryEnabled ?? true)
     setTasteSummaryText(community.tasteSummaryText || '')
-    setBannerUri(
-      community.bannerUrl
-        ? mediaUrl(community.bannerUrl.replace(/^\/api\/posts\/media\//, ''))
-        : null,
-    )
+    setBannerUri(normalizeMediaUrl(community.bannerUrl))
     setIconType(community.iconType === 'EMOJI' ? 'EMOJI' : 'IMAGE')
     setIconEmoji(community.iconEmoji || '🌟')
-    setIconUri(
-      community.iconUrl
-        ? mediaUrl(community.iconUrl.replace(/^\/api\/posts\/media\//, ''))
-        : null,
-    )
+    setIconUri(normalizeMediaUrl(community.iconUrl))
     setNewBannerFile(null)
     setNewIconFile(null)
     setSelectedArtist(null)

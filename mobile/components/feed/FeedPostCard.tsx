@@ -4,7 +4,8 @@ import { useCallback, useState } from 'react'
 import { Image, ScrollView, Text, TouchableOpacity, View } from 'react-native'
 import * as Haptics from 'expo-haptics'
 import { router, useSegments } from 'expo-router'
-import { apiPost, mediaUrl } from '@/lib/api'
+import { apiPost } from '@/lib/api'
+import { normalizeMediaUrl } from '@/lib/media'
 import { publicProfilePath, resolveHomeTab } from '@/lib/profileRoutes'
 import { timeAgo } from '@/lib/timeAgo'
 import { Colors } from '@/constants/colors'
@@ -183,12 +184,12 @@ export default function FeedPostCard({
               >
                 {m.type.startsWith('image/') ? (
                   <AuthImageWithToken
-                    uri={mediaUrl(m.url.replace(/^\/api\/posts\/media\//, ''))}
+                    uri={normalizeMediaUrl(m.url)!}
                     className="h-full w-full rounded-[24px]"
                   />
                 ) : m.type.startsWith('video/') ? (
                   <VideoThumbnail
-                    url={mediaUrl(m.url.replace(/^\/api\/posts\/media\//, ''))}
+                    url={normalizeMediaUrl(m.url)!}
                     width="100%"
                     height="100%"
                   />
@@ -277,7 +278,7 @@ export default function FeedPostCard({
           visible={initialIndex !== null}
           onClose={() => setInitialIndex(null)}
           allMedia={post.media.map(m => ({
-            url: mediaUrl(m.url.replace(/^\/api\/posts\/media\//, '')),
+            url: normalizeMediaUrl(m.url)!,
             type: m.type
           }))}
           initialIndex={initialIndex}

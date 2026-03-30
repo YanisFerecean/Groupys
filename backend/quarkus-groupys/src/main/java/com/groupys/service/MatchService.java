@@ -2,6 +2,7 @@ package com.groupys.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.groupys.config.PerformanceFeatureFlags;
 import com.groupys.dto.LikeResponseDto;
 import com.groupys.dto.MatchResDto;
 import com.groupys.dto.SentLikeResDto;
@@ -53,6 +54,12 @@ public class MatchService {
     @Inject
     DiscoveryService discoveryService;
 
+    @Inject
+    PerformanceFeatureFlags flags;
+
+    @Inject
+    DiscoveryRedisCacheService redisCacheService;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     // ── Like ──────────────────────────────────────────────────────────────────
@@ -75,7 +82,12 @@ public class MatchService {
         }
 
         // Remove target from liker's discovery cache
-        userSimilarityCacheRepository.delete("user.id = ?1 and candidateUser.id = ?2", liker.id, target.id);
+        if (legacyRecommendationPostgresWriteEnabled()) {
+            userSimilarityCacheRepository.delete("user.id = ?1 and candidateUser.id = ?2", liker.id, target.id);
+        }
+        if (redisRecoWriteEnabled()) {
+            redisCacheService.removeUserCandidate(liker.id, target.id);
+        }
 
         // Record discovery action for audit
         UserDiscoveryAction action = new UserDiscoveryAction();
@@ -206,7 +218,12 @@ public class MatchService {
         action.expiresAt = Instant.now().plus(30, ChronoUnit.DAYS);
         userDiscoveryActionRepository.persist(action);
 
-        userSimilarityCacheRepository.delete("user.id = ?1 and candidateUser.id = ?2", user.id, target.id);
+        if (legacyRecommendationPostgresWriteEnabled()) {
+            userSimilarityCacheRepository.delete("user.id = ?1 and candidateUser.id = ?2", user.id, target.id);
+        }
+        if (redisRecoWriteEnabled()) {
+            redisCacheService.removeUserCandidate(user.id, target.id);
+        }
     }
 
     // ── Matches ───────────────────────────────────────────────────────────────
@@ -269,7 +286,12 @@ public class MatchService {
                 user.id,
                 targetUserId
         );
-        userSimilarityCacheRepository.deleteByUser(user.id);
+        if (legacyRecommendationPostgresWriteEnabled()) {
+            userSimilarityCacheRepository.deleteByUser(user.id);
+        }
+        if (redisRecoWriteEnabled()) {
+            redisCacheService.clearUserRecommendations(user.id);
+        }
 
         if (discoveryService != null) {
             discoveryService.refreshAfterUserChange(user.id);
@@ -326,5 +348,13 @@ public class MatchService {
                 like.toUser.profileImage,
                 like.createdAt
         );
+    }
+
+    private boolean redisRecoWriteEnabled() {
+        return flags != null && flags.redisEnabled() && flags.redisRecommendationWriteEnabled();
+    }
+
+    private boolean legacyRecommendationPostgresWriteEnabled() {
+        return flags == null || flags.redisRecommendationLegacyPostgresWriteEnabled();
     }
 }

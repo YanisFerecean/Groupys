@@ -22,10 +22,9 @@ public class ConversationRepository implements PanacheRepositoryBase<Conversatio
      */
     public List<Conversation> findByUserId(UUID userId) {
         return getEntityManager().createQuery(
-                "SELECT DISTINCT c FROM Conversation c " +
-                "JOIN c.participants cp " +
-                "WHERE cp.user.id = :userId " +
-                "ORDER BY c.updatedAt DESC NULLS LAST",
+                "SELECT c FROM Conversation c " +
+                "WHERE EXISTS (SELECT 1 FROM ConversationParticipant cp WHERE cp.conversation = c AND cp.user.id = :userId) " +
+                "ORDER BY COALESCE(c.lastMessageAt, c.updatedAt) DESC NULLS LAST",
                 Conversation.class
         ).setParameter("userId", userId).getResultList();
     }
@@ -36,11 +35,10 @@ public class ConversationRepository implements PanacheRepositoryBase<Conversatio
      * of the last item from the previous page.
      */
     public List<Conversation> findByUserIdPaged(UUID userId, int size, Instant cursor) {
-        String jpql = "SELECT DISTINCT c FROM Conversation c " +
-                "JOIN c.participants cp " +
-                "WHERE cp.user.id = :userId " +
-                (cursor != null ? "AND c.updatedAt < :cursor " : "") +
-                "ORDER BY c.updatedAt DESC NULLS LAST";
+        String jpql = "SELECT c FROM Conversation c " +
+                "WHERE EXISTS (SELECT 1 FROM ConversationParticipant cp WHERE cp.conversation = c AND cp.user.id = :userId) " +
+                (cursor != null ? "AND COALESCE(c.lastMessageAt, c.updatedAt) < :cursor " : "") +
+                "ORDER BY COALESCE(c.lastMessageAt, c.updatedAt) DESC NULLS LAST";
         var query = getEntityManager().createQuery(jpql, Conversation.class)
                 .setParameter("userId", userId)
                 .setMaxResults(size);

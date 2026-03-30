@@ -11,7 +11,8 @@ import {
 import { router, useSegments } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
-import { apiFetch, apiPost, mediaUrl } from '@/lib/api'
+import { apiFetch, apiPost } from '@/lib/api'
+import { normalizeMediaUrl } from '@/lib/media'
 import { formatCount } from '@/lib/timeAgo'
 import { Colors } from '@/constants/colors'
 import FeedPostCard from '@/components/feed/FeedPostCard'
@@ -170,7 +171,7 @@ export default function CommunityDetailScreen({ communityId, postRoute, communit
         <View style={{ backgroundColor: color, height: 230 }} className="justify-end relative">
           {community.bannerUrl ? (
             <AuthImageWithToken 
-              uri={mediaUrl(community.bannerUrl.replace(/^\/api\/posts\/media\//, ''))} 
+              uri={normalizeMediaUrl(community.bannerUrl)!} 
               className="absolute"
               style={{ position: 'absolute', width: '100%', height: '100%' }}
             />
@@ -185,7 +186,7 @@ export default function CommunityDetailScreen({ communityId, postRoute, communit
               </View>
             ) : community.iconUrl ? (
               <AuthImageWithToken 
-                uri={mediaUrl(community.iconUrl.replace(/^\/api\/posts\/media\//, ''))} 
+                uri={normalizeMediaUrl(community.iconUrl)!} 
                 style={{ width: 64, height: 64, borderRadius: 16, marginBottom: 4 }} 
               />
             ) : null}

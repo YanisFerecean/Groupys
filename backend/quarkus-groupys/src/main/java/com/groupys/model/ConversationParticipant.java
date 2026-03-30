@@ -33,9 +33,13 @@ public class ConversationParticipant {
     @Column(name = "last_read_at")
     public Instant lastReadAt;
 
+    @Column(name = "unread_count", nullable = false)
+    public int unreadCount;
+
     @PrePersist
     void onCreate() {
         joinedAt = Instant.now();
         lastReadAt = Instant.now();
+        unreadCount = 0;
     }
 }
