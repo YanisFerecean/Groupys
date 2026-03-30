@@ -1,12 +1,37 @@
 import { useSSO } from '@clerk/expo'
-import * as Linking from 'expo-linking'
+import * as AuthSession from 'expo-auth-session'
+import Constants from 'expo-constants'
+import { useRouter } from 'expo-router'
 import * as WebBrowser from 'expo-web-browser'
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, Platform, Text, TouchableOpacity, View } from 'react-native'
 import Svg, { Path } from 'react-native-svg'
 import { Colors } from '@/constants/colors'
+import { openAccountPortal } from '@/lib/accountPortal'
 
 WebBrowser.maybeCompleteAuthSession()
+
+const SSO_CALLBACK_PATH = 'sso-callback'
+const SSO_CALLBACK_SCHEME = 'mobile'
+
+function makeSSORedirectUrl() {
+  return Platform.OS === 'web'
+    ? AuthSession.makeRedirectUri({ path: SSO_CALLBACK_PATH })
+    : AuthSession.makeRedirectUri({ path: SSO_CALLBACK_PATH, scheme: SSO_CALLBACK_SCHEME })
+}
+
+function getAuthSessionResultMessage(type?: string | null) {
+  switch (type) {
+    case 'cancel':
+      return 'Single sign-on was canceled.'
+    case 'dismiss':
+      return 'The browser was closed before single sign-on finished.'
+    case 'locked':
+      return 'Another authentication flow is active. Please close it and try again.'
+    default:
+      return null
+  }
+}
 
 function useWarmUpBrowser() {
   useEffect(() => {
@@ -59,47 +84,110 @@ interface SSOButtonsProps {
 export default function SSOButtons({ mode }: SSOButtonsProps) {
   useWarmUpBrowser()
 
+  const router = useRouter()
   const { startSSOFlow } = useSSO()
   const [loadingStrategy, setLoadingStrategy] = useState<SSOStrategy | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const isExpoGo = Constants.appOwnership === 'expo'
 
   async function handleSSO(strategy: SSOStrategy) {
     setLoadingStrategy(strategy)
     setError(null)
 
     try {
-      const { createdSessionId, setActive, signUp, signIn } = await startSSOFlow({
+      const redirectUrl = makeSSORedirectUrl()
+      const { createdSessionId, setActive, signUp, signIn, authSessionResult } = await startSSOFlow({
         strategy,
-        redirectUrl: Linking.createURL('/'),
+        redirectUrl,
       })
+      const authSessionResultType = authSessionResult?.type ?? null
 
       if (createdSessionId && setActive) {
         // Existing user or new user with all requirements satisfied — set session
         // and let the auth layout redirect reactively.
         await setActive({ session: createdSessionId })
-      } else if (signUp) {
-        // New user: Clerk returned a pending sign-up (e.g. username required).
-        // If the sign-up is complete, activate the new session; otherwise surface an error.
-        if (signUp.status === 'complete' && signUp.createdSessionId && setActive) {
-          await setActive({ session: signUp.createdSessionId })
-        } else {
-          setError(
-            'Your account could not be completed automatically. Please sign up with email and password.',
-          )
+        return
+      }
+
+      if (signUp?.status === 'complete' && signUp.createdSessionId && setActive) {
+        await setActive({ session: signUp.createdSessionId })
+        return
+      }
+
+      if (signIn?.status === 'complete' && signIn.createdSessionId && setActive) {
+        await setActive({ session: signIn.createdSessionId })
+        return
+      }
+
+      if (signUp || signIn) {
+        const continuationPath = signUp ? 'sign-up' : 'sign-in'
+        const signUpMissingFields = signUp?.missingFields ?? []
+
+        console.warn('SSO requires hosted continuation', {
+          mode,
+          strategy,
+          continuationPath,
+          authSessionResultType,
+          signInStatus: signIn?.status ?? null,
+          signUpStatus: signUp?.status ?? null,
+          signUpMissingFields,
+        })
+
+        if (signUp?.status === 'missing_requirements' && signUpMissingFields.includes('username')) {
+          router.push('/(auth)/sso-continue')
+          return
         }
-      } else if (signIn) {
-        // Edge case: sign-in returned without a session (e.g. additional factor needed).
-        if (signIn.status === 'complete' && signIn.createdSessionId && setActive) {
-          await setActive({ session: signIn.createdSessionId })
-        } else {
-          setError('Sign-in could not be completed. Please try again.')
+
+        try {
+          const hostedResult = await openAccountPortal(continuationPath, { redirectUrl })
+          const hostedResultMessage = getAuthSessionResultMessage(hostedResult.type)
+
+          if (hostedResult.type === 'success') {
+            return
+          }
+
+          if (hostedResultMessage) {
+            setError(hostedResultMessage)
+            return
+          }
+
+          setError('Single sign-on could not continue in the hosted flow.')
+          return
+        } catch (portalError) {
+          const continuationMessage =
+            portalError instanceof Error
+              ? portalError.message
+              : 'Single sign-on could not continue in the hosted flow.'
+          const expoGoHint = isExpoGo
+            ? ' Expo Go uses dynamic callback URLs, so continue in a development build if this keeps failing.'
+            : ''
+          setError(`${continuationMessage}${expoGoHint}`)
+          return
         }
       }
-      // If all values are null/undefined the OAuth sheet was dismissed — do nothing.
+
+      const authSessionResultMessage = getAuthSessionResultMessage(authSessionResultType)
+      if (authSessionResultMessage) {
+        setError(authSessionResultMessage)
+        return
+      }
+
+      if (isExpoGo) {
+        setError(
+          'Single sign-on did not complete in Expo Go. Try again in a development build with Clerk native redirects configured.',
+        )
+        return
+      }
+
+      setError(
+        `Single sign-on did not complete. Verify Clerk native redirect URLs include ${SSO_CALLBACK_SCHEME}://${SSO_CALLBACK_PATH}.`,
+      )
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Something went wrong. Please try again.'
-      setError(message)
+      const baseMessage = err instanceof Error ? err.message : 'Something went wrong. Please try again.'
+      const expoGoHint = isExpoGo
+        ? ' Expo Go uses dynamic callback URLs, so continue in a development build if needed.'
+        : ''
+      setError(`${baseMessage}${expoGoHint}`)
     } finally {
       setLoadingStrategy(null)
     }
@@ -113,6 +201,15 @@ export default function SSOButtons({ mode }: SSOButtonsProps) {
       {error ? (
         <View className="rounded-2xl bg-red-50 px-4 py-3">
           <Text className="text-sm text-red-600">{error}</Text>
+        </View>
+      ) : null}
+
+      {isExpoGo ? (
+        <View className="rounded-2xl bg-amber-50 px-4 py-3">
+          <Text className="text-sm text-amber-700">
+            Expo Go uses dynamic callback URLs, so SSO is best-effort here. If callback verification
+            fails, run the app with a development build.
+          </Text>
         </View>
       ) : null}
 
