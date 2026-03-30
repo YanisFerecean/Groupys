@@ -19,4 +19,10 @@ public class MusicSourceSnapshotRepository implements PanacheRepositoryBase<Musi
     public List<MusicSourceSnapshot> findByUser(UUID userId) {
         return find("user.id = ?1 order by fetchedAt desc", userId).list();
     }
+
+    public List<MusicSourceSnapshot> findPendingBlobBackfill(int limit) {
+        return find("objectKey is null and payloadJson is not null order by fetchedAt asc")
+                .page(0, Math.max(1, limit))
+                .list();
+    }
 }
