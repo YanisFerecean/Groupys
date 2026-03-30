@@ -1,27 +1,10 @@
 import type { ProfileCustomization } from '@/models/ProfileCustomization'
+import { apiRequest } from '@/lib/apiRequest'
 
 export const API_URL = process.env.EXPO_PUBLIC_API_URL!
 
 export async function apiFetch<T>(path: string, token: string | null, cache = true): Promise<T> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  }
-
-  if (!cache) {
-    headers['Cache-Control'] = 'no-cache, no-store'
-    headers['Pragma'] = 'no-cache'
-  }
-
-  const res = await fetch(`${API_URL}${path}`, {
-    headers,
-  })
-
-  if (!res.ok) {
-    throw new Error(`API error ${res.status}: ${res.statusText}`)
-  }
-
-  return res.json() as Promise<T>
+  return apiRequest<T>(path, { token, cache })
 }
 
 // ── Backend User types ──────────────────────────────────────────────────────
@@ -410,14 +393,7 @@ export async function apiPost<T>(
   token: string | null,
   body: unknown,
 ): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    method: 'POST',
-    headers: makeHeaders(token),
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) throw new Error(`API error ${res.status}: ${res.statusText}`)
-  if (res.status === 204 || res.headers.get('content-length') === '0') return undefined as T
-  return res.json() as Promise<T>
+  return apiRequest<T>(path, { method: 'POST', token, body })
 }
 
 export async function apiPut<T>(
@@ -425,24 +401,14 @@ export async function apiPut<T>(
   token: string | null,
   body: unknown,
 ): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    method: 'PUT',
-    headers: makeHeaders(token),
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) throw new Error(`API error ${res.status}: ${res.statusText}`)
-  return res.json() as Promise<T>
+  return apiRequest<T>(path, { method: 'PUT', token, body })
 }
 
 export async function apiDelete(
   path: string,
   token: string | null,
 ): Promise<void> {
-  const res = await fetch(`${API_URL}${path}`, {
-    method: 'DELETE',
-    headers: makeHeaders(token),
-  })
-  if (!res.ok) throw new Error(`API error ${res.status}: ${res.statusText}`)
+  return apiRequest<void>(path, { method: 'DELETE', token })
 }
 
 export async function apiPostMultipart<T>(
@@ -455,7 +421,17 @@ export async function apiPostMultipart<T>(
     headers: authHeader(token),
     body: formData,
   })
-  if (!res.ok) throw new Error(`API error ${res.status}: ${res.statusText}`)
+  if (!res.ok) {
+    let message = res.statusText
+    try {
+      const data = await res.json()
+      if (typeof data?.message === 'string') message = data.message
+      else if (typeof data?.error === 'string') message = data.error
+      else if (typeof data?.detail === 'string') message = data.detail
+      else if (typeof data?.title === 'string') message = data.title
+    } catch { /* use statusText */ }
+    throw new Error(`API error ${res.status}: ${message}`)
+  }
   return res.json() as Promise<T>
 }
 
@@ -513,6 +489,8 @@ export async function uploadCommunityMedia(
   const res = await apiPostMultipart<{ url: string }>('/communities/media/upload', token, formData)
   return res.url
 }
+
+export { normalizeMediaUrl } from '@/lib/media'
 
 export function mediaUrl(key: string): string {
   return `${API_URL}/posts/media/${key}`
