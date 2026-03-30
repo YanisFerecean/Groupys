@@ -9,7 +9,7 @@ import FaqSection from "@/components/landing/FaqSection";
 import CtaSection from "@/components/landing/CtaSection";
 import Footer from "@/components/landing/Footer";
 
-const GA_ID = process.env.NEXT_PUBLIC_GA_ID;
+const GA_ID = process.env.NEXT_PUBLIC_GA_ID ?? "G-WG945YLN9C";
 
 export const metadata: Metadata = {
   title: "Groupys – Find Your Music Community | Connect with Music Lovers",
