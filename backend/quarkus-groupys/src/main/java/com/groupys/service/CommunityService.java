@@ -54,9 +54,7 @@ public class CommunityService {
     }
 
     public List<CommunityResDto> search(String q) {
-        return communityRepository.searchByQuery(q).stream()
-                .map(CommunityUtil::toDto)
-                .toList();
+        return search(q, 10);
     }
 
     public List<CommunityResDto> listAll() {
@@ -80,7 +78,7 @@ public class CommunityService {
         if (normalizedQuery.isBlank()) {
             return List.of();
         }
-        return communityRepository.searchByName(normalizedQuery, limit).stream()
+        return communityRepository.searchByQuery(normalizedQuery, limit).stream()
                 .map(CommunityUtil::toDto)
                 .toList();
     }
@@ -245,9 +243,15 @@ public class CommunityService {
     }
 
     @Transactional
-    public CommunityResDto update(UUID id, CommunityUpdateDto dto) {
-        Community community = communityRepository.findByIdOptional(id)
-                .orElseThrow(() -> new NotFoundException("Community not found"));
+    public CommunityResDto update(UUID id, CommunityUpdateDto dto, String clerkId) {
+        Community community = requireOwnedCommunity(id, clerkId);
+        if (dto.name() != null) {
+            String trimmedName = dto.name().trim();
+            if (trimmedName.isEmpty()) {
+                throw new BadRequestException("Community name cannot be blank");
+            }
+            community.name = trimmedName;
+        }
         community.description = dto.description();
         community.genre = dto.genre();
         community.country = dto.country();
