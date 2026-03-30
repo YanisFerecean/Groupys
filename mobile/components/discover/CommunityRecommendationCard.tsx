@@ -7,14 +7,8 @@ import Animated, { FadeIn, FadeOut } from 'react-native-reanimated'
 import { useAuth } from '@clerk/expo'
 import { useEffect, useRef, useState } from 'react'
 import { Colors } from '@/constants/colors'
-import { mediaUrl } from '@/lib/api'
+import { normalizeMediaUrl } from '@/lib/media'
 import type { SuggestedCommunity } from '@/models/SuggestedCommunity'
-
-function resolveMediaUrl(raw: string | null): string | null {
-  if (!raw) return null
-  // Strip legacy /api/posts/media/ prefix if present, then build full URL
-  return mediaUrl(raw.replace(/^\/api\/posts\/media\//, ''))
-}
 
 interface AuthedImageProps {
   uri: string
@@ -66,7 +60,7 @@ export default function CommunityRecommendationCard({ community, onJoin, onDismi
     onDismiss()
   }
 
-  const bannerSrc = resolveMediaUrl(community.bannerUrl || community.imageUrl)
+  const bannerSrc = normalizeMediaUrl(community.bannerUrl || community.imageUrl)
   // Profile images are Clerk CDN URLs — already absolute, no auth needed
   const creatorSrc = community.creatorProfileImage || null
   const creatorName = community.creatorDisplayName || community.creatorUsername
