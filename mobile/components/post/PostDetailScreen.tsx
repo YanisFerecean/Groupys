@@ -17,7 +17,8 @@ import { MarkdownDisplay } from '@/components/ui/MarkdownDisplay'
 import { router, useSegments } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
-import { apiDelete, apiFetch, apiPost, mediaUrl } from '@/lib/api'
+import { apiDelete, apiFetch, apiPost } from '@/lib/api'
+import { normalizeMediaUrl } from '@/lib/media'
 import { communityDetailPath, publicProfilePath, resolveHomeTab } from '@/lib/profileRoutes'
 import { timeAgo } from '@/lib/timeAgo'
 import { Colors } from '@/constants/colors'
@@ -246,7 +247,7 @@ export default function PostDetailScreen({ postId }: Props) {
               >
                 {community?.bannerUrl ? (
                   <AuthImageWithToken
-                    uri={mediaUrl(community.bannerUrl.replace(/^\/api\/posts\/media\//, ''))}
+                    uri={normalizeMediaUrl(community.bannerUrl)!}
                     className="absolute"
                     style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
                   />
@@ -260,7 +261,7 @@ export default function PostDetailScreen({ postId }: Props) {
                     </View>
                   ) : community?.iconUrl ? (
                     <AuthImageWithToken
-                      uri={mediaUrl(community.iconUrl.replace(/^\/api\/posts\/media\//, ''))}
+                      uri={normalizeMediaUrl(community.iconUrl)!}
                       style={{ width: 64, height: 64, borderRadius: 16, marginBottom: 4 }}
                     />
                   ) : (
@@ -389,12 +390,12 @@ export default function PostDetailScreen({ postId }: Props) {
                 >
                   {m.type.startsWith('image/') ? (
                     <AuthImageWithToken
-                      uri={mediaUrl(m.url.replace(/^\/api\/posts\/media\//, ''))}
+                      uri={normalizeMediaUrl(m.url)!}
                       style={{ height: 240 }}
                     />
                   ) : m.type.startsWith('video/') ? (
                     <VideoThumbnail
-                      url={mediaUrl(m.url.replace(/^\/api\/posts\/media\//, ''))}
+                      url={normalizeMediaUrl(m.url)!}
                       width="100%"
                       height={240}
                     />
@@ -414,7 +415,7 @@ export default function PostDetailScreen({ postId }: Props) {
               visible={initialIndex !== null}
               onClose={() => setInitialIndex(null)}
               allMedia={post.media.map(m => ({
-                url: mediaUrl(m.url.replace(/^\/api\/posts\/media\//, '')),
+                url: normalizeMediaUrl(m.url)!,
                 type: m.type
               }))}
               initialIndex={initialIndex}
