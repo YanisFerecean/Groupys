@@ -4,6 +4,8 @@ import com.groupys.dto.CommunityCreateDto;
 import com.groupys.dto.CommunityMemberResDto;
 import com.groupys.dto.CommunityResDto;
 import com.groupys.dto.CommunityUpdateDto;
+import com.groupys.model.User;
+import com.groupys.repository.UserRepository;
 import com.groupys.service.CommunityService;
 import com.groupys.service.StorageService;
 import io.minio.GetObjectArgs;
@@ -15,7 +17,6 @@ import jakarta.annotation.security.PermitAll;
 import jakarta.inject.Inject;
 import org.jboss.resteasy.reactive.RestForm;
 import org.jboss.resteasy.reactive.multipart.FileUpload;
-import jakarta.inject.Inject;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
@@ -47,6 +48,9 @@ public class CommunityResource {
 
     @Inject
     JsonWebToken jwt;
+
+    @Inject
+    UserRepository userRepository;
 
     @GET
     public List<CommunityResDto> list() {
@@ -196,9 +200,11 @@ public class CommunityResource {
             throw new BadRequestException("No file provided");
         }
         try {
+            User user = userRepository.findByClerkId(jwt.getSubject())
+                    .orElseThrow(() -> new NotFoundException("User not found"));
             String mediaType = file.contentType();
             InputStream is = Files.newInputStream(file.uploadedFile());
-            String mediaUrl = storageService.upload(file.fileName(), mediaType, is, file.size());
+            String mediaUrl = storageService.uploadPostMedia(user.id, file.fileName(), mediaType, is, file.size());
             is.close();
             return Response.ok(java.util.Map.of("url", mediaUrl)).build();
         } catch (Exception e) {
