@@ -155,23 +155,27 @@ export default function CreatePostModal({
     }
   }, []);
 
+  const entriesRef = useRef(entries);
+  entriesRef.current = entries;
+
   const addFiles = useCallback((incoming: File[]) => {
-    setEntries((prev) => {
-      const available = 4 - prev.length;
-      const toAdd = incoming.slice(0, available);
-      const newEntries: FileEntry[] = toAdd.map((file) => ({
-        id: crypto.randomUUID(),
-        file,
-        preview: URL.createObjectURL(file),
-        url: null,
-        type: null,
-        progress: 0,
-        uploading: true,
-        error: null,
-      }));
-      newEntries.forEach((entry) => startUpload(entry.id, entry.file));
-      return [...prev, ...newEntries];
-    });
+    const available = 4 - entriesRef.current.length;
+    const toAdd = incoming.slice(0, available);
+    if (toAdd.length === 0) return;
+    const newEntries: FileEntry[] = toAdd.map((file) => ({
+      id: crypto.randomUUID(),
+      file,
+      preview: URL.createObjectURL(file),
+      url: null,
+      type: null,
+      progress: 0,
+      uploading: true,
+      error: null,
+    }));
+    // Add to state first (pure updater — no side effects so Strict Mode is safe)
+    setEntries((prev) => [...prev, ...newEntries.slice(0, 4 - prev.length)]);
+    // Start uploads outside the state updater to prevent double-uploads in Strict Mode
+    newEntries.forEach((entry) => startUpload(entry.id, entry.file));
   }, [startUpload]);
 
   const removeFile = useCallback((index: number) => {
