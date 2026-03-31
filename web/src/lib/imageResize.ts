@@ -30,8 +30,6 @@ export async function resizeImage(
         dstW = maxWidth;
         dstH = maxHeight;
         const scale = Math.max(maxWidth / img.width, maxHeight / img.height);
-        const scaledW = img.width * scale;
-        const scaledH = img.height * scale;
         srcW = maxWidth / scale;
         srcH = maxHeight / scale;
         srcX = (img.width - srcW) / 2;

@@ -4,6 +4,7 @@ import { useRef, forwardRef, useImperativeHandle } from "react";
 import { motion, useMotionValue, useTransform, animate } from "framer-motion";
 import { Users, Globe } from "lucide-react";
 import type { SuggestedUser } from "@/types/match";
+import Image from "next/image";
 
 const SWIPE_THRESHOLD = 120;
 const FLY_OUT_DISTANCE = 1200;
@@ -96,7 +97,7 @@ const UserRecommendationCard = forwardRef<CardHandle, Props>(
       >
         {/* Profile image */}
         {user.profileImage ? (
-          <img
+          <Image
             src={user.profileImage}
             alt={user.displayName ?? user.username}
             className="w-full h-full object-cover pointer-events-none"

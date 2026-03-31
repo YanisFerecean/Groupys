@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { Heart, User } from "lucide-react";
 import { useMatchStore } from "@/store/matchStore";
+import Image from "next/image";
 
 export default function MatchCelebrationModal() {
   const router = useRouter();
@@ -50,7 +51,7 @@ export default function MatchCelebrationModal() {
         {/* Profile image */}
         <div className="flex items-center gap-4">
           {pendingMatchModal.otherProfileImage ? (
-            <img
+            <Image
               src={pendingMatchModal.otherProfileImage}
               alt={pendingMatchModal.otherDisplayName ?? pendingMatchModal.otherUsername}
               className="w-20 h-20 rounded-full object-cover"

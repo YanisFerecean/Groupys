@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { User, ChevronRight } from "lucide-react";
 import type { UserMatch } from "@/types/match";
+import Image from "next/image";
 
 interface Props {
   match: UserMatch;
@@ -42,7 +43,7 @@ export function MatchHistoryListItem({ match }: Props) {
       className="w-full flex items-center gap-4 rounded-3xl bg-surface-container px-4 py-4 hover:bg-surface-container-high transition-colors disabled:cursor-default"
     >
       {match.otherProfileImage ? (
-        <img
+        <Image
           src={match.otherProfileImage}
           alt={match.otherDisplayName ?? match.otherUsername}
           className="w-14 h-14 rounded-full object-cover flex-shrink-0"

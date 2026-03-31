@@ -76,7 +76,7 @@ export function useConversations() {
     } finally {
       setIsLoadingMore(false);
     }
-  }, [isLoadingMore, hasMore, appendConversations]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isLoadingMore, hasMore, appendConversations]);
 
   const markAsRead = useCallback(async (conversationId: string) => {
     try {
@@ -87,19 +87,19 @@ export function useConversations() {
     } catch (e) {
       console.error("markAsRead failed", e);
     }
-  }, [updateConversation]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [updateConversation]);
 
   const acceptRequest = useCallback(async (conversationId: string) => {
     const token = await getTokenRef.current();
     await acceptConversationRequest(conversationId, token);
     updateConversation(conversationId, { requestStatus: "ACCEPTED" });
-  }, [updateConversation]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [updateConversation]);
 
   const denyRequest = useCallback(async (conversationId: string) => {
     const token = await getTokenRef.current();
     await denyConversationRequest(conversationId, token);
     removeConversation(conversationId);
-  }, [removeConversation]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [removeConversation]);
 
   return {
     conversations,

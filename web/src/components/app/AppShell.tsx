@@ -38,7 +38,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         if (bu) setSpotifyConnected(bu.spotifyConnected);
       });
     });
-  }, [isLoaded, isAuthLoaded, isSignedIn, user]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isLoaded, isAuthLoaded, isSignedIn, user]);
 
   const handleSpotifyDisconnected = useCallback(() => {
     setSpotifyConnected(false);

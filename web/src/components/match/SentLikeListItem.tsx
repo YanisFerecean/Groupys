@@ -2,6 +2,7 @@
 
 import { User } from "lucide-react";
 import type { SentLike } from "@/types/match";
+import Image from "next/image";
 
 interface Props {
   like: SentLike;
@@ -24,7 +25,7 @@ export function SentLikeListItem({ like, busy, onWithdraw }: Props) {
   return (
     <div className="flex items-center gap-4 rounded-3xl bg-surface-container px-4 py-4">
       {like.targetProfileImage ? (
-        <img
+        <Image
           src={like.targetProfileImage}
           alt={like.targetDisplayName ?? like.targetUsername}
           className="w-14 h-14 rounded-full object-cover flex-shrink-0"

@@ -50,7 +50,7 @@ export default function ProfileView() {
         // silently fail
       }
     })();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // Open the editor drawer when arriving from Spotify OAuth callback
   const [isEditing, setIsEditing] = useState(spotifyCallback === "connected");
