@@ -116,32 +116,54 @@ public class PostResource {
                 }
                 try {
                     String mediaType = file.contentType();
-                    MediaService.ProcessedMedia processed;
                     if (mediaType != null && mediaType.startsWith("image/")) {
+                        MediaService.ProcessedMedia processed;
                         try (InputStream is = Files.newInputStream(file.uploadedFile())) {
                             processed = mediaService.processImage(is, mediaType);
                         }
-                    } else if (mediaType != null && mediaType.startsWith("video/")) {
-                        processed = mediaService.processVideo(file.uploadedFile());
-                    } else if (mediaType != null && mediaType.startsWith("audio/")) {
-                        processed = mediaService.processAudio(file.uploadedFile());
+                        String mediaUrl = storageService.uploadPostMedia(currentUser.id, file.fileName(), processed.contentType(), processed.stream(), processed.size());
+                        mediaList.add(new PostMedia(mediaUrl, processed.contentType()));
+                    } else if (mediaType != null && (mediaType.startsWith("video/") || mediaType.startsWith("audio/"))) {
+                        // Attempt FFmpeg transcoding; fall back to raw upload if FFmpeg is unavailable
+                        try {
+                            MediaService.ProcessedMedia processed = mediaType.startsWith("video/")
+                                    ? mediaService.processVideo(file.uploadedFile())
+                                    : mediaService.processAudio(file.uploadedFile());
+                            String mediaUrl = storageService.uploadPostMedia(currentUser.id, file.fileName(), processed.contentType(), processed.stream(), processed.size());
+                            mediaList.add(new PostMedia(mediaUrl, processed.contentType()));
+                        } catch (Exception ffmpegEx) {
+                            // FFmpeg not available or transcoding failed — upload raw file as-is
+                            try (InputStream is = Files.newInputStream(file.uploadedFile())) {
+                                String mediaUrl = storageService.uploadPostMedia(currentUser.id, file.fileName(), mediaType, is, file.size());
+                                mediaList.add(new PostMedia(mediaUrl, mediaType));
+                            }
+                        }
                     } else {
                         try (InputStream is = Files.newInputStream(file.uploadedFile())) {
                             String url = storageService.uploadPostMedia(currentUser.id, file.fileName(), mediaType, is, file.size());
                             mediaList.add(new PostMedia(url, mediaType));
-                            continue;
                         }
                     }
-                    String mediaUrl = storageService.uploadPostMedia(currentUser.id, file.fileName(), processed.contentType(), processed.stream(), processed.size());
-                    mediaList.add(new PostMedia(mediaUrl, processed.contentType()));
                 } catch (Exception e) {
-                    throw new InternalServerErrorException("File upload failed", e);
+                    String msg = e.getMessage() != null ? e.getMessage() : "File upload failed";
+                    return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                            .type(MediaType.APPLICATION_JSON)
+                            .entity(java.util.Map.of("error", msg))
+                            .build();
                 }
             }
         }
 
-        PostResDto created = postService.create(communityId, title, content, mediaList, clerkId);
-        return Response.status(Response.Status.CREATED).entity(created).build();
+        try {
+            PostResDto created = postService.create(communityId, title, content, mediaList, clerkId);
+            return Response.status(Response.Status.CREATED).entity(created).build();
+        } catch (Exception e) {
+            String msg = e.getMessage() != null ? e.getMessage() : "Failed to create post";
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .type(MediaType.APPLICATION_JSON)
+                    .entity(java.util.Map.of("error", msg))
+                    .build();
+        }
     }
 
     @POST
