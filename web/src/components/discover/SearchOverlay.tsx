@@ -397,8 +397,8 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
   };
 
   const handleArtistPress = (artist: ArtistRes) => { handleClose(); router.push(`/discover/artist/${artist.id}`); };
-  const handleAlbumPress = (album: AlbumRes) => { handleClose(); router.push(`/album/${album.id}`); };
-  const handleUserPress = (user: BackendUser) => { handleClose(); router.push(`/profile/${user.username}`); };
+  const handleAlbumPress = (album: AlbumRes) => { handleClose(); router.push(`/discover/album/${album.id}`); };
+  const handleUserPress = (user: BackendUser) => { handleClose(); router.push(`/discover/user/${user.username}`); };
   const handleCommunityPress = (community: CommunityRes) => { handleClose(); router.push(`/discover/community/${community.id}`); };
 
   // Determine what to slice for "all" — 3 per type; for filtered tabs show up to 9

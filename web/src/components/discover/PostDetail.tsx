@@ -138,13 +138,15 @@ function CommentThread({
           onClick={() => router.push(`/profile/${comment.authorUsername}`)}
         >
           {comment.authorProfileImage ? (
-            <Image
-              src={comment.authorProfileImage}
-              alt={comment.authorDisplayName || comment.authorUsername}
-              width={28}
-              height={28}
-              className="shrink-0 rounded-full object-cover"
-            />
+            <div className="w-7 h-7 shrink-0 rounded-full overflow-hidden">
+              <Image
+                src={comment.authorProfileImage}
+                alt={comment.authorDisplayName || comment.authorUsername}
+                width={28}
+                height={28}
+                className="w-full h-full object-cover"
+              />
+            </div>
           ) : (
             <div className="w-7 h-7 shrink-0 rounded-full bg-surface-container-high flex items-center justify-center">
               <span className="material-symbols-outlined text-on-surface-variant/40 text-xs">
@@ -443,13 +445,15 @@ export default function PostDetail({ id }: { id: string }) {
           onClick={() => router.push(`/profile/${post.authorUsername}`)}
         >
           {post.authorProfileImage ? (
-            <Image
-              src={post.authorProfileImage}
-              alt={post.authorDisplayName || post.authorUsername}
-              width={44}
-              height={44}
-              className="shrink-0 rounded-full object-cover"
-            />
+            <div className="w-11 h-11 shrink-0 rounded-full overflow-hidden">
+              <Image
+                src={post.authorProfileImage}
+                alt={post.authorDisplayName || post.authorUsername}
+                width={44}
+                height={44}
+                className="w-full h-full object-cover"
+              />
+            </div>
           ) : (
             <div className="w-11 h-11 shrink-0 rounded-full bg-surface-container-high flex items-center justify-center">
               <span className="material-symbols-outlined text-on-surface-variant/40 text-base">
@@ -476,17 +480,31 @@ export default function PostDetail({ id }: { id: string }) {
         )}
 
         {/* Media */}
-        {post.media?.length > 0 && (
-          <div className="px-5 pb-4 space-y-3">
+        {post.media?.length > 0 && (() => {
+          const count = post.media.length;
+          const inGrid = count > 1;
+          return (
+          <div className={`px-5 pb-4${inGrid ? " grid grid-cols-2 gap-1" : ""}`}>
             {post.media.map((m, i) => {
               const src = `${API_URL}${m.url.replace(/^\/api/, "")}`;
-              if (m.type.startsWith("image/")) return <AuthMedia key={i} src={src} type="image" className="w-full max-h-[500px] object-contain rounded-xl" />;
-              if (m.type.startsWith("video/")) return <AuthMedia key={i} src={src} type="video" className="w-full max-h-[600px] rounded-xl" />;
-              if (m.type.startsWith("audio/")) return <AuthMedia key={i} src={src} type="audio" />;
-              return null;
+              const isImage = m.type.startsWith("image/");
+              const isVideo = m.type.startsWith("video/");
+              const isAudio = m.type.startsWith("audio/");
+              if (!isImage && !isVideo && !isAudio) return null;
+              const spanFull = inGrid && (isAudio || (count === 3 && i === 0));
+              const type: "image" | "video" | "audio" = isImage ? "image" : isVideo ? "video" : "audio";
+              const mediaClass = inGrid && !isAudio
+                ? "w-full h-52 object-cover rounded-xl"
+                : isImage ? "max-w-full max-h-[500px] rounded-xl" : isVideo ? "max-w-full max-h-[600px] rounded-xl" : undefined;
+              return (
+                <div key={i} className={spanFull ? "col-span-2" : undefined}>
+                  <AuthMedia src={src} type={type} className={mediaClass} />
+                </div>
+              );
             })}
           </div>
-        )}
+          );
+        })()}
 
         {/* Reaction bar */}
         <div className="flex items-center gap-1 px-4 py-2.5 border-t border-surface-container-high/50">

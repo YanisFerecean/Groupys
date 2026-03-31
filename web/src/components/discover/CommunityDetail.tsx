@@ -173,13 +173,15 @@ function PostCard({
         }}
       >
         {post.authorProfileImage ? (
-          <Image
-            src={post.authorProfileImage}
-            alt={post.authorDisplayName || post.authorUsername}
-            width={36}
-            height={36}
-            className="shrink-0 rounded-full object-cover"
-          />
+          <div className="w-9 h-9 shrink-0 rounded-full overflow-hidden">
+            <Image
+              src={post.authorProfileImage}
+              alt={post.authorDisplayName || post.authorUsername}
+              width={36}
+              height={36}
+              className="w-full h-full object-cover"
+            />
+          </div>
         ) : (
           <div className="w-9 h-9 shrink-0 rounded-full bg-surface-container-high flex items-center justify-center">
             <span className="material-symbols-outlined text-on-surface-variant/40 text-sm">
@@ -230,17 +232,31 @@ function PostCard({
       )}
 
       {/* Media */}
-      {post.media?.length > 0 && (
-        <div className="px-4 pb-3 space-y-2">
+      {post.media?.length > 0 && (() => {
+        const count = post.media.length;
+        const inGrid = count > 1;
+        return (
+        <div className={`px-4 pb-3${inGrid ? " grid grid-cols-2 gap-1" : ""}`}>
           {post.media.map((m, i) => {
             const src = `${API_URL}${m.url.replace(/^\/api/, "")}`;
-            if (m.type.startsWith("image/")) return <AuthMedia key={i} src={src} type="image" className="w-full max-h-96 object-contain rounded-xl" />;
-            if (m.type.startsWith("video/")) return <AuthMedia key={i} src={src} type="video" className="w-full rounded-xl" />;
-            if (m.type.startsWith("audio/")) return <AuthMedia key={i} src={src} type="audio" />;
-            return null;
+            const isImage = m.type.startsWith("image/");
+            const isVideo = m.type.startsWith("video/");
+            const isAudio = m.type.startsWith("audio/");
+            if (!isImage && !isVideo && !isAudio) return null;
+            const spanFull = inGrid && (isAudio || (count === 3 && i === 0));
+            const type: "image" | "video" | "audio" = isImage ? "image" : isVideo ? "video" : "audio";
+            const mediaClass = inGrid && !isAudio
+              ? "w-full h-40 object-cover rounded-xl"
+              : isImage ? "max-w-full max-h-80 rounded-xl" : isVideo ? "max-w-full max-h-[480px] rounded-xl" : undefined;
+            return (
+              <div key={i} className={spanFull ? "col-span-2" : undefined}>
+                <AuthMedia src={src} type={type} className={mediaClass} />
+              </div>
+            );
           })}
         </div>
-      )}
+        );
+      })()}
 
       {/* Reaction bar */}
       <div
@@ -384,12 +400,14 @@ function SortDropdown({
 function CreatePostForm({
   onPost,
   posting,
+  error,
 }: {
-  onPost: (content: string, file: File | null) => void;
+  onPost: (content: string, files: File[]) => void;
   posting: boolean;
+  error?: string | null;
 }) {
-  const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [, setTick] = useState(0);
@@ -415,62 +433,69 @@ function CreatePostForm({
     },
   });
 
-  const attachFile = useCallback((f: File | null) => {
-    setFile(f);
-    if (
-      f &&
-      (f.type.startsWith("image/") ||
-        f.type.startsWith("video/") ||
-        f.type.startsWith("audio/"))
-    ) {
-      setPreview(URL.createObjectURL(f));
-    } else {
-      setPreview(null);
-    }
-  }, []);
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    attachFile(e.target.files?.[0] || null);
-  };
-
   const isAllowedMedia = (type: string) =>
     type.startsWith("image/") ||
     type.startsWith("video/") ||
     type.startsWith("audio/");
+
+  const addFiles = useCallback((incoming: File[]) => {
+    setFiles((prev) => {
+      const merged = [...prev, ...incoming].slice(0, 4);
+      setPreviews(merged.map((f) => URL.createObjectURL(f)));
+      return merged;
+    });
+  }, []);
+
+  const removeFile = useCallback((index: number) => {
+    setFiles((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      setPreviews(next.map((f) => URL.createObjectURL(f)));
+      return next;
+    });
+    if (fileRef.current) fileRef.current.value = "";
+  }, []);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = Array.from(e.target.files ?? []).filter((f) => isAllowedMedia(f.type));
+    if (selected.length) addFiles(selected);
+  };
 
   // Handle paste & drop media on the editor area
   const handlePaste = useCallback(
     (e: React.ClipboardEvent) => {
       const items = e.clipboardData?.items;
       if (!items) return;
+      const mediaFiles: File[] = [];
       for (const item of items) {
         if (isAllowedMedia(item.type)) {
-          e.preventDefault();
           const f = item.getAsFile();
-          if (f) attachFile(f);
-          return;
+          if (f) mediaFiles.push(f);
         }
       }
+      if (mediaFiles.length) {
+        e.preventDefault();
+        addFiles(mediaFiles);
+      }
     },
-    [attachFile],
+    [addFiles],
   );
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
-      const f = e.dataTransfer?.files?.[0];
-      if (f && isAllowedMedia(f.type)) {
+      const dropped = Array.from(e.dataTransfer?.files ?? []).filter((f) => isAllowedMedia(f.type));
+      if (dropped.length) {
         e.preventDefault();
-        attachFile(f);
+        addFiles(dropped);
       }
     },
-    [attachFile],
+    [addFiles],
   );
 
   const handleSubmit = () => {
     if (!editor) return;
     const html = editor.getHTML();
     const isEmpty = editor.isEmpty;
-    if (isEmpty && !file) return;
+    if (isEmpty && files.length === 0) return;
 
     // Convert HTML to markdown for storage
     const td = new TurndownService({
@@ -479,10 +504,10 @@ function CreatePostForm({
     });
     const markdown = isEmpty ? "" : td.turndown(html);
 
-    onPost(markdown.trim(), file);
+    onPost(markdown.trim(), files);
     editor.commands.clearContent();
-    setFile(null);
-    setPreview(null);
+    setFiles([]);
+    setPreviews([]);
     if (fileRef.current) fileRef.current.value = "";
   };
 
@@ -592,75 +617,38 @@ function CreatePostForm({
         </div>
       )}
 
-      {preview && file && (
-        <div className="relative mt-2 mb-3">
-          {file.type.startsWith("video/") ? (
-            <video
-              src={preview}
-              controls
-              className="w-full max-h-48 rounded-xl"
-            />
-          ) : file.type.startsWith("audio/") ? (
-            <div className="flex items-center gap-3 bg-surface-container-high rounded-xl px-4 py-3">
-              <span
-                className="material-symbols-outlined text-primary"
-                style={{ fontSize: 24, fontVariationSettings: "'FILL' 1" }}
+      {files.length > 0 && (
+        <div className="mt-2 mb-3 space-y-2">
+          {files.map((file, index) => (
+            <div key={index} className="relative">
+              {previews[index] && file.type.startsWith("video/") ? (
+                <video src={previews[index]} controls className="max-w-full max-h-48 rounded-xl" />
+              ) : previews[index] && file.type.startsWith("audio/") ? (
+                <div className="flex items-center gap-3 bg-surface-container-high rounded-xl px-4 py-3">
+                  <span className="material-symbols-outlined text-primary" style={{ fontSize: 24, fontVariationSettings: "'FILL' 1" }}>music_note</span>
+                  <audio src={previews[index]} controls className="flex-1 h-8" />
+                </div>
+              ) : previews[index] ? (
+                <Image src={previews[index]} alt="Preview" width={0} height={0} sizes="100vw" className="max-w-full max-h-48 object-cover rounded-xl" />
+              ) : (
+                <div className="flex items-center gap-2 bg-surface-container-high rounded-xl px-3 py-2">
+                  <span className="material-symbols-outlined text-on-surface-variant text-base">attach_file</span>
+                  <span className="text-xs text-on-surface-variant truncate flex-1">{file.name}</span>
+                </div>
+              )}
+              <button
+                onClick={() => removeFile(index)}
+                className={`${file.type.startsWith("audio/") ? "absolute -top-1 -right-1" : "absolute top-2 right-2"} w-7 h-7 rounded-full bg-black/50 flex items-center justify-center text-white hover:bg-black/70 transition-colors`}
               >
-                music_note
-              </span>
-              <audio src={preview} controls className="flex-1 h-8" />
+                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
+              </button>
             </div>
-          ) : (
-            <Image
-              src={preview}
-              alt="Preview"
-              width={0}
-              height={0}
-              sizes="100vw"
-              className="w-full max-h-48 object-cover rounded-xl"
-            />
-          )}
-          <button
-            onClick={() => {
-              setFile(null);
-              setPreview(null);
-              if (fileRef.current) fileRef.current.value = "";
-            }}
-            className={`${file.type.startsWith("audio/") ? "absolute -top-1 -right-1" : "absolute top-2 right-2"} w-7 h-7 rounded-full bg-black/50 flex items-center justify-center text-white hover:bg-black/70 transition-colors`}
-          >
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: 16 }}
-            >
-              close
-            </span>
-          </button>
+          ))}
         </div>
       )}
 
-      {file && !preview && (
-        <div className="flex items-center gap-2 mt-2 mb-3 bg-surface-container-high rounded-xl px-3 py-2">
-          <span className="material-symbols-outlined text-on-surface-variant text-base">
-            attach_file
-          </span>
-          <span className="text-xs text-on-surface-variant truncate flex-1">
-            {file.name}
-          </span>
-          <button
-            onClick={() => {
-              setFile(null);
-              if (fileRef.current) fileRef.current.value = "";
-            }}
-            className="text-on-surface-variant hover:text-on-surface"
-          >
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: 16 }}
-            >
-              close
-            </span>
-          </button>
-        </div>
+      {error && (
+        <p className="text-xs text-error mb-2">{error}</p>
       )}
 
       <div className="flex items-center justify-between pt-2 border-t border-surface-container-high">
@@ -669,21 +657,34 @@ function CreatePostForm({
             ref={fileRef}
             type="file"
             accept="image/*,video/*,audio/*"
+            multiple
             onChange={handleFileChange}
             className="hidden"
           />
           <button
             onClick={() => fileRef.current?.click()}
-            className="p-2 rounded-full text-on-surface-variant hover:bg-surface-container-high transition-colors"
+            disabled={files.length >= 4}
+            className="p-2 rounded-full text-on-surface-variant hover:bg-surface-container-high transition-colors disabled:opacity-40 relative"
           >
             <span className="material-symbols-outlined text-lg">image</span>
+            {files.length > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-primary text-on-primary text-[10px] font-bold flex items-center justify-center">
+                {files.length}
+              </span>
+            )}
           </button>
         </div>
         <button
           onClick={handleSubmit}
-          disabled={posting || (!!editor?.isEmpty && !file)}
-          className="px-4 py-1.5 rounded-full text-sm font-bold text-on-primary bg-primary hover:opacity-90 transition-opacity disabled:opacity-50"
+          disabled={posting || (!!editor?.isEmpty && files.length === 0)}
+          className="px-4 py-1.5 rounded-full text-sm font-bold text-on-primary bg-primary hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-2"
         >
+          {posting && (
+            <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+            </svg>
+          )}
           {posting ? "Posting..." : "Post"}
         </button>
       </div>
@@ -705,6 +706,7 @@ export default function CommunityDetail({ id }: { id: string }) {
   const [joined, setJoined] = useState(false);
   const [joining, setJoining] = useState(false);
   const [posting, setPosting] = useState(false);
+  const [postError, setPostError] = useState<string | null>(null);
   const [membersExpanded, setMembersExpanded] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
   const bannerInputRef = useRef<HTMLInputElement>(null);
@@ -834,24 +836,44 @@ export default function CommunityDetail({ id }: { id: string }) {
   }, [id, getToken, joined]);
 
   const handlePost = useCallback(
-    async (content: string, file: File | null) => {
+    async (content: string, files: File[]) => {
       setPosting(true);
+      setPostError(null);
       try {
         const token = await getToken();
         const formData = new FormData();
         formData.append("content", content);
-        if (file) formData.append("files", await resizeImage(file, 800, 800));
+        for (const file of files) {
+          formData.append("files", file.type.startsWith("image/") ? await resizeImage(file, 800, 800) : file);
+        }
 
         const res = await fetch(`${API_URL}/posts/community/${id}`, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },
           body: formData,
         });
-        if (!res.ok) throw new Error("Failed to create post");
+        if (!res.ok) {
+          let message = "Failed to create post";
+          try {
+            const text = await res.text();
+            try {
+              const body = JSON.parse(text);
+              if (body?.error) message = body.error;
+              else if (body?.message) message = body.message;
+            } catch {
+              if (text && text.length < 300 && !text.startsWith("<")) message = text;
+            }
+          } catch {
+            // ignore
+          }
+          setPostError(message);
+          return;
+        }
         const newPost: PostRes = await res.json();
         setPosts((prev) => [newPost, ...prev]);
       } catch (err) {
         console.error("Post error:", err);
+        setPostError("Failed to create post");
       } finally {
         setPosting(false);
       }
@@ -1118,7 +1140,7 @@ export default function CommunityDetail({ id }: { id: string }) {
 
               {joined && (
                 <div className="mb-4">
-                  <CreatePostForm onPost={handlePost} posting={posting} />
+                  <CreatePostForm onPost={handlePost} posting={posting} error={postError} />
                 </div>
               )}
 
@@ -1192,13 +1214,15 @@ export default function CommunityDetail({ id }: { id: string }) {
                           {i + 1}
                         </span>
                         {user.profileImage ? (
-                          <Image
-                            src={user.profileImage}
-                            alt={user.displayName || user.username}
-                            width={32}
-                            height={32}
-                            className="rounded-full object-cover shrink-0"
-                          />
+                          <div className="w-8 h-8 shrink-0 rounded-full overflow-hidden">
+                            <Image
+                              src={user.profileImage}
+                              alt={user.displayName || user.username}
+                              width={32}
+                              height={32}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
                         ) : (
                           <div className="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center shrink-0">
                             <span className="material-symbols-outlined text-on-surface-variant/40 text-sm">
