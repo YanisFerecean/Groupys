@@ -49,7 +49,8 @@
       "Bash(grep -r \"EAGER\\\\|LAZY\\\\|fetch\" /c/Uni/Projects/groupys-web-app/backend/quarkus-groupys/src/main/java/com/groupys/model/*.java)",
       "Bash(grep -n \"useState\\\\|useEffect\\\\|useCallback\" /c/Uni/Projects/groupys-web-app/web/src/app/chat/[conversationId]/page.tsx)",
       "Bash(cmd /c \"mvnw.cmd compile -q\")",
-      "Bash(cmd /c \"npm run build\")"
+      "Bash(cmd /c \"npm run build\")",
+      "Bash(find /c/Uni/Projects/groupys-web-app/mobile/components -type f -name *rofile* -o -name *Avatar* -o -name *ommunity*)"
     ]
   }
 }
