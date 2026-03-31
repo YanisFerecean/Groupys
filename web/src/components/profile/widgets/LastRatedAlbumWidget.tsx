@@ -47,7 +47,7 @@ export default function LastRatedAlbumWidget({ username, containerColor, size = 
         size === "small" ? (
           <button
             className="w-full text-left flex flex-col gap-3 group"
-            onClick={() => router.push(`/album/${ratings[0].albumId}`)}
+            onClick={() => router.push(`/discover/album/${ratings[0].albumId}`)}
           >
             {ratings[0].albumCoverUrl ? (
               <div className="relative w-full aspect-square rounded-xl overflow-hidden shadow-md">
@@ -78,7 +78,7 @@ export default function LastRatedAlbumWidget({ username, containerColor, size = 
               <button
                 key={rating.albumId}
                 className="w-full text-left flex items-center gap-3 group"
-                onClick={() => router.push(`/album/${rating.albumId}`)}
+                onClick={() => router.push(`/discover/album/${rating.albumId}`)}
               >
                 {rating.albumCoverUrl ? (
                   <Image
