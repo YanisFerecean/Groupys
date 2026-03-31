@@ -14,6 +14,7 @@
   "dependencies": {
     "@clerk/expo": "^3.1.5",
     "@expo-google-fonts/dm-sans": "^0.4.2",
+    "@expo/ui": "~0.2.0-beta.9",
     "@expo/vector-icons": "^15.0.3",
     "@noble/curves": "^1.9.7",
     "@react-navigation/bottom-tabs": "^7.4.0",

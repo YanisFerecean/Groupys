@@ -1,9 +1,9 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
 import { useAuth, useUser } from '@clerk/expo'
-import { BlurView } from 'expo-blur'
 import { Redirect, Tabs, router, useSegments } from 'expo-router'
 import { useCallback, useRef } from 'react'
 import { StyleSheet, View } from 'react-native'
+import { GlassTabBarBackground } from '@/components/ui/GlassTabBarBackground'
 import { ChatProvider } from '@/components/chat/ChatProvider'
 import FullscreenSpinner from '@/components/ui/FullscreenSpinner'
 import { Colors } from '@/constants/colors'
@@ -63,15 +63,7 @@ export default function HomeLayout() {
                 backgroundColor: 'transparent',
               },
           tabBarBackground: () => (
-            isChatThreadRoute
-              ? null
-              : (
-                  <BlurView
-                    intensity={80}
-                    tint="light"
-                    style={StyleSheet.absoluteFill}
-                  />
-                )
+            isChatThreadRoute ? null : <GlassTabBarBackground />
           ),
         }}
       >
