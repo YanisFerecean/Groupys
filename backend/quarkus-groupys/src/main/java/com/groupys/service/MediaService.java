@@ -58,7 +58,8 @@ public class MediaService {
                     "-movflags", "+faststart",
                     outputPath.toString()
             );
-            pb.redirectErrorStream(true);
+            pb.redirectOutput(ProcessBuilder.Redirect.DISCARD);
+            pb.redirectError(ProcessBuilder.Redirect.DISCARD);
             int exitCode = pb.start().waitFor();
             if (exitCode != 0) {
                 throw new RuntimeException("FFmpeg video processing failed (exit " + exitCode + ")");
@@ -89,7 +90,8 @@ public class MediaService {
                     "-vn",
                     outputPath.toString()
             );
-            pb.redirectErrorStream(true);
+            pb.redirectOutput(ProcessBuilder.Redirect.DISCARD);
+            pb.redirectError(ProcessBuilder.Redirect.DISCARD);
             int exitCode = pb.start().waitFor();
             if (exitCode != 0) {
                 throw new RuntimeException("FFmpeg audio processing failed (exit " + exitCode + ")");

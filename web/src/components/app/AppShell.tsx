@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth, useUser } from "@clerk/nextjs";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import SideNav from "@/components/app/SideNav";
 import TopBar from "@/components/app/TopBar";
 import SearchOverlay from "@/components/discover/SearchOverlay";
 import SettingsDialog from "@/components/app/SettingsDialog";
+import CreatePostModal from "@/components/ui/CreatePostModal";
 import { fetchUserByClerkId } from "@/lib/api";
 import { useWebSocket } from "@/hooks/useWebSocket";
 
@@ -14,11 +15,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [createPostOpen, setCreatePostOpen] = useState(false);
   const [spotifyConnected, setSpotifyConnected] = useState(false);
   const { getToken, isLoaded: isAuthLoaded, isSignedIn } = useAuth();
   const { user, isLoaded } = useUser();
   const router = useRouter();
+  const pathname = usePathname();
   useWebSocket();
+
+  // Extract community ID if on a community detail page
+  const communityMatch = pathname?.match(/^\/discover\/community\/([^/]+)$/);
+  const currentCommunityId = communityMatch?.[1];
 
   const getTokenRef = useRef(getToken);
   useEffect(() => { getTokenRef.current = getToken; }, [getToken]);
@@ -55,12 +62,27 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         onSettingsClick={() => setSettingsOpen(true)}
       />
       <main className="lg:ml-64 pt-16 lg:pt-20 min-h-screen">{children}</main>
+
+      {/* Floating action button */}
+      <button
+        onClick={() => setCreatePostOpen(true)}
+        className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-primary text-on-primary shadow-lg hover:opacity-90 active:scale-95 transition-all flex items-center justify-center"
+        aria-label="Create post"
+      >
+        <span className="material-symbols-outlined text-2xl">add</span>
+      </button>
+
       {searchOpen && <SearchOverlay onClose={() => setSearchOpen(false)} />}
       <SettingsDialog
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
         spotifyConnected={spotifyConnected}
         onSpotifyDisconnected={handleSpotifyDisconnected}
+      />
+      <CreatePostModal
+        open={createPostOpen}
+        onClose={() => setCreatePostOpen(false)}
+        initialCommunityId={currentCommunityId}
       />
     </div>
   );

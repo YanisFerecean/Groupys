@@ -4,10 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth, useUser } from "@clerk/nextjs";
-import { useEditor, EditorContent } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import Placeholder from "@tiptap/extension-placeholder";
-import TurndownService from "turndown";
 import MarkdownContent from "@/components/ui/MarkdownContent";
 import AuthMedia from "@/components/ui/AuthMedia";
 import MediaLightbox, { LightboxItem } from "@/components/ui/MediaLightbox";
@@ -434,411 +430,6 @@ function SortDropdown({
   );
 }
 
-interface FileEntry {
-  id: string;
-  file: File;
-  preview: string;
-  url: string | null;
-  type: string | null;
-  progress: number;
-  uploading: boolean;
-  error: string | null;
-}
-
-function CreatePostForm({
-  onPost,
-  posting,
-  error,
-}: {
-  onPost: (content: string, media: { url: string; type: string }[]) => void;
-  posting: boolean;
-  error?: string | null;
-}) {
-  const { getToken } = useAuth();
-  const getTokenRef = useRef(getToken);
-  getTokenRef.current = getToken;
-
-  const [entries, setEntries] = useState<FileEntry[]>([]);
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  const [, setTick] = useState(0);
-
-  const editor = useEditor({
-    immediatelyRender: false,
-    extensions: [
-      StarterKit.configure({
-        heading: { levels: [1, 2, 3] },
-      }),
-      Placeholder.configure({
-        placeholder: "Share something with the community...",
-      }),
-    ],
-    editorProps: {
-      attributes: {
-        class:
-          "w-full min-h-[4.5rem] bg-transparent outline-none text-sm text-on-surface prose-editor",
-      },
-    },
-    onTransaction() {
-      setTick((t) => t + 1);
-    },
-  });
-
-  const isAllowedMedia = (type: string) =>
-    type.startsWith("image/") ||
-    type.startsWith("video/") ||
-    type.startsWith("audio/");
-
-  const startUpload = useCallback(async (id: string, file: File) => {
-    try {
-      const token = await getTokenRef.current();
-      const processed = file.type.startsWith("image/") ? await resizeImage(file, 800, 800) : file;
-      const fd = new FormData();
-      fd.append("file", processed, file.name);
-
-      await new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) {
-            const pct = Math.round((e.loaded / e.total) * 100);
-            setEntries((prev) => prev.map((en) => en.id === id ? { ...en, progress: pct } : en));
-          }
-        };
-        xhr.upload.onload = () => {
-          // Transfer done, server is now processing (resize/transcode/store)
-          setEntries((prev) => prev.map((en) => en.id === id ? { ...en, progress: 100 } : en));
-        };
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            const data = JSON.parse(xhr.responseText) as { url: string; type: string };
-            setEntries((prev) => prev.map((en) => en.id === id ? { ...en, url: data.url, type: data.type, progress: 100, uploading: false } : en));
-            resolve();
-          } else {
-            setEntries((prev) => prev.map((en) => en.id === id ? { ...en, uploading: false, error: "Upload failed" } : en));
-            reject();
-          }
-        };
-        xhr.onerror = () => {
-          setEntries((prev) => prev.map((en) => en.id === id ? { ...en, uploading: false, error: "Upload failed" } : en));
-          reject();
-        };
-        xhr.open("POST", `${API_URL}/posts/media/upload`);
-        xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-        xhr.send(fd);
-      });
-    } catch {
-      setEntries((prev) => prev.map((en) => en.id === id ? { ...en, uploading: false, error: "Upload failed" } : en));
-    }
-  }, []);
-
-  const addFiles = useCallback((incoming: File[]) => {
-    setEntries((prev) => {
-      const available = 4 - prev.length;
-      const toAdd = incoming.slice(0, available);
-      const newEntries: FileEntry[] = toAdd.map((file) => ({
-        id: crypto.randomUUID(),
-        file,
-        preview: URL.createObjectURL(file),
-        url: null,
-        type: null,
-        progress: 0,
-        uploading: true,
-        error: null,
-      }));
-      newEntries.forEach((entry) => startUpload(entry.id, entry.file));
-      return [...prev, ...newEntries];
-    });
-  }, [startUpload]);
-
-  const removeFile = useCallback((index: number) => {
-    setEntries((prev) => {
-      const entry = prev[index];
-      if (entry?.url) {
-        const key = entry.url.replace("/api/posts/media/", "");
-        getTokenRef.current().then((token) => {
-          fetch(`${API_URL}/posts/media/${key}`, {
-            method: "DELETE",
-            headers: { Authorization: `Bearer ${token}` },
-          }).catch(() => {});
-        });
-      }
-      return prev.filter((_, i) => i !== index);
-    });
-    if (fileRef.current) fileRef.current.value = "";
-  }, []);
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selected = Array.from(e.target.files ?? []).filter((f) => isAllowedMedia(f.type));
-    if (selected.length) addFiles(selected);
-  };
-
-  const handlePaste = useCallback(
-    (e: React.ClipboardEvent) => {
-      const items = e.clipboardData?.items;
-      if (!items) return;
-      const mediaFiles: File[] = [];
-      for (const item of items) {
-        if (isAllowedMedia(item.type)) {
-          const f = item.getAsFile();
-          if (f) mediaFiles.push(f);
-        }
-      }
-      if (mediaFiles.length) {
-        e.preventDefault();
-        addFiles(mediaFiles);
-      }
-    },
-    [addFiles],
-  );
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      const dropped = Array.from(e.dataTransfer?.files ?? []).filter((f) => isAllowedMedia(f.type));
-      if (dropped.length) {
-        e.preventDefault();
-        addFiles(dropped);
-      }
-    },
-    [addFiles],
-  );
-
-  const handleSubmit = () => {
-    if (!editor) return;
-    const html = editor.getHTML();
-    const isEmpty = editor.isEmpty;
-    if (isEmpty && entries.length === 0) return;
-    if (entries.some((e) => e.uploading)) return;
-
-    const td = new TurndownService({ headingStyle: "atx", bulletListMarker: "-" });
-    const markdown = isEmpty ? "" : td.turndown(html);
-
-    const media = entries
-      .filter((e) => e.url && e.type)
-      .map((e) => ({ url: e.url!, type: e.type! }));
-
-    onPost(markdown.trim(), media);
-    editor.commands.clearContent();
-    setEntries([]);
-    if (fileRef.current) fileRef.current.value = "";
-  };
-
-  const tbtn = (active: boolean) =>
-    `p-1.5 rounded transition-colors ${
-      active
-        ? "bg-primary/15 text-primary"
-        : "text-on-surface-variant hover:bg-surface-container-high"
-    }`;
-
-  return (
-    <div
-      className="bg-surface-container-lowest/65 border border-white/80 rounded-2xl overflow-hidden shadow-sm p-4"
-      onPaste={handlePaste}
-      onDrop={handleDrop}
-      onDragOver={(e) => e.preventDefault()}
-    >
-      <EditorContent editor={editor} />
-
-      {/* Formatting toolbar */}
-      {editor && (
-        <div className="flex items-center gap-0.5 pb-2 mt-1 flex-wrap">
-          <button
-            type="button"
-            onClick={() => {
-              if (editor.isActive("heading", { level: 1 })) {
-                editor.chain().focus().toggleHeading({ level: 1 }).run();
-              } else if (editor.state.selection.$from.parent.textContent) {
-                editor
-                  .chain()
-                  .focus()
-                  .splitBlock()
-                  .setHeading({ level: 1 })
-                  .run();
-              } else {
-                editor.chain().focus().toggleHeading({ level: 1 }).run();
-              }
-            }}
-            className={tbtn(editor.isActive("heading", { level: 1 }))}
-            title="Heading"
-          >
-            <span className="text-xs font-bold">H</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().toggleBold().run()}
-            className={tbtn(editor.isActive("bold"))}
-            title="Bold"
-          >
-            <span className="text-xs font-bold">B</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().toggleItalic().run()}
-            className={tbtn(editor.isActive("italic"))}
-            title="Italic"
-          >
-            <span className="text-xs italic">I</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().toggleStrike().run()}
-            className={tbtn(editor.isActive("strike"))}
-            title="Strikethrough"
-          >
-            <span className="text-xs line-through">S</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().toggleCode().run()}
-            className={tbtn(editor.isActive("code"))}
-            title="Inline code"
-          >
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: 16 }}
-            >
-              code
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().toggleBlockquote().run()}
-            className={tbtn(editor.isActive("blockquote"))}
-            title="Quote"
-          >
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: 16 }}
-            >
-              format_quote
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().toggleBulletList().run()}
-            className={tbtn(editor.isActive("bulletList"))}
-            title="List"
-          >
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: 16 }}
-            >
-              format_list_bulleted
-            </span>
-          </button>
-        </div>
-      )}
-
-      {entries.length > 0 && (() => {
-        const count = entries.length;
-        const inGrid = count > 1;
-        return (
-          <div className={`mt-2 mb-3${inGrid ? " grid grid-cols-2 gap-1" : ""}`}>
-            {entries.map((entry, index) => {
-              const { file, preview, progress, uploading, error: uploadError } = entry;
-              const isImage = file.type.startsWith("image/");
-              const isVideo = file.type.startsWith("video/");
-              const isAudio = file.type.startsWith("audio/");
-              const spanFull = inGrid && (isAudio || (count === 3 && index === 0));
-              const mediaClass = inGrid && !isAudio
-                ? "w-full h-64 object-cover rounded-xl"
-                : isImage ? "max-w-full max-h-48 object-cover rounded-xl" : isVideo ? "max-w-full max-h-48 rounded-xl" : undefined;
-              return (
-                <div key={entry.id} className={`relative${spanFull ? " col-span-2" : ""}`}>
-                  {isVideo ? (
-                    <video src={preview} controls className={mediaClass} />
-                  ) : isAudio ? (
-                    <div className="flex items-center gap-3 bg-surface-container-high rounded-xl px-4 py-3">
-                      <span className="material-symbols-outlined text-primary" style={{ fontSize: 24, fontVariationSettings: "'FILL' 1" }}>music_note</span>
-                      <audio src={preview} controls className="flex-1 h-8" />
-                    </div>
-                  ) : isImage ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={preview} alt="Preview" className={mediaClass} />
-                  ) : (
-                    <div className="flex items-center gap-2 bg-surface-container-high rounded-xl px-3 py-2">
-                      <span className="material-symbols-outlined text-on-surface-variant text-base">attach_file</span>
-                      <span className="text-xs text-on-surface-variant truncate flex-1">{file.name}</span>
-                    </div>
-                  )}
-                  {/* Upload progress / status */}
-                  {uploading && (
-                    <div className="mt-1 px-1">
-                      <div className="flex items-center justify-between mb-0.5">
-                        <span className="text-[10px] text-on-surface-variant">
-                          {progress < 100 ? "Uploading…" : "Processing…"}
-                        </span>
-                        {progress < 100 && (
-                          <span className="text-[10px] text-on-surface-variant">{progress}%</span>
-                        )}
-                      </div>
-                      <div className="h-1 bg-surface-container-high rounded-full overflow-hidden">
-                        <div
-                          className={`h-full bg-primary rounded-full ${progress < 100 ? "transition-all duration-150" : "animate-pulse w-full"}`}
-                          style={progress < 100 ? { width: `${progress}%` } : undefined}
-                        />
-                      </div>
-                    </div>
-                  )}
-                  {uploadError && (
-                    <p className="text-[10px] text-error mt-0.5 px-1">{uploadError}</p>
-                  )}
-                  <button
-                    onClick={() => removeFile(index)}
-                    className={`${isAudio ? "absolute -top-1 -right-1" : "absolute top-2 right-2"} w-7 h-7 rounded-full bg-black/50 flex items-center justify-center text-white hover:bg-black/70 transition-colors`}
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        );
-      })()}
-
-      {error && (
-        <p className="text-xs text-error mb-2">{error}</p>
-      )}
-
-      <div className="flex items-center justify-between pt-2 border-t border-surface-container-high">
-        <div className="flex gap-1">
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*,video/*,audio/*"
-            multiple
-            onChange={handleFileChange}
-            className="hidden"
-          />
-          <button
-            onClick={() => fileRef.current?.click()}
-            disabled={entries.length >= 4}
-            className="p-2 rounded-full text-on-surface-variant hover:bg-surface-container-high transition-colors disabled:opacity-40 relative"
-          >
-            <span className="material-symbols-outlined text-lg">image</span>
-            {entries.length > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-primary text-on-primary text-[10px] font-bold flex items-center justify-center">
-                {entries.length}
-              </span>
-            )}
-          </button>
-        </div>
-        <button
-          onClick={handleSubmit}
-          disabled={posting || (!!editor?.isEmpty && entries.length === 0) || entries.some((e) => e.uploading)}
-          className="px-4 py-1.5 rounded-full text-sm font-bold text-on-primary bg-primary hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-2"
-        >
-          {(posting || entries.some((e) => e.uploading)) && (
-            <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-            </svg>
-          )}
-          {posting ? "Posting..." : entries.some((e) => e.uploading) ? "Uploading..." : "Post"}
-        </button>
-      </div>
-    </div>
-  );
-}
 
 // ── Main component ───────────────────────────────────────────────────────────
 
@@ -853,8 +444,6 @@ export default function CommunityDetail({ id }: { id: string }) {
   const [loading, setLoading] = useState(true);
   const [joined, setJoined] = useState(false);
   const [joining, setJoining] = useState(false);
-  const [posting, setPosting] = useState(false);
-  const [postError, setPostError] = useState<string | null>(null);
   const [membersExpanded, setMembersExpanded] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
   const bannerInputRef = useRef<HTMLInputElement>(null);
@@ -933,6 +522,18 @@ export default function CommunityDetail({ id }: { id: string }) {
     };
   }, [id, getToken]);
 
+  // Listen for posts created via the global FAB modal
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { post, communityId } = (e as CustomEvent).detail;
+      if (communityId === id) {
+        setPosts((prev) => [post, ...prev]);
+      }
+    };
+    window.addEventListener("post-created", handler);
+    return () => window.removeEventListener("post-created", handler);
+  }, [id]);
+
   const handleBannerUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !community) return;
@@ -982,53 +583,6 @@ export default function CommunityDetail({ id }: { id: string }) {
       setJoining(false);
     }
   }, [id, getToken, joined]);
-
-  const handlePost = useCallback(
-    async (content: string, media: { url: string; type: string }[]) => {
-      setPosting(true);
-      setPostError(null);
-      try {
-        const token = await getToken();
-        const formData = new FormData();
-        formData.append("content", content);
-        media.forEach((m) => {
-          formData.append("mediaUrls", m.url);
-          formData.append("mediaTypes", m.type);
-        });
-
-        const res = await fetch(`${API_URL}/posts/community/${id}`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
-        });
-        if (!res.ok) {
-          let message = "Failed to create post";
-          try {
-            const text = await res.text();
-            try {
-              const body = JSON.parse(text);
-              if (body?.error) message = body.error;
-              else if (body?.message) message = body.message;
-            } catch {
-              if (text && text.length < 300 && !text.startsWith("<")) message = text;
-            }
-          } catch {
-            // ignore
-          }
-          setPostError(message);
-          return;
-        }
-        const newPost: PostRes = await res.json();
-        setPosts((prev) => [newPost, ...prev]);
-      } catch (err) {
-        console.error("Post error:", err);
-        setPostError("Failed to create post");
-      } finally {
-        setPosting(false);
-      }
-    },
-    [id, getToken],
-  );
 
   const handleReact = useCallback(
     async (postId: string, type: "like" | "dislike") => {
@@ -1286,12 +840,6 @@ export default function CommunityDetail({ id }: { id: string }) {
                   <SortDropdown value={sortOrder} onChange={setSortOrder} />
                 )}
               </div>
-
-              {joined && (
-                <div className="mb-4">
-                  <CreatePostForm onPost={handlePost} posting={posting} error={postError} />
-                </div>
-              )}
 
               {posts.length === 0 ? (
                 <p className="text-on-surface-variant text-sm">
