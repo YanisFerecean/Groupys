@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth, useUser } from "@clerk/nextjs";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -15,6 +15,11 @@ export default function UserSync() {
   const pathname = usePathname();
   const router = useRouter();
   const syncedRef = useRef(false);
+  const [redirecting, setRedirecting] = useState(false);
+
+  useEffect(() => {
+    if (redirecting && pathname !== "/") setRedirecting(false);
+  }, [pathname, redirecting]);
 
   useEffect(() => {
     if (!isLoaded || !isAuthLoaded || !isSignedIn || !user || syncedRef.current) return;
@@ -31,8 +36,10 @@ export default function UserSync() {
             displayName: user.fullName ?? undefined,
             profileImage: user.imageUrl ?? undefined,
           }, token);
-          // New user — send to profile to set up their account
-          if (pathname === "/") router.replace("/profile");
+          if (pathname === "/") {
+            setRedirecting(true);
+            router.replace("/profile");
+          }
         } else {
           if (user.imageUrl && existing.profileImage !== user.imageUrl) {
             await updateBackendUser(existing.id, {
@@ -45,8 +52,10 @@ export default function UserSync() {
               profileImage: user.imageUrl,
             }, token);
           }
-          // Returning user — send to feed
-          if (pathname === "/") router.replace("/feed");
+          if (pathname === "/") {
+            setRedirecting(true);
+            router.replace("/feed");
+          }
         }
       } catch (err) {
         console.error("Failed to sync user to backend:", err);
@@ -54,5 +63,14 @@ export default function UserSync() {
     })();
   }, [getToken, isAuthLoaded, isSignedIn, isLoaded, user, pathname, router]);
 
-  return null;
+  if (!redirecting) return null;
+
+  return (
+    <div className="fixed inset-0 z-[200] bg-surface flex items-center justify-center">
+      <svg className="animate-spin h-10 w-10 text-primary" viewBox="0 0 24 24" fill="none">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+      </svg>
+    </div>
+  );
 }

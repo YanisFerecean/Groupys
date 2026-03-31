@@ -2,14 +2,31 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Show, SignInButton, UserButton } from "@clerk/nextjs";
 
 const isProd = process.env.NEXT_PUBLIC_APP_ENV === "prod";
 
 export default function NavBar() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [navigating, setNavigating] = useState(false);
+  const router = useRouter();
+
+  const goToProfile = () => {
+    setNavigating(true);
+    router.push("/profile");
+  };
 
   return (
+    <>
+    {navigating && (
+      <div className="fixed inset-0 z-[200] bg-surface flex items-center justify-center">
+        <svg className="animate-spin h-10 w-10 text-primary" viewBox="0 0 24 24" fill="none">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+        </svg>
+      </div>
+    )}
     <nav className="fixed top-0 w-full z-50 bg-slate-50/70 glass-nav">
       <div className="max-w-7xl mx-auto px-6 sm:px-8 py-5 flex items-center justify-between">
         <div className="text-2xl font-black tracking-tighter text-primary">Groupys</div>
@@ -48,12 +65,12 @@ export default function NavBar() {
               </SignInButton>
             </Show>
             <Show when="signed-in">
-              <Link
-                href="/profile"
+              <button
+                onClick={goToProfile}
                 className="px-6 py-2 bg-primary text-on-primary rounded-full font-bold scale-95 duration-200 ease-in-out hover:scale-100 transition-transform"
               >
                 My Profile
-              </Link>
+              </button>
               <UserButton />
             </Show>
             </>
@@ -114,13 +131,12 @@ export default function NavBar() {
                 </SignInButton>
               </Show>
               <Show when="signed-in">
-                <Link
-                  href="/profile"
+                <button
+                  onClick={() => { setMobileOpen(false); goToProfile(); }}
                   className="w-full py-3 bg-primary text-on-primary rounded-full font-bold text-center hover:opacity-90 transition-opacity"
-                  onClick={() => setMobileOpen(false)}
                 >
                   My Profile
-                </Link>
+                </button>
               </Show>
             </>
           )}
@@ -128,5 +144,6 @@ export default function NavBar() {
         </div>
       )}
     </nav>
+    </>
   );
 }
