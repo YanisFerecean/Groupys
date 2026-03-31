@@ -84,13 +84,15 @@ const FeedPostCard = memo(function FeedPostCard({
         onClick={() => router.push(`/profile/${post.authorUsername}`)}
       >
         {post.authorProfileImage ? (
-          <Image
-            src={post.authorProfileImage}
-            alt={post.authorDisplayName || post.authorUsername}
-            width={36}
-            height={36}
-            className="shrink-0 rounded-full object-cover"
-          />
+          <div className="w-9 h-9 shrink-0 rounded-full overflow-hidden">
+            <Image
+              src={post.authorProfileImage}
+              alt={post.authorDisplayName || post.authorUsername}
+              width={36}
+              height={36}
+              className="w-full h-full object-cover"
+            />
+          </div>
         ) : (
           <div className="w-9 h-9 shrink-0 rounded-full bg-surface-container-high flex items-center justify-center">
             <span className="material-symbols-outlined text-on-surface-variant/40 text-sm">
@@ -123,17 +125,32 @@ const FeedPostCard = memo(function FeedPostCard({
       )}
 
       {/* Media */}
-      {post.media?.length > 0 && (
-        <div className="px-4 pb-3 space-y-2">
+      {post.media?.length > 0 && (() => {
+        const count = post.media.length;
+        const inGrid = count > 1;
+        return (
+        <div className={`px-4 pb-3${inGrid ? " grid grid-cols-2 gap-1" : ""}`}>
           {post.media.map((m, i) => {
             const src = `${API_URL}${m.url.replace(/^\/api/, "")}`;
-            if (m.type.startsWith("image/")) return <AuthMedia key={i} src={src} type="image" className="w-full max-h-96 object-contain rounded-xl" />;
-            if (m.type.startsWith("video/")) return <AuthMedia key={i} src={src} type="video" className="w-full rounded-xl" />;
-            if (m.type.startsWith("audio/")) return <AuthMedia key={i} src={src} type="audio" />;
-            return null;
+            const isImage = m.type.startsWith("image/");
+            const isVideo = m.type.startsWith("video/");
+            const isAudio = m.type.startsWith("audio/");
+            if (!isImage && !isVideo && !isAudio) return null;
+            const spanFull = inGrid && (isAudio || (count === 3 && i === 0));
+            const type: "image" | "video" | "audio" = isImage ? "image" : isVideo ? "video" : "audio";
+            const mediaClass = inGrid && !isAudio
+              ? "w-full h-40 object-cover rounded-xl"
+              : isImage ? "max-w-full max-h-80 rounded-xl" : isVideo ? "max-w-full max-h-[480px] rounded-xl" : undefined;
+            return (
+              <div key={i} className={spanFull ? "col-span-2" : undefined}>
+                <AuthMedia src={src} type={type} className={mediaClass} />
+              </div>
+            );
           })}
         </div>
-      )}
+        );
+      })()}
+      )
 
       {/* Reaction bar */}
       <div className="flex items-center gap-1 px-3 py-2 border-t border-surface-container-high/50">
