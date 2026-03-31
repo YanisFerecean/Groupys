@@ -19,14 +19,14 @@ export default function TopAlbumsWidget({ albums, containerColor, size = "normal
 
   async function handleAlbumClick(album: NonNullable<TopAlbumsWidgetProps["albums"]>[number]) {
     if (album.id) {
-      router.push(`/album/${album.id}`);
+      router.push(`/discover/album/${album.id}`);
       return;
     }
     try {
       const res = await fetch(`/api/music-search?q=${encodeURIComponent(album.title)}&type=album`);
       const data = await res.json();
       const match = data.results?.[0];
-      if (match?.id) router.push(`/album/${match.id}`);
+      if (match?.id) router.push(`/discover/album/${match.id}`);
     } catch {
       // silently ignore
     }
