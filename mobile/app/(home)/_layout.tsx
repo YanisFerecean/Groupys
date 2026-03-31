@@ -7,7 +7,7 @@ import { StyleSheet, View } from 'react-native'
 import { ChatProvider } from '@/components/chat/ChatProvider'
 import FullscreenSpinner from '@/components/ui/FullscreenSpinner'
 import { Colors } from '@/constants/colors'
-import { hasUsername } from '@/lib/auth'
+import { isAccountSetupComplete } from '@/lib/auth'
 import { homeTabRootPath, type HomeTab } from '@/lib/profileRoutes'
 
 const DOUBLE_TAP_DELAY_MS = 320
@@ -43,7 +43,7 @@ export default function HomeLayout() {
 
   if (!isSignedIn) return <Redirect href="/(auth)/sign-in" />
 
-  if (!hasUsername(user)) return <Redirect href="/complete-profile" />
+  if (!isAccountSetupComplete(user)) return <Redirect href="/complete-profile" />
 
   return (
     <ChatProvider>

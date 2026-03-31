@@ -1,33 +1,87 @@
 import { useAuth, useUser } from '@clerk/expo'
 import { Redirect, useRouter } from 'expo-router'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native'
 import AuthScaffold from '@/components/auth/AuthScaffold'
 import AuthTextField from '@/components/auth/AuthTextField'
 import FullscreenSpinner from '@/components/ui/FullscreenSpinner'
 import { Colors } from '@/constants/colors'
-import { hasUsername, normalizeUsername, validateUsername } from '@/lib/auth'
+import { fetchUserByClerkId, upsertBackendUserIdentity } from '@/lib/api'
+import {
+  getUserDisplayName,
+  isAccountSetupComplete,
+  normalizeDisplayName,
+  normalizeUsername,
+  validateDisplayName,
+  validateUsername,
+} from '@/lib/auth'
 import { getClerkErrorMessage } from '@/lib/clerk'
+
+function splitDisplayName(displayName: string) {
+  const parts = displayName.trim().split(/\s+/)
+  const firstName = parts[0] ?? ''
+  const lastName = parts.slice(1).join(' ') || null
+
+  return { firstName, lastName }
+}
 
 export default function CompleteProfileScreen() {
   const router = useRouter()
-  const { isSignedIn, isLoaded: isAuthLoaded } = useAuth()
+  const { isSignedIn, isLoaded: isAuthLoaded, getToken } = useAuth()
   const { user, isLoaded: isUserLoaded } = useUser()
 
+  const [displayName, setDisplayName] = useState('')
   const [username, setUsername] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [didPrefill, setDidPrefill] = useState(false)
+  const [didPrefillFromClerk, setDidPrefillFromClerk] = useState(false)
+  const didTryBackendPrefill = useRef(false)
 
   useEffect(() => {
-    if (didPrefill) return
+    if (didPrefillFromClerk || !user) {
+      return
+    }
 
-    const seededUsername = normalizeUsername(user?.username)
-    if (!seededUsername) return
+    setDisplayName(normalizeDisplayName(getUserDisplayName(user)))
+    setUsername(normalizeUsername(user.username))
+    setDidPrefillFromClerk(true)
+  }, [didPrefillFromClerk, user])
 
-    setUsername(seededUsername)
-    setDidPrefill(true)
-  }, [didPrefill, user?.username])
+  useEffect(() => {
+    if (!isAuthLoaded || !isUserLoaded || !isSignedIn || !user || didTryBackendPrefill.current) {
+      return
+    }
+
+    didTryBackendPrefill.current = true
+    let cancelled = false
+
+    ;(async () => {
+      try {
+        const token = await getToken()
+        const backendUser = await fetchUserByClerkId(user.id, token)
+
+        if (!backendUser || cancelled) {
+          return
+        }
+
+        const backendDisplayName = normalizeDisplayName(backendUser.displayName)
+        const backendUsername = normalizeUsername(backendUser.username)
+
+        if (backendDisplayName) {
+          setDisplayName((current) => current || backendDisplayName)
+        }
+        if (backendUsername) {
+          setUsername((current) => current || backendUsername)
+        }
+      } catch (prefillError) {
+        console.warn('Could not prefill backend onboarding fields', prefillError)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [getToken, isAuthLoaded, isSignedIn, isUserLoaded, user])
 
   if (!isAuthLoaded || !isUserLoaded) {
     return <FullscreenSpinner />
@@ -37,14 +91,21 @@ export default function CompleteProfileScreen() {
     return <Redirect href="/(auth)/sign-in" />
   }
 
-  if (hasUsername(user)) {
+  if (isAccountSetupComplete(user)) {
     return <Redirect href="/(home)/(feed)" />
   }
 
   async function handleContinue() {
+    const normalizedDisplayName = normalizeDisplayName(displayName)
     const normalizedUsername = normalizeUsername(username)
-    const usernameError = validateUsername(normalizedUsername)
 
+    const displayNameError = validateDisplayName(normalizedDisplayName)
+    if (displayNameError) {
+      setError(displayNameError)
+      return
+    }
+
+    const usernameError = validateUsername(normalizedUsername)
     if (usernameError) {
       setError(usernameError)
       return
@@ -59,15 +120,74 @@ export default function CompleteProfileScreen() {
         return
       }
 
-      await user.update({ username: normalizedUsername })
-      router.replace('/(home)/(feed)')
-    } catch (error) {
-      const message = getClerkErrorMessage(error, 'Could not save your username. Please try again.')
+      const { firstName, lastName } = splitDisplayName(normalizedDisplayName)
 
-      if (message.toLowerCase().includes('username')) {
+      await user.update({
+        username: normalizedUsername,
+        firstName,
+        lastName,
+      })
+
+      const token = await getToken()
+      if (!token) {
+        setError('Your session expired. Please sign in again.')
+        return
+      }
+
+      await upsertBackendUserIdentity(
+        {
+          clerkId: user.id,
+          username: normalizedUsername,
+          displayName: normalizedDisplayName,
+          profileImage: user.imageUrl ?? undefined,
+        },
+        token,
+      )
+
+      const currentMetadata = (user.unsafeMetadata ?? {}) as Record<string, unknown>
+
+      await user.update({
+        unsafeMetadata: {
+          ...currentMetadata,
+          onboarding_completed: true,
+        },
+      })
+
+      try {
+        await user.reload()
+      } catch (reloadError) {
+        console.warn('Clerk user reload failed after onboarding save', reloadError)
+      }
+      router.replace('/(home)/(feed)')
+    } catch (saveError) {
+      const message = saveError instanceof Error ? saveError.message : ''
+      const isBackendProfileWriteError =
+        /Failed to (create|update) user(?: identity)? \(\d+\)/i.test(message) ||
+        /Failed to fetch user \(\d+\)/i.test(message)
+
+      if (isBackendProfileWriteError) {
+        console.warn('Backend profile onboarding save failed', saveError)
+
+        if (message.toLowerCase().includes('username') || message.includes('(409)')) {
+          setError('That username is already taken in Groupys. Please choose a different one.')
+          return
+        }
+
+        if (message.includes('(401)') || message.includes('(403)')) {
+          setError('Your session expired. Please sign out and sign in again.')
+          return
+        }
+
+        setError('Could not save your profile in Groupys yet. Please try again.')
+        return
+      }
+
+      const clerkMessage = getClerkErrorMessage(saveError, 'Could not save your profile. Please try again.')
+
+      if (clerkMessage.toLowerCase().includes('username')) {
         setError('That username is already taken. Please choose a different one.')
       } else {
-        setError(message)
+        setError(clerkMessage)
       }
     } finally {
       setLoading(false)
@@ -76,8 +196,8 @@ export default function CompleteProfileScreen() {
 
   return (
     <AuthScaffold
-      title="Choose a username"
-      subtitle="Your profile and backend record still need a public handle before you can enter the app."
+      title="Complete your account"
+      subtitle="Add your display name and username before entering Groupys."
       footer={
         <View className="items-center">
           <Text className="text-sm text-on-surface-variant">
@@ -94,6 +214,18 @@ export default function CompleteProfileScreen() {
       ) : null}
 
       <AuthTextField
+        label="Display name"
+        error={null}
+        value={displayName}
+        onChangeText={setDisplayName}
+        autoCapitalize="words"
+        autoComplete="name"
+        textContentType="name"
+        autoFocus
+        placeholder="How people will see your name"
+      />
+
+      <AuthTextField
         label="Username"
         error={null}
         value={username}
@@ -101,7 +233,6 @@ export default function CompleteProfileScreen() {
         autoCapitalize="none"
         autoComplete="username-new"
         textContentType="username"
-        autoFocus
         placeholder="your public handle"
       />
 
@@ -113,7 +244,7 @@ export default function CompleteProfileScreen() {
         {loading ? (
           <ActivityIndicator color={Colors.onPrimary} />
         ) : (
-          <Text className="text-base font-semibold text-on-primary">Save username</Text>
+          <Text className="text-base font-semibold text-on-primary">Save and continue</Text>
         )}
       </TouchableOpacity>
     </AuthScaffold>

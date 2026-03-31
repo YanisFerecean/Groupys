@@ -12,7 +12,7 @@
     "chat:crypto-compat": "node ./scripts/chat-crypto-compat.mjs"
   },
   "dependencies": {
-    "@clerk/expo": "^3.1.4",
+    "@clerk/expo": "^3.1.5",
     "@expo-google-fonts/dm-sans": "^0.4.2",
     "@expo/vector-icons": "^15.0.3",
     "@noble/curves": "^1.9.7",
@@ -22,6 +22,7 @@
     "@vimeiro-co/react-native-html-to-markdown": "^1.0.8",
     "buffer": "^6.0.3",
     "expo": "~54.0.33",
+    "expo-apple-authentication": "~8.0.8",
     "expo-auth-session": "~7.0.10",
     "expo-av": "~16.0.8",
     "expo-blur": "~15.0.8",

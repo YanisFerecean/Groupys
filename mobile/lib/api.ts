@@ -388,6 +388,21 @@ function authHeader(token: string | null): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
+async function readApiErrorDetail(res: Response): Promise<string> {
+  try {
+    const payload = await res.json()
+    return (
+      (typeof payload?.message === 'string' && payload.message) ||
+      (typeof payload?.error === 'string' && payload.error) ||
+      (typeof payload?.detail === 'string' && payload.detail) ||
+      (typeof payload?.title === 'string' && payload.title) ||
+      ''
+    )
+  } catch {
+    return ''
+  }
+}
+
 export async function apiPost<T>(
   path: string,
   token: string | null,
@@ -522,6 +537,19 @@ export async function fetchUserById(
   return res.json()
 }
 
+export async function fetchUserByUsername(
+  username: string,
+  token: string | null,
+): Promise<BackendUser | null> {
+  const res = await fetch(
+    `${API_URL}/users/username/${encodeURIComponent(username)}`,
+    { headers: makeHeaders(token) },
+  )
+  if (res.status === 404) return null
+  if (!res.ok) throw new Error(`Failed to fetch user by username (${res.status})`)
+  return res.json()
+}
+
 export async function createBackendUser(
   data: {
     clerkId: string
@@ -541,9 +569,69 @@ export async function createBackendUser(
   if (res.status === 409) {
     const existing = await fetchUserByClerkId(data.clerkId, token)
     if (existing) return existing
+
+    // If Clerk user was deleted/recreated, backend may still hold the previous
+    // username under a different clerkId.
+    const conflicting = await fetchUserByUsername(data.username, token)
+    if (conflicting && conflicting.clerkId !== data.clerkId) {
+      throw new Error('Failed to create user (409): Username is already taken in Groupys')
+    }
   }
 
-  if (!res.ok) throw new Error(`Failed to create user (${res.status})`)
+  if (!res.ok) {
+    const detail = await readApiErrorDetail(res)
+    throw new Error(`Failed to create user (${res.status})${detail ? `: ${detail}` : ''}`)
+  }
+  return res.json()
+}
+
+export async function upsertBackendUserIdentity(
+  data: {
+    clerkId: string
+    username: string
+    displayName: string
+    profileImage?: string
+  },
+  token: string | null,
+): Promise<BackendUser> {
+  const existing = await fetchUserByClerkId(data.clerkId, token)
+
+  if (!existing) {
+    return createBackendUser(
+      {
+        clerkId: data.clerkId,
+        username: data.username,
+        displayName: data.displayName,
+        profileImage: data.profileImage,
+      },
+      token,
+    )
+  }
+
+  const res = await fetch(`${API_URL}/users/${encodeURIComponent(existing.id)}`, {
+    method: 'PUT',
+    headers: makeHeaders(token),
+    body: JSON.stringify({
+      displayName: data.displayName,
+      bio: existing.bio ?? null,
+      country: existing.country ?? null,
+      bannerUrl: existing.bannerUrl ?? null,
+      bannerText: existing.bannerText ?? null,
+      accentColor: existing.accentColor ?? null,
+      nameColor: existing.nameColor ?? null,
+      profileImage: data.profileImage ?? existing.profileImage ?? null,
+      website: existing.website ?? null,
+      jobTitle: existing.jobTitle ?? null,
+      location: existing.location ?? null,
+      widgets: existing.widgets ?? null,
+      tags: existing.tags ?? null,
+    }),
+  })
+
+  if (!res.ok) {
+    const detail = await readApiErrorDetail(res)
+    throw new Error(`Failed to update user identity (${res.status})${detail ? `: ${detail}` : ''}`)
+  }
   return res.json()
 }
 
