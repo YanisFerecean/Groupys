@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import MarkdownContent from "@/components/ui/MarkdownContent";
 import AuthMedia from "@/components/ui/AuthMedia";
+import MediaLightbox, { LightboxItem } from "@/components/ui/MediaLightbox";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
 const PAGE_SIZE = 20;
@@ -59,6 +60,20 @@ const FeedPostCard = memo(function FeedPostCard({
   onReact: (postId: string, type: "like" | "dislike") => void;
 }) {
   const router = useRouter();
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+
+  const visualItems: LightboxItem[] = post.media
+    ?.filter((m) => m.type.startsWith("image/") || m.type.startsWith("video/"))
+    .map((m) => ({
+      src: `${API_URL}${m.url.replace(/^\/api/, "")}`,
+      type: m.type.startsWith("image/") ? "image" : "video",
+    })) ?? [];
+
+  // Map original media index → visual index
+  let vi = -1;
+  const visualIndexOf = post.media?.map((m) =>
+    m.type.startsWith("image/") || m.type.startsWith("video/") ? ++vi : -1
+  ) ?? [];
 
   return (
     <div className="bg-surface-container-lowest/65 border border-white/80 rounded-2xl overflow-hidden shadow-sm">
@@ -129,28 +144,52 @@ const FeedPostCard = memo(function FeedPostCard({
         const count = post.media.length;
         const inGrid = count > 1;
         return (
-        <div className={`px-4 pb-3${inGrid ? " grid grid-cols-2 gap-1" : ""}`}>
-          {post.media.map((m, i) => {
-            const src = `${API_URL}${m.url.replace(/^\/api/, "")}`;
-            const isImage = m.type.startsWith("image/");
-            const isVideo = m.type.startsWith("video/");
-            const isAudio = m.type.startsWith("audio/");
-            if (!isImage && !isVideo && !isAudio) return null;
-            const spanFull = inGrid && (isAudio || (count === 3 && i === 0));
-            const type: "image" | "video" | "audio" = isImage ? "image" : isVideo ? "video" : "audio";
-            const mediaClass = inGrid && !isAudio
-              ? "w-full h-40 object-cover rounded-xl"
-              : isImage ? "max-w-full max-h-80 rounded-xl" : isVideo ? "max-w-full max-h-[480px] rounded-xl" : undefined;
-            return (
-              <div key={i} className={spanFull ? "col-span-2" : undefined}>
-                <AuthMedia src={src} type={type} className={mediaClass} />
-              </div>
-            );
-          })}
-        </div>
+          <div className={`px-4 pb-3${inGrid ? " grid grid-cols-2 gap-1" : ""}`}>
+            {post.media.map((m, i) => {
+              const src = `${API_URL}${m.url.replace(/^\/api/, "")}`;
+              const isImage = m.type.startsWith("image/");
+              const isVideo = m.type.startsWith("video/");
+              const isAudio = m.type.startsWith("audio/");
+              if (!isImage && !isVideo && !isAudio) return null;
+              const spanFull = inGrid && (isAudio || (count === 3 && i === 0));
+              const vIdx = visualIndexOf[i];
+              const mediaClass = inGrid && !isAudio
+                ? "w-full h-64 object-cover rounded-xl"
+                : isImage ? "max-w-full max-h-80 rounded-xl" : isVideo ? "max-w-full max-h-[480px] rounded-xl" : undefined;
+              return (
+                <div key={i} className={`relative${spanFull ? " col-span-2" : ""}`}>
+                  {isImage ? (
+                    <div onClick={() => setLightboxIndex(vIdx)} className="cursor-zoom-in">
+                      <AuthMedia src={src} type="image" className={mediaClass} />
+                    </div>
+                  ) : isVideo ? (
+                    <div className="relative">
+                      <AuthMedia src={src} type="video" className={mediaClass} />
+                      <button
+                        onClick={() => setLightboxIndex(vIdx)}
+                        className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center text-white transition-colors"
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>fullscreen</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <AuthMedia src={src} type="audio" />
+                  )}
+                </div>
+              );
+            })}
+          </div>
         );
       })()}
-      )
+
+      {lightboxIndex !== null && (
+        <MediaLightbox
+          items={visualItems}
+          index={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+          onNav={setLightboxIndex}
+        />
+      )}
 
       {/* Reaction bar */}
       <div className="flex items-center gap-1 px-3 py-2 border-t border-surface-container-high/50">

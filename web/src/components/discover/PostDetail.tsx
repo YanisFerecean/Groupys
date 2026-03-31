@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import MarkdownContent from "@/components/ui/MarkdownContent";
 import AuthMedia from "@/components/ui/AuthMedia";
+import MediaLightbox, { LightboxItem } from "@/components/ui/MediaLightbox";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
 
@@ -279,6 +280,7 @@ export default function PostDetail({ id }: { id: string }) {
   const [loading, setLoading] = useState(true);
   const [submittingComment, setSubmittingComment] = useState(false);
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -483,26 +485,62 @@ export default function PostDetail({ id }: { id: string }) {
         {post.media?.length > 0 && (() => {
           const count = post.media.length;
           const inGrid = count > 1;
+          const visualItems: LightboxItem[] = post.media
+            .filter((m) => m.type.startsWith("image/") || m.type.startsWith("video/"))
+            .map((m) => ({
+              src: `${API_URL}${m.url.replace(/^\/api/, "")}`,
+              type: m.type.startsWith("image/") ? "image" : "video",
+            }));
+          let vi = -1;
+          const visualIndexOf = post.media.map((m) =>
+            m.type.startsWith("image/") || m.type.startsWith("video/") ? ++vi : -1
+          );
           return (
-          <div className={`px-5 pb-4${inGrid ? " grid grid-cols-2 gap-1" : ""}`}>
-            {post.media.map((m, i) => {
-              const src = `${API_URL}${m.url.replace(/^\/api/, "")}`;
-              const isImage = m.type.startsWith("image/");
-              const isVideo = m.type.startsWith("video/");
-              const isAudio = m.type.startsWith("audio/");
-              if (!isImage && !isVideo && !isAudio) return null;
-              const spanFull = inGrid && (isAudio || (count === 3 && i === 0));
-              const type: "image" | "video" | "audio" = isImage ? "image" : isVideo ? "video" : "audio";
-              const mediaClass = inGrid && !isAudio
-                ? "w-full h-52 object-cover rounded-xl"
-                : isImage ? "max-w-full max-h-[500px] rounded-xl" : isVideo ? "max-w-full max-h-[600px] rounded-xl" : undefined;
-              return (
-                <div key={i} className={spanFull ? "col-span-2" : undefined}>
-                  <AuthMedia src={src} type={type} className={mediaClass} />
-                </div>
-              );
-            })}
-          </div>
+            <>
+              <div className={`px-5 pb-4${inGrid ? " grid grid-cols-2 gap-1" : ""}`}>
+                {post.media.map((m, i) => {
+                  const src = `${API_URL}${m.url.replace(/^\/api/, "")}`;
+                  const isImage = m.type.startsWith("image/");
+                  const isVideo = m.type.startsWith("video/");
+                  const isAudio = m.type.startsWith("audio/");
+                  if (!isImage && !isVideo && !isAudio) return null;
+                  const spanFull = inGrid && (isAudio || (count === 3 && i === 0));
+                  const vIdx = visualIndexOf[i];
+                  const mediaClass = inGrid && !isAudio
+                    ? "w-full h-72 object-cover rounded-xl"
+                    : isImage ? "max-w-full max-h-[500px] rounded-xl" : isVideo ? "max-w-full max-h-[600px] rounded-xl" : undefined;
+                  return (
+                    <div key={i} className={`relative${spanFull ? " col-span-2" : ""}`}>
+                      {isImage ? (
+                        <div onClick={() => setLightboxIndex(vIdx)} className="cursor-zoom-in">
+                          <AuthMedia src={src} type="image" className={mediaClass} />
+                        </div>
+                      ) : isVideo ? (
+                        <div className="relative">
+                          <AuthMedia src={src} type="video" className={mediaClass} />
+                          <button
+                            onClick={() => setLightboxIndex(vIdx)}
+                            className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center text-white transition-colors"
+                          >
+                            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>fullscreen</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <AuthMedia src={src} type="audio" />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {lightboxIndex !== null && (
+                <MediaLightbox
+                  items={visualItems}
+                  index={lightboxIndex}
+                  onClose={() => setLightboxIndex(null)}
+                  onNav={setLightboxIndex}
+                />
+              )}
+            </>
           );
         })()}
 

@@ -92,65 +92,83 @@ public class PostResource {
     }
 
     @POST
+    @Path("/media/upload")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    public Response uploadMedia(@RestForm("file") FileUpload file) {
+        String clerkId = jwt.getSubject();
+        User currentUser = userRepository.findByClerkId(clerkId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        if (file == null) {
+            return Response.status(400).entity(java.util.Map.of("error", "No file provided")).build();
+        }
+        if (file.size() > MAX_FILE_BYTES) {
+            return Response.status(400).entity(java.util.Map.of("error", "File exceeds 25 MB limit")).build();
+        }
+        try {
+            String mediaType = file.contentType();
+            String mediaUrl;
+            String finalType;
+            if (mediaType != null && mediaType.startsWith("image/")) {
+                MediaService.ProcessedMedia processed;
+                try (InputStream is = Files.newInputStream(file.uploadedFile())) {
+                    processed = mediaService.processImage(is, mediaType);
+                }
+                mediaUrl = storageService.uploadPostMedia(currentUser.id, file.fileName(), processed.contentType(), processed.stream(), processed.size());
+                finalType = processed.contentType();
+            } else if (mediaType != null && (mediaType.startsWith("video/") || mediaType.startsWith("audio/"))) {
+                try {
+                    MediaService.ProcessedMedia processed = mediaType.startsWith("video/")
+                            ? mediaService.processVideo(file.uploadedFile())
+                            : mediaService.processAudio(file.uploadedFile());
+                    mediaUrl = storageService.uploadPostMedia(currentUser.id, file.fileName(), processed.contentType(), processed.stream(), processed.size());
+                    finalType = processed.contentType();
+                } catch (Exception ffmpegEx) {
+                    try (InputStream is = Files.newInputStream(file.uploadedFile())) {
+                        mediaUrl = storageService.uploadPostMedia(currentUser.id, file.fileName(), mediaType, is, file.size());
+                        finalType = mediaType;
+                    }
+                }
+            } else {
+                try (InputStream is = Files.newInputStream(file.uploadedFile())) {
+                    mediaUrl = storageService.uploadPostMedia(currentUser.id, file.fileName(), mediaType, is, file.size());
+                    finalType = mediaType;
+                }
+            }
+            return Response.ok(java.util.Map.of("url", mediaUrl, "type", finalType)).build();
+        } catch (Exception e) {
+            String msg = e.getMessage() != null ? e.getMessage() : "Upload failed";
+            return Response.status(500).entity(java.util.Map.of("error", msg)).build();
+        }
+    }
+
+    @DELETE
+    @Path("/media/{key:.+}")
+    public Response deleteMedia(@PathParam("key") String key) {
+        storageService.delete("/api/posts/media/" + key);
+        return Response.noContent().build();
+    }
+
+    @POST
     @Path("/community/{communityId}")
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     public Response create(
             @PathParam("communityId") UUID communityId,
             @RestForm("title") String title,
             @RestForm("content") String content,
-            @RestForm("files") List<FileUpload> files) {
+            @RestForm("mediaUrls") List<String> mediaUrls,
+            @RestForm("mediaTypes") List<String> mediaTypes) {
 
         String clerkId = jwt.getSubject();
-        User currentUser = userRepository.findByClerkId(clerkId)
-                .orElseThrow(() -> new NotFoundException("User not found"));
         List<PostMedia> mediaList = new ArrayList<>();
 
-        if (files != null && !files.isEmpty()) {
-            if (files.size() > 4) {
+        if (mediaUrls != null && !mediaUrls.isEmpty()) {
+            if (mediaUrls.size() > 4) {
                 throw new BadRequestException("Maximum of 4 attachments allowed.");
             }
-            int index = 0;
-            for (FileUpload file : files) {
-                if (file.size() > MAX_FILE_BYTES) {
-                    throw new BadRequestException("File '" + file.fileName() + "' exceeds the 25 MB limit.");
-                }
-                try {
-                    String mediaType = file.contentType();
-                    if (mediaType != null && mediaType.startsWith("image/")) {
-                        MediaService.ProcessedMedia processed;
-                        try (InputStream is = Files.newInputStream(file.uploadedFile())) {
-                            processed = mediaService.processImage(is, mediaType);
-                        }
-                        String mediaUrl = storageService.uploadPostMedia(currentUser.id, file.fileName(), processed.contentType(), processed.stream(), processed.size());
-                        mediaList.add(new PostMedia(mediaUrl, processed.contentType()));
-                    } else if (mediaType != null && (mediaType.startsWith("video/") || mediaType.startsWith("audio/"))) {
-                        // Attempt FFmpeg transcoding; fall back to raw upload if FFmpeg is unavailable
-                        try {
-                            MediaService.ProcessedMedia processed = mediaType.startsWith("video/")
-                                    ? mediaService.processVideo(file.uploadedFile())
-                                    : mediaService.processAudio(file.uploadedFile());
-                            String mediaUrl = storageService.uploadPostMedia(currentUser.id, file.fileName(), processed.contentType(), processed.stream(), processed.size());
-                            mediaList.add(new PostMedia(mediaUrl, processed.contentType()));
-                        } catch (Exception ffmpegEx) {
-                            // FFmpeg not available or transcoding failed — upload raw file as-is
-                            try (InputStream is = Files.newInputStream(file.uploadedFile())) {
-                                String mediaUrl = storageService.uploadPostMedia(currentUser.id, file.fileName(), mediaType, is, file.size());
-                                mediaList.add(new PostMedia(mediaUrl, mediaType));
-                            }
-                        }
-                    } else {
-                        try (InputStream is = Files.newInputStream(file.uploadedFile())) {
-                            String url = storageService.uploadPostMedia(currentUser.id, file.fileName(), mediaType, is, file.size());
-                            mediaList.add(new PostMedia(url, mediaType));
-                        }
-                    }
-                } catch (Exception e) {
-                    String msg = e.getMessage() != null ? e.getMessage() : "File upload failed";
-                    return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
-                            .type(MediaType.APPLICATION_JSON)
-                            .entity(java.util.Map.of("error", msg))
-                            .build();
-                }
+            for (int i = 0; i < mediaUrls.size(); i++) {
+                String url = mediaUrls.get(i);
+                String type = (mediaTypes != null && i < mediaTypes.size()) ? mediaTypes.get(i) : "application/octet-stream";
+                mediaList.add(new PostMedia(url, type));
             }
         }
 
