@@ -106,7 +106,7 @@ function MemberRow({ member }: { member: MemberRes }) {
           alt={member.displayName || member.username}
           width={40}
           height={40}
-          className="rounded-full object-cover"
+          className="rounded-full object-cover aspect-square"
         />
       ) : (
         <div className="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center">
