@@ -41,10 +41,14 @@
         }
       ],
       "@clerk/expo",
+      "expo-apple-authentication",
       "expo-secure-store",
       "expo-video",
       "expo-web-browser"
     ],
+    "extra": {
+      "EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME": "${EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME}"
+    },
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true

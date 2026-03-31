@@ -1,7 +1,7 @@
 import { useAuth, useUser } from '@clerk/expo'
 import { Redirect, Stack } from 'expo-router'
 import FullscreenSpinner from '@/components/ui/FullscreenSpinner'
-import { hasUsername } from '@/lib/auth'
+import { isAccountSetupComplete } from '@/lib/auth'
 
 export default function AuthLayout() {
   const { isSignedIn, isLoaded: isAuthLoaded } = useAuth()
@@ -12,7 +12,7 @@ export default function AuthLayout() {
   }
 
   if (isSignedIn) {
-    return <Redirect href={hasUsername(user) ? '/(home)/(feed)' : '/complete-profile'} />
+    return <Redirect href={isAccountSetupComplete(user) ? '/(home)/(feed)' : '/complete-profile'} />
   }
 
   return <Stack screenOptions={{ headerShown: false }} />

@@ -1,23 +1,79 @@
 import { useSSO } from '@clerk/expo'
+import { useSignInWithApple } from '@clerk/expo/apple'
+import { useSignInWithGoogle } from '@clerk/expo/google'
 import * as AuthSession from 'expo-auth-session'
-import Constants from 'expo-constants'
-import { useRouter } from 'expo-router'
+import Constants, { ExecutionEnvironment } from 'expo-constants'
 import * as WebBrowser from 'expo-web-browser'
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, Platform, Text, TouchableOpacity, View } from 'react-native'
 import Svg, { Path } from 'react-native-svg'
 import { Colors } from '@/constants/colors'
-import { openAccountPortal } from '@/lib/accountPortal'
+
+const BROWSER_SSO_CALLBACK_PATH = 'sso-callback'
+const BROWSER_SSO_CALLBACK_SCHEME = 'mobile'
+const TEMP_USERNAME_PREFIX = 'groupys'
+const TEMP_USERNAME_RETRY_LIMIT = 6
+
+type SSOStrategy = 'google' | 'apple'
+type BrowserSSOStrategy = 'oauth_google' | 'oauth_apple'
+
+type SetActiveLike = (params: { session: string }) => Promise<void> | void
+
+type SignInLike = {
+  status?: string | null
+  createdSessionId?: string | null
+} | null
+
+type SignUpLike = {
+  status?: string | null
+  createdSessionId?: string | null
+  missingFields?: string[]
+  update?: (params: Record<string, unknown>) => Promise<SignUpLike>
+  create?: (params: Record<string, unknown>) => Promise<SignUpLike>
+} | null
+
+type AuthFlowResult = {
+  createdSessionId: string | null
+  setActive?: SetActiveLike
+  signIn?: SignInLike
+  signUp?: SignUpLike
+  authSessionResult?: {
+    type?: string | null
+  } | null
+}
+
+interface SSOButtonsProps {
+  mode: 'sign-in' | 'sign-up'
+}
+
+type UsernameRequirementResolution = 'activated' | 'handled-error' | 'not-applicable'
 
 WebBrowser.maybeCompleteAuthSession()
 
-const SSO_CALLBACK_PATH = 'sso-callback'
-const SSO_CALLBACK_SCHEME = 'mobile'
+function useWarmUpBrowser() {
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      return
+    }
 
-function makeSSORedirectUrl() {
+    void WebBrowser.warmUpAsync()
+    return () => {
+      void WebBrowser.coolDownAsync()
+    }
+  }, [])
+}
+
+function makeBrowserRedirectUrl() {
+  const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient
+
   return Platform.OS === 'web'
-    ? AuthSession.makeRedirectUri({ path: SSO_CALLBACK_PATH })
-    : AuthSession.makeRedirectUri({ path: SSO_CALLBACK_PATH, scheme: SSO_CALLBACK_SCHEME })
+    ? AuthSession.makeRedirectUri({ path: BROWSER_SSO_CALLBACK_PATH })
+    : isExpoGo
+      ? AuthSession.makeRedirectUri({ path: BROWSER_SSO_CALLBACK_PATH })
+      : AuthSession.makeRedirectUri({
+          path: BROWSER_SSO_CALLBACK_PATH,
+          scheme: BROWSER_SSO_CALLBACK_SCHEME,
+        })
 }
 
 function getAuthSessionResultMessage(type?: string | null) {
@@ -33,15 +89,47 @@ function getAuthSessionResultMessage(type?: string | null) {
   }
 }
 
-function useWarmUpBrowser() {
-  useEffect(() => {
-    if (Platform.OS !== 'web') {
-      void WebBrowser.warmUpAsync()
-      return () => {
-        void WebBrowser.coolDownAsync()
-      }
-    }
-  }, [])
+function getErrorMessage(error: unknown, fallback: string) {
+  if (!error || typeof error !== 'object') {
+    return fallback
+  }
+
+  const clerkError = error as {
+    longMessage?: string
+    message?: string
+    errors?: {
+      longMessage?: string
+      message?: string
+    }[]
+  }
+
+  return (
+    clerkError.errors?.[0]?.longMessage
+    ?? clerkError.errors?.[0]?.message
+    ?? clerkError.longMessage
+    ?? clerkError.message
+    ?? fallback
+  )
+}
+
+function isCanceledError(error: unknown) {
+  const code = (error as { code?: string | number } | null)?.code
+  return code === 'SIGN_IN_CANCELLED' || code === '-5' || code === 'ERR_REQUEST_CANCELED'
+}
+
+function isUsernameConflictError(error: unknown) {
+  const message = getErrorMessage(error, '').toLowerCase()
+  return message.includes('username') && (
+    message.includes('taken')
+    || message.includes('already')
+    || message.includes('exists')
+    || message.includes('in use')
+  )
+}
+
+function generateTemporaryUsername(attempt: number) {
+  const seed = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}${attempt.toString(36)}`
+  return `${TEMP_USERNAME_PREFIX}${seed}`.slice(0, 30)
 }
 
 function GoogleIcon() {
@@ -75,119 +163,214 @@ function AppleIcon() {
   )
 }
 
-type SSOStrategy = 'oauth_google' | 'oauth_apple'
-
-interface SSOButtonsProps {
-  mode: 'sign-in' | 'sign-up'
-}
-
 export default function SSOButtons({ mode }: SSOButtonsProps) {
   useWarmUpBrowser()
 
-  const router = useRouter()
+  const { startGoogleAuthenticationFlow } = useSignInWithGoogle()
+  const { startAppleAuthenticationFlow } = useSignInWithApple()
   const { startSSOFlow } = useSSO()
+
   const [loadingStrategy, setLoadingStrategy] = useState<SSOStrategy | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const isExpoGo = Constants.appOwnership === 'expo'
 
-  async function handleSSO(strategy: SSOStrategy) {
-    setLoadingStrategy(strategy)
+  const isExpoGoNative = Constants.appOwnership === 'expo' && Platform.OS !== 'web'
+  const isWeb = Platform.OS === 'web'
+
+  async function activateSession(result: AuthFlowResult) {
+    if (result.createdSessionId && result.setActive) {
+      await Promise.resolve(result.setActive({ session: result.createdSessionId }))
+      return true
+    }
+
+    if (result.signIn?.status === 'complete' && result.signIn.createdSessionId && result.setActive) {
+      await Promise.resolve(result.setActive({ session: result.signIn.createdSessionId }))
+      return true
+    }
+
+    if (result.signUp?.status === 'complete' && result.signUp.createdSessionId && result.setActive) {
+      await Promise.resolve(result.setActive({ session: result.signUp.createdSessionId }))
+      return true
+    }
+
+    return false
+  }
+
+  async function resolveMissingUsernameRequirement(result: AuthFlowResult): Promise<UsernameRequirementResolution> {
+    let signUp = result.signUp
+
+    if (!signUp || signUp.status !== 'missing_requirements') {
+      return 'not-applicable'
+    }
+
+    const missingFields = signUp.missingFields ?? []
+    if (!missingFields.includes('username')) {
+      if (missingFields.length > 0) {
+        setError(`Sign-up is blocked by Clerk requirements (${missingFields.join(', ')}).`) 
+        return 'handled-error'
+      }
+
+      return 'not-applicable'
+    }
+
+    const unsupportedFields = missingFields.filter((field) => field !== 'username')
+    if (unsupportedFields.length > 0) {
+      setError(`Sign-up is blocked by Clerk requirements (${unsupportedFields.join(', ')}).`)
+      return 'handled-error'
+    }
+
+    if (typeof signUp.update !== 'function' && typeof signUp.create !== 'function') {
+      setError('Could not finish SSO sign-up requirements. Please try again.')
+      return 'handled-error'
+    }
+
+    for (let attempt = 0; attempt < TEMP_USERNAME_RETRY_LIMIT; attempt += 1) {
+      const temporaryUsername = generateTemporaryUsername(attempt)
+
+      try {
+        if (typeof signUp.update === 'function') {
+          signUp = await signUp.update({ username: temporaryUsername })
+        }
+      } catch (updateError) {
+        if (isUsernameConflictError(updateError)) {
+          continue
+        }
+
+        setError(getErrorMessage(updateError, 'Could not complete sign-up username requirement.'))
+        return 'handled-error'
+      }
+
+      if (await activateSession({ ...result, signUp })) {
+        return 'activated'
+      }
+
+      try {
+        if (typeof signUp.create === 'function') {
+          signUp = await signUp.create({
+            transfer: true,
+            username: temporaryUsername,
+            unsafeMetadata: { onboarding_completed: false },
+          })
+        }
+      } catch (createError) {
+        if (isUsernameConflictError(createError)) {
+          continue
+        }
+
+        setError(getErrorMessage(createError, 'Could not complete sign-up username requirement.'))
+        return 'handled-error'
+      }
+
+      if (await activateSession({ ...result, signUp })) {
+        return 'activated'
+      }
+    }
+
+    setError('Could not reserve a temporary username. Please try again.')
+    return 'handled-error'
+  }
+
+  async function runBrowserSSO(strategy: BrowserSSOStrategy) {
+    const result = await startSSOFlow({
+      strategy,
+      redirectUrl: makeBrowserRedirectUrl(),
+      unsafeMetadata: { onboarding_completed: false },
+    })
+
+    if (await activateSession(result)) {
+      return true
+    }
+
+    const resolution = await resolveMissingUsernameRequirement(result)
+    if (resolution === 'activated') {
+      return true
+    }
+    if (resolution === 'handled-error') {
+      return false
+    }
+
+    const resultMessage = getAuthSessionResultMessage(result.authSessionResult?.type)
+    if (resultMessage) {
+      setError(resultMessage)
+      return false
+    }
+
+    setError('Single sign-on did not complete. Please try again.')
+    return false
+  }
+
+  async function handleGoogleSSO() {
+    setLoadingStrategy('google')
     setError(null)
 
     try {
-      const redirectUrl = makeSSORedirectUrl()
-      const { createdSessionId, setActive, signUp, signIn, authSessionResult } = await startSSOFlow({
-        strategy,
-        redirectUrl,
+      if (isWeb || isExpoGoNative) {
+        await runBrowserSSO('oauth_google')
+        return
+      }
+
+      const nativeResult = await startGoogleAuthenticationFlow({
+        unsafeMetadata: { onboarding_completed: false },
       })
-      const authSessionResultType = authSessionResult?.type ?? null
 
-      if (createdSessionId && setActive) {
-        // Existing user or new user with all requirements satisfied — set session
-        // and let the auth layout redirect reactively.
-        await setActive({ session: createdSessionId })
+      if (await activateSession(nativeResult)) {
         return
       }
 
-      if (signUp?.status === 'complete' && signUp.createdSessionId && setActive) {
-        await setActive({ session: signUp.createdSessionId })
+      const resolution = await resolveMissingUsernameRequirement(nativeResult)
+      if (resolution !== 'not-applicable') {
         return
       }
 
-      if (signIn?.status === 'complete' && signIn.createdSessionId && setActive) {
-        await setActive({ session: signIn.createdSessionId })
+      setError('Google sign-in did not complete. Please try again.')
+    } catch (nativeError) {
+      if (isCanceledError(nativeError)) {
         return
       }
 
-      if (signUp || signIn) {
-        const continuationPath = signUp ? 'sign-up' : 'sign-in'
-        const signUpMissingFields = signUp?.missingFields ?? []
-
-        console.warn('SSO requires hosted continuation', {
-          mode,
-          strategy,
-          continuationPath,
-          authSessionResultType,
-          signInStatus: signIn?.status ?? null,
-          signUpStatus: signUp?.status ?? null,
-          signUpMissingFields,
-        })
-
-        if (signUp?.status === 'missing_requirements' && signUpMissingFields.includes('username')) {
-          router.push('/(auth)/sso-continue')
-          return
-        }
-
-        try {
-          const hostedResult = await openAccountPortal(continuationPath, { redirectUrl })
-          const hostedResultMessage = getAuthSessionResultMessage(hostedResult.type)
-
-          if (hostedResult.type === 'success') {
-            return
-          }
-
-          if (hostedResultMessage) {
-            setError(hostedResultMessage)
-            return
-          }
-
-          setError('Single sign-on could not continue in the hosted flow.')
-          return
-        } catch (portalError) {
-          const continuationMessage =
-            portalError instanceof Error
-              ? portalError.message
-              : 'Single sign-on could not continue in the hosted flow.'
-          const expoGoHint = isExpoGo
-            ? ' Expo Go uses dynamic callback URLs, so continue in a development build if this keeps failing.'
-            : ''
-          setError(`${continuationMessage}${expoGoHint}`)
-          return
-        }
+      try {
+        await runBrowserSSO('oauth_google')
+      } catch (fallbackError) {
+        setError(getErrorMessage(fallbackError, getErrorMessage(nativeError, 'Google sign-in failed. Please try again.')))
       }
+    } finally {
+      setLoadingStrategy(null)
+    }
+  }
 
-      const authSessionResultMessage = getAuthSessionResultMessage(authSessionResultType)
-      if (authSessionResultMessage) {
-        setError(authSessionResultMessage)
+  async function handleAppleSSO() {
+    setLoadingStrategy('apple')
+    setError(null)
+
+    try {
+      if (isExpoGoNative) {
+        await runBrowserSSO('oauth_apple')
         return
       }
 
-      if (isExpoGo) {
-        setError(
-          'Single sign-on did not complete in Expo Go. Try again in a development build with Clerk native redirects configured.',
-        )
+      const nativeResult = await startAppleAuthenticationFlow({
+        unsafeMetadata: { onboarding_completed: false },
+      })
+
+      if (await activateSession(nativeResult)) {
         return
       }
 
-      setError(
-        `Single sign-on did not complete. Verify Clerk native redirect URLs include ${SSO_CALLBACK_SCHEME}://${SSO_CALLBACK_PATH}.`,
-      )
-    } catch (err) {
-      const baseMessage = err instanceof Error ? err.message : 'Something went wrong. Please try again.'
-      const expoGoHint = isExpoGo
-        ? ' Expo Go uses dynamic callback URLs, so continue in a development build if needed.'
-        : ''
-      setError(`${baseMessage}${expoGoHint}`)
+      const resolution = await resolveMissingUsernameRequirement(nativeResult)
+      if (resolution !== 'not-applicable') {
+        return
+      }
+
+      setError('Apple sign-in did not complete. Please try again.')
+    } catch (nativeError) {
+      if (isCanceledError(nativeError)) {
+        return
+      }
+
+      try {
+        await runBrowserSSO('oauth_apple')
+      } catch (fallbackError) {
+        setError(getErrorMessage(fallbackError, getErrorMessage(nativeError, 'Apple sign-in failed. Please try again.')))
+      }
     } finally {
       setLoadingStrategy(null)
     }
@@ -204,21 +387,20 @@ export default function SSOButtons({ mode }: SSOButtonsProps) {
         </View>
       ) : null}
 
-      {isExpoGo ? (
+      {isExpoGoNative ? (
         <View className="rounded-2xl bg-amber-50 px-4 py-3">
           <Text className="text-sm text-amber-700">
-            Expo Go uses dynamic callback URLs, so SSO is best-effort here. If callback verification
-            fails, run the app with a development build.
+            Expo Go uses browser-based SSO fallback. Development builds use native SSO.
           </Text>
         </View>
       ) : null}
 
       <TouchableOpacity
         className="flex-row items-center justify-center gap-3 rounded-2xl border border-outline-variant bg-surface-container-lowest py-4 active:opacity-90"
-        onPress={() => handleSSO('oauth_google')}
+        onPress={handleGoogleSSO}
         disabled={isLoading}
       >
-        {loadingStrategy === 'oauth_google' ? (
+        {loadingStrategy === 'google' ? (
           <ActivityIndicator color={Colors.onSurface} />
         ) : (
           <>
@@ -231,10 +413,10 @@ export default function SSOButtons({ mode }: SSOButtonsProps) {
       {Platform.OS === 'ios' ? (
         <TouchableOpacity
           className="flex-row items-center justify-center gap-3 rounded-2xl bg-black py-4 active:opacity-90"
-          onPress={() => handleSSO('oauth_apple')}
+          onPress={handleAppleSSO}
           disabled={isLoading}
         >
-          {loadingStrategy === 'oauth_apple' ? (
+          {loadingStrategy === 'apple' ? (
             <ActivityIndicator color="#ffffff" />
           ) : (
             <>
