@@ -21,7 +21,7 @@ import ColorPickerField from "./ColorPickerField";
 import BannerPicker from "./BannerPicker";
 import MusicSearchInput from "./MusicSearchInput";
 import type { TrackResult, ArtistResult, AlbumResult } from "./MusicSearchInput";
-import { COUNTRIES } from "@/lib/countries";
+import CountrySelect from "./CountrySelect";
 import {
   fetchSpotifyTopArtists,
   fetchSpotifyTopTracks,
@@ -506,21 +506,13 @@ export default function ProfileEditDrawer({
                     placeholder="Your display name"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>Country</Label>
-                  <select
-                    value={form.country ?? ""}
-                    onChange={(e) => set("country", e.target.value)}
-                    className="w-full h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  >
-                    <option value="">Select country...</option>
-                    {COUNTRIES.map((c) => (
-                      <option key={c.name} value={c.name}>
-                        {c.flag} {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+            <div className="space-y-2">
+              <Label>Country</Label>
+              <CountrySelect
+                value={form.country ?? ""}
+                onChange={(value) => set("country", value || undefined)}
+              />
+            </div>
               </div>
 
               {/* Bio */}
