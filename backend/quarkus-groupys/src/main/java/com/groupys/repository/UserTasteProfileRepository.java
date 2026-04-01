@@ -14,7 +14,7 @@ import java.util.UUID;
 public class UserTasteProfileRepository implements PanacheRepositoryBase<UserTasteProfile, UUID> {
 
     public Optional<UserTasteProfile> findByUserId(UUID userId) {
-        return find("user.id", userId).firstResultOptional();
+        return find("user.id = ?1", userId).firstResultOptional();
     }
 
     public void updateEmbedding(UUID userId, String vectorLiteral, String model, Instant updatedAt) {
