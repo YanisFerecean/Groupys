@@ -374,14 +374,15 @@ const addSongFromSearch = (result: TrackResult) => {
     clearSynced("topAlbums");
   };
 
-  const setListeningFromSearch = (result: TrackResult) => {
-    set("currentlyListening", {
-      title: result.title,
-      artist: result.artist,
-      coverUrl: result.coverUrl,
-    });
-    clearSynced("currentlyListening");
-  };
+const setListeningFromSearch = (result: TrackResult) => {
+  set("currentlyListening", {
+    title: result.title,
+    artist: result.artist,
+    coverUrl: result.coverUrl,
+    preview: result.preview,
+  });
+  clearSynced("currentlyListening");
+};
 
   // ── Spotify sync handlers ──────────────────────────────────────────────────
 
