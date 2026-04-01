@@ -42,12 +42,13 @@ function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCustomizatio
     const widgetSize = w.data?.size as string | undefined;
 
     switch (w.type) {
-      case "topSongs":
-        result.topSongs = items.map((i) => ({
-          title: i.title,
-          artist: i.artist,
-          coverUrl: i.coverUrl,
-        }));
+    case "topSongs":
+      result.topSongs = items.map((i) => ({
+        title: i.title,
+        artist: i.artist,
+        coverUrl: i.coverUrl,
+        preview: i.preview,
+      }));
         result.songsContainerColor = w.color ?? undefined;
         if (widgetSize) result.widgetSizes = { ...result.widgetSizes, topSongs: widgetSize as "small" | "normal" };
         if (w.data?.synced) result.spotifySynced = { ...result.spotifySynced, topSongs: true };
@@ -83,15 +84,16 @@ function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCustomizatio
         if (widgetSize) result.widgetSizes = { ...result.widgetSizes, lastRatedAlbum: widgetSize as "small" | "normal" };
         if (w.data?.hidden) result.hiddenWidgets = [...(result.hiddenWidgets ?? []), "lastRatedAlbum"];
         break;
-      case "currentlyListening": {
-        const d = w.data as Record<string, string>;
-        if (d.title) {
-          result.currentlyListening = {
-            title: d.title,
-            artist: d.artist,
-            coverUrl: d.coverUrl,
-          };
-        }
+    case "currentlyListening": {
+      const d = w.data as Record<string, string>;
+      if (d.title) {
+        result.currentlyListening = {
+          title: d.title,
+          artist: d.artist,
+          coverUrl: d.coverUrl,
+          preview: d.preview,
+        };
+      }
         result.currentlyListeningContainerColor = w.color ?? undefined;
         if (widgetSize) result.widgetSizes = { ...result.widgetSizes, currentlyListening: widgetSize as "small" | "normal" };
         if (w.data?.synced) result.spotifySynced = { ...result.spotifySynced, currentlyListening: true };

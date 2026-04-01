@@ -12,6 +12,7 @@ export interface TrackResult {
   artist: string;
   album: string;
   coverUrl: string;
+  preview?: string;
 }
 
 export interface ArtistResult {
@@ -160,13 +161,21 @@ export default function MusicSearchInput<T extends SearchType>({
 function TrackRow({ result }: { result: TrackResult }) {
   return (
     <>
-      <Image
-        src={result.coverUrl}
-        alt={result.title}
-        width={40}
-        height={40}
-        className="rounded object-cover shrink-0"
-      />
+      {result.coverUrl ? (
+        <Image
+          src={result.coverUrl}
+          alt={result.title}
+          width={40}
+          height={40}
+          className="rounded object-cover shrink-0"
+        />
+      ) : (
+        <div className="w-10 h-10 rounded bg-surface-container-high flex items-center justify-center shrink-0">
+          <span className="material-symbols-outlined text-on-surface-variant text-base">
+            music_note
+          </span>
+        </div>
+      )}
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold truncate">{result.title}</p>
         <p className="text-xs text-on-surface-variant truncate">
@@ -180,13 +189,21 @@ function TrackRow({ result }: { result: TrackResult }) {
 function ArtistRow({ result }: { result: ArtistResult }) {
   return (
     <>
-      <Image
-        src={result.imageUrl}
-        alt={result.name}
-        width={40}
-        height={40}
-        className="rounded-full object-cover shrink-0"
-      />
+      {result.imageUrl ? (
+        <Image
+          src={result.imageUrl}
+          alt={result.name}
+          width={40}
+          height={40}
+          className="rounded-full object-cover shrink-0"
+        />
+      ) : (
+        <div className="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center shrink-0">
+          <span className="material-symbols-outlined text-on-surface-variant text-base">
+            person
+          </span>
+        </div>
+      )}
       <p className="text-sm font-semibold truncate">{result.name}</p>
     </>
   );
@@ -195,13 +212,21 @@ function ArtistRow({ result }: { result: ArtistResult }) {
 function AlbumRow({ result }: { result: AlbumResult }) {
   return (
     <>
-      <Image
-        src={result.coverUrl}
-        alt={result.title}
-        width={40}
-        height={40}
-        className="rounded object-cover shrink-0"
-      />
+      {result.coverUrl ? (
+        <Image
+          src={result.coverUrl}
+          alt={result.title}
+          width={40}
+          height={40}
+          className="rounded object-cover shrink-0"
+        />
+      ) : (
+        <div className="w-10 h-10 rounded bg-surface-container-high flex items-center justify-center shrink-0">
+          <span className="material-symbols-outlined text-on-surface-variant text-base">
+            album
+          </span>
+        </div>
+      )}
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold truncate">{result.title}</p>
         <p className="text-xs text-on-surface-variant truncate">

@@ -6,7 +6,7 @@ export interface ProfileCustomization {
   accentColor?: string;
   nameColor?: string;
   profileImage?: string;
-  topSongs?: { title: string; artist: string; coverUrl?: string }[];
+  topSongs?: { title: string; artist: string; coverUrl?: string; preview?: string }[];
   topArtists?: { id?: string; name: string; genre?: string; imageUrl?: string }[];
   topAlbums?: {
     id?: string;
@@ -18,6 +18,7 @@ export interface ProfileCustomization {
     title: string;
     artist: string;
     coverUrl?: string;
+    preview?: string;
   };
   albumsContainerColor?: string;
   songsContainerColor?: string;

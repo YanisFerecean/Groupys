@@ -142,6 +142,81 @@ export default function ProfileEditDrawer({
     if (!open) { setTagQuery(""); setTagResults([]); }
   }, [open]);
 
+  // Sync widget colors and settings from external profile changes (e.g., updated via grid).
+  // Only widget container colors and sizes are managed externally; preserve user-edited
+  // widget content and profile fields inside the drawer.
+  const prevColorsRef = useRef({
+    albumsContainerColor: profile.albumsContainerColor,
+    songsContainerColor: profile.songsContainerColor,
+    artistsContainerColor: profile.artistsContainerColor,
+    lastRatedAlbumContainerColor: profile.lastRatedAlbumContainerColor,
+    currentlyListeningContainerColor: profile.currentlyListeningContainerColor,
+  });
+  const prevWidgetSettingsRef = useRef({
+    widgetOrder: profile.widgetOrder,
+    widgetSizes: profile.widgetSizes,
+    hiddenWidgets: profile.hiddenWidgets,
+  });
+
+  useEffect(() => {
+    if (!open) return;
+
+    const colorsChanged =
+      profile.albumsContainerColor !== prevColorsRef.current.albumsContainerColor ||
+      profile.songsContainerColor !== prevColorsRef.current.songsContainerColor ||
+      profile.artistsContainerColor !== prevColorsRef.current.artistsContainerColor ||
+      profile.lastRatedAlbumContainerColor !== prevColorsRef.current.lastRatedAlbumContainerColor ||
+      profile.currentlyListeningContainerColor !== prevColorsRef.current.currentlyListeningContainerColor;
+
+    const settingsChanged =
+      profile.widgetOrder !== prevWidgetSettingsRef.current.widgetOrder ||
+      profile.widgetSizes !== prevWidgetSettingsRef.current.widgetSizes ||
+      profile.hiddenWidgets !== prevWidgetSettingsRef.current.hiddenWidgets;
+
+    if (!colorsChanged && !settingsChanged) return;
+
+    // Update refs
+    prevColorsRef.current = {
+      albumsContainerColor: profile.albumsContainerColor,
+      songsContainerColor: profile.songsContainerColor,
+      artistsContainerColor: profile.artistsContainerColor,
+      lastRatedAlbumContainerColor: profile.lastRatedAlbumContainerColor,
+      currentlyListeningContainerColor: profile.currentlyListeningContainerColor,
+    };
+    prevWidgetSettingsRef.current = {
+      widgetOrder: profile.widgetOrder,
+      widgetSizes: profile.widgetSizes,
+      hiddenWidgets: profile.hiddenWidgets,
+    };
+
+    // Sync only the changed external fields into form state
+    setForm((prev) => ({
+      ...prev,
+      ...(colorsChanged && {
+        albumsContainerColor: profile.albumsContainerColor,
+        songsContainerColor: profile.songsContainerColor,
+        artistsContainerColor: profile.artistsContainerColor,
+        lastRatedAlbumContainerColor: profile.lastRatedAlbumContainerColor,
+        currentlyListeningContainerColor: profile.currentlyListeningContainerColor,
+      }),
+      ...(settingsChanged && {
+        widgetOrder: profile.widgetOrder,
+        widgetSizes: profile.widgetSizes,
+        hiddenWidgets: profile.hiddenWidgets,
+      }),
+    }));
+  }, [
+    open,
+    profile.albumsContainerColor,
+    profile.songsContainerColor,
+    profile.artistsContainerColor,
+    profile.lastRatedAlbumContainerColor,
+    profile.currentlyListeningContainerColor,
+    profile.widgetOrder,
+    profile.widgetSizes,
+    profile.hiddenWidgets,
+  ]);
+
   const handleOpenChange = (next: boolean) => {
     if (next) {
       setForm({ ...profile });
@@ -237,11 +312,12 @@ export default function ProfileEditDrawer({
       };
     });
 
-  const addSongFromSearch = (result: TrackResult) => {
-    const songs = [...(form.topSongs ?? [])];
-    if (songs.length < 3) {
-      songs.push({
-        title: result.title,
+const addSongFromSearch = (result: TrackResult) => {
+  const songs = [...(form.topSongs ?? [])];
+  if (songs.length < 3) {
+    songs.push({
+      title: result.title,
+      preview: result.preview,
         artist: result.artist,
         coverUrl: result.coverUrl,
       });
