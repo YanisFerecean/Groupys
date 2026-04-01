@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import Image from "next/image";
 import { useAuth } from "@clerk/nextjs";
 import type { ProfileCustomization } from "@/types/profile";
+import { uploadProfileBanner } from "@/lib/api";
 import {
   Dialog,
   DialogContent,
@@ -94,6 +95,8 @@ export default function ProfileEditDrawer({
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [pendingAvatarFile, setPendingAvatarFile] = useState<File | null>(null);
   const [removeAvatar, setRemoveAvatar] = useState(false);
+  const [pendingBannerFile, setPendingBannerFile] = useState<File | null>(null);
+  const [bannerPreview, setBannerPreview] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [syncing, setSyncing] = useState<string | null>(null);
   const [tagQuery, setTagQuery] = useState("");
@@ -225,6 +228,8 @@ export default function ProfileEditDrawer({
       setActiveTab(initialTab);
       setPendingAvatarFile(null);
       setRemoveAvatar(false);
+      setPendingBannerFile(null);
+      setBannerPreview(null);
       setErrors({});
     }
     onOpenChange(next);
@@ -263,6 +268,20 @@ export default function ProfileEditDrawer({
       }
     }
 
+    if (pendingBannerFile) {
+      try {
+        const token = await getToken();
+        if (!token) return;
+        const updated = await uploadProfileBanner(pendingBannerFile, token);
+        form.bannerUrl = updated.bannerUrl ?? undefined;
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error ? err.message : "Failed to upload banner.";
+        setErrors((prev) => ({ ...prev, banner: message }));
+        return;
+      }
+    }
+
     try {
       await onSave(form);
     } catch (err: unknown) {
@@ -290,6 +309,19 @@ export default function ProfileEditDrawer({
     setPendingAvatarFile(null);
     setAvatarPreview(null);
   };
+
+  const handleBannerFileSelect = useCallback((file: File) => {
+    setPendingBannerFile(file);
+    const reader = new FileReader();
+    reader.onload = () => setBannerPreview(reader.result as string);
+    reader.readAsDataURL(file);
+  }, []);
+
+  const handleBannerClear = useCallback(() => {
+    setPendingBannerFile(null);
+    setBannerPreview(null);
+    setForm((prev) => ({ ...prev, bannerUrl: undefined }));
+  }, []);
 
   const displayedAvatar = removeAvatar
     ? null
@@ -695,8 +727,15 @@ const setListeningFromSearch = (result: TrackResult) => {
             <TabsContent value="customization" className="space-y-8">
               <BannerPicker
                 value={form.bannerUrl ?? ""}
-                onChange={(v) => set("bannerUrl", v)}
+                preview={bannerPreview}
+                onFileSelect={handleBannerFileSelect}
+                onClear={handleBannerClear}
               />
+              {errors.banner && (
+                <p className="text-xs text-error font-medium">
+                  {errors.banner}
+                </p>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <ColorPickerField
                   label="Accent Color"

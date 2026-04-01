@@ -1,49 +1,100 @@
 "use client";
 
+import { useRef } from "react";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
+import { resizeImage } from "@/lib/imageResize";
 
-const PRESET_GRADIENTS = [
-  "linear-gradient(135deg, #1a1c1d 0%, #2f3132 40%, #5d3f3f 100%)",
-  "linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%)",
-  "linear-gradient(135deg, #232526 0%, #414345 100%)",
-  "linear-gradient(135deg, #200122 0%, #6f0000 100%)",
-  "linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%)",
-  "linear-gradient(135deg, #141e30 0%, #243b55 100%)",
-];
+const DEFAULT_BANNER =
+  "linear-gradient(135deg, #1a1c1d 0%, #2f3132 40%, #5d3f3f 100%)";
 
 interface BannerPickerProps {
+  /** Current stored banner URL or gradient string */
   value: string;
-  onChange: (url: string) => void;
+  /** Base64 data-URL preview of a newly selected file */
+  preview: string | null;
+  onFileSelect: (file: File) => void;
+  onClear: () => void;
 }
 
-export default function BannerPicker({ value, onChange }: BannerPickerProps) {
+export default function BannerPicker({
+  value,
+  preview,
+  onFileSelect,
+  onClear,
+}: BannerPickerProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  let bgStyle: React.CSSProperties;
+  if (preview) {
+    bgStyle = { backgroundImage: `url(${preview})` };
+  } else if (!value) {
+    bgStyle = { backgroundImage: DEFAULT_BANNER };
+  } else if (
+    value.startsWith("linear-gradient") ||
+    value.startsWith("radial-gradient")
+  ) {
+    bgStyle = { backgroundImage: value };
+  } else {
+    bgStyle = { backgroundImage: `url(${value})` };
+  }
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const resized = await resizeImage(file, 1500, 500, true);
+    onFileSelect(resized);
+    e.target.value = "";
+  };
+
+  const showClear = !!preview || !!value;
+
   return (
     <div className="space-y-2">
       <Label>Banner Image</Label>
-      <Input
-        value={value || ""}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="Paste an image URL..."
-      />
-      <p className="text-xs text-on-surface-variant">Or choose a preset:</p>
-      <div className="grid grid-cols-3 gap-2">
-        {PRESET_GRADIENTS.map((gradient, i) => (
-          <button
-            key={i}
-            type="button"
-            onClick={() => onChange(gradient)}
-            className="h-12 rounded-lg border-2 transition-transform hover:scale-105"
-            style={{
-              backgroundImage: gradient,
-              borderColor:
-                value === gradient
-                  ? "var(--color-on-surface)"
-                  : "transparent",
-            }}
+
+      <div className="relative h-28 w-full rounded-xl overflow-hidden bg-cover bg-center">
+        <div className="absolute inset-0" style={bgStyle} />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
+
+        <div className="absolute inset-0 flex items-center justify-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleFileChange}
           />
-        ))}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/40 backdrop-blur-md text-white text-xs font-semibold hover:bg-black/60 transition-colors"
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+              add_photo_alternate
+            </span>
+            {preview || value ? "Change" : "Upload Image"}
+          </button>
+
+          {showClear && (
+            <button
+              type="button"
+              onClick={onClear}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/40 backdrop-blur-md text-white text-xs font-semibold hover:bg-black/60 transition-colors"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+                close
+              </span>
+              Remove
+            </button>
+          )}
+        </div>
       </div>
+
+      {preview && (
+        <p className="text-xs text-on-surface-variant">
+          New banner selected — will be uploaded when you save.
+        </p>
+      )}
     </div>
   );
 }

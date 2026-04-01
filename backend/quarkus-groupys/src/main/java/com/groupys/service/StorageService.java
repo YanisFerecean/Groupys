@@ -46,6 +46,17 @@ public class StorageService {
         return objectKey;
     }
 
+    public String uploadBanner(UUID userId, String fileName, String contentType, InputStream data, long size) {
+        String objectKey = buildBannerObjectKey(userId, fileName);
+        putObject("banners", objectKey, contentType, data, size);
+        return objectKey;
+    }
+
+    private String buildBannerObjectKey(UUID userId, String fileName) {
+        String sanitized = sanitizeFileName(fileName);
+        return "%s/%s-%s".formatted(userId, UUID.randomUUID(), sanitized);
+    }
+
     public void putObject(String bucket, String objectKey, String contentType, InputStream data, long size) {
         try {
             ensureBucketExists(bucket);

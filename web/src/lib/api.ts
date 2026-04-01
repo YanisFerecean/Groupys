@@ -395,3 +395,22 @@ export async function updateBackendUser(
   if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to update user profile"));
   return res.json();
 }
+
+export async function uploadProfileBanner(
+  file: File,
+  token: string | null,
+): Promise<BackendUser> {
+  const headers = new Headers();
+  headers.set("Authorization", `Bearer ${requireToken(token)}`);
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch(`${API_URL}/users/banner`, {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to upload banner"));
+  return res.json();
+}

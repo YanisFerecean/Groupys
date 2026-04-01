@@ -35,7 +35,8 @@ function bannerBackground(value?: string): React.CSSProperties {
   ) {
     return { backgroundImage: value };
   }
-  return { backgroundImage: `url(${value})` };
+  const url = value.startsWith("/") ? `${API_URL.replace(/\/api$/, "")}${value}` : value;
+  return { backgroundImage: `url(${url})` };
 }
 
 export default function PublicProfileView({
