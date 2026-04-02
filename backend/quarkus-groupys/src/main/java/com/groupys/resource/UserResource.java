@@ -11,6 +11,7 @@ import com.groupys.service.StorageService;
 import com.groupys.service.UserService;
 import io.minio.GetObjectArgs;
 import io.minio.MinioClient;
+import io.minio.RemoveObjectArgs;
 import io.minio.StatObjectArgs;
 import io.minio.StatObjectResponse;
 import io.quarkus.security.Authenticated;
@@ -118,6 +119,7 @@ public class UserResource {
     }
 
     private static final long MAX_BANNER_SIZE = 5 * 1024 * 1024; // 5 MB
+    private static final String BANNER_PREFIX = "/api/users/banner/";
 
     @POST
     @Path("/banner")
@@ -134,10 +136,23 @@ public class UserResource {
             throw new BadRequestException("Unsupported format. Use JPG, PNG, or WebP.");
         }
         try {
+            // Delete old banner from MinIO if present
+            User user = userRepository.findByClerkId(jwt.getSubject())
+                .orElseThrow(() -> new NotFoundException("User not found"));
+            if (user.bannerUrl != null && user.bannerUrl.startsWith(BANNER_PREFIX)) {
+                String oldKey = user.bannerUrl.substring(BANNER_PREFIX.length());
+                try {
+                    minioClient.removeObject(
+                        RemoveObjectArgs.builder().bucket("banners").object(oldKey).build());
+                } catch (Exception e) {
+                    System.err.println("Failed to delete old banner: " + e.getMessage());
+                }
+            }
+
             InputStream is = Files.newInputStream(file.uploadedFile());
             String key = storageService.uploadToBucket("banners", file.fileName(), file.contentType(), is, file.size());
             is.close();
-            return userService.updateBanner(jwt.getSubject(), "/api/users/banner/" + key);
+            return userService.updateBanner(jwt.getSubject(), BANNER_PREFIX + key);
         } catch (Exception e) {
             throw new InternalServerErrorException("Banner upload failed", e);
         }
