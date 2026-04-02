@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { Label } from "@/components/ui/label";
-import { resizeImage } from "@/lib/imageResize";
+import BannerCropDialog from "./BannerCropDialog";
 
 const DEFAULT_BANNER =
   "linear-gradient(135deg, #1a1c1d 0%, #2f3132 40%, #5d3f3f 100%)";
@@ -28,6 +28,7 @@ export default function BannerPicker({
 }: BannerPickerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cropSourceFile, setCropSourceFile] = useState<File | null>(null);
 
   let bgStyle: React.CSSProperties;
   if (preview) {
@@ -43,7 +44,7 @@ export default function BannerPicker({
     bgStyle = { backgroundImage: `url(${value})` };
   }
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -61,9 +62,13 @@ export default function BannerPicker({
       return;
     }
 
-    const resized = await resizeImage(file, 1500, 500, true);
-    onFileSelect(resized);
+    setCropSourceFile(file);
     e.target.value = "";
+  };
+
+  const handleCropConfirm = (cropped: File) => {
+    setCropSourceFile(null);
+    onFileSelect(cropped);
   };
 
   const showClear = !!preview || !!value;
@@ -123,6 +128,14 @@ export default function BannerPicker({
       <p className="text-xs text-on-surface-variant/50">
         JPG, PNG, or WebP. Max 5 MB.
       </p>
+
+      {cropSourceFile && (
+        <BannerCropDialog
+          file={cropSourceFile}
+          onConfirm={handleCropConfirm}
+          onCancel={() => setCropSourceFile(null)}
+        />
+      )}
     </div>
   );
 }
