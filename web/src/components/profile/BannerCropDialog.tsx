@@ -11,6 +11,7 @@ interface BannerCropDialogProps {
   file: File;
   onConfirm: (file: File) => void;
   onCancel: () => void;
+  onCropChange?: (pos: { x: number; y: number }) => void;
 }
 
 const BANNER_W = 1500;
@@ -21,6 +22,7 @@ export default function BannerCropDialog({
   file,
   onConfirm,
   onCancel,
+  onCropChange,
 }: BannerCropDialogProps) {
   const [imgDims, setImgDims] = useState<{ w: number; h: number } | null>(null);
   const [cropPos, setCropPos] = useState({ x: 0.5, y: 0.5 }); // 0-1
@@ -39,12 +41,14 @@ export default function BannerCropDialog({
 
       // Default crop: center, but biased top if very tall
       const imgRatio = w / h;
-      setCropPos({
+      const initialPos = {
         x: 0.5,
         y: imgRatio < BANNER_RATIO ? 0.4 : 0.5,
-      });
+      };
+      setCropPos(initialPos);
+      onCropChange?.(initialPos);
     },
-    [],
+    [onCropChange],
   );
 
   const onPointerDown = useCallback(
@@ -79,8 +83,10 @@ export default function BannerCropDialog({
 
     const newX = Math.max(0, Math.min(1, dragStart.current.cx + dx / (1 - visXFrac)));
     const newY = Math.max(0, Math.min(1, dragStart.current.cy + dy / (1 - visYFrac)));
-    setCropPos({ x: newX, y: newY });
-  }, []);
+    const newPos = { x: newX, y: newY };
+    setCropPos(newPos);
+    onCropChange?.(newPos);
+  }, [onCropChange]);
 
   const onPointerUp = useCallback(() => {
     dragging.current = false;
