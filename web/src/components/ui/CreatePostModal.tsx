@@ -2,11 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { useEditor, EditorContent } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import Placeholder from "@tiptap/extension-placeholder";
-import TurndownService from "turndown";
 import { resizeImage } from "@/lib/imageResize";
+import LexicalEditorProvider from "@/components/ui/LexicalEditorProvider";
+import type { LexicalEditorRef } from "@/components/ui/LexicalEditor";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
 
@@ -47,7 +45,9 @@ export default function CreatePostModal({
   const [postError, setPostError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
-  const [, setTick] = useState(0);
+  const editorRef = useRef<LexicalEditorRef>(null);
+  const [editorMarkdown, setEditorMarkdown] = useState("");
+  const justSubmittedRef = useRef(false);
 
   // Fetch joined communities when modal opens
   useEffect(() => {
@@ -67,9 +67,28 @@ export default function CreatePostModal({
     if (initialCommunityId) setSelectedCommunityId(initialCommunityId);
   }, [initialCommunityId]);
 
-  // Reset form when modal closes
+  // Reset form when modal closes & clean up orphaned uploads from MinIO
   useEffect(() => {
     if (!open) {
+      // Skip cleanup if post was just submitted (files are now associated with the post)
+      if (justSubmittedRef.current) {
+        justSubmittedRef.current = false;
+      } else {
+        // Delete any uploaded files from MinIO so they don't become orphans
+        const current = entriesRef.current;
+        const uploaded = current.filter((e) => e.url);
+        if (uploaded.length > 0) {
+          getTokenRef.current().then((token) => {
+            for (const entry of uploaded) {
+              const key = entry.url!.replace("/api/posts/media/", "");
+              fetch(`${API_URL}/posts/media/${key}`, {
+                method: "DELETE",
+                headers: { Authorization: `Bearer ${token}` },
+              }).catch(() => {});
+            }
+          });
+        }
+      }
       setEntries([]);
       setPostError(null);
       setPosting(false);
@@ -88,28 +107,13 @@ export default function CreatePostModal({
     return () => document.removeEventListener("mousedown", handler);
   }, [communityPickerOpen]);
 
-  const editor = useEditor({
-    immediatelyRender: false,
-    extensions: [
-      StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
-      Placeholder.configure({ placeholder: "Share something with the community..." }),
-    ],
-    editorProps: {
-      attributes: {
-        class: "w-full min-h-[5rem] bg-transparent outline-none text-sm text-on-surface prose-editor",
-      },
-    },
-    onTransaction() {
-      setTick((t) => t + 1);
-    },
-  });
-
   // Clear editor when modal opens
   useEffect(() => {
-    if (open && editor) {
-      editor.commands.clearContent();
+    if (open && editorRef.current) {
+      editorRef.current.clear();
+      setEditorMarkdown("");
     }
-  }, [open, editor]);
+  }, [open]);
 
   const isAllowedMedia = (type: string) =>
     type.startsWith("image/") || type.startsWith("video/") || type.startsWith("audio/");
@@ -225,17 +229,15 @@ export default function CreatePostModal({
   }, [addFiles]);
 
   const handleSubmit = async () => {
-    if (!editor || !selectedCommunityId) return;
-    const html = editor.getHTML();
-    const isEmpty = editor.isEmpty;
+    if (!editorRef.current || !selectedCommunityId) return;
+    const markdown = editorMarkdown;
+    const isEmpty = editorRef.current.isEmpty();
     if (isEmpty && entries.length === 0) return;
     if (entries.some((e) => e.uploading)) return;
 
     setPosting(true);
     setPostError(null);
 
-    const td = new TurndownService({ headingStyle: "atx", bulletListMarker: "-" });
-    const markdown = isEmpty ? "" : td.turndown(html);
     const media = entries.filter((e) => e.url && e.type).map((e) => ({ url: e.url!, type: e.type! }));
 
     try {
@@ -269,7 +271,9 @@ export default function CreatePostModal({
 
       const newPost = await res.json();
       window.dispatchEvent(new CustomEvent("post-created", { detail: { post: newPost, communityId: selectedCommunityId } }));
-      editor.commands.clearContent();
+      editorRef.current.clear();
+      setEditorMarkdown("");
+      justSubmittedRef.current = true;
       setEntries([]);
       if (fileRef.current) fileRef.current.value = "";
       onClose();
@@ -279,9 +283,6 @@ export default function CreatePostModal({
       setPosting(false);
     }
   };
-
-  const tbtn = (active: boolean) =>
-    `p-1.5 rounded transition-colors ${active ? "bg-primary/15 text-primary" : "text-on-surface-variant hover:bg-surface-container-high"}`;
 
   const selectedCommunity = communities.find((c) => c.id === selectedCommunityId);
 
@@ -297,24 +298,41 @@ export default function CreatePostModal({
 
       {/* Modal */}
       <div
-        className="relative w-full sm:max-w-xl max-h-[90dvh] bg-surface border border-white/20 rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden"
+        className="relative w-full sm:max-w-2xl max-h-[95dvh] bg-surface border border-white/20 rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden"
         onPaste={handlePaste}
         onDrop={handleDrop}
         onDragOver={(e) => e.preventDefault()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-surface-container-high/50 shrink-0">
-          <h2 className="text-base font-bold text-on-surface">New Post</h2>
+        <div className="flex items-center justify-between px-4 pt-4 pb-3 shrink-0">
           <button
             onClick={onClose}
             className="p-1.5 rounded-full text-on-surface-variant hover:bg-surface-container-high transition-colors"
           >
-            <span className="material-symbols-outlined" style={{ fontSize: 20 }}>close</span>
+            <span className="material-symbols-outlined" style={{ fontSize: 24 }}>close</span>
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={
+              posting ||
+              !selectedCommunityId ||
+              (!editorMarkdown.trim() && entries.length === 0) ||
+              entries.some((e) => e.uploading)
+            }
+            className="px-6 py-2 rounded-full text-sm font-bold text-on-primary bg-primary hover:opacity-90 transition-opacity disabled:opacity-50 disabled:bg-surface-container-high disabled:text-on-surface-variant flex items-center gap-2"
+          >
+            {(posting || entries.some((e) => e.uploading)) && (
+              <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+              </svg>
+            )}
+            {posting ? "Posting..." : entries.some((e) => e.uploading) ? "Uploading..." : "Post"}
           </button>
         </div>
 
         {/* Community picker */}
-        <div className="px-5 pt-3 pb-2 shrink-0">
+        <div className="px-4 py-2 shrink-0">
           <div ref={pickerRef} className="relative">
             <button
               onClick={() => setCommunityPickerOpen((o) => !o)}
@@ -370,86 +388,22 @@ export default function CreatePostModal({
           </div>
         </div>
 
-        {/* Editor area */}
-        <div className="px-5 py-2 flex-1 overflow-y-auto">
-          <EditorContent editor={editor} />
-
-          {/* Formatting toolbar */}
-          {editor && (
-            <div className="flex items-center gap-0.5 pb-2 mt-1 flex-wrap">
-              <button
-                type="button"
-                onClick={() => {
-                  if (editor.isActive("heading", { level: 1 })) {
-                    editor.chain().focus().toggleHeading({ level: 1 }).run();
-                  } else if (editor.state.selection.$from.parent.textContent) {
-                    editor.chain().focus().splitBlock().setHeading({ level: 1 }).run();
-                  } else {
-                    editor.chain().focus().toggleHeading({ level: 1 }).run();
-                  }
-                }}
-                className={tbtn(editor.isActive("heading", { level: 1 }))}
-                title="Heading"
-              >
-                <span className="text-xs font-bold">H</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => editor.chain().focus().toggleBold().run()}
-                className={tbtn(editor.isActive("bold"))}
-                title="Bold"
-              >
-                <span className="text-xs font-bold">B</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => editor.chain().focus().toggleItalic().run()}
-                className={tbtn(editor.isActive("italic"))}
-                title="Italic"
-              >
-                <span className="text-xs italic">I</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => editor.chain().focus().toggleStrike().run()}
-                className={tbtn(editor.isActive("strike"))}
-                title="Strikethrough"
-              >
-                <span className="text-xs line-through">S</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => editor.chain().focus().toggleCode().run()}
-                className={tbtn(editor.isActive("code"))}
-                title="Inline code"
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>code</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => editor.chain().focus().toggleBlockquote().run()}
-                className={tbtn(editor.isActive("blockquote"))}
-                title="Quote"
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>format_quote</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => editor.chain().focus().toggleBulletList().run()}
-                className={tbtn(editor.isActive("bulletList"))}
-                title="List"
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>format_list_bulleted</span>
-              </button>
-            </div>
-          )}
+        {/* Scrollable content area */}
+        <div className="flex-1 overflow-y-auto min-h-0">
+          {/* Editor with tabs */}
+          <div className="px-4">
+            <LexicalEditorProvider
+              onChange={setEditorMarkdown}
+              editorRef={editorRef}
+            />
+          </div>
 
           {/* Media previews */}
           {entries.length > 0 && (() => {
             const count = entries.length;
             const inGrid = count > 1;
             return (
-              <div className={`mt-2 mb-3${inGrid ? " grid grid-cols-2 gap-1" : ""}`}>
+              <div className={`px-4 mt-2 mb-3${inGrid ? " grid grid-cols-2 gap-1" : ""}`}>
                 {entries.map((entry, index) => {
                   const { file, preview, progress, uploading, error: uploadError } = entry;
                   const isImage = file.type.startsWith("image/");
@@ -510,52 +464,35 @@ export default function CreatePostModal({
               </div>
             );
           })()}
+
+          {postError && <p className="text-xs text-error mt-2 px-4">{postError}</p>}
         </div>
 
-        {/* Footer */}
-        <div className="px-5 py-3 border-t border-surface-container-high/50 shrink-0">
-          {postError && <p className="text-xs text-error mb-2">{postError}</p>}
-          <div className="flex items-center justify-between">
-            <div className="flex gap-1">
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*,video/*,audio/*"
-                multiple
-                onChange={handleFileChange}
-                className="hidden"
-              />
-              <button
-                onClick={() => fileRef.current?.click()}
-                disabled={entries.length >= 4}
-                className="p-2 rounded-full text-on-surface-variant hover:bg-surface-container-high transition-colors disabled:opacity-40 relative"
-              >
-                <span className="material-symbols-outlined text-lg">image</span>
-                {entries.length > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-primary text-on-primary text-[10px] font-bold flex items-center justify-center">
-                    {entries.length}
-                  </span>
-                )}
-              </button>
-            </div>
+        {/* Bottom toolbar (matching mobile) */}
+        <div className="border-t border-surface-container-high shrink-0">
+          <div className="flex items-center px-2 py-1">
+            {/* Left: media buttons */}
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*,video/*,audio/*"
+              multiple
+              onChange={handleFileChange}
+              className="hidden"
+            />
             <button
-              onClick={handleSubmit}
-              disabled={
-                posting ||
-                !selectedCommunityId ||
-                (!!editor?.isEmpty && entries.length === 0) ||
-                entries.some((e) => e.uploading)
-              }
-              className="px-5 py-1.5 rounded-full text-sm font-bold text-on-primary bg-primary hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-2"
+              onClick={() => fileRef.current?.click()}
+              disabled={entries.length >= 4 || posting}
+              className="p-2.5 rounded-full text-on-surface-variant hover:bg-surface-container-high transition-colors disabled:opacity-40"
+              title="Add media"
             >
-              {(posting || entries.some((e) => e.uploading)) && (
-                <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                </svg>
-              )}
-              {posting ? "Posting..." : entries.some((e) => e.uploading) ? "Uploading..." : "Post"}
+              <span className="material-symbols-outlined text-xl">image</span>
             </button>
+
+            <div className="flex-1" />
+
+            {/* Divider */}
+            <div className="w-px h-5 bg-surface-container-high mx-1" />
           </div>
         </div>
       </div>
