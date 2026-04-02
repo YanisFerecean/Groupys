@@ -1,11 +1,15 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { Label } from "@/components/ui/label";
 import { resizeImage } from "@/lib/imageResize";
 
 const DEFAULT_BANNER =
   "linear-gradient(135deg, #1a1c1d 0%, #2f3132 40%, #5d3f3f 100%)";
+
+const MAX_BANNER_SIZE = 5 * 1024 * 1024; // 5 MB
+const ALLOWED_BANNER_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+const ALLOWED_BANNER_EXTENSIONS = ".jpg, .jpeg, .png, .webp";
 
 interface BannerPickerProps {
   /** Current stored banner URL or gradient string */
@@ -23,6 +27,7 @@ export default function BannerPicker({
   onClear,
 }: BannerPickerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState<string | null>(null);
 
   let bgStyle: React.CSSProperties;
   if (preview) {
@@ -41,6 +46,21 @@ export default function BannerPicker({
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    setError(null);
+
+    if (!ALLOWED_BANNER_TYPES.includes(file.type as typeof ALLOWED_BANNER_TYPES[number])) {
+      setError("Unsupported format. Use JPG, PNG, or WebP.");
+      e.target.value = "";
+      return;
+    }
+
+    if (file.size > MAX_BANNER_SIZE) {
+      setError("File too large. Maximum size is 5 MB.");
+      e.target.value = "";
+      return;
+    }
+
     const resized = await resizeImage(file, 1500, 500, true);
     onFileSelect(resized);
     e.target.value = "";
@@ -60,7 +80,7 @@ export default function BannerPicker({
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept={ALLOWED_BANNER_EXTENSIONS}
             className="hidden"
             onChange={handleFileChange}
           />
@@ -90,11 +110,19 @@ export default function BannerPicker({
         </div>
       </div>
 
-      {preview && (
+      {error && (
+        <p className="text-xs text-error font-medium">{error}</p>
+      )}
+
+      {preview && !error && (
         <p className="text-xs text-on-surface-variant">
           New banner selected — will be uploaded when you save.
         </p>
       )}
+
+      <p className="text-xs text-on-surface-variant/50">
+        JPG, PNG, or WebP. Max 5 MB.
+      </p>
     </div>
   );
 }

@@ -117,12 +117,21 @@ public class UserResource {
         return Response.noContent().build();
     }
 
+    private static final long MAX_BANNER_SIZE = 5 * 1024 * 1024; // 5 MB
+
     @POST
     @Path("/banner")
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     public UserResDto uploadBanner(@RestForm("file") FileUpload file) {
         if (file == null || file.size() == 0) {
             throw new BadRequestException("No file provided");
+        }
+        if (file.size() > MAX_BANNER_SIZE) {
+            throw new BadRequestException("File too large. Maximum size is 5 MB.");
+        }
+        String contentType = file.contentType();
+        if (contentType == null || !(contentType.equals("image/jpeg") || contentType.equals("image/png") || contentType.equals("image/webp"))) {
+            throw new BadRequestException("Unsupported format. Use JPG, PNG, or WebP.");
         }
         try {
             InputStream is = Files.newInputStream(file.uploadedFile());
