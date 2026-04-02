@@ -11,6 +11,7 @@ const inter = Inter({
 });
 
 const BASE_URL = "https://groupys.app";
+const CLERK_ENABLED = process.env.NODE_ENV !== "production";
 
 export const metadata: Metadata = {
   metadataBase: new URL(BASE_URL),
@@ -67,15 +68,18 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const content = (
+    <>
+      {CLERK_ENABLED ? <UserSync /> : null}
+      <FontLoader />
+      {children}
+    </>
+  );
+
   return (
     <html lang="en" className={`${inter.variable} h-full antialiased`}>
-
       <body className="min-h-full flex flex-col">
-        <ClerkProvider>
-          <UserSync />
-          <FontLoader />
-          {children}
-        </ClerkProvider>
+        {CLERK_ENABLED ? <ClerkProvider>{content}</ClerkProvider> : content}
       </body>
     </html>
   );
