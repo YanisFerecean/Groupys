@@ -134,12 +134,14 @@ function SearchResultCard({
 export default function ArtistStep({ selected, onToggle, selectedGenres = [] }: ArtistStepProps) {
   const { getToken } = useAuth();
   const [query, setQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
   const [results, setResults] = useState<ArtistSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<ArtistSearchResult[]>([]);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const getTokenRef = useRef(getToken);
   useEffect(() => { getTokenRef.current = getToken; }, [getToken]);
 
@@ -148,7 +150,7 @@ export default function ArtistStep({ selected, onToggle, selectedGenres = [] }: 
     setIsLoadingSuggestions(true);
     getTokenRef.current().then(async (token) => {
       try {
-        const perGenre = Math.ceil(10 / selectedGenres.length);
+        const perGenre = Math.ceil(12 / selectedGenres.length);
         const all = await Promise.all(
           selectedGenres.map((g) => fetchArtistsByGenre(g, token, perGenre))
         );
@@ -162,7 +164,7 @@ export default function ArtistStep({ selected, onToggle, selectedGenres = [] }: 
             }
           }
         }
-        setSuggestions(deduped.slice(0, 10));
+        setSuggestions(deduped.slice(0, 12));
       } catch {
         // suggestions are non-critical, silently fail
       } finally {
@@ -200,36 +202,59 @@ export default function ArtistStep({ selected, onToggle, selectedGenres = [] }: 
   }, [query]);
 
   const selectedIds = new Set(selected.map((a) => a.id));
-  const isQueryActive = query.trim().length > 0;
+  const isQueryActive = searchOpen && query.trim().length > 0;
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-1">
-        <h2 className="text-2xl font-extrabold text-on-surface tracking-tight">
-          Who do you love?
-        </h2>
-        <p className="text-on-surface-variant text-sm">
-          Search for artists and pick at least one favourite.
-        </p>
+    <div className="space-y-5">
+      <div className="flex items-start justify-between gap-2">
+        <div className="space-y-1">
+          <h2 className="text-2xl font-extrabold text-on-surface tracking-tight">
+            Who do you love?
+          </h2>
+          <p className="text-on-surface-variant text-sm">
+            Pick at least one favourite artist.
+          </p>
+        </div>
+        <button
+          onClick={() => {
+            setSearchOpen((prev) => {
+              const next = !prev;
+              if (next) setTimeout(() => inputRef.current?.focus(), 50);
+              if (!next) { setQuery(""); setResults([]); }
+              return next;
+            });
+          }}
+          className={`flex-shrink-0 mt-1 w-9 h-9 flex items-center justify-center rounded-full transition-colors ${
+            searchOpen
+              ? "bg-primary text-on-primary"
+              : "bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest"
+          }`}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: 20 }}>
+            {searchOpen ? "close" : "search"}
+          </span>
+        </button>
       </div>
 
-      {/* Search input */}
-      <div className="relative">
-        <span
-          className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant/60"
-          style={{ fontSize: 20 }}
-        >
-          search
-        </span>
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search artists…"
-          className="w-full pl-11 pr-4 py-3 rounded-2xl bg-surface-container-high text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all text-sm font-medium"
-          autoFocus
-        />
-      </div>
+      {/* Search input — shown only when open */}
+      {searchOpen && (
+        <div className="relative">
+          <span
+            className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant/60"
+            style={{ fontSize: 18 }}
+          >
+            search
+          </span>
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search artists…"
+            className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-surface-container-high text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all text-sm font-medium"
+          />
+        </div>
+      )}
 
       {/* Selected chips */}
       {selected.length > 0 && (
@@ -286,8 +311,8 @@ export default function ArtistStep({ selected, onToggle, selectedGenres = [] }: 
       {!isQueryActive && (
         <>
           {isLoadingSuggestions && (
-            <div className="grid grid-cols-5 gap-2">
-              {Array.from({ length: 10 }).map((_, i) => (
+            <div className="grid grid-cols-4 gap-2">
+              {Array.from({ length: 12 }).map((_, i) => (
                 <div key={i} className="aspect-square rounded-xl bg-surface-container-high animate-pulse" />
               ))}
             </div>
@@ -295,10 +320,10 @@ export default function ArtistStep({ selected, onToggle, selectedGenres = [] }: 
 
           {!isLoadingSuggestions && suggestions.length > 0 && (
             <>
-              <p className="text-xs font-bold text-on-surface-variant/50 uppercase tracking-wider -mb-2">
+              <p className="text-xs font-bold text-on-surface-variant/50 uppercase tracking-wider">
                 Based on your genres
               </p>
-              <div className="grid grid-cols-5 gap-2">
+              <div className="grid grid-cols-4 gap-2">
                 {suggestions.map((artist) => (
                   <SuggestionCard
                     key={artist.id}

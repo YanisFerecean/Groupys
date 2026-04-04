@@ -65,20 +65,20 @@ export default function CommunityStep({
   }, [selectedGenres, token]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div className="space-y-1">
         <h2 className="text-2xl font-extrabold text-on-surface tracking-tight">
-          Your communities are waiting
+          Find your people
         </h2>
         <p className="text-on-surface-variant text-sm">
-          Based on your taste — join the ones that feel right. You can always find more later.
+          Communities matched to your taste — join freely, leave anytime.
         </p>
       </div>
 
       {loading && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-2.5">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-[100px] bg-surface-container-high rounded-2xl animate-pulse" />
+            <div key={i} className="h-24 bg-surface-container-high rounded-2xl animate-pulse" />
           ))}
         </div>
       )}
@@ -99,7 +99,7 @@ export default function CommunityStep({
       )}
 
       {!loading && communities.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-80 overflow-y-auto pr-1">
+        <div className="grid grid-cols-2 gap-2.5 max-h-72 overflow-y-auto pr-0.5">
           {communities.map((community) => {
             const isSelected = selectedCommunityIds.has(community.id);
             const color = communityColor(community.id);
@@ -108,54 +108,46 @@ export default function CommunityStep({
               <button
                 key={community.id}
                 onClick={() => onToggle(community.id)}
-                className={`relative overflow-hidden rounded-2xl text-left transition-all duration-200 min-h-[100px] p-4 flex flex-col justify-between ${
-                  isSelected ? "ring-2 ring-white ring-offset-2 scale-[0.98]" : "hover:scale-[0.98]"
+                className={`relative overflow-hidden rounded-2xl text-left transition-all duration-200 h-24 p-3.5 flex flex-col justify-between ${
+                  isSelected ? "ring-2 ring-white/80 ring-offset-1 ring-offset-transparent scale-[0.97]" : "hover:scale-[0.97]"
                 }`}
                 style={{ backgroundColor: color }}
               >
-                {/* Decorative icon */}
+                {/* Decorative background icon */}
                 <span
-                  className="material-symbols-outlined absolute -top-2 -right-2 text-white/10 select-none pointer-events-none"
-                  style={{ fontSize: 72, fontVariationSettings: "'FILL' 1" }}
+                  className="material-symbols-outlined absolute -bottom-2 -right-2 text-white/10 select-none pointer-events-none"
+                  style={{ fontSize: 64, fontVariationSettings: "'FILL' 1" }}
                 >
-                  {community.iconEmoji ? "music_note" : "group"}
+                  music_note
                 </span>
 
-                {/* Selected checkmark */}
-                {isSelected && (
-                  <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-white/90 flex items-center justify-center">
-                    <span
-                      className="material-symbols-outlined text-on-surface"
-                      style={{ fontSize: 14, fontVariationSettings: "'FILL' 1" }}
-                    >
-                      check
-                    </span>
-                  </div>
-                )}
-
-                <div className="relative space-y-1">
-                  <h4 className="text-base font-extrabold text-white leading-tight">
+                {/* Top row: name + checkmark */}
+                <div className="flex items-start justify-between gap-2 relative">
+                  <h4 className="text-sm font-extrabold text-white leading-tight line-clamp-2">
                     {community.name}
                   </h4>
-                  {community.description && (
-                    <p className="text-[11px] text-white/70 font-medium line-clamp-1">
-                      {community.description}
-                    </p>
+                  {isSelected && (
+                    <div className="flex-shrink-0 w-5 h-5 rounded-full bg-white/90 flex items-center justify-center">
+                      <span
+                        className="material-symbols-outlined text-on-surface"
+                        style={{ fontSize: 12, fontVariationSettings: "'FILL' 1" }}
+                      >
+                        check
+                      </span>
+                    </div>
                   )}
                 </div>
 
-                <div className="relative flex items-center gap-1.5 mt-2">
-                  <span
-                    className="material-symbols-outlined text-white/70"
-                    style={{ fontSize: 13 }}
-                  >
+                {/* Bottom row: members + genre tag */}
+                <div className="relative flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-white/60" style={{ fontSize: 12 }}>
                     group
                   </span>
-                  <span className="text-[11px] font-semibold text-white/70">
-                    {formatMembers(community.memberCount)} members
+                  <span className="text-[10px] font-semibold text-white/60">
+                    {formatMembers(community.memberCount)}
                   </span>
                   {community.genre && (
-                    <span className="ml-auto bg-white/20 text-white px-2 py-0.5 rounded-full text-[9px] font-bold tracking-wider uppercase">
+                    <span className="ml-auto bg-black/20 text-white/90 px-1.5 py-px rounded-full text-[9px] font-bold tracking-wider uppercase">
                       {community.genre}
                     </span>
                   )}
@@ -167,7 +159,7 @@ export default function CommunityStep({
       )}
 
       {selectedCommunityIds.size > 0 && (
-        <p className="text-xs text-on-surface-variant text-center">
+        <p className="text-xs text-primary font-semibold text-center">
           {selectedCommunityIds.size} communit{selectedCommunityIds.size !== 1 ? "ies" : "y"} selected
         </p>
       )}

@@ -179,22 +179,27 @@ export default function OnboardingFlow() {
   const variants = slideVariants(direction);
 
   return (
-    <div className="min-h-screen bg-surface relative overflow-hidden flex flex-col items-center justify-center px-4 py-12">
-      {/* Gradient blob decorations */}
-      <div className="absolute -top-20 -left-20 w-96 h-96 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-20 -right-20 w-96 h-96 bg-secondary/5 rounded-full blur-3xl pointer-events-none" />
+    <div className="min-h-screen bg-surface relative overflow-hidden flex flex-col items-center justify-center px-4 py-10">
+      {/* Background blobs */}
+      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-primary/8 rounded-full blur-3xl pointer-events-none -translate-y-1/2" />
+      <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-secondary/8 rounded-full blur-3xl pointer-events-none translate-y-1/3" />
+      <div className="absolute top-1/2 left-0 w-64 h-64 bg-primary/5 rounded-full blur-2xl pointer-events-none" />
 
-      <div className="relative z-10 w-full max-w-2xl">
-        {/* Header */}
-        <div className="text-center mb-8 space-y-4">
-          <p className="text-on-surface-variant text-xs font-bold uppercase tracking-widest">
-            Welcome to Groupys
-          </p>
+      <div className="relative z-10 w-full max-w-lg">
+        {/* Wordmark */}
+        <div className="text-center mb-6">
+          <span className="text-2xl font-black tracking-tight text-primary">
+            groupys
+          </span>
+        </div>
+
+        {/* Step indicator */}
+        <div className="flex justify-center mb-6">
           <StepIndicator currentStep={step} />
         </div>
 
-        {/* Step card */}
-        <div className="bg-surface-container rounded-3xl p-7 sm:p-10 shadow-xl overflow-hidden">
+        {/* Card */}
+        <div className="bg-surface-container border border-outline-variant/30 rounded-3xl p-6 sm:p-8 shadow-xl shadow-black/5">
           <AnimatePresence mode="wait" initial={false}>
             {step === 1 && (
               <motion.div key="step-1" {...variants}>
@@ -218,15 +223,18 @@ export default function OnboardingFlow() {
             )}
           </AnimatePresence>
 
-          {/* Footer */}
-          <div className="flex items-center justify-between mt-8">
+          {/* Divider */}
+          <div className="h-px bg-outline-variant/30 mt-6 mb-4" />
+
+          {/* Footer navigation */}
+          <div className="flex items-center justify-between">
             {step > 1 ? (
               <button
                 onClick={handleBack}
                 disabled={isCompleting}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-full text-on-surface-variant font-semibold text-sm hover:bg-surface-container-high transition-all disabled:opacity-40"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-full text-on-surface-variant text-sm font-semibold hover:bg-surface-container-high transition-all disabled:opacity-40"
               >
-                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
                   arrow_back
                 </span>
                 Back
@@ -236,18 +244,18 @@ export default function OnboardingFlow() {
             )}
 
             {step === 3 ? (
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <button
                   onClick={handleSkip}
                   disabled={isCompleting}
-                  className="px-5 py-2.5 rounded-full text-on-surface-variant font-semibold text-sm hover:bg-surface-container-high transition-all disabled:opacity-40"
+                  className="px-4 py-2 rounded-full text-on-surface-variant text-sm font-semibold hover:bg-surface-container-high transition-all disabled:opacity-40"
                 >
                   Skip
                 </button>
                 <button
                   onClick={handleComplete}
                   disabled={isCompleting}
-                  className="flex items-center gap-2 px-8 py-2.5 bg-primary text-on-primary rounded-full font-bold text-sm hover:shadow-xl hover:shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                  className="flex items-center gap-2 px-6 py-2.5 bg-primary text-on-primary rounded-full font-bold text-sm hover:shadow-lg hover:shadow-primary/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
                 >
                   {isCompleting ? (
                     <>
@@ -259,9 +267,9 @@ export default function OnboardingFlow() {
                     </>
                   ) : (
                     <>
-                      Done
-                      <span className="material-symbols-outlined" style={{ fontSize: 18, fontVariationSettings: "'FILL' 1" }}>
-                        check
+                      Let&apos;s go
+                      <span className="material-symbols-outlined" style={{ fontSize: 16, fontVariationSettings: "'FILL' 1" }}>
+                        arrow_forward
                       </span>
                     </>
                   )}
@@ -271,10 +279,10 @@ export default function OnboardingFlow() {
               <button
                 onClick={handleNext}
                 disabled={!canProceed}
-                className="flex items-center gap-2 px-8 py-2.5 bg-primary text-on-primary rounded-full font-bold text-sm hover:shadow-xl hover:shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                className="flex items-center gap-2 px-6 py-2.5 bg-primary text-on-primary rounded-full font-bold text-sm hover:shadow-lg hover:shadow-primary/25 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
               >
                 Continue
-                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
                   arrow_forward
                 </span>
               </button>
@@ -282,15 +290,8 @@ export default function OnboardingFlow() {
           </div>
 
           {completionError && (
-            <p className="text-error text-sm text-center mt-4">{completionError}</p>
+            <p className="text-error text-xs text-center mt-3">{completionError}</p>
           )}
-        </div>
-
-        {/* Step labels */}
-        <div className="flex justify-center gap-8 mt-6 text-xs text-on-surface-variant/40 font-semibold uppercase tracking-wider">
-          <span className={step >= 1 ? "text-on-surface-variant" : ""}>Genres</span>
-          <span className={step >= 2 ? "text-on-surface-variant" : ""}>Artists</span>
-          <span className={step >= 3 ? "text-on-surface-variant" : ""}>Communities</span>
         </div>
       </div>
     </div>
