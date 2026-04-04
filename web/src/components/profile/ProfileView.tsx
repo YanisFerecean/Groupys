@@ -98,7 +98,8 @@ export default function ProfileView() {
             type === "topSongs" ? "songsContainerColor" :
             type === "topArtists" ? "artistsContainerColor" :
             type === "lastRatedAlbum" ? "lastRatedAlbumContainerColor" :
-            type === "currentlyListening" ? "currentlyListeningContainerColor" : null;
+            type === "currentlyListening" ? "currentlyListeningContainerColor" :
+            type === "hotTake" ? "hotTakeContainerColor" : null;
           const updates = { ...profile, widgetSizes: { ...(profile.widgetSizes ?? {}), [type]: size } };
           if (colorKey) (updates as Record<string, unknown>)[colorKey] = color;
           updateProfile(updates);

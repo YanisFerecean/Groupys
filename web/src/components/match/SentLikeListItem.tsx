@@ -28,7 +28,9 @@ export function SentLikeListItem({ like, busy, onWithdraw }: Props) {
         <Image
           src={like.targetProfileImage}
           alt={like.targetDisplayName ?? like.targetUsername}
-          className="w-14 h-14 rounded-full object-cover flex-shrink-0"
+          width={56}
+          height={56}
+          className="rounded-full object-cover flex-shrink-0"
         />
       ) : (
         <div className="w-14 h-14 rounded-full bg-surface-container-high flex items-center justify-center flex-shrink-0">

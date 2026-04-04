@@ -84,6 +84,12 @@ function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCustomizatio
         if (widgetSize) result.widgetSizes = { ...result.widgetSizes, lastRatedAlbum: widgetSize as "small" | "normal" };
         if (w.data?.hidden) result.hiddenWidgets = [...(result.hiddenWidgets ?? []), "lastRatedAlbum"];
         break;
+      case "hotTake":
+        result.showHotTake = (w.data?.show as boolean | undefined) !== false;
+        result.hotTakeContainerColor = w.color ?? undefined;
+        if (widgetSize) result.widgetSizes = { ...result.widgetSizes, hotTake: widgetSize as "small" | "normal" };
+        if (w.data?.hidden) result.hiddenWidgets = [...(result.hiddenWidgets ?? []), "hotTake"];
+        break;
     case "currentlyListening": {
       const d = w.data as Record<string, string>;
       if (d.title) {
@@ -123,6 +129,9 @@ function profileToWidgets(profile: Partial<ProfileCustomization>): BackendWidget
   }
   if (profile.showLastRatedAlbum) {
     widgetData.lastRatedAlbum = { type: "lastRatedAlbum", color: profile.lastRatedAlbumContainerColor ?? null, data: { size: profile.widgetSizes?.lastRatedAlbum ?? null, hidden: hidden.includes("lastRatedAlbum") } };
+  }
+  if (profile.showHotTake !== false) {
+    widgetData.hotTake = { type: "hotTake", color: profile.hotTakeContainerColor ?? null, data: { show: true, size: profile.widgetSizes?.hotTake ?? null, hidden: hidden.includes("hotTake") } };
   }
   if (profile.topArtists?.length) {
     widgetData.topArtists = { type: "topArtists", color: profile.artistsContainerColor ?? null, data: { items: profile.topArtists, size: profile.widgetSizes?.topArtists ?? null, synced: synced.topArtists ?? false, hidden: hidden.includes("topArtists") } };

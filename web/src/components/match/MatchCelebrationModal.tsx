@@ -54,7 +54,9 @@ export default function MatchCelebrationModal() {
             <Image
               src={pendingMatchModal.otherProfileImage}
               alt={pendingMatchModal.otherDisplayName ?? pendingMatchModal.otherUsername}
-              className="w-20 h-20 rounded-full object-cover"
+              width={80}
+              height={80}
+              className="rounded-full object-cover"
               style={{ border: "3px solid var(--color-primary)" }}
             />
           ) : (

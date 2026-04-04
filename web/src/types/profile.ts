@@ -30,5 +30,7 @@ export interface ProfileCustomization {
   spotifySynced?: Partial<Record<string, boolean>>;
   tags?: string[];
   showLastRatedAlbum?: boolean;
+  showHotTake?: boolean;
+  hotTakeContainerColor?: string;
   widgetOrder?: string[];
 }

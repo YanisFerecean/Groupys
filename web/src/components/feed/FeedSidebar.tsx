@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
+import { fetchCurrentHotTake, fetchMyHotTakeAnswer, type HotTakeRes } from "@/lib/hot-take-api";
+import HotTakeAnswerModal from "./HotTakeAnswerModal";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
 
@@ -36,17 +38,28 @@ export default function FeedSidebar() {
   const [trending, setTrending] = useState<CommunityRes[]>([]);
   const [expanded, setExpanded] = useState(false);
 
+  // Hot take notification state
+  const [hotTake, setHotTake] = useState<HotTakeRes | null>(null);
+  const [answered, setAnswered] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const token = await getToken();
-        const [mineRes, trendingRes] = await Promise.all([
+        const [mineRes, trendingRes, ht, answer] = await Promise.all([
           fetch(`${API_URL}/communities/mine`, { headers: { Authorization: `Bearer ${token}` } }),
           fetch(`${API_URL}/communities/trending?limit=5`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetchCurrentHotTake(),
+          fetchMyHotTakeAnswer(token),
         ]);
         if (mineRes.ok && !cancelled) setCommunities(await mineRes.json());
         if (trendingRes.ok && !cancelled) setTrending(await trendingRes.json());
+        if (!cancelled) {
+          setHotTake(ht);
+          setAnswered(!!answer);
+        }
       } catch {
         // ignore
       }
@@ -56,10 +69,49 @@ export default function FeedSidebar() {
     };
   }, [getToken]);
 
+  // Refresh answered state when user submits from modal or HotTakeCard
+  useEffect(() => {
+    const handler = async () => {
+      const token = await getToken();
+      const answer = await fetchMyHotTakeAnswer(token);
+      setAnswered(!!answer);
+    };
+    window.addEventListener("hot-take-answered", handler);
+    return () => window.removeEventListener("hot-take-answered", handler);
+  }, [getToken]);
+
   const visible = expanded ? communities : communities.slice(0, 3);
+  const showHotTakeNotification = !!hotTake && !answered;
 
   return (
     <aside className="hidden xl:flex w-80 h-[calc(100vh-5rem)] sticky top-20 border-l border-surface-container-highest px-8 py-12 flex-col gap-12 overflow-y-auto">
+
+      {/* Hot Take notification */}
+      {showHotTakeNotification && (
+        <div className="rounded-2xl overflow-hidden border border-primary/20 bg-gradient-to-br from-primary/10 via-surface-container-low to-surface-container-low p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span
+              className="material-symbols-outlined text-primary"
+              style={{ fontSize: 16, fontVariationSettings: "'FILL' 1" }}
+            >
+              local_fire_department
+            </span>
+            <span className="text-xs font-bold uppercase tracking-widest text-primary">
+              Hot Take{hotTake.weekLabel ? ` · ${hotTake.weekLabel}` : ""}
+            </span>
+          </div>
+          <p className="text-sm font-semibold text-on-surface line-clamp-2 mb-3">
+            {hotTake.question}
+          </p>
+          <button
+            onClick={() => setModalOpen(true)}
+            className="w-full py-2 rounded-xl text-xs font-bold bg-primary text-on-primary hover:opacity-90 transition-opacity"
+          >
+            Answer now →
+          </button>
+        </div>
+      )}
+
       {/* Trending */}
       <div>
         <h4 className="text-sm font-bold uppercase tracking-widest text-on-surface-variant/60 mb-6">
@@ -149,6 +201,15 @@ export default function FeedSidebar() {
         )}
       </div>
 
+      {/* Hot Take answer modal */}
+      {hotTake && (
+        <HotTakeAnswerModal
+          open={modalOpen}
+          hotTake={hotTake}
+          onClose={() => setModalOpen(false)}
+          onAnswered={() => { setModalOpen(false); setAnswered(true); }}
+        />
+      )}
     </aside>
   );
 }

@@ -38,6 +38,35 @@ public class SchemaBootstrapService {
             run(statement, "ALTER TABLE music_source_snapshot ADD COLUMN IF NOT EXISTS payload_size_bytes bigint");
             run(statement, "ALTER TABLE music_source_snapshot ADD COLUMN IF NOT EXISTS checksum varchar(64)");
 
+            // Hot takes
+            run(statement, """
+                    CREATE TABLE IF NOT EXISTS hot_takes (
+                        id uuid PRIMARY KEY,
+                        question text NOT NULL,
+                        week_label varchar(20) NOT NULL,
+                        created_at timestamptz NOT NULL
+                    )""");
+            run(statement, """
+                    CREATE TABLE IF NOT EXISTS hot_take_answers (
+                        id uuid PRIMARY KEY,
+                        hot_take_id uuid NOT NULL REFERENCES hot_takes(id) ON DELETE CASCADE,
+                        user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        answer text NOT NULL,
+                        image_url text,
+                        music_type varchar(20),
+                        answered_at timestamptz NOT NULL,
+                        UNIQUE (hot_take_id, user_id)
+                    )""");
+
+            run(statement, "ALTER TABLE hot_takes ADD COLUMN IF NOT EXISTS answer_type VARCHAR(20)");
+            run(statement, "UPDATE hot_takes SET answer_type = 'ARTIST' WHERE answer_type IS NULL");
+            run(statement, "ALTER TABLE hot_takes ALTER COLUMN answer_type SET NOT NULL");
+            run(statement, "ALTER TABLE hot_takes ALTER COLUMN answer_type SET DEFAULT 'ARTIST'");
+            run(statement, "ALTER TABLE hot_take_answers ADD COLUMN IF NOT EXISTS show_on_widget BOOLEAN");
+            run(statement, "UPDATE hot_take_answers SET show_on_widget = FALSE WHERE show_on_widget IS NULL");
+            run(statement, "ALTER TABLE hot_take_answers ALTER COLUMN show_on_widget SET NOT NULL");
+            run(statement, "ALTER TABLE hot_take_answers ALTER COLUMN show_on_widget SET DEFAULT FALSE");
+
             // Chat/feed read-model columns
             run(statement, "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS last_message_at timestamptz");
             run(statement, "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS last_message_preview text");
