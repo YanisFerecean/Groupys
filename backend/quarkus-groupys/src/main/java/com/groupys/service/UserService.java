@@ -161,7 +161,18 @@ public class UserService {
     @Transactional
     public void savePublicKey(String clerkId, String publicKey) {
         User user = userRepository.findByClerkId(clerkId)
-                .orElseThrow(() -> new NotFoundException("User not found"));
+            .orElseThrow(() -> new NotFoundException("User not found"));
         user.publicKey = publicKey;
+    }
+
+    @Transactional
+    public UserResDto updateBanner(String clerkId, String bannerUrl) {
+        User user = userRepository.findByClerkId(clerkId)
+            .orElseThrow(() -> new NotFoundException("User not found"));
+        user.bannerUrl = bannerUrl;
+        // Initialize lazy collections before the session closes
+        user.tags.size();
+        discoveryService.refreshAfterUserChange(user.id);
+        return mapUser(user);
     }
 }

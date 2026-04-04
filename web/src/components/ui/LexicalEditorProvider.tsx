@@ -1,0 +1,101 @@
+"use client";
+
+import { LexicalComposer } from "@lexical/react/LexicalComposer";
+import { HeadingNode, QuoteNode } from "@lexical/rich-text";
+import { ListNode, ListItemNode } from "@lexical/list";
+import { CodeNode, CodeHighlightNode } from "@lexical/code";
+import { HorizontalRuleNode } from "@lexical/react/LexicalHorizontalRuleNode";
+import { AutoLinkNode, LinkNode } from "@lexical/link";
+import LexicalEditor, { type LexicalEditorRef } from "./LexicalEditor";
+
+const EDITOR_NODES = [
+  HeadingNode,
+  QuoteNode,
+  ListNode,
+  ListItemNode,
+  CodeNode,
+  CodeHighlightNode,
+  HorizontalRuleNode,
+  AutoLinkNode,
+  LinkNode,
+];
+
+export default function LexicalEditorProvider({
+  onChange,
+  editorRef,
+  initialMarkdown,
+}: {
+  onChange: (markdown: string) => void;
+  editorRef?: React.RefObject<LexicalEditorRef | null>;
+  initialMarkdown?: string;
+}) {
+  const initialConfig = {
+    namespace: "GroupysPostEditor",
+    nodes: EDITOR_NODES,
+    onError: (error: Error) => {
+      console.error("Lexical error:", error);
+    },
+    theme: {
+      text: {
+        bold: "font-bold",
+        italic: "italic",
+        strikethrough: "line-through",
+        code: "text-[0.8rem] bg-surface-container-high px-1.5 py-0.5 rounded font-mono",
+      },
+      heading: {
+        h1: "text-xl font-extrabold my-2",
+        h2: "text-lg font-bold my-2",
+        h3: "text-base font-bold my-1.5",
+      },
+      quote: "border-l-3 border-primary pl-3 my-2 opacity-85",
+      list: {
+        ul: "list-disc pl-5 my-1",
+        ol: "list-decimal pl-5 my-1",
+        listitem: "my-0.5",
+      },
+      code: "bg-surface-container-high px-4 py-3 rounded-xl overflow-x-auto my-2 text-[0.8rem] font-mono",
+      codeHighlight: {
+        atrule: "text-purple-500",
+        attr: "text-blue-500",
+        boolean: "text-orange-500",
+        builtin: "text-teal-500",
+        cdata: "text-gray-500",
+        char: "text-green-500",
+        class: "text-yellow-500",
+        "class-name": "text-yellow-500",
+        comment: "text-gray-400",
+        constant: "text-orange-500",
+        deleted: "text-red-500",
+        doctype: "text-gray-500",
+        entity: "text-purple-500",
+        function: "text-blue-500",
+        important: "text-orange-500",
+        inserted: "text-green-500",
+        keyword: "text-purple-500",
+        namespace: "text-yellow-500",
+        number: "text-orange-500",
+        operator: "text-purple-500",
+        prolog: "text-gray-500",
+        property: "text-blue-500",
+        punctuation: "text-gray-500",
+        regex: "text-orange-500",
+        selector: "text-green-500",
+        string: "text-green-500",
+        symbol: "text-orange-500",
+        tag: "text-red-500",
+        url: "text-blue-500",
+        variable: "text-orange-500",
+      },
+    },
+  };
+
+  return (
+    <LexicalComposer initialConfig={initialConfig}>
+      <LexicalEditor
+        onChange={onChange}
+        editorRef={editorRef}
+        initialMarkdown={initialMarkdown}
+      />
+    </LexicalComposer>
+  );
+}

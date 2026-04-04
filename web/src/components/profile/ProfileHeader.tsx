@@ -4,6 +4,8 @@ import Image from "next/image";
 import type { ProfileCustomization } from "@/types/profile";
 import { countryFlag } from "@/lib/countries";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
+
 interface ProfileHeaderProps {
   profile: ProfileCustomization;
   avatarUrl: string;
@@ -18,12 +20,11 @@ const DEFAULT_BANNER =
 
 function bannerBackground(value?: string): React.CSSProperties {
   if (!value) return { backgroundImage: DEFAULT_BANNER };
-  // Gradient strings start with "linear-gradient" / "radial-gradient" etc.
   if (value.startsWith("linear-gradient") || value.startsWith("radial-gradient")) {
     return { backgroundImage: value };
   }
-  // Otherwise treat as image URL
-  return { backgroundImage: `url(${value})` };
+  const url = value.startsWith("/") ? `${API_URL.replace(/\/api$/, "")}${value}` : value;
+  return { backgroundImage: `url(${url})` };
 }
 
 export default function ProfileHeader({

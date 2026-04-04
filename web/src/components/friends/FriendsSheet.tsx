@@ -200,11 +200,11 @@ export default function FriendsSheet() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <button
-          className="relative w-10 h-10 flex items-center justify-center rounded-full bg-surface-container hover:bg-surface-container-high transition-colors"
-          aria-label="Friends"
-        >
-          <Users className="w-5 h-5 text-primary" />
+      <button
+        className="relative w-10 h-10 flex items-center justify-center rounded-full text-slate-500 hover:text-slate-800 transition-colors"
+        aria-label="Friends"
+      >
+        <Users className="w-5 h-5" />
           {received.length > 0 && (
             <span className="absolute -top-0.5 -right-0.5 w-4 h-4 text-[10px] font-bold bg-primary text-white rounded-full flex items-center justify-center">
               {received.length > 9 ? "9+" : received.length}
