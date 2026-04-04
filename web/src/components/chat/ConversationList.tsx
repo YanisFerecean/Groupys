@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useRef } from "react";
+import { memo, useCallback, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { MessageCircle } from "lucide-react";
@@ -123,13 +123,13 @@ export function ConversationList({ conversations, activeId, hasMore, isLoadingMo
   const { user } = useUser();
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const handleScroll = () => {
+  const handleScroll = useCallback(() => {
     const el = containerRef.current;
     if (!el || !hasMore || isLoadingMore || !onLoadMore) return;
     if (el.scrollHeight - el.scrollTop - el.clientHeight < 100) {
       onLoadMore();
     }
-  };
+  }, [hasMore, isLoadingMore, onLoadMore]);
 
   if (conversations.length === 0) {
     return (

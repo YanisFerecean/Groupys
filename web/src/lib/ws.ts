@@ -70,7 +70,7 @@ export class ChatWebSocketClient {
       this.ws.onmessage = (event) => {
         try {
           const msg: WsInbound = JSON.parse(event.data);
-          console.log("[WS Inbound]", msg.type, msg.payload || msg);
+          console.log("[WS Inbound]", msg.type);
 
           if (msg.type === "AUTH_OK") {
             // Server confirmed auth — now safe to send SYNC and flush queued messages
@@ -124,11 +124,13 @@ export class ChatWebSocketClient {
 
   public send(msg: WsOutbound) {
     if (this.ws?.readyState === WebSocket.OPEN && this.isAuthenticated) {
-      console.log("[WS Outbound]", msg);
+      console.log("[WS Outbound]", msg.type);
       this.ws.send(JSON.stringify(msg));
     } else if (!ChatWebSocketClient.EPHEMERAL_TYPES.has(msg.type)) {
-      console.log("[WS] Queueing message (not connected or not yet authed)");
-      this.messageQueue.push(msg);
+      if (this.messageQueue.length < 100) {
+        console.log("[WS] Queueing message (not connected or not yet authed)");
+        this.messageQueue.push(msg);
+      }
     }
   }
 

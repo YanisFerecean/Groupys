@@ -1,7 +1,12 @@
-import { useEffect, useRef } from "react";
+import { memo, useState } from "react";
 import { motion } from "framer-motion";
 import { AlertCircle, Check } from "lucide-react";
 import { Message } from "@/types/chat";
+
+const timeFormatter = new Intl.DateTimeFormat("en-US", {
+  hour: "numeric",
+  minute: "2-digit",
+});
 
 interface MessageBubbleProps {
   message: Message;
@@ -11,18 +16,15 @@ interface MessageBubbleProps {
   onRetry?: () => void;
 }
 
-export function MessageBubble({ message, isMine, showTime = true, isLastInGroup = true, onRetry }: MessageBubbleProps) {
-  const time = new Intl.DateTimeFormat("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(message.createdAt));
+export const MessageBubble = memo(function MessageBubble({ message, isMine, showTime = true, isLastInGroup = true, onRetry }: MessageBubbleProps) {
+  const time = timeFormatter.format(new Date(message.createdAt));
 
-  const prevStatusRef = useRef(message.status);
-  useEffect(() => {
-    prevStatusRef.current = message.status;
-  }, [message.status]);
+  const [prevStatus, setPrevStatus] = useState(message.status);
+  if (prevStatus !== message.status) {
+    setPrevStatus(message.status);
+  }
 
-  const justConfirmed = prevStatusRef.current === "sending" && message.status === "sent";
+  const justConfirmed = prevStatus === "sending" && message.status === "sent";
   const isSending = message.status === "sending";
   const isFailed = message.status === "failed";
 
@@ -91,4 +93,4 @@ export function MessageBubble({ message, isMine, showTime = true, isLastInGroup 
       </div>
     </div>
   );
-}
+});
