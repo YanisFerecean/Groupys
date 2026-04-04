@@ -121,7 +121,9 @@ export function MessageInput({ conversationId, onSend, disabled, rateLimitError 
         </p>
       )}
       <div className="flex items-center gap-2 max-w-4xl mx-auto">
-        <div className="flex-1 relative">
+        <div ref={emojiRef} className={`flex-1 relative flex items-center bg-surface-container rounded-full px-4 py-1 gap-1 transition-all ${
+          remaining < 0 ? "ring-2 ring-error/30" : "focus-within:ring-2 focus-within:ring-primary/20"
+        }`}>
           <textarea
             ref={textareaRef}
             value={content}
@@ -131,27 +133,23 @@ export function MessageInput({ conversationId, onSend, disabled, rateLimitError 
             disabled={disabled}
             rows={1}
             maxLength={MAX_LENGTH}
-            className={`w-full max-h-30 min-h-11 bg-surface-container resize-none rounded-2xl px-4 py-3 text-[15px] text-on-surface focus:outline-none focus:ring-2 placeholder:text-on-surface-variant disabled:opacity-50 transition-all custom-scrollbar ${
-              remaining < 0 ? "focus:ring-error/40 ring-2 ring-error/30" : "focus:ring-primary/20"
-            }`}
+            className="flex-1 max-h-30 min-h-11 bg-transparent resize-none text-[15px] text-on-surface focus:outline-none placeholder:text-on-surface-variant disabled:opacity-50 custom-scrollbar py-2.5"
           />
           {nearLimit && (
-            <span className={`absolute right-3 bottom-2 text-[11px] tabular-nums pointer-events-none ${
+            <span className={`text-[11px] tabular-nums pointer-events-none flex-shrink-0 ${
               remaining <= 0 ? "text-error font-medium" : "text-on-surface-variant"
             }`}>
               {remaining}
             </span>
           )}
-        </div>
-        <div ref={emojiRef} className="relative shrink-0">
           <button
             type="button"
             onClick={() => setEmojiOpen((o) => !o)}
             disabled={disabled}
-            className={`h-11 w-11 rounded-full flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+            className={`flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
               emojiOpen
                 ? "bg-primary/15 text-primary"
-                : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+                : "text-on-surface-variant hover:text-on-surface"
             }`}
           >
             <Smile className="w-5 h-5" />

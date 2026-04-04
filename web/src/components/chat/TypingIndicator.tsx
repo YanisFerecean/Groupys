@@ -1,11 +1,13 @@
 export function TypingIndicator({ username }: { username?: string }) {
   return (
     <div className="flex flex-col space-y-1 w-fit">
-      {username && <span className="text-xs text-muted-foreground ml-2">{username} is typing...</span>}
-      <div className="flex items-center space-x-1.5 p-3 px-4 bg-muted/50 rounded-2xl w-fit">
-        <div className="w-1.5 h-1.5 bg-foreground/50 rounded-full animate-bounce [animation-delay:-0.3s]" />
-        <div className="w-1.5 h-1.5 bg-foreground/50 rounded-full animate-bounce [animation-delay:-0.15s]" />
-        <div className="w-1.5 h-1.5 bg-foreground/50 rounded-full animate-bounce" />
+      {username && (
+        <span className="text-xs text-on-surface-variant ml-3">{username} is typing...</span>
+      )}
+      <div className="flex items-center space-x-1.5 px-4 py-3 bg-surface-container-high rounded-3xl rounded-bl-sm w-fit shadow-sm">
+        <div className="w-2 h-2 bg-on-surface/40 rounded-full animate-bounce [animation-delay:-0.3s]" />
+        <div className="w-2 h-2 bg-on-surface/40 rounded-full animate-bounce [animation-delay:-0.15s]" />
+        <div className="w-2 h-2 bg-on-surface/40 rounded-full animate-bounce" />
       </div>
     </div>
   );

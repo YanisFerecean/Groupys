@@ -51,7 +51,10 @@
       "Bash(cmd /c \"mvnw.cmd compile -q\")",
       "Bash(cmd /c \"npm run build\")",
       "Bash(find /c/Uni/Projects/groupys-web-app/mobile/components -type f -name *rofile* -o -name *Avatar* -o -name *ommunity*)",
-      "Bash(find /c/Uni/Projects/groupys-web-app -type f -name *artist*)"
+      "Bash(find /c/Uni/Projects/groupys-web-app -type f \\\\\\(-iname *dm* -o -iname *direct* -o -iname *message* -o -iname *chat* -o -iname *conversation* \\\\\\))",
+      "Bash(find /c/Uni/Projects/groupys-web-app/backend -type f \\\\\\(-iname *dm* -o -iname *direct* -o -iname *message* -o -iname *chat* -o -iname *conversation* \\\\\\))",
+      "Bash(find /c/Uni/Projects/groupys-web-app/mobile -type f \\\\\\(-iname *dm* -o -iname *direct* -o -iname *message* -o -iname *chat* -o -iname *conversation* \\\\\\))",
+      "Bash(find /c/Uni/Projects/groupys-web-app -name *ws* -o -name *websocket*)"
     ]
   }
 }

@@ -117,7 +117,8 @@ export function useMessages(
             }
           }
           if (prev.some((m) => m.id === payload.id)) return prev;
-          return [msg, ...prev];
+          const next = [msg, ...prev];
+          return next.length > MAX_MESSAGES ? next.slice(0, MAX_MESSAGES) : next;
         });
       }),
 

@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { ChevronLeft, Info, Lock, Check, X } from "lucide-react";
+import { Bell, ChevronLeft, Info, Lock, Check, X } from "lucide-react";
 import { useUser } from "@clerk/nextjs";
 import { useAuth } from "@clerk/nextjs";
 import { useMessages } from "@/hooks/useMessages";
@@ -59,11 +59,17 @@ export default function ConversationPage() {
     [cryptoReady, otherPublicKey, makeDecrypt]
   );
 
+  const isInitialLoadRef = useRef(true);
+
   const { messages, isLoading, hasMore, loadMore, sendMessage, resendMessage, rateLimitError, isDecrypting } = useMessages(
     conversationId,
     decryptFn,
     encryptFn
   );
+
+  useEffect(() => {
+    if (!isLoading) isInitialLoadRef.current = false;
+  }, [isLoading]);
 
   // Other participant's last read timestamp — seeded from conversation data, kept live via READ events
   const [otherLastReadAt, setOtherLastReadAt] = useState<string | null>(null);
@@ -176,7 +182,7 @@ export default function ConversationPage() {
   return (
     <div className="flex flex-col h-full bg-surface">
       {/* Header */}
-      <div className="h-16 border-b border-surface-container-high flex items-center px-4 justify-between flex-shrink-0 bg-surface/95 backdrop-blur z-10">
+      <div className="h-16 border-b border-surface-container-high/50 shadow-sm flex items-center px-4 justify-between flex-shrink-0 bg-surface/95 backdrop-blur z-10">
         <div className="flex items-center gap-3">
           <button 
             onClick={() => router.push('/chat')}
@@ -190,9 +196,9 @@ export default function ConversationPage() {
             className="flex items-center gap-3 hover:opacity-80 transition-opacity"
           >
             {avatarUrl ? (
-              <Image src={avatarUrl} alt={headerTitle} width={40} height={40} className="rounded-full object-cover" />
+              <Image src={avatarUrl} alt={headerTitle} width={48} height={48} className="rounded-full object-cover" />
             ) : (
-              <div className="w-10 h-10 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-lg uppercase">
+              <div className="w-12 h-12 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-lg uppercase">
                 {headerTitle.charAt(0)}
               </div>
             )}
@@ -217,8 +223,8 @@ export default function ConversationPage() {
                 )}
               </div>
               {isOtherOnline ? (
-                <span className="text-xs text-primary font-medium flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block"></span>
+                <span className="text-xs text-primary font-semibold flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-primary ring-2 ring-surface inline-block"></span>
                   Online
                 </span>
               ) : lastSeenText ? (
@@ -238,7 +244,8 @@ export default function ConversationPage() {
         conversationId={conversationId || ""}
         messages={messages}
         hasMore={hasMore}
-        isLoadingMore={isLoading}
+        isLoading={isLoading && isInitialLoadRef.current}
+        isLoadingMore={isLoading && !isInitialLoadRef.current}
         isDecrypting={isDecrypting}
         otherLastReadAt={otherLastReadAt}
         onLoadMore={handleLoadMore}
@@ -248,14 +255,17 @@ export default function ConversationPage() {
       {/* Input / Request banner */}
       {conversation?.requestStatus === "PENDING_INCOMING" ? (
         <div className="flex-shrink-0 border-t border-surface-container-high bg-surface p-4">
-          <p className="text-sm text-center text-on-surface-variant mb-3">
-            <span className="font-semibold text-on-surface">{headerTitle}</span> wants to send you a message.
-          </p>
+          <div className="flex items-center justify-center gap-2 mb-3">
+            <Bell className="w-4 h-4 text-primary" />
+            <p className="text-sm text-center text-on-surface-variant">
+              <span className="font-semibold text-on-surface">{headerTitle}</span> wants to send you a message.
+            </p>
+          </div>
           <div className="flex gap-3">
             <button
               onClick={handleDeny}
               disabled={requestBusy}
-              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-full bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-semibold transition-colors disabled:opacity-50"
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-full bg-surface-container-highest hover:bg-surface-container-high text-on-surface font-semibold transition-colors disabled:opacity-50"
             >
               <X className="w-4 h-4" />
               Decline
