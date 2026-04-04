@@ -4,12 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth, useUser } from "@clerk/nextjs";
-import { useEditor, EditorContent } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import Placeholder from "@tiptap/extension-placeholder";
-import TurndownService from "turndown";
 import MarkdownContent from "@/components/ui/MarkdownContent";
 import AuthMedia from "@/components/ui/AuthMedia";
+import MediaLightbox, { LightboxItem } from "@/components/ui/MediaLightbox";
+import { resizeImage } from "@/lib/imageResize";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
 
@@ -22,6 +20,7 @@ interface CommunityRes {
   genre: string;
   country: string;
   imageUrl: string;
+  bannerUrl: string | null;
   tags: string[];
   artistId: number;
   memberCount: number;
@@ -39,11 +38,16 @@ interface MemberRes {
   joinedAt: string;
 }
 
+interface PostMedia {
+  url: string;
+  type: string;
+  order: number;
+}
+
 interface PostRes {
   id: string;
   content: string;
-  mediaUrl: string | null;
-  mediaType: string | null;
+  media: PostMedia[];
   communityId: string;
   communityName: string;
   authorId: string;
@@ -99,7 +103,7 @@ function MemberRow({ member }: { member: MemberRes }) {
           alt={member.displayName || member.username}
           width={40}
           height={40}
-          className="rounded-full object-cover"
+          className="rounded-full object-cover aspect-square"
         />
       ) : (
         <div className="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center">
@@ -143,14 +147,25 @@ function PostCard({
   onDelete?: (postId: string) => void;
 }) {
   const router = useRouter();
-  const isImage = post.mediaType?.startsWith("image/");
-  const isVideo = post.mediaType?.startsWith("video/");
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+
+  const visualItems: LightboxItem[] = post.media
+    ?.filter((m) => m.type.startsWith("image/") || m.type.startsWith("video/"))
+    .map((m) => ({
+      src: `${API_URL}${m.url.replace(/^\/api/, "")}`,
+      type: m.type.startsWith("image/") ? "image" : "video",
+    })) ?? [];
+
+  let vi = -1;
+  const visualIndexOf = post.media?.map((m) =>
+    m.type.startsWith("image/") || m.type.startsWith("video/") ? ++vi : -1
+  ) ?? [];
+
   const isOwner = !!communityOwnerId && communityOwnerId === post.authorId;
   const canDelete =
     !!onDelete &&
     (currentUserId === post.authorId ||
       currentUserId === communityOwnerId);
-  const isAudio = post.mediaType?.startsWith("audio/");
 
   return (
     <div
@@ -166,13 +181,15 @@ function PostCard({
         }}
       >
         {post.authorProfileImage ? (
-          <Image
-            src={post.authorProfileImage}
-            alt={post.authorDisplayName || post.authorUsername}
-            width={36}
-            height={36}
-            className="shrink-0 rounded-full object-cover"
-          />
+          <div className="w-9 h-9 shrink-0 rounded-full overflow-hidden">
+            <Image
+              src={post.authorProfileImage}
+              alt={post.authorDisplayName || post.authorUsername}
+              width={36}
+              height={36}
+              className="w-full h-full object-cover"
+            />
+          </div>
         ) : (
           <div className="w-9 h-9 shrink-0 rounded-full bg-surface-container-high flex items-center justify-center">
             <span className="material-symbols-outlined text-on-surface-variant/40 text-sm">
@@ -223,31 +240,55 @@ function PostCard({
       )}
 
       {/* Media */}
-      {post.mediaUrl && isImage && (
-        <div className="px-4 pb-3">
-          <AuthMedia
-            src={`${API_URL}${post.mediaUrl.replace(/^\/api/, "")}`}
-            type="image"
-            className="w-full rounded-xl"
-          />
-        </div>
-      )}
-      {post.mediaUrl && isVideo && (
-        <div className="px-4 pb-3">
-          <AuthMedia
-            src={`${API_URL}${post.mediaUrl.replace(/^\/api/, "")}`}
-            type="video"
-            className="w-full rounded-xl"
-          />
-        </div>
-      )}
-      {post.mediaUrl && isAudio && (
-        <div className="px-4 pb-3">
-          <AuthMedia
-            src={`${API_URL}${post.mediaUrl.replace(/^\/api/, "")}`}
-            type="audio"
-          />
-        </div>
+      {post.media?.length > 0 && (() => {
+        const count = post.media.length;
+        const inGrid = count > 1;
+        return (
+          <div className={`px-4 pb-3${inGrid ? " grid grid-cols-2 gap-1" : ""}`} onClick={(e) => e.stopPropagation()}>
+            {post.media.map((m, i) => {
+              const src = `${API_URL}${m.url.replace(/^\/api/, "")}`;
+              const isImage = m.type.startsWith("image/");
+              const isVideo = m.type.startsWith("video/");
+              const isAudio = m.type.startsWith("audio/");
+              if (!isImage && !isVideo && !isAudio) return null;
+              const spanFull = inGrid && (isAudio || (count === 3 && i === 0));
+              const vIdx = visualIndexOf[i];
+              const mediaClass = inGrid && !isAudio
+                ? "w-full h-64 object-cover rounded-xl"
+                : isImage ? "max-w-full max-h-80 rounded-xl" : isVideo ? "max-w-full max-h-[480px] rounded-xl" : undefined;
+              return (
+                <div key={i} className={`relative${spanFull ? " col-span-2" : ""}`}>
+                  {isImage ? (
+                    <div onClick={() => setLightboxIndex(vIdx)} className="cursor-zoom-in">
+                      <AuthMedia src={src} type="image" className={mediaClass} />
+                    </div>
+                  ) : isVideo ? (
+                    <div className="relative">
+                      <AuthMedia src={src} type="video" className={mediaClass} />
+                      <button
+                        onClick={() => setLightboxIndex(vIdx)}
+                        className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center text-white transition-colors"
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>fullscreen</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <AuthMedia src={src} type="audio" />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
+
+      {lightboxIndex !== null && (
+        <MediaLightbox
+          items={visualItems}
+          index={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+          onNav={setLightboxIndex}
+        />
       )}
 
       {/* Reaction bar */}
@@ -295,12 +336,15 @@ function PostCard({
           {post.dislikeCount}
         </button>
 
-        <span className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-on-surface-variant ml-auto">
+        <button
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-on-surface-variant hover:bg-surface-container-high transition-colors ml-auto"
+          onClick={(e) => { e.stopPropagation(); router.push(`/discover/post/${post.id}`); }}
+        >
           <span className="material-symbols-outlined text-base">
             chat_bubble_outline
           </span>
           {post.commentCount > 0 ? post.commentCount : 0}
-        </span>
+        </button>
       </div>
     </div>
   );
@@ -386,315 +430,6 @@ function SortDropdown({
   );
 }
 
-function CreatePostForm({
-  onPost,
-  posting,
-}: {
-  onPost: (content: string, file: File | null) => void;
-  posting: boolean;
-}) {
-  const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  const [, setTick] = useState(0);
-
-  const editor = useEditor({
-    immediatelyRender: false,
-    extensions: [
-      StarterKit.configure({
-        heading: { levels: [1, 2, 3] },
-      }),
-      Placeholder.configure({
-        placeholder: "Share something with the community...",
-      }),
-    ],
-    editorProps: {
-      attributes: {
-        class:
-          "w-full min-h-[4.5rem] bg-transparent outline-none text-sm text-on-surface prose-editor",
-      },
-    },
-    onTransaction() {
-      setTick((t) => t + 1);
-    },
-  });
-
-  const attachFile = useCallback((f: File | null) => {
-    setFile(f);
-    if (
-      f &&
-      (f.type.startsWith("image/") ||
-        f.type.startsWith("video/") ||
-        f.type.startsWith("audio/"))
-    ) {
-      setPreview(URL.createObjectURL(f));
-    } else {
-      setPreview(null);
-    }
-  }, []);
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    attachFile(e.target.files?.[0] || null);
-  };
-
-  const isAllowedMedia = (type: string) =>
-    type.startsWith("image/") ||
-    type.startsWith("video/") ||
-    type.startsWith("audio/");
-
-  // Handle paste & drop media on the editor area
-  const handlePaste = useCallback(
-    (e: React.ClipboardEvent) => {
-      const items = e.clipboardData?.items;
-      if (!items) return;
-      for (const item of items) {
-        if (isAllowedMedia(item.type)) {
-          e.preventDefault();
-          const f = item.getAsFile();
-          if (f) attachFile(f);
-          return;
-        }
-      }
-    },
-    [attachFile],
-  );
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      const f = e.dataTransfer?.files?.[0];
-      if (f && isAllowedMedia(f.type)) {
-        e.preventDefault();
-        attachFile(f);
-      }
-    },
-    [attachFile],
-  );
-
-  const handleSubmit = () => {
-    if (!editor) return;
-    const html = editor.getHTML();
-    const isEmpty = editor.isEmpty;
-    if (isEmpty && !file) return;
-
-    // Convert HTML to markdown for storage
-    const td = new TurndownService({
-      headingStyle: "atx",
-      bulletListMarker: "-",
-    });
-    const markdown = isEmpty ? "" : td.turndown(html);
-
-    onPost(markdown.trim(), file);
-    editor.commands.clearContent();
-    setFile(null);
-    setPreview(null);
-    if (fileRef.current) fileRef.current.value = "";
-  };
-
-  const tbtn = (active: boolean) =>
-    `p-1.5 rounded transition-colors ${
-      active
-        ? "bg-primary/15 text-primary"
-        : "text-on-surface-variant hover:bg-surface-container-high"
-    }`;
-
-  return (
-    <div
-      className="bg-surface-container-lowest/65 border border-white/80 rounded-2xl overflow-hidden shadow-sm p-4"
-      onPaste={handlePaste}
-      onDrop={handleDrop}
-      onDragOver={(e) => e.preventDefault()}
-    >
-      <EditorContent editor={editor} />
-
-      {/* Formatting toolbar */}
-      {editor && (
-        <div className="flex items-center gap-0.5 pb-2 mt-1 flex-wrap">
-          <button
-            type="button"
-            onClick={() => {
-              if (editor.isActive("heading", { level: 1 })) {
-                editor.chain().focus().toggleHeading({ level: 1 }).run();
-              } else if (editor.state.selection.$from.parent.textContent) {
-                editor
-                  .chain()
-                  .focus()
-                  .splitBlock()
-                  .setHeading({ level: 1 })
-                  .run();
-              } else {
-                editor.chain().focus().toggleHeading({ level: 1 }).run();
-              }
-            }}
-            className={tbtn(editor.isActive("heading", { level: 1 }))}
-            title="Heading"
-          >
-            <span className="text-xs font-bold">H</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().toggleBold().run()}
-            className={tbtn(editor.isActive("bold"))}
-            title="Bold"
-          >
-            <span className="text-xs font-bold">B</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().toggleItalic().run()}
-            className={tbtn(editor.isActive("italic"))}
-            title="Italic"
-          >
-            <span className="text-xs italic">I</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().toggleStrike().run()}
-            className={tbtn(editor.isActive("strike"))}
-            title="Strikethrough"
-          >
-            <span className="text-xs line-through">S</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().toggleCode().run()}
-            className={tbtn(editor.isActive("code"))}
-            title="Inline code"
-          >
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: 16 }}
-            >
-              code
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().toggleBlockquote().run()}
-            className={tbtn(editor.isActive("blockquote"))}
-            title="Quote"
-          >
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: 16 }}
-            >
-              format_quote
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().toggleBulletList().run()}
-            className={tbtn(editor.isActive("bulletList"))}
-            title="List"
-          >
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: 16 }}
-            >
-              format_list_bulleted
-            </span>
-          </button>
-        </div>
-      )}
-
-      {preview && file && (
-        <div className="relative mt-2 mb-3">
-          {file.type.startsWith("video/") ? (
-            <video
-              src={preview}
-              controls
-              className="w-full max-h-48 rounded-xl"
-            />
-          ) : file.type.startsWith("audio/") ? (
-            <div className="flex items-center gap-3 bg-surface-container-high rounded-xl px-4 py-3">
-              <span
-                className="material-symbols-outlined text-primary"
-                style={{ fontSize: 24, fontVariationSettings: "'FILL' 1" }}
-              >
-                music_note
-              </span>
-              <audio src={preview} controls className="flex-1 h-8" />
-            </div>
-          ) : (
-            <Image
-              src={preview}
-              alt="Preview"
-              width={0}
-              height={0}
-              sizes="100vw"
-              className="w-full max-h-48 object-cover rounded-xl"
-            />
-          )}
-          <button
-            onClick={() => {
-              setFile(null);
-              setPreview(null);
-              if (fileRef.current) fileRef.current.value = "";
-            }}
-            className={`${file.type.startsWith("audio/") ? "absolute -top-1 -right-1" : "absolute top-2 right-2"} w-7 h-7 rounded-full bg-black/50 flex items-center justify-center text-white hover:bg-black/70 transition-colors`}
-          >
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: 16 }}
-            >
-              close
-            </span>
-          </button>
-        </div>
-      )}
-
-      {file && !preview && (
-        <div className="flex items-center gap-2 mt-2 mb-3 bg-surface-container-high rounded-xl px-3 py-2">
-          <span className="material-symbols-outlined text-on-surface-variant text-base">
-            attach_file
-          </span>
-          <span className="text-xs text-on-surface-variant truncate flex-1">
-            {file.name}
-          </span>
-          <button
-            onClick={() => {
-              setFile(null);
-              if (fileRef.current) fileRef.current.value = "";
-            }}
-            className="text-on-surface-variant hover:text-on-surface"
-          >
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: 16 }}
-            >
-              close
-            </span>
-          </button>
-        </div>
-      )}
-
-      <div className="flex items-center justify-between pt-2 border-t border-surface-container-high">
-        <div className="flex gap-1">
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*,video/*,audio/*"
-            onChange={handleFileChange}
-            className="hidden"
-          />
-          <button
-            onClick={() => fileRef.current?.click()}
-            className="p-2 rounded-full text-on-surface-variant hover:bg-surface-container-high transition-colors"
-          >
-            <span className="material-symbols-outlined text-lg">image</span>
-          </button>
-        </div>
-        <button
-          onClick={handleSubmit}
-          disabled={posting || (!!editor?.isEmpty && !file)}
-          className="px-4 py-1.5 rounded-full text-sm font-bold text-on-primary bg-primary hover:opacity-90 transition-opacity disabled:opacity-50"
-        >
-          {posting ? "Posting..." : "Post"}
-        </button>
-      </div>
-    </div>
-  );
-}
 
 // ── Main component ───────────────────────────────────────────────────────────
 
@@ -709,8 +444,9 @@ export default function CommunityDetail({ id }: { id: string }) {
   const [loading, setLoading] = useState(true);
   const [joined, setJoined] = useState(false);
   const [joining, setJoining] = useState(false);
-  const [posting, setPosting] = useState(false);
   const [membersExpanded, setMembersExpanded] = useState(false);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest" | "most_liked" | "most_disliked" | "most_commented">("newest");
 
   const sortedPosts = useMemo(() => {
@@ -786,6 +522,41 @@ export default function CommunityDetail({ id }: { id: string }) {
     };
   }, [id, getToken]);
 
+  // Listen for posts created via the global FAB modal
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { post, communityId } = (e as CustomEvent).detail;
+      if (communityId === id) {
+        setPosts((prev) => [post, ...prev]);
+      }
+    };
+    window.addEventListener("post-created", handler);
+    return () => window.removeEventListener("post-created", handler);
+  }, [id]);
+
+  const handleBannerUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !community) return;
+    setUploadingBanner(true);
+    try {
+      const token = await getToken();
+      const resized = await resizeImage(file, 1500, 500, true);
+      const formData = new FormData();
+      formData.append("file", resized);
+      const res = await fetch(`${API_URL}/communities/${community.id}/banner`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      if (res.ok) setCommunity(await res.json());
+    } catch {
+      // ignore
+    } finally {
+      setUploadingBanner(false);
+      e.target.value = "";
+    }
+  }, [community, getToken]);
+
   const handleToggleJoin = useCallback(async () => {
     setJoining(true);
     try {
@@ -812,32 +583,6 @@ export default function CommunityDetail({ id }: { id: string }) {
       setJoining(false);
     }
   }, [id, getToken, joined]);
-
-  const handlePost = useCallback(
-    async (content: string, file: File | null) => {
-      setPosting(true);
-      try {
-        const token = await getToken();
-        const formData = new FormData();
-        formData.append("content", content);
-        if (file) formData.append("file", file);
-
-        const res = await fetch(`${API_URL}/posts/community/${id}`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
-        });
-        if (!res.ok) throw new Error("Failed to create post");
-        const newPost: PostRes = await res.json();
-        setPosts((prev) => [newPost, ...prev]);
-      } catch (err) {
-        console.error("Post error:", err);
-      } finally {
-        setPosting(false);
-      }
-    },
-    [id, getToken],
-  );
 
   const handleReact = useCallback(
     async (postId: string, type: "like" | "dislike") => {
@@ -932,13 +677,43 @@ export default function CommunityDetail({ id }: { id: string }) {
       <div
         className={`relative h-64 sm:h-80 lg:h-96 -mx-px overflow-hidden rounded-b-3xl lg:rounded-3xl lg:mt-6 lg:mx-6 bg-gradient-to-br ${heroGradient}`}
       >
-        <span
-          className="material-symbols-outlined absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white/5 select-none pointer-events-none"
-          style={{ fontSize: 240, fontVariationSettings: "'FILL' 1" }}
-        >
-          group
-        </span>
+        {community.bannerUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={`${API_URL}${community.bannerUrl.replace(/^\/api/, "")}`}
+            alt={community.name}
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        ) : (
+          <span
+            className="material-symbols-outlined absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white/5 select-none pointer-events-none"
+            style={{ fontSize: 240, fontVariationSettings: "'FILL' 1" }}
+          >
+            group
+          </span>
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+        {currentMember?.role === "owner" && (
+          <>
+            <input
+              ref={bannerInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleBannerUpload}
+            />
+            <button
+              onClick={() => bannerInputRef.current?.click()}
+              disabled={uploadingBanner}
+              className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/40 backdrop-blur-md text-white text-xs font-semibold hover:bg-black/60 transition-colors disabled:opacity-50"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
+                {uploadingBanner ? "hourglass_empty" : "add_photo_alternate"}
+              </span>
+              {uploadingBanner ? "Uploading…" : "Change Banner"}
+            </button>
+          </>
+        )}
         <div className="absolute bottom-0 left-0 right-0 px-6 lg:px-8 pb-6">
           <button
             onClick={() => router.back()}
@@ -1066,12 +841,6 @@ export default function CommunityDetail({ id }: { id: string }) {
                 )}
               </div>
 
-              {joined && (
-                <div className="mb-4">
-                  <CreatePostForm onPost={handlePost} posting={posting} />
-                </div>
-              )}
-
               {posts.length === 0 ? (
                 <p className="text-on-surface-variant text-sm">
                   No posts yet{joined ? " — be the first to share!" : "."}
@@ -1142,13 +911,15 @@ export default function CommunityDetail({ id }: { id: string }) {
                           {i + 1}
                         </span>
                         {user.profileImage ? (
-                          <Image
-                            src={user.profileImage}
-                            alt={user.displayName || user.username}
-                            width={32}
-                            height={32}
-                            className="rounded-full object-cover shrink-0"
-                          />
+                          <div className="w-8 h-8 shrink-0 rounded-full overflow-hidden">
+                            <Image
+                              src={user.profileImage}
+                              alt={user.displayName || user.username}
+                              width={32}
+                              height={32}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
                         ) : (
                           <div className="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center shrink-0">
                             <span className="material-symbols-outlined text-on-surface-variant/40 text-sm">

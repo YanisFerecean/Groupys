@@ -2,6 +2,9 @@ package com.groupys.resource;
 
 import com.groupys.dto.PostResDto;
 import com.groupys.model.PostMedia;
+import com.groupys.model.User;
+import com.groupys.repository.UserRepository;
+import com.groupys.service.MediaService;
 import com.groupys.service.PostService;
 import com.groupys.service.StorageService;
 import io.minio.GetObjectArgs;
@@ -38,21 +41,39 @@ public class PostResource {
     StorageService storageService;
 
     @Inject
+    MediaService mediaService;
+
+    @Inject
     MinioClient minioClient;
 
     @Inject
     JsonWebToken jwt;
 
+    @Inject
+    UserRepository userRepository;
+
+    private static final long MAX_FILE_BYTES = 25L * 1024 * 1024; // 25 MB
+
     @GET
     @Path("/feed")
-    public List<PostResDto> getFeed() {
-        return postService.getFeed(jwt.getSubject());
+    public List<PostResDto> getFeed(
+            @QueryParam("page") @DefaultValue("0") int page,
+            @QueryParam("size") @DefaultValue("20") int size) {
+        return postService.getFeed(jwt.getSubject(), page, Math.min(size, 50));
     }
 
     @GET
     @Path("/mine")
-    public List<PostResDto> getMyPosts() {
-        return postService.getAccountPosts(jwt.getSubject());
+    public List<PostResDto> getMyPosts(
+            @QueryParam("page") @DefaultValue("0") int page,
+            @QueryParam("size") @DefaultValue("20") int size) {
+        return postService.getAccountPosts(jwt.getSubject(), page, Math.min(size, 50));
+    }
+
+    @GET
+    @Path("/author/{userId}")
+    public List<PostResDto> getByAuthor(@PathParam("userId") UUID userId) {
+        return postService.getByAuthor(userId, jwt.getSubject());
     }
 
     @GET
@@ -63,8 +84,68 @@ public class PostResource {
 
     @GET
     @Path("/community/{communityId}")
-    public List<PostResDto> getByCommunity(@PathParam("communityId") UUID communityId) {
-        return postService.getByCommunity(communityId, jwt.getSubject());
+    public List<PostResDto> getByCommunity(
+            @PathParam("communityId") UUID communityId,
+            @QueryParam("page") @DefaultValue("0") int page,
+            @QueryParam("size") @DefaultValue("20") int size) {
+        return postService.getByCommunity(communityId, jwt.getSubject(), page, Math.min(size, 50));
+    }
+
+    @POST
+    @Path("/media/upload")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    public Response uploadMedia(@RestForm("file") FileUpload file) {
+        String clerkId = jwt.getSubject();
+        User currentUser = userRepository.findByClerkId(clerkId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        if (file == null) {
+            return Response.status(400).entity(java.util.Map.of("error", "No file provided")).build();
+        }
+        if (file.size() > MAX_FILE_BYTES) {
+            return Response.status(400).entity(java.util.Map.of("error", "File exceeds 25 MB limit")).build();
+        }
+        try {
+            String mediaType = file.contentType();
+            String mediaUrl;
+            String finalType;
+            if (mediaType != null && mediaType.startsWith("image/")) {
+                MediaService.ProcessedMedia processed;
+                try (InputStream is = Files.newInputStream(file.uploadedFile())) {
+                    processed = mediaService.processImage(is, mediaType);
+                }
+                mediaUrl = storageService.uploadPostMedia(currentUser.id, file.fileName(), processed.contentType(), processed.stream(), processed.size());
+                finalType = processed.contentType();
+            } else if (mediaType != null && (mediaType.startsWith("video/") || mediaType.startsWith("audio/"))) {
+                try {
+                    MediaService.ProcessedMedia processed = mediaType.startsWith("video/")
+                            ? mediaService.processVideo(file.uploadedFile())
+                            : mediaService.processAudio(file.uploadedFile());
+                    mediaUrl = storageService.uploadPostMedia(currentUser.id, file.fileName(), processed.contentType(), processed.stream(), processed.size());
+                    finalType = processed.contentType();
+                } catch (Exception ffmpegEx) {
+                    try (InputStream is = Files.newInputStream(file.uploadedFile())) {
+                        mediaUrl = storageService.uploadPostMedia(currentUser.id, file.fileName(), mediaType, is, file.size());
+                        finalType = mediaType;
+                    }
+                }
+            } else {
+                try (InputStream is = Files.newInputStream(file.uploadedFile())) {
+                    mediaUrl = storageService.uploadPostMedia(currentUser.id, file.fileName(), mediaType, is, file.size());
+                    finalType = mediaType;
+                }
+            }
+            return Response.ok(java.util.Map.of("url", mediaUrl, "type", finalType)).build();
+        } catch (Exception e) {
+            String msg = e.getMessage() != null ? e.getMessage() : "Upload failed";
+            return Response.status(500).entity(java.util.Map.of("error", msg)).build();
+        }
+    }
+
+    @DELETE
+    @Path("/media/{key:.+}")
+    public Response deleteMedia(@PathParam("key") String key) {
+        storageService.delete("/api/posts/media/" + key);
+        return Response.noContent().build();
     }
 
     @POST
@@ -74,31 +155,33 @@ public class PostResource {
             @PathParam("communityId") UUID communityId,
             @RestForm("title") String title,
             @RestForm("content") String content,
-            @RestForm("files") List<FileUpload> files) {
+            @RestForm("mediaUrls") List<String> mediaUrls,
+            @RestForm("mediaTypes") List<String> mediaTypes) {
 
         String clerkId = jwt.getSubject();
         List<PostMedia> mediaList = new ArrayList<>();
 
-        if (files != null && !files.isEmpty()) {
-            if (files.size() > 4) {
+        if (mediaUrls != null && !mediaUrls.isEmpty()) {
+            if (mediaUrls.size() > 4) {
                 throw new BadRequestException("Maximum of 4 attachments allowed.");
             }
-            int index = 0;
-            for (FileUpload file : files) {
-                try {
-                    String mediaType = file.contentType();
-                    InputStream is = Files.newInputStream(file.uploadedFile());
-                    String mediaUrl = storageService.upload(file.fileName(), mediaType, is, file.size());
-                    is.close();
-                    mediaList.add(new PostMedia(mediaUrl, mediaType));
-                } catch (Exception e) {
-                    throw new InternalServerErrorException("File upload failed", e);
-                }
+            for (int i = 0; i < mediaUrls.size(); i++) {
+                String url = mediaUrls.get(i);
+                String type = (mediaTypes != null && i < mediaTypes.size()) ? mediaTypes.get(i) : "application/octet-stream";
+                mediaList.add(new PostMedia(url, type));
             }
         }
 
-        PostResDto created = postService.create(communityId, title, content, mediaList, clerkId);
-        return Response.status(Response.Status.CREATED).entity(created).build();
+        try {
+            PostResDto created = postService.create(communityId, title, content, mediaList, clerkId);
+            return Response.status(Response.Status.CREATED).entity(created).build();
+        } catch (Exception e) {
+            String msg = e.getMessage() != null ? e.getMessage() : "Failed to create post";
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .type(MediaType.APPLICATION_JSON)
+                    .entity(java.util.Map.of("error", msg))
+                    .build();
+        }
     }
 
     @POST
@@ -117,7 +200,7 @@ public class PostResource {
     }
 
     @GET
-    @Path("/media/{key}")
+    @Path("/media/{key:.+}")
     @Produces(MediaType.WILDCARD)
     @PermitAll
     public Response getMedia(

@@ -7,8 +7,8 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { label: "Feed", icon: "rss_feed", href: "/feed" },
   { label: "Discover", icon: "explore", href: "/discover" },
-  { label: "Match", icon: "favorite", href: "/match" },
-  { label: "Profile", icon: "person_outline", href: "/profile" },
+  { label: "Mutuals", icon: "favorite", href: "/match" },
+{ label: "Profile", icon: "person_outline", href: "/profile" },
 ];
 
 interface SideNavProps {

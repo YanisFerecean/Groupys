@@ -5,7 +5,14 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "comment_reactions", uniqueConstraints = @UniqueConstraint(columnNames = {"comment_id", "user_id"}))
+@Table(
+    name = "comment_reactions",
+    uniqueConstraints = @UniqueConstraint(columnNames = {"comment_id", "user_id"}),
+    indexes = {
+        @Index(name = "idx_comment_reactions_comment_type", columnList = "comment_id, reaction_type"),
+        @Index(name = "idx_comment_reactions_user", columnList = "user_id")
+    }
+)
 public class CommentReaction {
 
     @Id

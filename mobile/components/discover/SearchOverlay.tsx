@@ -1,11 +1,13 @@
 import { Ionicons } from '@expo/vector-icons'
-import { useAuth } from '@clerk/expo'
+import { useAuth, useUser } from '@clerk/expo'
 import { router } from 'expo-router'
 import { BlurView } from 'expo-blur'
+import * as Haptics from 'expo-haptics'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Animated,
   Image,
+  InteractionManager,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,11 +17,18 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Audio, AVPlaybackStatus } from 'expo-av'
+import type { BackendUser } from '@/lib/api'
+import { searchCommunities } from '@/lib/api'
+import { searchUsers } from '@/lib/chat-api'
 import { Colors } from '@/constants/colors'
+import { publicProfilePath } from '@/lib/profileRoutes'
 import type { ArtistRes } from '@/models/ArtistRes'
 import type { AlbumRes } from '@/models/AlbumRes'
 import type { TrackRes } from '@/models/TrackRes'
 import type { SearchResult } from '@/models/SearchResult'
+import type { CommunityResDto } from '@/models/CommunityRes'
+import type { TopAlbum } from '@/models/ProfileCustomization'
+import AlbumRatingModal from '@/components/album/AlbumRatingModal'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -61,11 +70,11 @@ function ArtistRow({ artist, onPress }: { artist: ArtistRes; onPress: () => void
   )
 }
 
-function AlbumRow({ album }: { album: AlbumRes }) {
+function AlbumRow({ album, onPress }: { album: AlbumRes; onPress: () => void }) {
   const cover = album.coverSmall || album.coverMedium
 
   return (
-    <View style={styles.resultRow}>
+    <TouchableOpacity style={styles.resultRow} activeOpacity={0.7} onPress={onPress}>
       {cover ? (
         <Image source={{ uri: cover }} style={styles.square} />
       ) : (
@@ -77,7 +86,8 @@ function AlbumRow({ album }: { album: AlbumRes }) {
         <Text style={styles.rowTitle} numberOfLines={1}>{album.title}</Text>
         <Text style={styles.rowSub} numberOfLines={1}>{album.artist?.name}</Text>
       </View>
-    </View>
+      <Ionicons name="star-outline" size={16} color="rgba(0,0,0,0.25)" />
+    </TouchableOpacity>
   )
 }
 
@@ -144,11 +154,74 @@ function SectionLabel({ label }: { label: string }) {
   return <Text style={styles.sectionLabel}>{label}</Text>
 }
 
+function CommunityRow({ community, onPress }: { community: CommunityResDto; onPress: () => void }) {
+  return (
+    <TouchableOpacity style={styles.resultRow} activeOpacity={0.7} onPress={onPress}>
+      {community.imageUrl ? (
+        <Image source={{ uri: community.imageUrl }} style={styles.square} />
+      ) : (
+        <View style={[styles.square, styles.placeholder]}>
+          <Ionicons name="people" size={18} color="#aaa" />
+        </View>
+      )}
+      <View style={styles.rowText}>
+        <Text style={styles.rowTitle} numberOfLines={1}>{community.name}</Text>
+        <Text style={styles.rowSub} numberOfLines={1}>
+          {community.memberCount} {community.memberCount === 1 ? 'member' : 'members'}
+          {community.genre ? ` · ${community.genre}` : ''}
+        </Text>
+      </View>
+      <Ionicons name="chevron-forward" size={16} color="rgba(0,0,0,0.25)" />
+    </TouchableOpacity>
+  )
+}
+
+function UserRow({ user, onPress }: { user: BackendUser; onPress: () => void }) {
+  const initial = (user.displayName || user.username).charAt(0).toUpperCase()
+
+  return (
+    <TouchableOpacity style={styles.resultRow} activeOpacity={0.7} onPress={onPress}>
+      {user.profileImage ? (
+        <Image source={{ uri: user.profileImage }} style={styles.circle} />
+      ) : (
+        <View style={[styles.circle, styles.placeholder]}>
+          <Text style={styles.userInitial}>{initial}</Text>
+        </View>
+      )}
+      <View style={styles.rowText}>
+        <Text style={styles.rowTitle} numberOfLines={1}>
+          {user.displayName || user.username}
+        </Text>
+        <Text style={styles.rowSub} numberOfLines={1}>
+          @{user.username}
+        </Text>
+      </View>
+      <Ionicons name="chevron-forward" size={16} color="rgba(0,0,0,0.25)" />
+    </TouchableOpacity>
+  )
+}
+
 // ─── Main overlay ─────────────────────────────────────────────────────────────
 
 interface SearchOverlayProps {
   onClose: () => void
 }
+
+type Category = 'all' | 'artists' | 'songs' | 'albums' | 'users' | 'communities'
+
+type SearchOverlayResult = SearchResult & {
+  users: BackendUser[]
+  communities: CommunityResDto[]
+}
+
+const CATEGORIES: { value: Category; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'communities', label: 'Communities' },
+  { value: 'users', label: 'Users' },
+  { value: 'albums', label: 'Albums' },
+  { value: 'artists', label: 'Artists' },
+  { value: 'songs', label: 'Songs' },
+]
 
 function SearchingDots() {
   const dots = [
@@ -187,11 +260,14 @@ function SearchingDots() {
 
 export default function SearchOverlay({ onClose }: SearchOverlayProps) {
   const { getToken, isLoaded: isAuthLoaded } = useAuth()
+  const { user } = useUser()
   const insets = useSafeAreaInsets()
   const inputRef = useRef<TextInput>(null)
+  const [ratingAlbum, setRatingAlbum] = useState<TopAlbum | null>(null)
   const getTokenRef = useRef(getToken)
 
   const [query, setQuery] = useState('')
+  const [category, setCategory] = useState<Category>('all')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [playingId, setPlayingId] = useState<number | null>(null)
   const [loadingId, setLoadingId] = useState<number | null>(null)
@@ -199,6 +275,8 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
   const abortRef = useRef<AbortController | null>(null)
 
   const fadeAnim = useRef(new Animated.Value(0)).current
+  const categoryFadeAnim = useRef(new Animated.Value(1)).current
+  const latestTransitionId = useRef(0)
 
   useEffect(() => {
     getTokenRef.current = getToken
@@ -207,8 +285,21 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
   // Fade in on mount, auto-focus input
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 220, useNativeDriver: true }).start()
-    const t = setTimeout(() => inputRef.current?.focus(), 100)
-    return () => clearTimeout(t)
+    let cancelled = false
+    let task: ReturnType<typeof InteractionManager.runAfterInteractions> | null = null
+    const t = setTimeout(() => {
+      task = InteractionManager.runAfterInteractions(() => {
+        if (!cancelled) {
+          inputRef.current?.focus()
+        }
+      })
+    }, 100)
+
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+      task?.cancel()
+    }
   }, [fadeAnim])
 
   // Debounce: update debouncedQuery 300ms after the user stops typing
@@ -222,7 +313,10 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
     return () => clearTimeout(t)
   }, [query])
 
-  const [results, setResults] = useState<SearchResult | null>(null)
+  const [results, setResults] = useState<SearchOverlayResult | null>(null)
+  const [resultsKey, setResultsKey] = useState('')
+  const [displayedResults, setDisplayedResults] = useState<SearchOverlayResult | null>(null)
+  const [displayedResultsKey, setDisplayedResultsKey] = useState('')
   const [searching, setSearching] = useState(false)
   // Track whether we're in the debounce window (typed but not yet sent)
   const isDebouncing = query.trim().length > 0 && query.trim() !== debouncedQuery
@@ -230,7 +324,11 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
   useEffect(() => {
     if (debouncedQuery.length === 0 || !isAuthLoaded) {
       setResults(null)
+      setResultsKey('')
+      setDisplayedResults(null)
+      setDisplayedResultsKey('')
       setSearching(false)
+      categoryFadeAnim.setValue(1)
       return
     }
 
@@ -244,23 +342,70 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
     ;(async () => {
       try {
         const token = await getTokenRef.current()
-        const res = await fetch(
-          `${process.env.EXPO_PUBLIC_API_URL}/search?q=${encodeURIComponent(debouncedQuery)}`,
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            },
-            signal: controller.signal,
-          },
-        )
-        if (!res.ok) throw new Error(`API error ${res.status}`)
-        const data = (await res.json()) as SearchResult
+        const headers = {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        }
+
+        let data: SearchOverlayResult
+
+        if (category === 'all') {
+          const [searchRes, users, communities] = await Promise.all([
+            fetch(
+              `${process.env.EXPO_PUBLIC_API_URL}/search?q=${encodeURIComponent(debouncedQuery)}`,
+              { headers, signal: controller.signal },
+            ),
+            searchUsers(debouncedQuery, token, 8),
+            searchCommunities(debouncedQuery, token),
+          ])
+
+          if (!searchRes.ok) throw new Error(`API error ${searchRes.status}`)
+          const searchData = (await searchRes.json()) as SearchResult
+          data = { ...searchData, users, communities }
+        } else if (category === 'users') {
+          data = {
+            artists: [],
+            albums: [],
+            tracks: [],
+            users: await searchUsers(debouncedQuery, token, 12),
+            communities: [],
+          }
+        } else if (category === 'communities') {
+          data = {
+            artists: [],
+            albums: [],
+            tracks: [],
+            users: [],
+            communities: await searchCommunities(debouncedQuery, token),
+          }
+        } else {
+          const endpointMap: Record<Exclude<Category, 'all' | 'users' | 'communities'>, string> = {
+            artists: 'artists',
+            albums: 'albums',
+            songs: 'tracks',
+          }
+          const res = await fetch(
+            `${process.env.EXPO_PUBLIC_API_URL}/${endpointMap[category]}/search?q=${encodeURIComponent(debouncedQuery)}`,
+            { headers, signal: controller.signal },
+          )
+          if (!res.ok) throw new Error(`API error ${res.status}`)
+          const raw = await res.json()
+          data = {
+            artists: category === 'artists' ? raw as ArtistRes[] : [],
+            albums: category === 'albums' ? raw as AlbumRes[] : [],
+            tracks: category === 'songs' ? raw as TrackRes[] : [],
+            users: [],
+            communities: [],
+          }
+        }
+
         if (!cancelled) {
-          setResults({
+          const nextResults = {
             ...data,
             artists: [...data.artists].sort((a, b) => b.listeners - a.listeners),
-          })
+          }
+          setResults(nextResults)
+          setResultsKey(`${category}:${debouncedQuery}`)
         }
       } catch (err) {
         if (err && typeof err === 'object' && 'name' in err && (err as { name: string }).name === 'AbortError') return
@@ -273,7 +418,44 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
       cancelled = true
       controller.abort()
     }
-  }, [debouncedQuery, isAuthLoaded])
+  }, [category, categoryFadeAnim, debouncedQuery, isAuthLoaded])
+
+  useEffect(() => {
+    if (!results || !resultsKey) return
+
+    if (!displayedResults || !displayedResultsKey) {
+      categoryFadeAnim.setValue(1)
+      setDisplayedResults(results)
+      setDisplayedResultsKey(resultsKey)
+      return
+    }
+
+    if (resultsKey === displayedResultsKey) {
+      setDisplayedResults(results)
+      return
+    }
+
+    latestTransitionId.current += 1
+    const transitionId = latestTransitionId.current
+
+    Animated.timing(categoryFadeAnim, {
+      toValue: 0,
+      duration: 110,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (!finished || transitionId !== latestTransitionId.current) return
+
+      setDisplayedResults(results)
+      setDisplayedResultsKey(resultsKey)
+      categoryFadeAnim.setValue(0)
+
+      Animated.timing(categoryFadeAnim, {
+        toValue: 1,
+        duration: 190,
+        useNativeDriver: true,
+      }).start()
+    })
+  }, [categoryFadeAnim, displayedResults, displayedResultsKey, results, resultsKey])
 
   // Stop sound on unmount
   useEffect(() => {
@@ -332,8 +514,29 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
     }, 200)
   }
 
+  const handleUserPress = (user: BackendUser) => {
+    handleClose()
+    setTimeout(() => {
+      router.push(publicProfilePath(user.id, '(discover)') as any)
+    }, 200)
+  }
+
+  const handleCommunityPress = (community: CommunityResDto) => {
+    handleClose()
+    setTimeout(() => {
+      router.push(`/(home)/(discover)/community/${community.id}` as any)
+    }, 200)
+  }
+
+  const visibleResults = displayedResults
   const hasResults =
-    results && (results.artists.length > 0 || results.albums.length > 0 || results.tracks.length > 0)
+    visibleResults && (
+      visibleResults.artists.length > 0 ||
+      visibleResults.albums.length > 0 ||
+      visibleResults.tracks.length > 0 ||
+      visibleResults.users.length > 0 ||
+      visibleResults.communities.length > 0
+    )
 
   // Show "no results" only when we've actually completed a search for the current input
   const showNoResults =
@@ -371,64 +574,136 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
           </TouchableOpacity>
         </View>
 
-        {/* Results */}
         <ScrollView
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: insets.bottom + 32, paddingTop: 8 }}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.categoryScroll}
+          contentContainerStyle={styles.categoryTabs}
         >
-          {/* Initial empty state */}
-          {!query && !hasResults && (
-            <Text style={styles.hint}>Start typing to search</Text>
-          )}
-
-          {/* Inline loading indicator — only when no results to show yet */}
-          {(searching || isDebouncing) && !hasResults && <SearchingDots />}
-
-          {/* No results — only after a completed search */}
-          {showNoResults && (
-            <Text style={styles.hint}>{'No results for "' + query.trim() + '"'}</Text>
-          )}
-
-          {/* Results list — stays visible while a new search is in-flight */}
-          {hasResults && (
-            <View style={styles.resultsWrap}>
-              {results!.artists.length > 0 && (
-                <View style={styles.section}>
-                  <SectionLabel label="Artists" />
-                  {results!.artists.map((a) => (
-                    <ArtistRow key={a.id} artist={a} onPress={() => handleArtistPress(a)} />
-                  ))}
-                </View>
-              )}
-
-              {results!.albums.length > 0 && (
-                <View style={styles.section}>
-                  <SectionLabel label="Albums" />
-                  {results!.albums.map((a) => (
-                    <AlbumRow key={a.id} album={a} />
-                  ))}
-                </View>
-              )}
-
-              {results!.tracks.length > 0 && (
-                <View style={styles.section}>
-                  <SectionLabel label="Tracks" />
-                  {results!.tracks.map((t) => (
-                    <TrackRow
-                      key={t.id}
-                      track={t}
-                      isPlaying={playingId === t.id}
-                      isLoading={loadingId === t.id}
-                      onPress={() => handleTrackPress(t)}
-                    />
-                  ))}
-                </View>
-              )}
-            </View>
-          )}
+          {CATEGORIES.map(({ value, label }) => {
+            const active = category === value
+            return (
+              <TouchableOpacity
+                key={value}
+                onPress={() => {
+                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                  setCategory(value)
+                }}
+                activeOpacity={0.8}
+                style={[
+                  styles.categoryTab,
+                  active ? styles.categoryTabActive : styles.categoryTabInactive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.categoryTabText,
+                    active ? styles.categoryTabTextActive : styles.categoryTabTextInactive,
+                  ]}
+                >
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            )
+          })}
         </ScrollView>
+
+        {/* Results */}
+        <Animated.View style={{ flex: 1, opacity: categoryFadeAnim }}>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: insets.bottom + 32, paddingTop: 4 }}
+          >
+            {/* Initial empty state */}
+            {!query && !hasResults && (
+              <Text style={styles.hint}>Start typing to search</Text>
+            )}
+
+            {/* Inline loading indicator — only when no results to show yet */}
+            {(searching || isDebouncing) && !hasResults && <SearchingDots />}
+
+            {/* No results — only after a completed search */}
+            {showNoResults && (
+              <Text style={styles.hint}>{'No results for "' + query.trim() + '"'}</Text>
+            )}
+
+            {/* Results list — stays visible while a new search is in-flight */}
+            {hasResults && (
+              <View style={styles.resultsWrap}>
+                {visibleResults!.artists.length > 0 && (
+                  <View style={styles.section}>
+                    <SectionLabel label="Artists" />
+                    {visibleResults!.artists.map((a) => (
+                      <ArtistRow key={a.id} artist={a} onPress={() => handleArtistPress(a)} />
+                    ))}
+                  </View>
+                )}
+
+                {visibleResults!.albums.length > 0 && (
+                  <View style={styles.section}>
+                    <SectionLabel label="Albums" />
+                    {visibleResults!.albums.map((a) => (
+                      <AlbumRow
+                        key={a.id}
+                        album={a}
+                        onPress={() =>
+                          setRatingAlbum({
+                            id: a.id,
+                            title: a.title,
+                            artist: a.artist?.name ?? '',
+                            coverUrl: a.coverMedium || a.coverSmall || undefined,
+                          })
+                        }
+                      />
+                    ))}
+                  </View>
+                )}
+
+                {visibleResults!.tracks.length > 0 && (
+                  <View style={styles.section}>
+                    <SectionLabel label="Songs" />
+                    {visibleResults!.tracks.map((t) => (
+                      <TrackRow
+                        key={t.id}
+                        track={t}
+                        isPlaying={playingId === t.id}
+                        isLoading={loadingId === t.id}
+                        onPress={() => handleTrackPress(t)}
+                      />
+                    ))}
+                  </View>
+                )}
+
+                {visibleResults!.users.length > 0 && (
+                  <View style={styles.section}>
+                    <SectionLabel label="Users" />
+                    {visibleResults!.users.map((user) => (
+                      <UserRow key={user.id} user={user} onPress={() => handleUserPress(user)} />
+                    ))}
+                  </View>
+                )}
+
+                {visibleResults!.communities.length > 0 && (
+                  <View style={styles.section}>
+                    <SectionLabel label="Communities" />
+                    {visibleResults!.communities.map((c) => (
+                      <CommunityRow key={c.id} community={c} onPress={() => handleCommunityPress(c)} />
+                    ))}
+                  </View>
+                )}
+              </View>
+            )}
+          </ScrollView>
+        </Animated.View>
       </View>
+
+      <AlbumRatingModal
+        visible={ratingAlbum !== null}
+        onClose={() => setRatingAlbum(null)}
+        album={ratingAlbum}
+        currentUserId={user?.id}
+      />
     </Animated.View>
   )
 }
@@ -475,6 +750,46 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: Colors.primary,
     fontWeight: '600',
+  },
+  categoryScroll: {
+    marginBottom: 10,
+    flexGrow: 0,
+  },
+  categoryTabs: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingBottom: 2,
+    paddingRight: 16,
+  },
+  categoryTab: {
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    alignSelf: 'flex-start',
+    minHeight: 36,
+    justifyContent: 'center',
+  },
+  categoryTabActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  categoryTabInactive: {
+    backgroundColor: 'rgba(255,255,255,0.65)',
+    borderColor: 'rgba(255,255,255,0.9)',
+  },
+  categoryTabText: {
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 16,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+  },
+  categoryTabTextActive: {
+    color: Colors.onPrimary,
+  },
+  categoryTabTextInactive: {
+    color: Colors.onSurface,
   },
   hint: {
     textAlign: 'center',
@@ -543,6 +858,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.outline,
     marginTop: 1,
+  },
+  userInitial: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.primary,
   },
   duration: {
     fontSize: 12,

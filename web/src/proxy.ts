@@ -1,20 +1,38 @@
 import { clerkMiddleware } from "@clerk/nextjs/server";
-import { NextRequest, NextResponse } from "next/server";
+import { NextFetchEvent, NextRequest, NextResponse } from "next/server";
 
-const ALLOWED_PREFIXES = ["/", "/api", "/_next", "/favicon.ico", "/blog", "/coming-soon", "/privacy", "/og-image", "/sitemap.xml", "/sitemap-0.xml", "/robots.txt"];
+const PROD_PUBLIC_EXACT_PATHS = new Set([
+  "/",
+  "/favicon.ico",
+  "/robots.txt",
+  "/sitemap.xml",
+  "/sitemap-0.xml",
+  "/opengraph-image",
+  "/privacy",
+]);
 
-export const proxy = clerkMiddleware((_, request: NextRequest) => {
-  if (process.env.APP_ENV === "prod") {
+const PROD_PUBLIC_PREFIXES = ["/_next", "/blog", "/api/waitlist"];
+
+function isAllowedInProd(pathname: string) {
+  if (PROD_PUBLIC_EXACT_PATHS.has(pathname)) return true;
+  return PROD_PUBLIC_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(prefix + "/")
+  );
+}
+
+const devProxy = clerkMiddleware();
+
+export function proxy(request: NextRequest, event: NextFetchEvent) {
+  if (process.env.NODE_ENV === "production") {
     const { pathname } = request.nextUrl;
-    const allowed = ALLOWED_PREFIXES.some(
-      (prefix) => pathname === prefix || pathname.startsWith(prefix + "/")
-    );
-
-    if (!allowed) {
+    if (!isAllowedInProd(pathname)) {
       return NextResponse.redirect(new URL("/", request.url));
     }
+    return NextResponse.next();
   }
-});
+
+  return devProxy(request, event);
+}
 
 export const config = {
   matcher: [

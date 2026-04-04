@@ -1,20 +1,58 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { SendHorizonal } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import dynamic from "next/dynamic";
+import { SendHorizonal, Smile } from "lucide-react";
 import { chatWs } from "@/lib/ws";
+
+const EmojiPicker = dynamic(() => import("./EmojiPicker"), { ssr: false });
 
 interface MessageInputProps {
   conversationId: string;
   onSend: (content: string) => void;
   disabled?: boolean;
+  rateLimitError?: boolean;
 }
 
-export function MessageInput({ conversationId, onSend, disabled }: MessageInputProps) {
+export function MessageInput({ conversationId, onSend, disabled, rateLimitError }: MessageInputProps) {
   const [content, setContent] = useState("");
+  const [emojiOpen, setEmojiOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const emojiRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [isTyping, setIsTyping] = useState(false);
+
+  // Close picker on outside click
+  useEffect(() => {
+    if (!emojiOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (emojiRef.current && !emojiRef.current.contains(e.target as Node)) {
+        setEmojiOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [emojiOpen]);
+
+  const insertEmoji = useCallback((emoji: string) => {
+    const el = textareaRef.current;
+    if (!el) {
+      setContent((c) => c + emoji);
+      return;
+    }
+    // Read from el.value (live DOM) rather than closing over `content`,
+    // so this function can have a stable empty dep array.
+    const start = el.selectionStart ?? el.value.length;
+    const end = el.selectionEnd ?? el.value.length;
+    const next = el.value.slice(0, start) + emoji + el.value.slice(end);
+    setContent(next);
+    // Restore cursor after the inserted emoji
+    requestAnimationFrame(() => {
+      el.selectionStart = start + emoji.length;
+      el.selectionEnd = start + emoji.length;
+      el.focus();
+    });
+  }, []);
 
   const adjustHeight = () => {
     const el = textareaRef.current;
@@ -77,7 +115,12 @@ export function MessageInput({ conversationId, onSend, disabled }: MessageInputP
 
   return (
     <div className="p-4 bg-surface border-t border-surface-container-high">
-      <div className="flex items-end gap-2 max-w-4xl mx-auto align-bottom">
+      {rateLimitError && (
+        <p className="text-xs text-center text-amber-600 dark:text-amber-400 font-medium mb-2">
+          Slow down! You&apos;re sending messages too fast.
+        </p>
+      )}
+      <div className="flex items-center gap-2 max-w-4xl mx-auto">
         <div className="flex-1 relative">
           <textarea
             ref={textareaRef}
@@ -88,7 +131,7 @@ export function MessageInput({ conversationId, onSend, disabled }: MessageInputP
             disabled={disabled}
             rows={1}
             maxLength={MAX_LENGTH}
-            className={`w-full max-h-[120px] min-h-[44px] bg-surface-container resize-none rounded-2xl px-4 py-3 text-[15px] text-on-surface focus:outline-none focus:ring-2 placeholder:text-on-surface-variant disabled:opacity-50 transition-all custom-scrollbar ${
+            className={`w-full max-h-30 min-h-11 bg-surface-container resize-none rounded-2xl px-4 py-3 text-[15px] text-on-surface focus:outline-none focus:ring-2 placeholder:text-on-surface-variant disabled:opacity-50 transition-all custom-scrollbar ${
               remaining < 0 ? "focus:ring-error/40 ring-2 ring-error/30" : "focus:ring-primary/20"
             }`}
           />
@@ -100,10 +143,25 @@ export function MessageInput({ conversationId, onSend, disabled }: MessageInputP
             </span>
           )}
         </div>
+        <div ref={emojiRef} className="relative shrink-0">
+          <button
+            type="button"
+            onClick={() => setEmojiOpen((o) => !o)}
+            disabled={disabled}
+            className={`h-11 w-11 rounded-full flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+              emojiOpen
+                ? "bg-primary/15 text-primary"
+                : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+            }`}
+          >
+            <Smile className="w-5 h-5" />
+          </button>
+          {emojiOpen && <EmojiPicker onSelectAction={insertEmoji} />}
+        </div>
         <button
           onClick={handleSend}
           disabled={!content.trim() || disabled || remaining < 0}
-          className="h-[44px] w-[44px] rounded-full bg-primary text-primary-foreground flex items-center justify-center flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"
+          className="h-11 w-11 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"
         >
           <SendHorizonal className="w-5 h-5 ml-0.5" />
         </button>

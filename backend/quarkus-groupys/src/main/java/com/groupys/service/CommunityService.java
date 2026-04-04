@@ -12,13 +12,19 @@ import com.groupys.repository.ArtistRepository;
 import com.groupys.repository.CommunityMemberRepository;
 import com.groupys.repository.CommunityRepository;
 import com.groupys.repository.UserRepository;
+import com.groupys.util.CountryUtil;
 import com.groupys.util.CommunityUtil;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import jakarta.ws.rs.BadRequestException;
+import jakarta.ws.rs.ForbiddenException;
 import jakarta.ws.rs.NotFoundException;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @ApplicationScoped
@@ -36,6 +42,9 @@ public class CommunityService {
     @Inject
     ArtistRepository artistRepository;
 
+    @Inject
+    DiscoveryService discoveryService;
+
     public List<CommunityResDto> getJoinedCommunities(String clerkId) {
         User user = userRepository.findByClerkId(clerkId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
@@ -44,8 +53,32 @@ public class CommunityService {
                 .toList();
     }
 
+    public List<CommunityResDto> search(String q) {
+        return search(q, 10);
+    }
+
     public List<CommunityResDto> listAll() {
         return communityRepository.listAll().stream()
+                .map(CommunityUtil::toDto)
+                .toList();
+    }
+
+    public List<CommunityResDto> getTrending(int limit) {
+        Instant since = Instant.now().minus(7, ChronoUnit.DAYS);
+        return communityMemberRepository.findTrendingCommunityIds(since, limit).stream()
+                .map(id -> communityRepository.findByIdOptional(id))
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .map(CommunityUtil::toDto)
+                .toList();
+    }
+
+    public List<CommunityResDto> search(String query, int limit) {
+        String normalizedQuery = query == null ? "" : query.trim();
+        if (normalizedQuery.isBlank()) {
+            return List.of();
+        }
+        return communityRepository.searchByQuery(normalizedQuery, limit).stream()
                 .map(CommunityUtil::toDto)
                 .toList();
     }
@@ -90,11 +123,19 @@ public class CommunityService {
         community.description = dto.description();
         community.genre = dto.genre();
         community.country = dto.country();
+        community.countryCode = CountryUtil.resolveCountryCode(dto.countryCode(), dto.country());
         community.imageUrl = dto.imageUrl();
         community.bannerUrl = dto.bannerUrl();
         community.iconType = dto.iconType();
         community.iconEmoji = dto.iconEmoji();
         community.iconUrl = dto.iconUrl();
+        if (dto.visibility() != null) {
+            community.visibility = dto.visibility();
+        }
+        if (dto.discoveryEnabled() != null) {
+            community.discoveryEnabled = dto.discoveryEnabled();
+        }
+        community.tasteSummaryText = dto.tasteSummaryText();
         if (dto.artistId() != null) {
             Artist artist = artistRepository.findByIdOptional(dto.artistId())
                     .orElseThrow(() -> new NotFoundException("Artist not found"));
@@ -111,7 +152,10 @@ public class CommunityService {
         membership.community = community;
         membership.user = creator;
         membership.role = "owner";
+        membership.source = "COMMUNITY_CREATE";
         communityMemberRepository.persist(membership);
+
+        discoveryService.refreshAfterCommunityChange(creator.id, community.id);
 
         return CommunityUtil.toDto(community);
     }
@@ -131,9 +175,11 @@ public class CommunityService {
         membership.community = community;
         membership.user = user;
         membership.role = "member";
+        membership.source = "USER_JOIN";
         communityMemberRepository.persist(membership);
 
         community.memberCount++;
+        discoveryService.refreshAfterCommunityChange(user.id, community.id);
         return CommunityUtil.toDto(community);
     }
 
@@ -154,6 +200,7 @@ public class CommunityService {
 
         communityMemberRepository.delete(membership);
         community.memberCount = Math.max(0, community.memberCount - 1);
+        discoveryService.refreshAfterCommunityChange(user.id, community.id);
         return CommunityUtil.toDto(community);
     }
 
@@ -188,24 +235,71 @@ public class CommunityService {
     }
 
     @Transactional
-    public CommunityResDto update(UUID id, CommunityUpdateDto dto) {
+    public CommunityResDto updateBanner(UUID id, String bannerUrl) {
         Community community = communityRepository.findByIdOptional(id)
                 .orElseThrow(() -> new NotFoundException("Community not found"));
+        community.bannerUrl = bannerUrl;
+        return CommunityUtil.toDto(community);
+    }
+
+    @Transactional
+    public CommunityResDto update(UUID id, CommunityUpdateDto dto, String clerkId) {
+        Community community = requireOwnedCommunity(id, clerkId);
+        if (dto.name() != null) {
+            String trimmedName = dto.name().trim();
+            if (trimmedName.isEmpty()) {
+                throw new BadRequestException("Community name cannot be blank");
+            }
+            community.name = trimmedName;
+        }
         community.description = dto.description();
         community.genre = dto.genre();
         community.country = dto.country();
+        community.countryCode = CountryUtil.resolveCountryCode(dto.countryCode(), dto.country());
         community.imageUrl = dto.imageUrl();
         community.bannerUrl = dto.bannerUrl();
         community.iconType = dto.iconType();
         community.iconEmoji = dto.iconEmoji();
         community.iconUrl = dto.iconUrl();
+        if (dto.tags() != null) {
+            community.tags = new java.util.ArrayList<>(dto.tags());
+        }
+        community.artist = dto.artistId() != null
+                ? artistRepository.findByIdOptional(dto.artistId())
+                .orElseThrow(() -> new NotFoundException("Artist not found"))
+                : null;
+        if (dto.visibility() != null) {
+            community.visibility = dto.visibility();
+        }
+        if (dto.discoveryEnabled() != null) {
+            community.discoveryEnabled = dto.discoveryEnabled();
+        }
+        community.tasteSummaryText = dto.tasteSummaryText();
+        discoveryService.refreshAfterCommunityActivity(id);
         return CommunityUtil.toDto(community);
     }
 
     @Transactional
-    public void delete(UUID id) {
+    public void delete(UUID id, String clerkId) {
+        requireOwnedCommunity(id, clerkId);
+        java.util.List<UUID> impactedUserIds = communityMemberRepository.findByCommunity(id).stream()
+                .map(member -> member.user.id)
+                .distinct()
+                .toList();
         Community community = communityRepository.findByIdOptional(id)
                 .orElseThrow(() -> new NotFoundException("Community not found"));
         communityRepository.delete(community);
+        discoveryService.removeCommunityReferences(id, impactedUserIds);
+    }
+
+    private Community requireOwnedCommunity(UUID communityId, String clerkId) {
+        User user = userRepository.findByClerkId(clerkId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        Community community = communityRepository.findByIdOptional(communityId)
+                .orElseThrow(() -> new NotFoundException("Community not found"));
+        if (community.createdBy == null || !community.createdBy.id.equals(user.id)) {
+            throw new ForbiddenException("Only the community owner can modify community settings");
+        }
+        return community;
     }
 }

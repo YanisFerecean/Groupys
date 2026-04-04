@@ -21,6 +21,7 @@ import org.eclipse.microprofile.rest.client.inject.RestClient;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 @ApplicationScoped
 public class ArtistService {
@@ -50,9 +51,14 @@ public class ArtistService {
         if (response == null || response.data() == null) {
             return Collections.emptyList();
         }
-        return response.data().stream()
-                .map(this::enrichWithLastFm)
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        List<CompletableFuture<ArtistResDto>> futures = response.data().stream()
+                .map(a -> CompletableFuture.supplyAsync(() -> {
+                    Thread.currentThread().setContextClassLoader(cl);
+                    return enrichWithLastFm(a);
+                }))
                 .toList();
+        return futures.stream().map(CompletableFuture::join).toList();
     }
 
     @Transactional

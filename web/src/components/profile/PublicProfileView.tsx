@@ -5,10 +5,19 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth, useUser } from "@clerk/nextjs";
 import { startConversation } from "@/lib/chat-api";
+import {
+  fetchFriendStatus,
+  sendFriendRequest,
+  acceptFriendRequest,
+  declineOrCancelRequest,
+  removeFriend,
+  type FriendStatus,
+} from "@/lib/friends-api";
 import type { ProfileCustomization } from "@/types/profile";
 import {
   type BackendUser,
   backendUserToProfile,
+  fetchUserAlbumRatings,
 } from "@/lib/api";
 import { countryFlag } from "@/lib/countries";
 import ProfileWidgetGrid from "./ProfileWidgetGrid";
@@ -26,7 +35,8 @@ function bannerBackground(value?: string): React.CSSProperties {
   ) {
     return { backgroundImage: value };
   }
-  return { backgroundImage: `url(${value})` };
+  const url = value.startsWith("/") ? `${API_URL.replace(/\/api$/, "")}${value}` : value;
+  return { backgroundImage: `url(${url})` };
 }
 
 export default function PublicProfileView({
@@ -41,14 +51,52 @@ export default function PublicProfileView({
   const [profile, setProfile] = useState<ProfileCustomization>({});
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [albumsRatedCount, setAlbumsRatedCount] = useState<number | null>(null);
   const [messagingLoading, setMessagingLoading] = useState(false);
+  const [messagingConversationId, setMessagingConversationId] = useState<string | null>(null);
+  const [friendStatus, setFriendStatus] = useState<FriendStatus>("NONE");
+  const [friendshipId, setFriendshipId] = useState<string | null>(null);
+  const [friendLoading, setFriendLoading] = useState(false);
+
+  async function handleFriend() {
+    if (!backendUser || friendLoading) return;
+    setFriendLoading(true);
+    try {
+      const token = await getToken();
+      if (friendStatus === "NONE") {
+        const res = await sendFriendRequest(backendUser.id, token);
+        setFriendStatus("PENDING_SENT");
+        setFriendshipId(res.friendshipId);
+      } else if (friendStatus === "PENDING_SENT" && friendshipId) {
+        await declineOrCancelRequest(friendshipId, token);
+        setFriendStatus("NONE");
+        setFriendshipId(null);
+      } else if (friendStatus === "PENDING_RECEIVED" && friendshipId) {
+        await acceptFriendRequest(friendshipId, token);
+        setFriendStatus("ACCEPTED");
+      } else if (friendStatus === "ACCEPTED") {
+        await removeFriend(backendUser.id, token);
+        setFriendStatus("NONE");
+        setFriendshipId(null);
+      }
+    } catch (err) {
+      console.error("Friend action failed:", err);
+    } finally {
+      setFriendLoading(false);
+    }
+  }
 
   async function handleMessage() {
     if (!backendUser || messagingLoading) return;
+    if (messagingConversationId) {
+      router.push(`/chat/${messagingConversationId}`);
+      return;
+    }
     setMessagingLoading(true);
     try {
       const token = await getToken();
       const conversation = await startConversation(backendUser.id, token);
+      setMessagingConversationId(conversation.id);
       router.push(`/chat/${conversation.id}`);
     } catch (err) {
       console.error("Failed to start conversation:", err);
@@ -77,11 +125,26 @@ export default function PublicProfileView({
           if (!cancelled) setNotFound(true);
           return;
         }
-        if (!res.ok) throw new Error("Failed to fetch user");
+        if (!res.ok) {
+          console.error("Failed to fetch profile:", res.status);
+          if (!cancelled) setNotFound(true);
+          return;
+        }
         const data: BackendUser = await res.json();
         if (!cancelled) {
           setBackendUser(data);
           setProfile(backendUserToProfile(data));
+        }
+        const [ratings, statusRes] = await Promise.all([
+          fetchUserAlbumRatings(username, token).catch(() => []),
+          token ? fetchFriendStatus(data.id, token).catch(() => null) : Promise.resolve(null),
+        ]);
+        if (!cancelled) {
+          setAlbumsRatedCount(ratings.length);
+          if (statusRes) {
+            setFriendStatus(statusRes.status);
+            setFriendshipId(statusRes.friendshipId);
+          }
         }
       } catch (err) {
         console.error("Failed to fetch profile:", err);
@@ -147,7 +210,7 @@ export default function PublicProfileView({
         <div className="px-6 md:px-12 -mt-16 md:-mt-20 relative z-10">
           <div className="flex flex-col items-center md:flex-row md:items-end gap-6">
             {/* Avatar */}
-            <div className="relative w-32 h-32 md:w-40 md:h-40 shrink-0 rounded-2xl overflow-hidden shadow-2xl border-4 border-surface bg-surface-container-high">
+            <div className="relative w-32 h-32 md:w-40 md:h-40 shrink-0 rounded-full overflow-hidden shadow-2xl border-4 border-surface bg-surface-container-high">
               {avatarUrl ? (
                 <Image
                   alt={displayName}
@@ -166,9 +229,6 @@ export default function PublicProfileView({
 
             {/* Info */}
             <div className="flex-1 text-center md:text-left pb-2">
-              <p className="text-sm text-on-surface-variant font-medium mb-2">
-                Member since {memberYear}
-              </p>
               <h1
                 className="text-3xl md:text-[3.2rem] font-extrabold tracking-tighter leading-none mb-1"
                 style={
@@ -215,7 +275,7 @@ export default function PublicProfileView({
                         "var(--profile-accent, var(--color-primary))",
                     }}
                   >
-                    24
+                    {albumsRatedCount ?? "—"}
                   </span>
                   <span className="text-sm uppercase tracking-wide">
                     Albums Rated
@@ -254,24 +314,37 @@ export default function PublicProfileView({
 
             {/* Actions */}
             <div className="flex items-center gap-3 shrink-0 mb-2">
-              <button
-                className="px-5 py-2.5 text-sm font-bold rounded-full transition-colors"
-                style={{
-                  backgroundColor:
-                    "var(--profile-accent, var(--color-primary))",
-                  color: "#fff",
-                }}
-              >
-                <span className="flex items-center gap-2">
-                  <span
-                    className="material-symbols-outlined"
-                    style={{ fontSize: 18 }}
-                  >
-                    link
+              {clerkUser && (
+                <button
+                  onClick={handleFriend}
+                  disabled={friendLoading}
+                  className="px-5 py-2.5 text-sm font-bold rounded-full transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  style={
+                    friendStatus === "ACCEPTED"
+                      ? { backgroundColor: "color-mix(in srgb, var(--profile-accent, var(--color-primary)) 15%, transparent)", color: "var(--profile-accent, var(--color-primary))" }
+                      : friendStatus === "PENDING_SENT"
+                      ? { backgroundColor: "transparent", border: "2px solid var(--profile-accent, var(--color-primary))", color: "var(--profile-accent, var(--color-primary))" }
+                      : friendStatus === "PENDING_RECEIVED"
+                      ? { backgroundColor: "var(--profile-accent, var(--color-primary))", color: "#fff" }
+                      : { backgroundColor: "var(--profile-accent, var(--color-primary))", color: "#fff" }
+                  }
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                      {friendLoading ? "hourglass_empty"
+                        : friendStatus === "ACCEPTED" ? "how_to_reg"
+                        : friendStatus === "PENDING_SENT" ? "schedule"
+                        : friendStatus === "PENDING_RECEIVED" ? "person_add"
+                        : "person_add"}
+                    </span>
+                    {friendLoading ? "..."
+                      : friendStatus === "ACCEPTED" ? "Friends"
+                      : friendStatus === "PENDING_SENT" ? "Request Sent"
+                      : friendStatus === "PENDING_RECEIVED" ? "Accept Request"
+                      : "Add Friend"}
                   </span>
-                  Link Up
-                </span>
-              </button>
+                </button>
+              )}
               {clerkUser && (
                 <button
                   onClick={handleMessage}
@@ -299,7 +372,11 @@ export default function PublicProfileView({
         </div>
       </section>
 
-      <ProfileWidgetGrid profile={profile} />
+      <ProfileWidgetGrid profile={profile} username={username} />
+
+      <div className="px-6 md:px-12 py-6 text-center">
+        <p className="text-xs text-on-surface-variant/50 font-medium">Member since {memberYear}</p>
+      </div>
     </div>
   );
 }

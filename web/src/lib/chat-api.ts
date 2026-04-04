@@ -3,6 +3,13 @@ import { BackendUser } from "./api"; // we'll reuse the existing BackendUser for
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
 
+export class ApiError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 type JsonRequestInit = Omit<RequestInit, "body"> & {
   body?: unknown;
 };
@@ -82,8 +89,22 @@ export async function postMessage(conversationId: string, content: string, token
     method: "POST",
     body: { content },
   });
-  if (!res.ok) throw new Error("Failed to send message");
+  if (!res.ok) throw new ApiError(res.status, "Failed to send message");
   return res.json();
+}
+
+export async function acceptConversationRequest(conversationId: string, token: string | null): Promise<void> {
+  const res = await apiRequest(`/chat/conversations/${encodeURIComponent(conversationId)}/accept`, token, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error("Failed to accept conversation request");
+}
+
+export async function denyConversationRequest(conversationId: string, token: string | null): Promise<void> {
+  const res = await apiRequest(`/chat/conversations/${encodeURIComponent(conversationId)}/request`, token, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error("Failed to deny conversation request");
 }
 
 export async function searchUsers(query: string, token: string | null): Promise<BackendUser[]> {

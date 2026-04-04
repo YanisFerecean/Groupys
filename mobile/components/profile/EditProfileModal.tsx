@@ -5,6 +5,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  Switch,
   ScrollView,
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -12,8 +13,9 @@ import {
   LayoutAnimation,
 } from 'react-native'
 import { Image } from 'expo-image'
-import { Ionicons } from '@expo/vector-icons'
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
 import ColorWheel from 'react-native-wheel-color-picker'
+import DraggableFlatList, { type RenderItemParams } from 'react-native-draggable-flatlist'
 import { useAuth } from '@clerk/expo'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Colors } from '@/constants/colors'
@@ -66,6 +68,49 @@ const NAME_COLOR_PRESETS = [
 
 type SearchType = 'track' | 'artist' | 'album'
 type SearchResult = TrackSearchResult | ArtistSearchResult | AlbumSearchResult
+type WidgetType = 'topAlbums' | 'currentlyListening' | 'topSongs' | 'topArtists'
+type WidgetListItem = {
+  type: WidgetType
+  title: string
+  description: string
+  icon: keyof typeof Ionicons.glyphMap
+}
+
+const DEFAULT_WIDGET_ORDER: WidgetType[] = ['topAlbums', 'currentlyListening', 'topSongs', 'topArtists']
+const WIDGET_ITEMS: WidgetListItem[] = [
+  {
+    type: 'topAlbums',
+    title: 'Top Albums',
+    description: 'Show your favorite album picks.',
+    icon: 'albums-outline',
+  },
+  {
+    type: 'currentlyListening',
+    title: 'Currently Listening',
+    description: 'Highlight what is playing right now.',
+    icon: 'headset-outline',
+  },
+  {
+    type: 'topSongs',
+    title: 'Top Songs',
+    description: 'Pin the tracks that define your taste.',
+    icon: 'musical-notes-outline',
+  },
+  {
+    type: 'topArtists',
+    title: 'Top Artists',
+    description: 'Feature the artists you keep coming back to.',
+    icon: 'people-outline',
+  },
+]
+
+function normalizeWidgetOrder(order?: string[]): WidgetType[] {
+  const incoming = (order ?? []).filter((type): type is WidgetType =>
+    DEFAULT_WIDGET_ORDER.includes(type as WidgetType)
+  )
+  return [...incoming, ...DEFAULT_WIDGET_ORDER.filter(type => !incoming.includes(type))]
+}
+
 
 interface MusicSearchProps {
   type: SearchType
@@ -288,7 +333,7 @@ function ColorPicker({ label, value, onChange }: ColorPickerProps) {
 
 // ── Section label ────────────────────────────────────────────────────────────
 
-function SectionLabel({ children }: { children: string }) {
+function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <Text className="text-base font-extrabold text-on-surface mb-1">
       {children}
@@ -296,14 +341,52 @@ function SectionLabel({ children }: { children: string }) {
   )
 }
 
+interface SectionHeaderWithSpotifySyncProps {
+  title: string
+  synced: boolean
+  canSync: boolean
+  onToggle: (value: boolean) => void
+}
+
+function SectionHeaderWithSpotifySync({
+  title,
+  synced,
+  canSync,
+  onToggle,
+}: SectionHeaderWithSpotifySyncProps) {
+  return (
+    <View className="flex-row items-center justify-between">
+      <SectionLabel>{title}</SectionLabel>
+      <View className="flex-row items-center gap-2">
+        <MaterialCommunityIcons
+          name="spotify"
+          size={16}
+          color={canSync ? '#1DB954' : Colors.onSurfaceVariant}
+        />
+        <Text className="text-xs font-semibold" style={{ color: canSync ? Colors.onSurface : Colors.onSurfaceVariant }}>
+          Sync
+        </Text>
+        <Switch
+          value={synced}
+          onValueChange={onToggle}
+          disabled={!canSync}
+          trackColor={{ false: Colors.outlineVariant, true: '#1DB95466' }}
+          thumbColor={synced ? '#1DB954' : '#f4f3f4'}
+        />
+      </View>
+    </View>
+  )
+}
+
 // ── Tabs ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'profile' | 'appearance' | 'music'
+type Tab = 'profile' | 'appearance' | 'music' | 'widgets'
 
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'profile', label: 'Profile', icon: 'person-outline' },
   { key: 'appearance', label: 'Appearance', icon: 'color-palette-outline' },
   { key: 'music', label: 'Music', icon: 'musical-notes-outline' },
+  { key: 'widgets', label: 'Widgets', icon: 'apps-outline' },
 ]
 
 // ── Main component ───────────────────────────────────────────────────────────
@@ -332,12 +415,20 @@ export default function EditProfileModal({
   const insets = useSafeAreaInsets()
   const { getToken } = useAuth()
   const [tab, setTab] = useState<Tab>('profile')
-  const [form, setForm] = useState<ProfileCustomization>({ ...profile })
+  const [form, setForm] = useState<ProfileCustomization>({
+    ...profile,
+    widgetOrder: normalizeWidgetOrder(profile.widgetOrder),
+    hiddenWidgets: profile.hiddenWidgets ?? [],
+  })
   const [error, setError] = useState<string | null>(null)
 
   // Reset form when modal opens
   const handleOpen = useCallback(() => {
-    setForm({ ...profile })
+    setForm({
+      ...profile,
+      widgetOrder: normalizeWidgetOrder(profile.widgetOrder),
+      hiddenWidgets: profile.hiddenWidgets ?? [],
+    })
     setError(null)
 
     // Auto-repair missing IDs for better navigation
@@ -406,20 +497,6 @@ export default function EditProfileModal({
           newForm.topAlbums = repairedAlbums
         }
 
-        // Repair Currently Listening
-        if (newForm.currentlyListening && !newForm.currentlyListening.id) {
-          const results = await searchTracks(newForm.currentlyListening.title, token, 5)
-          const match = results.find(
-            (r) =>
-              r.title.toLowerCase() === newForm.currentlyListening!.title.toLowerCase() &&
-              r.artist.toLowerCase() === newForm.currentlyListening!.artist.toLowerCase()
-          )
-          if (match) {
-            changed = true
-            newForm.currentlyListening = { ...newForm.currentlyListening, id: match.id }
-          }
-        }
-
         if (changed) {
           // Patch only the resolved IDs onto the current form state so any
           // deletions / additions the user made while we were fetching are preserved.
@@ -459,21 +536,6 @@ export default function EditProfileModal({
                 const id = idByKey.get(`${al.title.toLowerCase()}|${al.artist.toLowerCase()}`)
                 return id && !al.id ? { ...al, id } : al
               })
-            }
-
-            if (
-              newForm.currentlyListening?.id &&
-              prev.currentlyListening &&
-              !prev.currentlyListening.id
-            ) {
-              const prevKey = `${prev.currentlyListening.title.toLowerCase()}|${prev.currentlyListening.artist.toLowerCase()}`
-              const newKey = `${newForm.currentlyListening.title.toLowerCase()}|${newForm.currentlyListening.artist.toLowerCase()}`
-              if (prevKey === newKey) {
-                updated.currentlyListening = {
-                  ...prev.currentlyListening,
-                  id: newForm.currentlyListening.id,
-                }
-              }
             }
 
             return updated
@@ -548,9 +610,108 @@ export default function EditProfileModal({
     set('topArtists', artists)
   }
 
-  const setListening = (r: TrackSearchResult) => {
-    set('currentlyListening', { id: r.id, title: r.title, artist: r.artist, coverUrl: r.coverUrl })
-  }
+  const hasWidgetContent = useCallback((type: WidgetType) => {
+    switch (type) {
+      case 'topAlbums':
+        return Boolean((form.topAlbums?.length ?? 0) > 0 || form.syncTopAlbumsWithSpotify)
+      case 'currentlyListening':
+        return Boolean(form.currentlyListening?.title)
+      case 'topSongs':
+        return Boolean((form.topSongs?.length ?? 0) > 0 || form.syncTopSongsWithSpotify)
+      case 'topArtists':
+        return Boolean((form.topArtists?.length ?? 0) > 0 || form.syncTopArtistsWithSpotify)
+    }
+  }, [
+    form.currentlyListening?.title,
+    form.syncTopAlbumsWithSpotify,
+    form.syncTopArtistsWithSpotify,
+    form.syncTopSongsWithSpotify,
+    form.topAlbums?.length,
+    form.topArtists?.length,
+    form.topSongs?.length,
+  ])
+
+  const toggleWidgetHidden = useCallback((type: WidgetType) => {
+    setForm(prev => {
+      const hiddenWidgets = prev.hiddenWidgets ?? []
+      return {
+        ...prev,
+        hiddenWidgets: hiddenWidgets.includes(type)
+          ? hiddenWidgets.filter(item => item !== type)
+          : [...hiddenWidgets, type],
+      }
+    })
+  }, [])
+
+  const renderWidgetListItem = useCallback(({ item, drag, isActive }: RenderItemParams<WidgetListItem>) => {
+    const hidden = (form.hiddenWidgets ?? []).includes(item.type)
+    const hasContent = hasWidgetContent(item.type)
+
+    return (
+      <View
+        className="mb-3 rounded-2xl px-4 py-4"
+        style={{
+          backgroundColor: isActive ? Colors.surfaceContainer : Colors.surfaceContainerLow,
+          borderWidth: 1,
+          borderColor: isActive ? `${Colors.primary}99` : Colors.outlineVariant,
+          opacity: isActive ? 0.98 : 1,
+          shadowColor: '#000',
+          shadowOpacity: isActive ? 0.08 : 0.03,
+          shadowRadius: isActive ? 6 : 2,
+          shadowOffset: { width: 0, height: isActive ? 3 : 1 },
+          elevation: isActive ? 3 : 0,
+        }}
+      >
+        <View className="flex-row items-center gap-3">
+          <TouchableOpacity
+            onLongPress={drag}
+            delayLongPress={120}
+            className="h-11 w-11 items-center justify-center rounded-2xl bg-surface-container"
+          >
+            <Ionicons name={item.icon} size={20} color={Colors.primary} />
+          </TouchableOpacity>
+
+          <View className="flex-1">
+            <View className="flex-row items-center gap-2">
+              <Text className="text-base font-bold text-on-surface">{item.title}</Text>
+              {!hasContent ? (
+                <View className="rounded-full bg-surface-container px-2 py-1">
+                  <Text className="text-[11px] font-semibold text-on-surface-variant">Empty</Text>
+                </View>
+              ) : hidden ? (
+                <View className="rounded-full bg-surface-container px-2 py-1">
+                  <Text className="text-[11px] font-semibold text-on-surface-variant">Hidden</Text>
+                </View>
+              ) : null}
+            </View>
+            <Text className="mt-1 text-sm text-on-surface-variant">
+              {hasContent ? item.description : 'Add content in the Music tab to show this widget.'}
+            </Text>
+          </View>
+
+          <Switch
+            value={!hidden}
+            onValueChange={() => toggleWidgetHidden(item.type)}
+            trackColor={{ false: Colors.outlineVariant, true: `${Colors.primary}66` }}
+            thumbColor={!hidden ? Colors.primary : '#f4f3f4'}
+          />
+
+          <TouchableOpacity
+            onLongPress={drag}
+            delayLongPress={120}
+            className="ml-1 h-10 w-8 items-center justify-center"
+          >
+            <Ionicons
+              name="reorder-three-outline"
+              size={22}
+              color={isActive ? Colors.primary : Colors.onSurfaceVariant}
+            />
+          </TouchableOpacity>
+        </View>
+
+      </View>
+    )
+  }, [form.hiddenWidgets, hasWidgetContent, toggleWidgetHidden])
 
   return (
     <Modal
@@ -846,7 +1007,12 @@ export default function EditProfileModal({
             <View className="gap-6">
               {/* Top Albums */}
               <View className="gap-3 p-5 bg-surface-container-low rounded-2xl">
-                <SectionLabel>Top Albums</SectionLabel>
+                <SectionHeaderWithSpotifySync
+                  title="Top Albums"
+                  synced={form.syncTopAlbumsWithSpotify === true}
+                  canSync={form.spotifyConnected === true}
+                  onToggle={(value) => set('syncTopAlbumsWithSpotify', value)}
+                />
                 {(form.topAlbums ?? []).map((album, i) => (
                   <MusicItem
                     key={i}
@@ -857,38 +1023,28 @@ export default function EditProfileModal({
                     onRemove={() => removeAlbum(i)}
                   />
                 ))}
-                {(form.topAlbums ?? []).length < 3 && (
+                {!(form.syncTopAlbumsWithSpotify && form.spotifyConnected) && (form.topAlbums ?? []).length < 3 && (
                   <MusicSearch
                     type="album"
                     placeholder="Search for an album..."
                     onSelect={(r) => addAlbum(r as AlbumSearchResult)}
                   />
                 )}
-              </View>
-
-              {/* Currently Listening */}
-              <View className="gap-3 p-5 bg-surface-container-low rounded-2xl">
-                <SectionLabel>Currently Listening</SectionLabel>
-                {form.currentlyListening?.title ? (
-                  <MusicItem
-                    title={form.currentlyListening.title}
-                    subtitle={form.currentlyListening.artist}
-                    imageUrl={form.currentlyListening.coverUrl}
-                    imageShape="square"
-                    onRemove={() => set('currentlyListening', undefined)}
-                  />
-                ) : (
-                  <MusicSearch
-                    type="track"
-                    placeholder="Search for a track..."
-                    onSelect={(r) => setListening(r as TrackSearchResult)}
-                  />
+                {form.syncTopAlbumsWithSpotify && form.spotifyConnected && (
+                  <Text className="text-xs text-on-surface-variant">
+                    Synced from Spotify. Toggle off to curate this section manually.
+                  </Text>
                 )}
               </View>
 
               {/* Top Songs */}
               <View className="gap-3 p-5 bg-surface-container-low rounded-2xl">
-                <SectionLabel>Top Songs</SectionLabel>
+                <SectionHeaderWithSpotifySync
+                  title="Top Songs"
+                  synced={form.syncTopSongsWithSpotify === true}
+                  canSync={form.spotifyConnected === true}
+                  onToggle={(value) => set('syncTopSongsWithSpotify', value)}
+                />
                 {(form.topSongs ?? []).map((song, i) => (
                   <MusicItem
                     key={i}
@@ -900,18 +1056,28 @@ export default function EditProfileModal({
                     onRemove={() => removeSong(i)}
                   />
                 ))}
-                {(form.topSongs ?? []).length < 3 && (
+                {!(form.syncTopSongsWithSpotify && form.spotifyConnected) && (form.topSongs ?? []).length < 3 && (
                   <MusicSearch
                     type="track"
                     placeholder="Search for a song..."
                     onSelect={(r) => addSong(r as TrackSearchResult)}
                   />
                 )}
+                {form.syncTopSongsWithSpotify && form.spotifyConnected && (
+                  <Text className="text-xs text-on-surface-variant">
+                    Synced from Spotify. Toggle off to curate this section manually.
+                  </Text>
+                )}
               </View>
 
               {/* Top Artists */}
               <View className="gap-3 p-5 bg-surface-container-low rounded-2xl">
-                <SectionLabel>Top Artists</SectionLabel>
+                <SectionHeaderWithSpotifySync
+                  title="Top Artists"
+                  synced={form.syncTopArtistsWithSpotify === true}
+                  canSync={form.spotifyConnected === true}
+                  onToggle={(value) => set('syncTopArtistsWithSpotify', value)}
+                />
                 {(form.topArtists ?? []).map((artist, i) => (
                   <MusicItem
                     key={i}
@@ -921,14 +1087,44 @@ export default function EditProfileModal({
                     onRemove={() => removeArtist(i)}
                   />
                 ))}
-                {(form.topArtists ?? []).length < 3 && (
+                {!(form.syncTopArtistsWithSpotify && form.spotifyConnected) && (form.topArtists ?? []).length < 3 && (
                   <MusicSearch
                     type="artist"
                     placeholder="Search for an artist..."
                     onSelect={(r) => addArtist(r as ArtistSearchResult)}
                   />
                 )}
+                {form.syncTopArtistsWithSpotify && form.spotifyConnected && (
+                  <Text className="text-xs text-on-surface-variant">
+                    Synced from Spotify. Toggle off to curate this section manually.
+                  </Text>
+                )}
               </View>
+            </View>
+          )}
+
+          {tab === 'widgets' && (
+            <View className="gap-5">
+              <View className="rounded-2xl bg-surface-container-low p-5">
+                <Text className="text-base font-bold text-on-surface">Arrange your profile widgets</Text>
+                <Text className="mt-2 text-sm leading-6 text-on-surface-variant">
+                  Long-press and drag a row to reorder it. Use the switch to hide a widget without removing its content.
+                </Text>
+              </View>
+
+              <DraggableFlatList
+                data={normalizeWidgetOrder(form.widgetOrder).map(type =>
+                  WIDGET_ITEMS.find(item => item.type === type)!
+                )}
+                keyExtractor={(item) => item.type}
+                onDragEnd={({ data }) => {
+                  set('widgetOrder', data.map(item => item.type))
+                }}
+                renderItem={renderWidgetListItem}
+                scrollEnabled={false}
+                activationDistance={8}
+                containerStyle={{ flexGrow: 0 }}
+              />
             </View>
           )}
         </ScrollView>

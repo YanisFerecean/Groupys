@@ -5,8 +5,10 @@ import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @ApplicationScoped
 public class CommunityRepository implements PanacheRepositoryBase<Community, UUID> {
@@ -25,5 +27,25 @@ public class CommunityRepository implements PanacheRepositoryBase<Community, UUI
 
     public List<Community> findByArtist(Long artistId) {
         return find("artist.id", artistId).list();
+    }
+
+    public List<Community> listDiscoverable() {
+        return find("visibility = 'PUBLIC' and discoveryEnabled = true").list();
+    }
+
+    public List<Community> searchByQuery(String query, int limit) {
+        return find(
+                "LOWER(name) LIKE :query AND visibility = 'PUBLIC'",
+                io.quarkus.panache.common.Parameters.with("query", "%" + query.toLowerCase() + "%"))
+                .page(0, limit)
+                .list();
+    }
+
+    public Map<UUID, Community> findByIdsMap(List<UUID> communityIds) {
+        if (communityIds.isEmpty()) {
+            return Map.of();
+        }
+        return find("id IN ?1", communityIds).stream()
+                .collect(Collectors.toMap(c -> c.id, c -> c));
     }
 }

@@ -1,5 +1,6 @@
 package com.groupys.service;
 
+import com.groupys.config.PerformanceFeatureFlags;
 import com.groupys.dto.CommentResDto;
 import com.groupys.model.Comment;
 import com.groupys.model.CommentReaction;
@@ -32,11 +33,30 @@ public class CommentService {
     @Inject
     UserRepository userRepository;
 
+    @Inject
+    DiscoveryService discoveryService;
+
+    @Inject
+    PerformanceFeatureFlags flags;
+
     public List<CommentResDto> getByPost(UUID postId, String clerkId) {
         User user = userRepository.findByClerkId(clerkId).orElse(null);
         List<Comment> all = commentRepository.findByPost(postId);
+        if (all.isEmpty()) return List.of();
 
-        // Group by parent
+        List<UUID> commentIds = all.stream().map(c -> c.id).toList();
+        Map<UUID, Long> likesMap = Map.of();
+        Map<UUID, Long> dislikesMap = Map.of();
+        if (!readModelReadEnabled()) {
+            // Batch-load reaction data from reactions table when read-model counters are disabled.
+            likesMap = commentReactionRepository.countsByCommentIdsAndType(commentIds, "like");
+            dislikesMap = commentReactionRepository.countsByCommentIdsAndType(commentIds, "dislike");
+        }
+        Map<UUID, String> userReactionMap = user != null
+                ? commentReactionRepository.findUserReactionsByCommentIds(commentIds, user.id)
+                : Map.of();
+
+        // Group by parent in memory
         Map<UUID, List<Comment>> byParent = new HashMap<>();
         List<Comment> topLevel = new ArrayList<>();
         for (Comment c : all) {
@@ -47,15 +67,23 @@ public class CommentService {
             }
         }
 
-        return buildTree(topLevel, byParent, user);
+        return buildTree(topLevel, byParent, user, likesMap, dislikesMap, userReactionMap);
     }
 
-    private List<CommentResDto> buildTree(List<Comment> comments, Map<UUID, List<Comment>> byParent, User user) {
+    private List<CommentResDto> buildTree(
+            List<Comment> comments,
+            Map<UUID, List<Comment>> byParent,
+            User user,
+            Map<UUID, Long> likesMap,
+            Map<UUID, Long> dislikesMap,
+            Map<UUID, String> userReactionMap) {
         return comments.stream()
                 .map(c -> {
                     List<Comment> children = byParent.getOrDefault(c.id, List.of());
-                    List<CommentResDto> replies = buildTree(children, byParent, user);
-                    return toDto(c, user, replies);
+                    List<CommentResDto> replies = buildTree(children, byParent, user, likesMap, dislikesMap, userReactionMap);
+                    long likes = readModelReadEnabled() ? Math.max(0L, c.likeCount) : likesMap.getOrDefault(c.id, 0L);
+                    long dislikes = readModelReadEnabled() ? Math.max(0L, c.dislikeCount) : dislikesMap.getOrDefault(c.id, 0L);
+                    return toDto(c, userReactionMap.get(c.id), likes, dislikes, replies);
                 })
                 .sorted(Comparator.comparingLong(CommentResDto::likeCount).reversed()
                         .thenComparing(CommentResDto::createdAt))
@@ -78,10 +106,17 @@ public class CommentService {
             Comment parent = commentRepository.findByIdOptional(parentCommentId)
                     .orElseThrow(() -> new NotFoundException("Parent comment not found"));
             comment.parentComment = parent;
+            if (readModelWriteEnabled()) {
+                parent.replyCount = Math.max(0L, parent.replyCount + 1L);
+            }
         }
 
         commentRepository.persist(comment);
-        return toDto(comment, author, List.of());
+        if (readModelWriteEnabled()) {
+            post.commentCount = Math.max(0L, post.commentCount + 1L);
+        }
+        discoveryService.refreshAfterCommunityActivity(post.community.id);
+        return toDto(comment, null, 0L, 0L, List.of());
     }
 
     @Transactional
@@ -90,32 +125,52 @@ public class CommentService {
                 .orElseThrow(() -> new NotFoundException("User not found"));
         Comment comment = commentRepository.findByIdOptional(commentId)
                 .orElseThrow(() -> new NotFoundException("Comment not found"));
+        String normalizedReaction = reactionType == null ? "" : reactionType.trim().toLowerCase();
+        if (!"like".equals(normalizedReaction) && !"dislike".equals(normalizedReaction)) {
+            throw new jakarta.ws.rs.BadRequestException("Reaction type must be 'like' or 'dislike'");
+        }
 
         var existing = commentReactionRepository.findByCommentAndUser(commentId, user.id);
 
         if (existing.isPresent()) {
             CommentReaction reaction = existing.get();
-            if (reaction.reactionType.equals(reactionType)) {
+            String oldType = reaction.reactionType == null ? "" : reaction.reactionType.toLowerCase();
+            if (oldType.equals(normalizedReaction)) {
                 commentReactionRepository.delete(reaction);
+                applyCommentReactionDelta(comment, oldType, -1);
             } else {
-                reaction.reactionType = reactionType;
+                reaction.reactionType = normalizedReaction;
+                applyCommentReactionDelta(comment, oldType, -1);
+                applyCommentReactionDelta(comment, normalizedReaction, 1);
             }
         } else {
             CommentReaction reaction = new CommentReaction();
             reaction.comment = comment;
             reaction.user = user;
-            reaction.reactionType = reactionType;
+            reaction.reactionType = normalizedReaction;
             commentReactionRepository.persist(reaction);
+            applyCommentReactionDelta(comment, normalizedReaction, 1);
         }
 
-        // Rebuild replies for this comment
+        discoveryService.refreshAfterCommunityActivity(comment.post.community.id);
+
+        // Single-comment response — per-comment queries are acceptable here (not N+1)
+        long likes = readModelReadEnabled()
+                ? Math.max(0L, comment.likeCount)
+                : commentReactionRepository.countByCommentAndType(commentId, "like");
+        long dislikes = readModelReadEnabled()
+                ? Math.max(0L, comment.dislikeCount)
+                : commentReactionRepository.countByCommentAndType(commentId, "dislike");
+        String userReaction = commentReactionRepository.findByCommentAndUser(commentId, user.id)
+                .map(r -> r.reactionType).orElse(null);
+
         List<Comment> children = commentRepository.findByParent(commentId);
         List<CommentResDto> replies = children.stream()
-                .map(c -> toDto(c, user, List.of()))
+                .map(c -> toDto(c, null, 0L, 0L, List.of()))
                 .sorted(Comparator.comparingLong(CommentResDto::likeCount).reversed())
                 .collect(Collectors.toList());
 
-        return toDto(comment, user, replies);
+        return toDto(comment, userReaction, likes, dislikes, replies);
     }
 
     @Transactional
@@ -127,35 +182,51 @@ public class CommentService {
         if (!comment.author.id.equals(user.id)) {
             throw new jakarta.ws.rs.ForbiddenException("Not the author");
         }
-        deleteRecursive(comment);
-    }
-
-    private void deleteRecursive(Comment comment) {
-        List<Comment> children = commentRepository.findByParent(comment.id);
-        for (Comment child : children) {
-            deleteRecursive(child);
+        UUID postId = comment.post.id;
+        UUID communityId = comment.post.community.id;
+        deleteRecursive(comment, postId);
+        if (readModelWriteEnabled()) {
+            recalculatePostCommentCounters(postId);
         }
-        commentReactionRepository.delete("comment.id", comment.id);
-        commentRepository.delete(comment);
+        discoveryService.refreshAfterCommunityActivity(communityId);
     }
 
-    public void deleteAllByPost(UUID postId) {
-        List<Comment> all = commentRepository.findByPost(postId);
+    /**
+     * Loads all comments for the post once, collects the target comment and all its
+     * descendants in memory, then issues a single batch DELETE per table — instead of
+     * the previous recursive per-row deletes.
+     */
+    private void deleteRecursive(Comment root, UUID postId) {
+        List<Comment> allForPost = commentRepository.findByPost(postId);
+        List<UUID> toDelete = new ArrayList<>();
+        toDelete.add(root.id);
+        collectDescendantIds(root.id, allForPost, toDelete);
+        commentReactionRepository.deleteByCommentIds(toDelete);
+        commentRepository.deleteByIds(toDelete);
+    }
+
+    private void collectDescendantIds(UUID parentId, List<Comment> all, List<UUID> acc) {
         for (Comment c : all) {
-            commentReactionRepository.delete("comment.id", c.id);
+            if (c.parentComment != null && c.parentComment.id.equals(parentId)) {
+                acc.add(c.id);
+                collectDescendantIds(c.id, all, acc);
+            }
+        }
+    }
+
+    /**
+     * Deletes all comments (and their reactions) for a post using batch queries —
+     * previously issued one DELETE per comment reaction.
+     */
+    public void deleteAllByPost(UUID postId) {
+        List<UUID> commentIds = commentRepository.findIdsByPost(postId);
+        if (!commentIds.isEmpty()) {
+            commentReactionRepository.deleteByCommentIds(commentIds);
         }
         commentRepository.delete("post.id", postId);
     }
 
-    private CommentResDto toDto(Comment comment, User currentUser, List<CommentResDto> replies) {
-        long likes = commentReactionRepository.countByCommentAndType(comment.id, "like");
-        long dislikes = commentReactionRepository.countByCommentAndType(comment.id, "dislike");
-        String userReaction = null;
-        if (currentUser != null) {
-            userReaction = commentReactionRepository.findByCommentAndUser(comment.id, currentUser.id)
-                    .map(r -> r.reactionType)
-                    .orElse(null);
-        }
+    private CommentResDto toDto(Comment comment, String userReaction, long likes, long dislikes, List<CommentResDto> replies) {
         return new CommentResDto(
                 comment.id,
                 comment.content,
@@ -171,5 +242,37 @@ public class CommentService {
                 userReaction,
                 replies
         );
+    }
+
+    private void applyCommentReactionDelta(Comment comment, String reactionType, int delta) {
+        if (!readModelWriteEnabled()) {
+            return;
+        }
+        if ("like".equals(reactionType)) {
+            comment.likeCount = Math.max(0L, comment.likeCount + delta);
+        } else if ("dislike".equals(reactionType)) {
+            comment.dislikeCount = Math.max(0L, comment.dislikeCount + delta);
+        }
+    }
+
+    private void recalculatePostCommentCounters(UUID postId) {
+        Post post = postRepository.findByIdOptional(postId).orElse(null);
+        if (post == null) {
+            return;
+        }
+        List<Comment> comments = commentRepository.findByPost(postId);
+        post.commentCount = comments.size();
+        Map<UUID, Long> replyCounts = comments.stream()
+                .filter(comment -> comment.parentComment != null && comment.parentComment.id != null)
+                .collect(Collectors.groupingBy(comment -> comment.parentComment.id, Collectors.counting()));
+        comments.forEach(comment -> comment.replyCount = replyCounts.getOrDefault(comment.id, 0L));
+    }
+
+    private boolean readModelReadEnabled() {
+        return flags != null && flags.readModelReadEnabled();
+    }
+
+    private boolean readModelWriteEnabled() {
+        return flags != null && flags.readModelWriteEnabled();
     }
 }

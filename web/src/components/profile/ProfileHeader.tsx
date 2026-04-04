@@ -4,12 +4,14 @@ import Image from "next/image";
 import type { ProfileCustomization } from "@/types/profile";
 import { countryFlag } from "@/lib/countries";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
+
 interface ProfileHeaderProps {
   profile: ProfileCustomization;
   avatarUrl: string;
   clerkName: string;
   username: string;
-  memberYear: number;
+  albumsRatedCount?: number | null;
   onEditClick: () => void;
 }
 
@@ -18,12 +20,11 @@ const DEFAULT_BANNER =
 
 function bannerBackground(value?: string): React.CSSProperties {
   if (!value) return { backgroundImage: DEFAULT_BANNER };
-  // Gradient strings start with "linear-gradient" / "radial-gradient" etc.
   if (value.startsWith("linear-gradient") || value.startsWith("radial-gradient")) {
     return { backgroundImage: value };
   }
-  // Otherwise treat as image URL
-  return { backgroundImage: `url(${value})` };
+  const url = value.startsWith("/") ? `${API_URL.replace(/\/api$/, "")}${value}` : value;
+  return { backgroundImage: `url(${url})` };
 }
 
 export default function ProfileHeader({
@@ -31,7 +32,7 @@ export default function ProfileHeader({
   avatarUrl,
   clerkName,
   username,
-  memberYear,
+  albumsRatedCount,
   onEditClick,
 }: ProfileHeaderProps) {
   const displayName = profile.displayName || clerkName;
@@ -60,9 +61,6 @@ export default function ProfileHeader({
 
           {/* Info */}
           <div className="flex-1 text-center md:text-left pb-2">
-            <p className="text-sm text-on-surface-variant font-medium mb-2">
-              Member since {memberYear}
-            </p>
             <h1
               className="text-3xl md:text-[3.2rem] font-extrabold tracking-tighter leading-none mb-1"
               style={profile.nameColor ? { color: profile.nameColor } : undefined}
@@ -102,7 +100,7 @@ export default function ProfileHeader({
             )}
             <div className="flex items-center gap-6 md:gap-8 text-on-surface-variant font-medium flex-wrap justify-center md:justify-start mt-2">
               <div className="flex items-center gap-2">
-                <span className="font-bold text-lg" style={{ color: "var(--profile-accent, var(--color-primary))" }}>24</span>
+                <span className="font-bold text-lg" style={{ color: "var(--profile-accent, var(--color-primary))" }}>{albumsRatedCount ?? "—"}</span>
                 <span className="text-sm uppercase tracking-wide">Albums Rated</span>
               </div>
               <div className="flex items-center gap-2">

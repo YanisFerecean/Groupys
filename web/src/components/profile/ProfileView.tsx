@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useProfileCustomization } from "@/hooks/useProfileCustomization";
-import { useUser } from "@clerk/nextjs";
+import { useUser, useAuth } from "@clerk/nextjs";
+import { fetchMyAlbumRatings } from "@/lib/api";
 import ProfileHeader from "./ProfileHeader";
 import ProfileWidgetGrid from "./ProfileWidgetGrid";
 import ProfileEditDrawer from "./ProfileEditDrawer";
@@ -31,8 +32,25 @@ export default function ProfileView() {
     setSpotifyConnected,
   } = useProfileCustomization();
   const { user } = useUser();
+  const { getToken } = useAuth();
   const router = useRouter();
   const spotifyCallback = useSpotifyCallback();
+  const [albumsRatedCount, setAlbumsRatedCount] = useState<number | null>(null);
+
+  const getTokenRef = useRef(getToken);
+  useEffect(() => { getTokenRef.current = getToken; }, [getToken]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = await getTokenRef.current();
+        const ratings = await fetchMyAlbumRatings(token);
+        setAlbumsRatedCount(ratings.length);
+      } catch {
+        // silently fail
+      }
+    })();
+  }, []);
 
   // Open the editor drawer when arriving from Spotify OAuth callback
   const [isEditing, setIsEditing] = useState(spotifyCallback === "connected");
@@ -64,11 +82,32 @@ export default function ProfileView() {
         avatarUrl={user.imageUrl}
         clerkName={clerkName}
         username={user.username ?? ""}
-        memberYear={memberYear}
+        albumsRatedCount={albumsRatedCount}
         onEditClick={() => setIsEditing(true)}
       />
 
-      <ProfileWidgetGrid profile={profile} spotifyConnected={spotifyConnected} />
+      <ProfileWidgetGrid
+        profile={profile}
+        username={user.username ?? ""}
+        spotifyConnected={spotifyConnected}
+        isEditing={true}
+        onReorder={(newOrder) => updateProfile({ ...profile, widgetOrder: newOrder })}
+        onSettingsChange={(type, color, size) => {
+          const colorKey =
+            type === "topAlbums" ? "albumsContainerColor" :
+            type === "topSongs" ? "songsContainerColor" :
+            type === "topArtists" ? "artistsContainerColor" :
+            type === "lastRatedAlbum" ? "lastRatedAlbumContainerColor" :
+            type === "currentlyListening" ? "currentlyListeningContainerColor" : null;
+          const updates = { ...profile, widgetSizes: { ...(profile.widgetSizes ?? {}), [type]: size } };
+          if (colorKey) (updates as Record<string, unknown>)[colorKey] = color;
+          updateProfile(updates);
+        }}
+      />
+
+      <div className="px-6 md:px-12 py-6 text-center">
+        <p className="text-xs text-on-surface-variant/50 font-medium">Member since {memberYear}</p>
+      </div>
 
       <ProfileEditDrawer
         open={isEditing}
@@ -82,6 +121,7 @@ export default function ProfileView() {
         onRemoveProfileImage={removeProfileImage}
         isSaving={isSaving}
         spotifyConnected={spotifyConnected}
+        initialTab={spotifyCallback === "connected" ? "widgets" : "profile"}
       />
     </div>
   );

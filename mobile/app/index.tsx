@@ -1,7 +1,7 @@
 import { useAuth, useUser } from '@clerk/expo'
 import { Redirect } from 'expo-router'
 import FullscreenSpinner from '@/components/ui/FullscreenSpinner'
-import { hasUsername } from '@/lib/auth'
+import { isAccountSetupComplete } from '@/lib/auth'
 
 export default function Index() {
   const { isSignedIn, isLoaded: isAuthLoaded } = useAuth()
@@ -15,5 +15,5 @@ export default function Index() {
     return <Redirect href="/(auth)/landing" />
   }
 
-  return hasUsername(user) ? <Redirect href="/(home)/(feed)" /> : <Redirect href="/complete-profile" />
+  return isAccountSetupComplete(user) ? <Redirect href="/(home)/(feed)" /> : <Redirect href="/complete-profile" />
 }

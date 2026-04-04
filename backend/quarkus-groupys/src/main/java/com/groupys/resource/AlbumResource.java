@@ -28,7 +28,7 @@ public class AlbumResource {
     @GET
     @Path("/search")
     public List<AlbumResDto> search(@QueryParam("q") String query,
-                                    @DefaultValue("5") @QueryParam("limit") int limit) {
+                                    @DefaultValue("10") @QueryParam("limit") int limit) {
         return albumService.search(query, limit);
     }
 

@@ -68,6 +68,19 @@ public class ConversationResource {
         return Response.ok(dto).build();
     }
 
+    @POST
+    @Path("/conversations/{id}/accept")
+    public ConversationResDto acceptConversationRequest(@PathParam("id") UUID id) {
+        return chatService.acceptConversationRequest(id, jwt.getSubject());
+    }
+
+    @DELETE
+    @Path("/conversations/{id}/request")
+    public Response denyConversationRequest(@PathParam("id") UUID id) {
+        chatService.denyConversationRequest(id, jwt.getSubject());
+        return Response.noContent().build();
+    }
+
     // ── Messages ──────────────────────────────────────────────────────────────
 
     @GET
@@ -100,9 +113,8 @@ public class ConversationResource {
             data.put("messageType", msg.messageType());
             data.put("createdAt", msg.createdAt().toString());
             String json = objectMapper.writeValueAsString(new WebSocketMessage("MESSAGE_NEW", data));
-            chatService.getParticipantUserIds(msg.conversationId()).forEach(pid -> {
-                String clerkId = chatService.getClerkIdByUserId(pid);
-                if (clerkId != null && !clerkId.equals(senderClerkId)) {
+            chatService.getParticipantClerkIds(msg.conversationId()).forEach((pid, clerkId) -> {
+                if (!clerkId.equals(senderClerkId)) {
                     presenceService.sendTo(clerkId, json);
                 }
             });

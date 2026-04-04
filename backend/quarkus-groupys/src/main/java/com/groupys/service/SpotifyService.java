@@ -7,6 +7,7 @@ import com.groupys.dto.SpotifyAlbumResDto;
 import com.groupys.dto.SpotifyArtistResDto;
 import com.groupys.dto.SpotifyTrackResDto;
 import com.groupys.dto.spotify.SpotifyCurrentlyPlayingResponse;
+import com.groupys.dto.spotify.SpotifyRecentlyPlayedResponse;
 import com.groupys.dto.spotify.SpotifyTokenResponse;
 import com.groupys.dto.spotify.SpotifyTopArtistsResponse;
 import com.groupys.dto.spotify.SpotifyTopTracksResponse;
@@ -33,7 +34,7 @@ import java.util.List;
 @ApplicationScoped
 public class SpotifyService {
 
-    private static final String SCOPES = "user-top-read user-read-currently-playing";
+    private static final String SCOPES = "user-top-read user-read-currently-playing user-read-recently-played";
 
     @Inject
     UserRepository userRepository;
@@ -92,7 +93,16 @@ public class SpotifyService {
     }
 
     public List<SpotifyArtistResDto> getTopArtists(String clerkId) {
-        String token = ensureValidToken(clerkId);
+        String token = getValidAccessToken(clerkId);
+        return getTopArtistsForToken(token);
+    }
+
+    public List<SpotifyArtistResDto> getTopArtistsByUserId(String userId) {
+        String token = getValidAccessTokenByUserId(userId);
+        return getTopArtistsForToken(token);
+    }
+
+    private List<SpotifyArtistResDto> getTopArtistsForToken(String token) {
         try {
             Response response = spotifyApi.getTopArtists("Bearer " + token, 3, "medium_term");
             if (response.getStatus() != 200) {
@@ -117,8 +127,21 @@ public class SpotifyService {
         return fetchTopTracks(clerkId, 3);
     }
 
+    public List<SpotifyTrackResDto> getTopTracksByUserId(String userId) {
+        return fetchTopTracksByUserId(userId, 3);
+    }
+
     public List<SpotifyAlbumResDto> getTopAlbums(String clerkId) {
-        String token = ensureValidToken(clerkId);
+        String token = getValidAccessToken(clerkId);
+        return getTopAlbumsForToken(token);
+    }
+
+    public List<SpotifyAlbumResDto> getTopAlbumsByUserId(String userId) {
+        String token = getValidAccessTokenByUserId(userId);
+        return getTopAlbumsForToken(token);
+    }
+
+    private List<SpotifyAlbumResDto> getTopAlbumsForToken(String token) {
         try {
             Response response = spotifyApi.getTopTracks("Bearer " + token, 20, "medium_term");
             if (response.getStatus() != 200) {
@@ -151,32 +174,92 @@ public class SpotifyService {
     }
 
     public SpotifyTrackResDto getCurrentlyPlaying(String clerkId) {
-        String token = ensureValidToken(clerkId);
+        String token = getValidAccessToken(clerkId);
+        return getCurrentlyPlayingForToken(token);
+    }
+
+    public SpotifyTrackResDto getCurrentlyPlayingByUserId(String userId) {
+        String token = getValidAccessTokenByUserId(userId);
+        return getCurrentlyPlayingForToken(token);
+    }
+
+    private SpotifyTrackResDto getCurrentlyPlayingForToken(String token) {
         try {
             Response response = spotifyApi.getCurrentlyPlaying("Bearer " + token);
-            if (response.getStatus() == 204 || response.getStatus() != 200) {
-                return null;
+            if (response.getStatus() == 200) {
+                String body = response.readEntity(String.class);
+                SpotifyCurrentlyPlayingResponse data = objectMapper.readValue(
+                        body, SpotifyCurrentlyPlayingResponse.class);
+                if (data != null && data.item() != null) {
+                    return toTrackDto(data.item().name(), data.item().artists(), data.item().album());
+                }
             }
-            String body = response.readEntity(String.class);
-            SpotifyCurrentlyPlayingResponse data = objectMapper.readValue(
-                    body, SpotifyCurrentlyPlayingResponse.class);
-            if (data.item() == null) return null;
-
-            var track = data.item();
-            return new SpotifyTrackResDto(
-                    track.name(),
-                    track.artists() != null && !track.artists().isEmpty()
-                            ? track.artists().getFirst().name() : "",
-                    track.album() != null && track.album().images() != null && !track.album().images().isEmpty()
-                            ? track.album().images().getFirst().url() : null);
+            return getLastPlayedTrack(token);
         } catch (Exception e) {
             Log.errorf(e, "Spotify currently-playing error");
             return null;
         }
     }
 
+    private SpotifyTrackResDto getLastPlayedTrack(String token) {
+        try {
+            Response response = spotifyApi.getRecentlyPlayed("Bearer " + token, 1);
+            if (response.getStatus() != 200) return null;
+
+            String body = response.readEntity(String.class);
+            SpotifyRecentlyPlayedResponse data = objectMapper.readValue(body, SpotifyRecentlyPlayedResponse.class);
+            if (data == null || data.items() == null || data.items().isEmpty()) return null;
+            if (data.items().getFirst() == null || data.items().getFirst().track() == null) return null;
+
+            var track = data.items().getFirst().track();
+            return toTrackDto(track.name(), track.artists(), track.album());
+        } catch (Exception e) {
+            Log.errorf(e, "Spotify recently-played error");
+            return null;
+        }
+    }
+
+    private SpotifyTrackResDto toTrackDto(
+            String name,
+            List<?> artists,
+            Object album
+    ) {
+        String artistName = "";
+        String cover = null;
+
+        if (artists != null && !artists.isEmpty()) {
+            Object firstArtist = artists.getFirst();
+            if (firstArtist instanceof SpotifyCurrentlyPlayingResponse.SpotifyArtistRef artistRef) {
+                artistName = artistRef.name() != null ? artistRef.name() : "";
+            } else if (firstArtist instanceof SpotifyRecentlyPlayedResponse.SpotifyArtistRef artistRef) {
+                artistName = artistRef.name() != null ? artistRef.name() : "";
+            }
+        }
+
+        if (album instanceof SpotifyCurrentlyPlayingResponse.SpotifyAlbumRef albumRef
+                && albumRef.images() != null
+                && !albumRef.images().isEmpty()) {
+            cover = albumRef.images().getFirst().url();
+        } else if (album instanceof SpotifyRecentlyPlayedResponse.SpotifyAlbumRef albumRef
+                && albumRef.images() != null
+                && !albumRef.images().isEmpty()) {
+            cover = albumRef.images().getFirst().url();
+        }
+
+        return new SpotifyTrackResDto(name, artistName, cover);
+    }
+
     private List<SpotifyTrackResDto> fetchTopTracks(String clerkId, int limit) {
-        String token = ensureValidToken(clerkId);
+        String token = getValidAccessToken(clerkId);
+        return fetchTopTracksForToken(token, limit);
+    }
+
+    private List<SpotifyTrackResDto> fetchTopTracksByUserId(String userId, int limit) {
+        String token = getValidAccessTokenByUserId(userId);
+        return fetchTopTracksForToken(token, limit);
+    }
+
+    private List<SpotifyTrackResDto> fetchTopTracksForToken(String token, int limit) {
         try {
             Response response = spotifyApi.getTopTracks("Bearer " + token, limit, "medium_term");
             if (response.getStatus() != 200) {
@@ -199,10 +282,19 @@ public class SpotifyService {
         }
     }
 
-    private String ensureValidToken(String clerkId) {
+    public String getValidAccessToken(String clerkId) {
         User user = userRepository.findByClerkId(clerkId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
+        return getValidAccessToken(user);
+    }
 
+    public String getValidAccessTokenByUserId(String userId) {
+        User user = userRepository.findByIdOptional(java.util.UUID.fromString(userId))
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        return getValidAccessToken(user);
+    }
+
+    private String getValidAccessToken(User user) {
         if (user.spotifyRefreshToken == null) {
             throw new BadRequestException("Spotify not connected");
         }

@@ -1,21 +1,28 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import MarkdownContent from "@/components/ui/MarkdownContent";
 import AuthMedia from "@/components/ui/AuthMedia";
+import MediaLightbox, { LightboxItem } from "@/components/ui/MediaLightbox";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
+const PAGE_SIZE = 20;
 
 // ── Types ────────────────────────────────────────────────────────────────────
+
+interface PostMedia {
+  url: string;
+  type: string;
+  order: number;
+}
 
 interface PostRes {
   id: string;
   content: string;
-  mediaUrl: string | null;
-  mediaType: string | null;
+  media: PostMedia[];
   communityId: string;
   communityName: string;
   authorId: string;
@@ -45,7 +52,7 @@ function timeAgo(dateStr: string): string {
 
 // ── FeedPostCard ─────────────────────────────────────────────────────────────
 
-function FeedPostCard({
+const FeedPostCard = memo(function FeedPostCard({
   post,
   onReact,
 }: {
@@ -53,9 +60,20 @@ function FeedPostCard({
   onReact: (postId: string, type: "like" | "dislike") => void;
 }) {
   const router = useRouter();
-  const isImage = post.mediaType?.startsWith("image/");
-  const isVideo = post.mediaType?.startsWith("video/");
-  const isAudio = post.mediaType?.startsWith("audio/");
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+
+  const visualItems: LightboxItem[] = post.media
+    ?.filter((m) => m.type.startsWith("image/") || m.type.startsWith("video/"))
+    .map((m) => ({
+      src: `${API_URL}${m.url.replace(/^\/api/, "")}`,
+      type: m.type.startsWith("image/") ? "image" : "video",
+    })) ?? [];
+
+  // Map original media index → visual index
+  let vi = -1;
+  const visualIndexOf = post.media?.map((m) =>
+    m.type.startsWith("image/") || m.type.startsWith("video/") ? ++vi : -1
+  ) ?? [];
 
   return (
     <div className="bg-surface-container-lowest/65 border border-white/80 rounded-2xl overflow-hidden shadow-sm">
@@ -81,13 +99,15 @@ function FeedPostCard({
         onClick={() => router.push(`/profile/${post.authorUsername}`)}
       >
         {post.authorProfileImage ? (
-          <Image
-            src={post.authorProfileImage}
-            alt={post.authorDisplayName || post.authorUsername}
-            width={36}
-            height={36}
-            className="shrink-0 rounded-full object-cover"
-          />
+          <div className="w-9 h-9 shrink-0 rounded-full overflow-hidden">
+            <Image
+              src={post.authorProfileImage}
+              alt={post.authorDisplayName || post.authorUsername}
+              width={36}
+              height={36}
+              className="w-full h-full object-cover"
+            />
+          </div>
         ) : (
           <div className="w-9 h-9 shrink-0 rounded-full bg-surface-container-high flex items-center justify-center">
             <span className="material-symbols-outlined text-on-surface-variant/40 text-sm">
@@ -120,31 +140,55 @@ function FeedPostCard({
       )}
 
       {/* Media */}
-      {post.mediaUrl && isImage && (
-        <div className="px-4 pb-3">
-          <AuthMedia
-            src={`${API_URL}${post.mediaUrl.replace(/^\/api/, "")}`}
-            type="image"
-            className="w-full rounded-xl"
-          />
-        </div>
-      )}
-      {post.mediaUrl && isVideo && (
-        <div className="px-4 pb-3">
-          <AuthMedia
-            src={`${API_URL}${post.mediaUrl.replace(/^\/api/, "")}`}
-            type="video"
-            className="w-full rounded-xl"
-          />
-        </div>
-      )}
-      {post.mediaUrl && isAudio && (
-        <div className="px-4 pb-3">
-          <AuthMedia
-            src={`${API_URL}${post.mediaUrl.replace(/^\/api/, "")}`}
-            type="audio"
-          />
-        </div>
+      {post.media?.length > 0 && (() => {
+        const count = post.media.length;
+        const inGrid = count > 1;
+        return (
+          <div className={`px-4 pb-3${inGrid ? " grid grid-cols-2 gap-1" : ""}`}>
+            {post.media.map((m, i) => {
+              const src = `${API_URL}${m.url.replace(/^\/api/, "")}`;
+              const isImage = m.type.startsWith("image/");
+              const isVideo = m.type.startsWith("video/");
+              const isAudio = m.type.startsWith("audio/");
+              if (!isImage && !isVideo && !isAudio) return null;
+              const spanFull = inGrid && (isAudio || (count === 3 && i === 0));
+              const vIdx = visualIndexOf[i];
+              const mediaClass = inGrid && !isAudio
+                ? "w-full h-64 object-cover rounded-xl"
+                : isImage ? "max-w-full max-h-80 rounded-xl" : isVideo ? "max-w-full max-h-[480px] rounded-xl" : undefined;
+              return (
+                <div key={i} className={`relative${spanFull ? " col-span-2" : ""}`}>
+                  {isImage ? (
+                    <div onClick={() => setLightboxIndex(vIdx)} className="cursor-zoom-in">
+                      <AuthMedia src={src} type="image" className={mediaClass} />
+                    </div>
+                  ) : isVideo ? (
+                    <div className="relative">
+                      <AuthMedia src={src} type="video" className={mediaClass} />
+                      <button
+                        onClick={() => setLightboxIndex(vIdx)}
+                        className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center text-white transition-colors"
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>fullscreen</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <AuthMedia src={src} type="audio" />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
+
+      {lightboxIndex !== null && (
+        <MediaLightbox
+          items={visualItems}
+          index={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+          onNav={setLightboxIndex}
+        />
       )}
 
       {/* Reaction bar */}
@@ -202,7 +246,7 @@ function FeedPostCard({
       </div>
     </div>
   );
-}
+});
 
 // ── Main component ───────────────────────────────────────────────────────────
 
@@ -210,17 +254,26 @@ export default function FeedContent() {
   const { getToken } = useAuth();
   const [posts, setPosts] = useState<PostRes[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const getTokenRef = useRef(getToken);
+  getTokenRef.current = getToken;
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const token = await getToken();
-        const res = await fetch(`${API_URL}/posts/feed`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const token = await getTokenRef.current();
+        const res = await fetch(
+          `${API_URL}/posts/feed?page=0&size=${PAGE_SIZE}`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
         if (res.ok && !cancelled) {
-          setPosts(await res.json());
+          const data: PostRes[] = await res.json();
+          setPosts(data);
+          setHasMore(data.length === PAGE_SIZE);
+          setPage(1);
         }
       } catch (err) {
         console.error("Failed to fetch feed:", err);
@@ -231,12 +284,34 @@ export default function FeedContent() {
     return () => {
       cancelled = true;
     };
-  }, [getToken]);
+  }, []);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const token = await getTokenRef.current();
+      const res = await fetch(
+        `${API_URL}/posts/feed?page=${page}&size=${PAGE_SIZE}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (res.ok) {
+        const data: PostRes[] = await res.json();
+        setPosts((prev) => [...prev, ...data]);
+        setHasMore(data.length === PAGE_SIZE);
+        setPage((p) => p + 1);
+      }
+    } catch (err) {
+      console.error("Failed to load more:", err);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [page, hasMore, loadingMore]);
 
   const handleReact = useCallback(
     async (postId: string, type: "like" | "dislike") => {
       try {
-        const token = await getToken();
+        const token = await getTokenRef.current();
         const res = await fetch(`${API_URL}/posts/${postId}/react`, {
           method: "POST",
           headers: {
@@ -255,7 +330,7 @@ export default function FeedContent() {
         console.error("React error:", err);
       }
     },
-    [getToken],
+    [],
   );
 
   return (
@@ -290,6 +365,18 @@ export default function FeedContent() {
           {posts.map((post) => (
             <FeedPostCard key={post.id} post={post} onReact={handleReact} />
           ))}
+
+          {hasMore && (
+            <div className="flex justify-center pt-2">
+              <button
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="px-6 py-2 rounded-full text-sm font-semibold text-primary border border-primary/30 hover:bg-primary/10 transition-colors disabled:opacity-50"
+              >
+                {loadingMore ? "Loading…" : "Load more"}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </section>

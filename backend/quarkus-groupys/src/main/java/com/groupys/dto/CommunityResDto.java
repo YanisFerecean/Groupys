@@ -10,6 +10,7 @@ public record CommunityResDto(
         String description,
         String genre,
         String country,
+        String countryCode,
         String imageUrl,
         String bannerUrl,
         String iconType,
@@ -19,6 +20,10 @@ public record CommunityResDto(
         Long artistId,
         int memberCount,
         UUID createdById,
-        Instant createdAt
+        Instant createdAt,
+        String visibility,
+        boolean discoveryEnabled,
+        Instant lastProfileRefreshAt,
+        String tasteSummaryText
 ) {
 }

@@ -7,7 +7,11 @@ import java.util.UUID;
 @Entity
 @Table(
     name = "conversation_participants",
-    uniqueConstraints = @UniqueConstraint(columnNames = {"conversation_id", "user_id"})
+    uniqueConstraints = @UniqueConstraint(columnNames = {"conversation_id", "user_id"}),
+    indexes = {
+        @Index(name = "idx_cp_user_id", columnList = "user_id"),
+        @Index(name = "idx_cp_conversation_id", columnList = "conversation_id")
+    }
 )
 public class ConversationParticipant {
 
@@ -29,9 +33,13 @@ public class ConversationParticipant {
     @Column(name = "last_read_at")
     public Instant lastReadAt;
 
+    @Column(name = "unread_count", nullable = false)
+    public int unreadCount;
+
     @PrePersist
     void onCreate() {
         joinedAt = Instant.now();
         lastReadAt = Instant.now();
+        unreadCount = 0;
     }
 }

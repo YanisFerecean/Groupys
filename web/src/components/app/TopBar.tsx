@@ -1,8 +1,10 @@
 "use client";
 
 import { UserButton } from "@clerk/nextjs";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { History, MessageCircle } from "lucide-react";
 import DmButton from "./DmButton";
+import FriendsSheet from "@/components/friends/FriendsSheet";
 
 interface TopBarProps {
   onMenuClick?: () => void;
@@ -12,8 +14,10 @@ interface TopBarProps {
 
 export default function TopBar({ onMenuClick, onSearchClick, onSettingsClick }: TopBarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const isProfile = pathname === "/profile" || pathname.startsWith("/profile/");
   const isFeed = pathname === "/feed" || pathname.startsWith("/feed/");
+  const isMutuals = pathname === "/match" || pathname.startsWith("/match/");
 
   return (
     <header className="fixed top-0 right-0 left-0 lg:left-64 h-16 lg:h-20 z-40 bg-surface/80 backdrop-blur-xl border-b border-surface-container">
@@ -50,6 +54,25 @@ export default function TopBar({ onMenuClick, onSearchClick, onSettingsClick }: 
             </button>
           )}
           {isFeed && <DmButton />}
+          {isMutuals && (
+            <>
+              <button
+                onClick={() => router.push("/match/history")}
+                className="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container hover:bg-surface-container-high transition-colors"
+                aria-label="Match history"
+              >
+                <History className="w-5 h-5 text-primary" />
+              </button>
+              <button
+                onClick={() => router.push("/chat")}
+                className="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container hover:bg-surface-container-high transition-colors"
+                aria-label="Messages"
+              >
+                <MessageCircle className="w-5 h-5 text-primary" />
+              </button>
+            </>
+          )}
+          {isProfile && <FriendsSheet />}
           <UserButton />
         </div>
       </div>

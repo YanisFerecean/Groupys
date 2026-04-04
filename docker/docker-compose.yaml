@@ -1,7 +1,7 @@
 name: groupys
 services:
   groupys-db:
-    image: postgres:18-alpine
+    image: pgvector/pgvector:pg18
     container_name: groupys-db
     restart: always
     environment:
@@ -11,7 +11,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - groupys_data:/var/lib/postgresql/data
+      - groupys_data_pg18:/var/lib/postgresql
 
   groupys-minio:
     image: quay.io/minio/minio
@@ -30,5 +30,13 @@ services:
       - ./minio/config:/root/.minio
     command: server /data --console-address ":9001"
 
+  groupys-redis:
+    image: redis:7-alpine
+    container_name: groupys-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+
 volumes:
-  groupys_data:
+  groupys_data_pg18:

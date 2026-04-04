@@ -53,11 +53,12 @@ const desktopPositions = [
 const initialStack = [0, 1, 2, 3];
 
 export default function CommunitiesPreview() {
-  const [stackOrder, setStackOrder] = useState(initialStack);
-  const [pullingCard, setPullingCard] = useState<number | null>(null);
-
-  const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches;
+  const [isMobile] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches);
   const positions = isMobile ? mobilePositions : desktopPositions;
+
+  const [stackOrder, setStackOrder] = useState(initialStack);
+  const [prevStackOrder, setPrevStackOrder] = useState(initialStack);
+  const [pullingCard, setPullingCard] = useState<number | null>(null);
 
   function handleClick(e: React.MouseEvent, cardIndex: number) {
     e.stopPropagation();
@@ -67,9 +68,11 @@ export default function CommunitiesPreview() {
 
     setPullingCard(cardIndex);
     setTimeout(() => {
-      setStackOrder((prev) => [...prev.filter((c) => c !== cardIndex), cardIndex]);
+      const next = [...stackOrder.filter((c) => c !== cardIndex), cardIndex];
+      setPrevStackOrder(stackOrder);
+      setStackOrder(next);
       setPullingCard(null);
-    }, 350);
+    }, 250);
   }
 
   const activeCard = stackOrder[stackOrder.length - 1];
@@ -80,6 +83,7 @@ export default function CommunitiesPreview() {
       {communities.map((c, i) => {
         const pos = stackOrder.indexOf(i);
         const isPulling = pullingCard === i;
+        const posChanged = prevStackOrder.indexOf(i) !== pos;
 
         return (
           <motion.div
@@ -93,13 +97,14 @@ export default function CommunitiesPreview() {
             }
             transition={
               isPulling
-                ? { duration: 0.35, ease: "easeOut" }
-                : { duration: 0.45, ease: [0.25, 0.46, 0.45, 0.94] }
+                ? { duration: 0.25, ease: "easeOut" }
+                : { duration: posChanged ? 0.3 : 0, delay: posChanged ? pos * 0.04 : 0, ease: [0.25, 0.46, 0.45, 0.94] }
             }
             style={{
               zIndex: pos,
               transformOrigin: "bottom center",
               pointerEvents: pullingCard !== null ? "none" : "auto",
+              willChange: "transform",
             }}
           >
             <Image
@@ -107,9 +112,10 @@ export default function CommunitiesPreview() {
               src={c.image}
               fill
               className="object-cover"
-              sizes="(max-width: 639px) 400px, 900px"
-              quality={75}
-              priority={pos === communities.length - 1}
+              sizes="(max-width: 639px) 200px, 300px"
+              quality={70}
+              priority
+              fetchPriority={"high"}
             />
             <div
               className="absolute inset-0"
@@ -120,7 +126,7 @@ export default function CommunitiesPreview() {
                 {c.tags.map((tag) => (
                   <span
                     key={tag}
-                    className="bg-white/20 backdrop-blur-sm text-white px-1.5 py-0.5 sm:px-2.5 rounded-full text-[8px] sm:text-[10px] font-bold tracking-widest uppercase"
+                    className="bg-white/25 text-white px-1.5 py-0.5 sm:px-2.5 rounded-full text-[8px] sm:text-[10px] font-bold tracking-widest uppercase"
                   >
                     {tag}
                   </span>
@@ -150,6 +156,7 @@ export default function CommunitiesPreview() {
         <button
           key={i}
           onClick={(e) => handleClick(e, i)}
+          aria-label={`View ${communities[i].name}`}
           className={`rounded-full transition-all duration-300 ${
             activeCard === i
               ? "w-4 h-2 bg-foreground"

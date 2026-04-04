@@ -1,27 +1,10 @@
 import type { ProfileCustomization } from '@/models/ProfileCustomization'
+import { apiRequest } from '@/lib/apiRequest'
 
 export const API_URL = process.env.EXPO_PUBLIC_API_URL!
 
 export async function apiFetch<T>(path: string, token: string | null, cache = true): Promise<T> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  }
-
-  if (!cache) {
-    headers['Cache-Control'] = 'no-cache, no-store'
-    headers['Pragma'] = 'no-cache'
-  }
-
-  const res = await fetch(`${API_URL}${path}`, {
-    headers,
-  })
-
-  if (!res.ok) {
-    throw new Error(`API error ${res.status}: ${res.statusText}`)
-  }
-
-  return res.json() as Promise<T>
+  return apiRequest<T>(path, { token, cache })
 }
 
 // ── Backend User types ──────────────────────────────────────────────────────
@@ -34,6 +17,7 @@ interface BackendWidget {
 }
 
 type UnknownRecord = Record<string, unknown>
+const DEFAULT_WIDGET_ORDER = ['topAlbums', 'currentlyListening', 'topSongs', 'topArtists']
 
 export interface BackendUser {
   id: string
@@ -43,6 +27,7 @@ export interface BackendUser {
   bio: string | null
   country: string | null
   bannerUrl: string | null
+  bannerText: string | null
   accentColor: string | null
   nameColor: string | null
   profileImage: string | null
@@ -50,6 +35,29 @@ export interface BackendUser {
   dateJoined: string
   tags?: string[]
   spotifyConnected?: boolean
+  isVerified?: boolean
+  website?: string | null
+  jobTitle?: string | null
+  location?: string | null
+  followerCount?: number
+  followingCount?: number
+}
+
+export interface SpotifyTrackRes {
+  title: string
+  artist: string
+  coverUrl?: string | null
+}
+
+export interface SpotifyArtistRes {
+  name: string
+  imageUrl?: string | null
+}
+
+export interface SpotifyAlbumRes {
+  title: string
+  artist: string
+  coverUrl?: string | null
 }
 
 // ── Widget conversion ───────────────────────────────────────────────────────
@@ -156,6 +164,7 @@ function normalizeTrackItem(item: UnknownRecord) {
 
 function normalizeAlbumItem(item: UnknownRecord) {
   return {
+    id: typeof item.id === 'number' ? item.id : undefined,
     title: firstString(item.title, item.name) ?? '',
     artist: pickArtistName(item.artist) ?? '',
     coverUrl: firstString(
@@ -190,36 +199,62 @@ function normalizeArtistItem(item: UnknownRecord) {
 }
 
 function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCustomization> {
-  const result: Partial<ProfileCustomization> = {}
+  const sorted = [...widgets].sort((a, b) => a.pos - b.pos)
+  const result: Partial<ProfileCustomization> = {
+    widgetOrder: sorted.map(w => w.type),
+  }
 
-  for (const w of widgets) {
+  for (const w of sorted) {
     const data = parseRecord(w.data)
     const items = Array.isArray(data.items) ? data.items : []
+    const isHidden = data.hidden === true
+    const size = data.size === 'small' || data.size === 'normal' ? data.size : undefined
 
     switch (w.type) {
       case 'topSongs':
+        result.syncTopSongsWithSpotify = data.syncWithSpotify === true || data.synced === true
         result.topSongs = items
           .map((i) => asRecord(i))
           .filter((i): i is UnknownRecord => i !== null)
           .map(normalizeTrackItem)
           .filter((i) => i.title || i.artist)
         result.songsContainerColor = w.color ?? undefined
+        if (size) {
+          result.widgetSizes = { ...(result.widgetSizes ?? {}), topSongs: size }
+        }
+        if (isHidden) {
+          result.hiddenWidgets = [...(result.hiddenWidgets ?? []), 'topSongs']
+        }
         break
       case 'topArtists':
+        result.syncTopArtistsWithSpotify = data.syncWithSpotify === true || data.synced === true
         result.topArtists = items
           .map((i) => asRecord(i))
           .filter((i): i is UnknownRecord => i !== null)
           .map(normalizeArtistItem)
           .filter((i) => i.name)
         result.artistsContainerColor = w.color ?? undefined
+        if (size) {
+          result.widgetSizes = { ...(result.widgetSizes ?? {}), topArtists: size }
+        }
+        if (isHidden) {
+          result.hiddenWidgets = [...(result.hiddenWidgets ?? []), 'topArtists']
+        }
         break
       case 'topAlbums':
+        result.syncTopAlbumsWithSpotify = data.syncWithSpotify === true || data.synced === true
         result.topAlbums = items
           .map((i) => asRecord(i))
           .filter((i): i is UnknownRecord => i !== null)
           .map(normalizeAlbumItem)
           .filter((i) => i.title || i.artist)
         result.albumsContainerColor = w.color ?? undefined
+        if (size) {
+          result.widgetSizes = { ...(result.widgetSizes ?? {}), topAlbums: size }
+        }
+        if (isHidden) {
+          result.hiddenWidgets = [...(result.hiddenWidgets ?? []), 'topAlbums']
+        }
         break
       case 'currentlyListening': {
         const d = asRecord(data) ?? {}
@@ -231,6 +266,9 @@ function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCustomizatio
             coverUrl: track.coverUrl,
           }
         }
+        if (isHidden) {
+          result.hiddenWidgets = [...(result.hiddenWidgets ?? []), 'currentlyListening']
+        }
         break
       }
     }
@@ -240,43 +278,76 @@ function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCustomizatio
 }
 
 function profileToWidgets(profile: Partial<ProfileCustomization>): BackendWidget[] {
-  const widgets: BackendWidget[] = []
-  let pos = 0
+  type WidgetData = Omit<BackendWidget, 'pos'>
+  const hidden = profile.hiddenWidgets ?? []
+  const widgetMap: Partial<Record<string, WidgetData>> = {}
 
-  if (profile.topAlbums?.length) {
-    widgets.push({
+  if (profile.topAlbums?.length || profile.syncTopAlbumsWithSpotify) {
+    widgetMap.topAlbums = {
       type: 'topAlbums',
       color: profile.albumsContainerColor ?? null,
-      pos: pos++,
-      data: { items: profile.topAlbums },
-    })
+      data: {
+        items: profile.topAlbums ?? [],
+        syncWithSpotify: profile.syncTopAlbumsWithSpotify === true,
+        size: profile.widgetSizes?.topAlbums ?? 'normal',
+        hidden: hidden.includes('topAlbums'),
+      },
+    }
   }
 
   if (profile.currentlyListening?.title) {
-    widgets.push({
+    widgetMap.currentlyListening = {
       type: 'currentlyListening',
       color: null,
-      pos: pos++,
-      data: { ...profile.currentlyListening },
-    })
+      data: {
+        ...profile.currentlyListening,
+        hidden: hidden.includes('currentlyListening'),
+      },
+    }
   }
 
-  if (profile.topSongs?.length) {
-    widgets.push({
+  if (profile.topSongs?.length || profile.syncTopSongsWithSpotify) {
+    widgetMap.topSongs = {
       type: 'topSongs',
       color: profile.songsContainerColor ?? null,
-      pos: pos++,
-      data: { items: profile.topSongs },
-    })
+      data: {
+        items: profile.topSongs ?? [],
+        syncWithSpotify: profile.syncTopSongsWithSpotify === true,
+        size: profile.widgetSizes?.topSongs ?? 'normal',
+        hidden: hidden.includes('topSongs'),
+      },
+    }
   }
 
-  if (profile.topArtists?.length) {
-    widgets.push({
+  if (profile.topArtists?.length || profile.syncTopArtistsWithSpotify) {
+    widgetMap.topArtists = {
       type: 'topArtists',
       color: profile.artistsContainerColor ?? null,
-      pos: pos++,
-      data: { items: profile.topArtists },
-    })
+      data: {
+        items: profile.topArtists ?? [],
+        syncWithSpotify: profile.syncTopArtistsWithSpotify === true,
+        size: profile.widgetSizes?.topArtists ?? 'normal',
+        hidden: hidden.includes('topArtists'),
+      },
+    }
+  }
+
+  const order = profile.widgetOrder ?? DEFAULT_WIDGET_ORDER
+  const widgets: BackendWidget[] = []
+  let pos = 0
+
+  for (const type of order) {
+    const widget = widgetMap[type]
+    if (widget) {
+      widgets.push({ ...widget, pos: pos++ })
+      delete widgetMap[type]
+    }
+  }
+
+  for (const widget of Object.values(widgetMap)) {
+    if (widget) {
+      widgets.push({ ...widget, pos: pos++ })
+    }
   }
 
   return widgets
@@ -291,8 +362,15 @@ export function backendUserToProfile(user: BackendUser): ProfileCustomization {
     tags: user.tags || [],
     spotifyConnected: user.spotifyConnected ?? false,
     bannerUrl: user.bannerUrl ?? undefined,
+    bannerText: user.bannerText ?? undefined,
     accentColor: user.accentColor ?? undefined,
     nameColor: user.nameColor ?? undefined,
+    isVerified: user.isVerified ?? false,
+    website: user.website ?? undefined,
+    jobTitle: user.jobTitle ?? undefined,
+    location: user.location ?? undefined,
+    followersCount: user.followerCount ?? 0,
+    followingCount: user.followingCount ?? 0,
     ...widgetsToProfile(parseWidgets(user.widgets)),
   }
 }
@@ -310,18 +388,27 @@ function authHeader(token: string | null): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
+async function readApiErrorDetail(res: Response): Promise<string> {
+  try {
+    const payload = await res.json()
+    return (
+      (typeof payload?.message === 'string' && payload.message) ||
+      (typeof payload?.error === 'string' && payload.error) ||
+      (typeof payload?.detail === 'string' && payload.detail) ||
+      (typeof payload?.title === 'string' && payload.title) ||
+      ''
+    )
+  } catch {
+    return ''
+  }
+}
+
 export async function apiPost<T>(
   path: string,
   token: string | null,
   body: unknown,
 ): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    method: 'POST',
-    headers: makeHeaders(token),
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) throw new Error(`API error ${res.status}: ${res.statusText}`)
-  return res.json() as Promise<T>
+  return apiRequest<T>(path, { method: 'POST', token, body })
 }
 
 export async function apiPut<T>(
@@ -329,24 +416,14 @@ export async function apiPut<T>(
   token: string | null,
   body: unknown,
 ): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    method: 'PUT',
-    headers: makeHeaders(token),
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) throw new Error(`API error ${res.status}: ${res.statusText}`)
-  return res.json() as Promise<T>
+  return apiRequest<T>(path, { method: 'PUT', token, body })
 }
 
 export async function apiDelete(
   path: string,
   token: string | null,
 ): Promise<void> {
-  const res = await fetch(`${API_URL}${path}`, {
-    method: 'DELETE',
-    headers: makeHeaders(token),
-  })
-  if (!res.ok) throw new Error(`API error ${res.status}: ${res.statusText}`)
+  return apiRequest<void>(path, { method: 'DELETE', token })
 }
 
 export async function apiPostMultipart<T>(
@@ -359,7 +436,17 @@ export async function apiPostMultipart<T>(
     headers: authHeader(token),
     body: formData,
   })
-  if (!res.ok) throw new Error(`API error ${res.status}: ${res.statusText}`)
+  if (!res.ok) {
+    let message = res.statusText
+    try {
+      const data = await res.json()
+      if (typeof data?.message === 'string') message = data.message
+      else if (typeof data?.error === 'string') message = data.error
+      else if (typeof data?.detail === 'string') message = data.detail
+      else if (typeof data?.title === 'string') message = data.title
+    } catch { /* use statusText */ }
+    throw new Error(`API error ${res.status}: ${message}`)
+  }
   return res.json() as Promise<T>
 }
 
@@ -393,6 +480,13 @@ export async function fetchMyPosts(token: string): Promise<any[]> {
   return apiFetch('/posts/mine', token)
 }
 
+export async function fetchPostsByAuthor(
+  userId: string,
+  token: string | null,
+): Promise<any[]> {
+  return apiFetch(`/posts/author/${encodeURIComponent(userId)}`, token, false)
+}
+
 export async function uploadCommunityMedia(
   token: string,
   uri: string,
@@ -411,6 +505,8 @@ export async function uploadCommunityMedia(
   return res.url
 }
 
+export { normalizeMediaUrl } from '@/lib/media'
+
 export function mediaUrl(key: string): string {
   return `${API_URL}/posts/media/${key}`
 }
@@ -425,6 +521,32 @@ export async function fetchUserByClerkId(
   )
   if (res.status === 404) return null
   if (!res.ok) throw new Error(`Failed to fetch user (${res.status})`)
+  return res.json()
+}
+
+export async function fetchUserById(
+  userId: string,
+  token: string | null,
+): Promise<BackendUser | null> {
+  const res = await fetch(
+    `${API_URL}/users/${encodeURIComponent(userId)}`,
+    { headers: makeHeaders(token) },
+  )
+  if (res.status === 404) return null
+  if (!res.ok) throw new Error(`Failed to fetch user (${res.status})`)
+  return res.json()
+}
+
+export async function fetchUserByUsername(
+  username: string,
+  token: string | null,
+): Promise<BackendUser | null> {
+  const res = await fetch(
+    `${API_URL}/users/username/${encodeURIComponent(username)}`,
+    { headers: makeHeaders(token) },
+  )
+  if (res.status === 404) return null
+  if (!res.ok) throw new Error(`Failed to fetch user by username (${res.status})`)
   return res.json()
 }
 
@@ -447,9 +569,69 @@ export async function createBackendUser(
   if (res.status === 409) {
     const existing = await fetchUserByClerkId(data.clerkId, token)
     if (existing) return existing
+
+    // If Clerk user was deleted/recreated, backend may still hold the previous
+    // username under a different clerkId.
+    const conflicting = await fetchUserByUsername(data.username, token)
+    if (conflicting && conflicting.clerkId !== data.clerkId) {
+      throw new Error('Failed to create user (409): Username is already taken in Groupys')
+    }
   }
 
-  if (!res.ok) throw new Error(`Failed to create user (${res.status})`)
+  if (!res.ok) {
+    const detail = await readApiErrorDetail(res)
+    throw new Error(`Failed to create user (${res.status})${detail ? `: ${detail}` : ''}`)
+  }
+  return res.json()
+}
+
+export async function upsertBackendUserIdentity(
+  data: {
+    clerkId: string
+    username: string
+    displayName: string
+    profileImage?: string
+  },
+  token: string | null,
+): Promise<BackendUser> {
+  const existing = await fetchUserByClerkId(data.clerkId, token)
+
+  if (!existing) {
+    return createBackendUser(
+      {
+        clerkId: data.clerkId,
+        username: data.username,
+        displayName: data.displayName,
+        profileImage: data.profileImage,
+      },
+      token,
+    )
+  }
+
+  const res = await fetch(`${API_URL}/users/${encodeURIComponent(existing.id)}`, {
+    method: 'PUT',
+    headers: makeHeaders(token),
+    body: JSON.stringify({
+      displayName: data.displayName,
+      bio: existing.bio ?? null,
+      country: existing.country ?? null,
+      bannerUrl: existing.bannerUrl ?? null,
+      bannerText: existing.bannerText ?? null,
+      accentColor: existing.accentColor ?? null,
+      nameColor: existing.nameColor ?? null,
+      profileImage: data.profileImage ?? existing.profileImage ?? null,
+      website: existing.website ?? null,
+      jobTitle: existing.jobTitle ?? null,
+      location: existing.location ?? null,
+      widgets: existing.widgets ?? null,
+      tags: existing.tags ?? null,
+    }),
+  })
+
+  if (!res.ok) {
+    const detail = await readApiErrorDetail(res)
+    throw new Error(`Failed to update user identity (${res.status})${detail ? `: ${detail}` : ''}`)
+  }
   return res.json()
 }
 
@@ -489,8 +671,12 @@ export async function updateBackendUser(
     country: data.country ?? null,
     tags: data.tags ?? null,
     bannerUrl: data.bannerUrl ?? null,
+    bannerText: data.bannerText ?? null,
     accentColor: data.accentColor ?? null,
     nameColor: data.nameColor ?? null,
+    website: data.website ?? null,
+    jobTitle: data.jobTitle ?? null,
+    location: data.location ?? null,
     widgets: widgets.length ? JSON.stringify(widgets) : null,
   }
 
@@ -502,4 +688,212 @@ export async function updateBackendUser(
 
   if (!res.ok) throw new Error(`Failed to update user (${res.status})`)
   return res.json()
+}
+
+// ── Discovery Helpers ───────────────────────────────────────────────────────
+
+import type { SuggestedCommunity } from '@/models/SuggestedCommunity'
+import type { SuggestedUser } from '@/models/SuggestedUser'
+import type { CommunityResDto } from '@/models/CommunityRes'
+
+export async function searchCommunities(query: string, token: string | null): Promise<CommunityResDto[]> {
+  return apiFetch<CommunityResDto[]>(
+    `/communities/search?q=${encodeURIComponent(query)}`,
+    token,
+    false,
+  )
+}
+
+export async function fetchSuggestedCommunities(
+  token: string | null,
+  limit: number = 20,
+  refresh: boolean = false,
+): Promise<SuggestedCommunity[]> {
+  return apiFetch<SuggestedCommunity[]>(
+    `/discovery/communities/suggested?limit=${limit}&refresh=${refresh}`,
+    token,
+    !refresh,
+  )
+}
+
+export async function fetchSuggestedUsers(
+  token: string | null,
+  limit: number = 20,
+  refresh: boolean = false,
+): Promise<SuggestedUser[]> {
+  return apiFetch<SuggestedUser[]>(
+    `/discovery/users/suggested?limit=${limit}&refresh=${refresh}`,
+    token,
+    !refresh,
+  )
+}
+
+export async function dismissRecommendation(
+  targetType: 'community' | 'user',
+  targetId: string,
+  token: string | null,
+): Promise<void> {
+  await apiPost(`/discovery/recommendations/${targetType}/${encodeURIComponent(targetId)}/dismiss`, token, {
+    actionType: 'DISMISS',
+    surface: 'PEOPLE',
+  })
+}
+
+export async function syncSpotifyMusic(
+  token: string | null,
+): Promise<void> {
+  await apiPost('/discovery/music/sync', token, {})
+}
+
+export async function fetchSpotifyTopTracks(
+  token: string | null,
+): Promise<SpotifyTrackRes[]> {
+  return apiFetch<SpotifyTrackRes[]>('/spotify/top-tracks', token, false)
+}
+
+export async function fetchSpotifyTopTracksByUserId(
+  userId: string,
+  token: string | null,
+): Promise<SpotifyTrackRes[]> {
+  return apiFetch<SpotifyTrackRes[]>(
+    `/spotify/users/${encodeURIComponent(userId)}/top-tracks`,
+    token,
+    false,
+  )
+}
+
+export async function fetchSpotifyTopArtists(
+  token: string | null,
+): Promise<SpotifyArtistRes[]> {
+  return apiFetch<SpotifyArtistRes[]>('/spotify/top-artists', token, false)
+}
+
+export async function fetchSpotifyTopArtistsByUserId(
+  userId: string,
+  token: string | null,
+): Promise<SpotifyArtistRes[]> {
+  return apiFetch<SpotifyArtistRes[]>(
+    `/spotify/users/${encodeURIComponent(userId)}/top-artists`,
+    token,
+    false,
+  )
+}
+
+export async function fetchSpotifyTopAlbums(
+  token: string | null,
+): Promise<SpotifyAlbumRes[]> {
+  return apiFetch<SpotifyAlbumRes[]>('/spotify/saved-albums', token, false)
+}
+
+export async function fetchSpotifyTopAlbumsByUserId(
+  userId: string,
+  token: string | null,
+): Promise<SpotifyAlbumRes[]> {
+  return apiFetch<SpotifyAlbumRes[]>(
+    `/spotify/users/${encodeURIComponent(userId)}/saved-albums`,
+    token,
+    false,
+  )
+}
+
+export async function fetchSpotifyCurrentlyPlaying(
+  token: string | null,
+): Promise<SpotifyTrackRes | null> {
+  const res = await fetch(`${API_URL}/spotify/currently-playing`, {
+    headers: makeHeaders(token),
+  })
+  if (res.status === 204 || res.status === 404) return null
+  if (!res.ok) throw new Error(`Failed to fetch currently playing (${res.status})`)
+  return res.json()
+}
+
+export async function fetchSpotifyCurrentlyPlayingByUserId(
+  userId: string,
+  token: string | null,
+): Promise<SpotifyTrackRes | null> {
+  const res = await fetch(`${API_URL}/spotify/users/${encodeURIComponent(userId)}/currently-playing`, {
+    headers: makeHeaders(token),
+  })
+  if (res.status === 204 || res.status === 404) return null
+  if (!res.ok) throw new Error(`Failed to fetch currently playing (${res.status})`)
+  return res.json()
+}
+
+export async function followUser(
+  userId: string,
+  token: string | null,
+): Promise<void> {
+  await apiPost(`/users/${encodeURIComponent(userId)}/follow`, token, {})
+}
+
+export async function likeUser(
+  userId: string,
+  token: string | null,
+): Promise<import('@/models/Match').LikeResponse> {
+  return apiPost<import('@/models/Match').LikeResponse>(
+    `/discovery/users/${encodeURIComponent(userId)}/like`,
+    token,
+    {},
+  )
+}
+
+export async function passUser(
+  userId: string,
+  token: string | null,
+): Promise<void> {
+  await apiPost(`/discovery/users/${encodeURIComponent(userId)}/pass`, token, {})
+}
+
+// ── Album Ratings ───────────────────────────────────────────────────────────
+
+export interface AlbumRatingRes {
+  id: string
+  albumId: number
+  albumTitle: string
+  albumCoverUrl: string | null
+  artistName: string | null
+  userId: string
+  username: string
+  displayName: string | null
+  profileImage: string | null
+  score: number
+  review: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AlbumRatingCreate {
+  albumId: number
+  albumTitle: string
+  albumCoverUrl: string | null
+  artistName: string | null
+  score: number
+  review: string | null
+}
+
+export async function fetchAlbumRatings(
+  albumId: number,
+  token: string | null,
+): Promise<AlbumRatingRes[]> {
+  return apiFetch<AlbumRatingRes[]>(`/album-ratings/album/${albumId}`, token, false)
+}
+
+export async function upsertAlbumRating(
+  body: AlbumRatingCreate,
+  token: string | null,
+): Promise<AlbumRatingRes> {
+  return apiPost<AlbumRatingRes>('/album-ratings', token, body)
+}
+
+export async function fetchMyAlbumRatings(
+  token: string | null,
+): Promise<AlbumRatingRes[]> {
+  return apiFetch<AlbumRatingRes[]>('/album-ratings/mine', token, false)
+}
+
+export async function deleteAlbumRating(
+  ratingId: string,
+  token: string | null,
+): Promise<void> {
+  return apiDelete(`/album-ratings/${encodeURIComponent(ratingId)}`, token)
 }

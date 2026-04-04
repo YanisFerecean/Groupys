@@ -8,8 +8,10 @@ import com.groupys.repository.UserRepository;
 import com.groupys.service.ChatService;
 import com.groupys.service.PresenceService;
 import io.quarkus.arc.Arc;
+import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.websockets.next.*;
 import jakarta.enterprise.context.control.ActivateRequestContext;
+import jakarta.enterprise.event.Observes;
 import io.smallrye.common.annotation.Blocking;
 import io.smallrye.jwt.auth.principal.JWTParser;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -55,6 +57,11 @@ public class ChatWebSocket {
     JWTParser jwtParser;
 
     private final ObjectMapper mapper = new ObjectMapper();
+    private volatile boolean shuttingDown;
+
+    void onShutdown(@Observes ShutdownEvent event) {
+        shuttingDown = true;
+    }
 
     // -- Lifecycle -------------------------------------------------------------
 
@@ -121,16 +128,24 @@ public class ChatWebSocket {
         presenceService.remove(clerkId, connection); // conditional: won't wipe a newer connection
         LOG.infof("WS closed for clerkId=%s", clerkId);
 
+        if (shuttingDown) {
+            return;
+        }
+
         // Only update lastSeen and broadcast offline if no other tab is still connected
         if (!presenceService.isOnline(clerkId)) {
-            userRepository.findByClerkId(clerkId).ifPresent(user -> {
-                try {
-                    Arc.container().instance(ChatWebSocket.class).get().updateLastSeen(user.id);
-                    broadcastPresence(user, false);
-                } catch (Exception e) {
-                    LOG.warnf("Failed to update lastSeenAt for %s: %s", clerkId, e.getMessage());
-                }
-            });
+            try {
+                userRepository.findByClerkId(clerkId).ifPresent(user -> {
+                    try {
+                        Arc.container().instance(ChatWebSocket.class).get().updateLastSeen(user.id);
+                        broadcastPresence(user, false);
+                    } catch (Exception e) {
+                        LOG.warnf("Failed to update lastSeenAt for %s: %s", clerkId, e.getMessage());
+                    }
+                });
+            } catch (Exception e) {
+                LOG.debugf("Skipping offline cleanup for %s: %s", clerkId, e.getMessage());
+            }
         }
     }
 
@@ -138,6 +153,10 @@ public class ChatWebSocket {
     @Blocking
     @ActivateRequestContext
     public void onError(WebSocketConnection connection, Throwable error) {
+        if (shuttingDown) {
+            LOG.debugf("Ignoring WS error on session %s during shutdown: %s", connection.id(), error.getMessage());
+            return;
+        }
         LOG.errorf(error, "WS error on session %s", connection.id());
         onClose(connection);
     }
@@ -231,15 +250,11 @@ public class ChatWebSocket {
         Map<String, Object> messageData = buildMessageData(saved, tempId);
         String json = toJson(WebSocketMessage.messageNew(messageData));
 
-        List<UUID> participantIds = chatService.getParticipantUserIds(conversationId);
-        for (UUID pid : participantIds) {
+        chatService.getParticipantClerkIds(conversationId).forEach((pid, participantClerkId) -> {
             if (!pid.equals(sender.id)) {
-                String participantClerkId = chatService.getClerkIdByUserId(pid);
-                if (participantClerkId != null) {
-                    presenceService.sendTo(participantClerkId, json);
-                }
+                presenceService.sendTo(participantClerkId, json);
             }
-        }
+        });
     }
 
     private void handleTyping(User user, Map<String, Object> msg, boolean isTyping) {
@@ -254,13 +269,9 @@ public class ChatWebSocket {
         String json = toJson(WebSocketMessage.typing(
                 conversationId, user.id.toString(), user.username, isTyping));
 
-        List<UUID> participantIds = chatService.getParticipantUserIds(conversationId);
-        for (UUID pid : participantIds) {
-            if (!pid.equals(user.id)) {
-                String clerkId = chatService.getClerkIdByUserId(pid);
-                if (clerkId != null) presenceService.sendTo(clerkId, json);
-            }
-        }
+        chatService.getParticipantClerkIds(conversationId).forEach((pid, clerkId) -> {
+            if (!pid.equals(user.id)) presenceService.sendTo(clerkId, json);
+        });
     }
 
     private void handleReadReceipt(User user, Map<String, Object> msg) {
@@ -279,13 +290,9 @@ public class ChatWebSocket {
         String readAt = Instant.now().toString();
         String json = toJson(WebSocketMessage.readReceipt(conversationId, user.id.toString(), readAt));
 
-        List<UUID> participantIds = chatService.getParticipantUserIds(conversationId);
-        for (UUID pid : participantIds) {
-            if (!pid.equals(user.id)) {
-                String clerkId = chatService.getClerkIdByUserId(pid);
-                if (clerkId != null) presenceService.sendTo(clerkId, json);
-            }
-        }
+        chatService.getParticipantClerkIds(conversationId).forEach((pid, clerkId) -> {
+            if (!pid.equals(user.id)) presenceService.sendTo(clerkId, json);
+        });
     }
 
     private void handleSync(WebSocketConnection connection, User user) {

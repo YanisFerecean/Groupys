@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { useAuth } from "@clerk/nextjs";
 import type { ProfileCustomization } from "@/types/profile";
 import { fetchSpotifyCurrentlyPlaying } from "@/lib/spotify";
+import { getContrastColor } from "@/lib/utils";
 import WidgetCard from "./WidgetCard";
 
 const POLL_INTERVAL = 30_000;
@@ -12,14 +13,20 @@ const POLL_INTERVAL = 30_000;
 interface CurrentlyListeningWidgetProps {
   track?: ProfileCustomization["currentlyListening"];
   spotifyConnected?: boolean;
+  containerColor?: string;
+  size?: "small" | "normal";
 }
 
 export default function CurrentlyListeningWidget({
   track: savedTrack,
   spotifyConnected,
+  containerColor,
+  size = "normal",
 }: CurrentlyListeningWidgetProps) {
   const { getToken } = useAuth();
   const [liveTrack, setLiveTrack] = useState(savedTrack);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     if (!spotifyConnected) return;
@@ -40,46 +47,135 @@ export default function CurrentlyListeningWidget({
     return () => clearInterval(id);
   }, [spotifyConnected, getToken, savedTrack]);
 
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
+
   const track = spotifyConnected ? liveTrack : savedTrack;
+  const textColor = containerColor ? getContrastColor(containerColor) : undefined;
+
+  const handleTrackClick = () => {
+    if (!track?.preview) return;
+
+    if (isPlaying) {
+      audioRef.current?.pause();
+      audioRef.current = null;
+      setIsPlaying(false);
+      return;
+    }
+
+    const audio = new Audio(track.preview);
+    audioRef.current = audio;
+
+    audio.addEventListener("ended", () => {
+      setIsPlaying(false);
+      audioRef.current = null;
+    });
+
+    audio.addEventListener("error", () => {
+      setIsPlaying(false);
+      audioRef.current = null;
+    });
+
+    audio.play().then(() => {
+      setIsPlaying(true);
+    }).catch(() => {
+      setIsPlaying(false);
+      audioRef.current = null;
+    });
+  };
 
   return (
-    <WidgetCard title="Currently Listening">
+    <WidgetCard
+      title="Currently Listening"
+      className="h-[260px] overflow-hidden"
+      style={containerColor ? { backgroundColor: containerColor } : undefined}
+      textColor={textColor}
+    >
       {track?.title ? (
-        <div className="flex items-center gap-4">
-          {track.coverUrl && (
-            <div className="w-14 h-14 shrink-0 rounded-lg overflow-hidden shadow">
-              <Image
-                alt={track.title}
-                className="w-full h-full object-cover"
-                src={track.coverUrl}
-                width={56}
-                height={56}
-              />
+        size === "small" ? (
+          <div
+            className={`flex flex-col gap-3 ${track.preview ? "cursor-pointer group" : ""}`}
+            onClick={handleTrackClick}
+          >
+            {track.coverUrl && (
+              <div className="relative w-full aspect-square rounded-xl overflow-hidden shadow-md">
+                <Image alt={track.title} fill className="object-cover" src={track.coverUrl} />
+                {/* Play/Pause overlay */}
+                {track.preview && (
+                  <div className={`absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity ${isPlaying ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
+                    <span className="material-symbols-outlined text-white text-4xl">
+                      {isPlaying ? "pause" : "play_arrow"}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="min-w-0">
+              <p className="font-bold text-sm truncate">{track.title}</p>
+              <p className="text-xs truncate" style={textColor ? { color: textColor, opacity: 0.6 } : { color: "var(--color-on-surface-variant)" }}>
+                {track.artist}
+              </p>
             </div>
-          )}
-          <div className="flex-1 min-w-0">
-            <p className="font-bold text-sm truncate">{track.title}</p>
-            <p className="text-xs text-on-surface-variant truncate">
-              {track.artist}
-            </p>
           </div>
-          {/* Animated equalizer bars */}
-          <div className="flex items-end gap-0.5 h-5">
-            {[1, 2, 3, 4].map((i) => (
-              <span
-                key={i}
-                className="w-1 rounded-full"
-                style={{
-                  backgroundColor: "var(--profile-accent, var(--color-primary))",
-                  animation: `equalize 0.8s ease-in-out ${i * 0.15}s infinite alternate`,
-                  height: `${8 + (i % 3) * 6}px`,
-                }}
-              />
-            ))}
+        ) : (
+          <div className="flex flex-col gap-3">
+            {track.coverUrl && (
+              <div
+                className={`relative w-full rounded-xl overflow-hidden shadow-lg ${track.preview ? "cursor-pointer group" : ""}`}
+                style={{ height: 140 }}
+                onClick={handleTrackClick}
+              >
+                <Image
+                  alt={track.title}
+                  fill
+                  className="object-cover"
+                  src={track.coverUrl}
+                />
+                {/* Play/Pause overlay */}
+                {track.preview && (
+                  <div className={`absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity ${isPlaying ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
+                    <span className="material-symbols-outlined text-white text-5xl">
+                      {isPlaying ? "pause" : "play_arrow"}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-base truncate">{track.title}</p>
+                <p className="text-sm truncate mt-0.5" style={textColor ? { color: textColor, opacity: 0.6 } : { color: "var(--color-on-surface-variant)" }}>
+                  {track.artist}
+                </p>
+              </div>
+              {/* Animated equalizer bars (only when actually playing from Spotify) */}
+              {spotifyConnected && (
+                <div className="flex items-end gap-0.5 h-5 shrink-0">
+                  {[1, 2, 3, 4].map((i) => (
+                    <span
+                      key={i}
+                      className="w-1 rounded-full"
+                      style={{
+                        backgroundColor: textColor ?? "var(--profile-accent, var(--color-primary))",
+                        animation: `equalize 0.8s ease-in-out ${i * 0.15}s infinite alternate`,
+                        height: `${8 + (i % 3) * 6}px`,
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )
       ) : (
-        <p className="text-sm text-on-surface-variant">
+        <p className="text-sm" style={textColor ? { color: textColor, opacity: 0.6 } : { color: "var(--color-on-surface-variant)" }}>
           Nothing playing right now.
         </p>
       )}

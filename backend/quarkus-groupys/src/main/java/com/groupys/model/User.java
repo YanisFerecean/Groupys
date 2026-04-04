@@ -1,6 +1,8 @@
 package com.groupys.model;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.BatchSize;
+import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -8,10 +10,14 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.UUID;
 
 @Entity
-@Table(name = "users")
+@BatchSize(size = 50)
+@Table(name = "users", indexes = {
+        @Index(name = "idx_users_country_code", columnList = "country_code"),
+        @Index(name = "idx_users_discovery_flags", columnList = "discovery_visible,recommendation_opt_out"),
+        @Index(name = "idx_users_last_music_sync_at", columnList = "last_music_sync_at")
+})
 public class User {
 
     @Id
@@ -27,12 +33,19 @@ public class User {
     @Column(name = "display_name")
     public String displayName;
 
+    @Column(columnDefinition = "TEXT")
     public String bio;
 
     public String country;
 
-    @Column(name = "banner_url")
+    @Column(name = "country_code", length = 2)
+    public String countryCode;
+
+    @Column(name = "banner_url", columnDefinition = "TEXT")
     public String bannerUrl;
+
+    @Column(name = "banner_text")
+    public String bannerText;
 
     @Column(name = "accent_color")
     public String accentColor;
@@ -40,7 +53,7 @@ public class User {
     @Column(name = "name_color")
     public String nameColor;
 
-    @Column(name = "profile_image")
+    @Column(name = "profile_image", columnDefinition = "TEXT")
     public String profileImage;
 
     @JdbcTypeCode(SqlTypes.JSON)
@@ -63,12 +76,39 @@ public class User {
     @Column(name = "public_key", columnDefinition = "TEXT")
     public String publicKey;
 
+    @Column(name = "last_music_sync_at")
+    public Instant lastMusicSyncAt;
+
+    @Column(name = "taste_summary_text", columnDefinition = "TEXT")
+    public String tasteSummaryText;
+
+    @Column(name = "recommendation_opt_out", nullable = false)
+    @ColumnDefault("false")
+    public boolean recommendationOptOut = false;
+
+    @Column(name = "discovery_visible", nullable = false)
+    @ColumnDefault("true")
+    public boolean discoveryVisible = true;
+
     @Column(name = "date_joined", nullable = false, updatable = false)
     public Instant dateJoined;
 
-    @ElementCollection(fetch = FetchType.EAGER)
-    @CollectionTable(name = "user_tags", joinColumns = @JoinColumn(name = "user_id"))
+    @Column(name = "is_verified", nullable = false)
+    @ColumnDefault("false")
+    public boolean isVerified = false;
+
+    public String website;
+
+    @Column(name = "job_title")
+    public String jobTitle;
+
+    public String location;
+
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(name = "user_tags", joinColumns = @JoinColumn(name = "user_id"),
+            indexes = @Index(name = "idx_user_tags_user_id", columnList = "user_id"))
     @Column(name = "tag")
+    @org.hibernate.annotations.BatchSize(size = 50)
     public List<String> tags = new ArrayList<>();
 
     @PrePersist

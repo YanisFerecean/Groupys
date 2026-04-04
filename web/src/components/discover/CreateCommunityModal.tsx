@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
@@ -32,6 +33,7 @@ export default function CreateCommunityModal({
   onCreated,
 }: CreateCommunityModalProps) {
   const { getToken } = useAuth();
+  const router = useRouter();
   const nameRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState(`${artistName} Fans`);
@@ -109,7 +111,9 @@ export default function CreateCommunityModal({
         throw new Error(text || "Failed to create community");
       }
 
+      const created = await res.json();
       onCreated();
+      router.push(`/discover/community/${created.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {

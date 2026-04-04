@@ -22,6 +22,7 @@ interface BackendAlbum {
 interface BackendTrack {
   id: number;
   title: string;
+  preview: string | null;
   artist: BackendArtist;
   album: BackendAlbum;
 }
@@ -84,6 +85,7 @@ function mapResults(type: string, data: unknown[]) {
         artist: t.artist.name,
         album: t.album.title,
         coverUrl: t.album.coverBig || t.album.coverMedium,
+        preview: t.preview,
       }));
     case "artist":
       return (data as BackendArtist[]).map((a) => ({

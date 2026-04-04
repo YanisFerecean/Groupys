@@ -7,7 +7,7 @@ import { Colors } from '@/constants/colors'
 interface VideoThumbnailProps {
   url: string
   width: number | string
-  height?: number
+  height?: number | string
 }
 
 export default function VideoThumbnail({ url, width, height = 200 }: VideoThumbnailProps) {
@@ -20,7 +20,7 @@ export default function VideoThumbnail({ url, width, height = 200 }: VideoThumbn
   }, [url])
 
   return (
-    <View style={{ width: width as any, height }} className="rounded-xl overflow-hidden bg-surface-container-high">
+    <View style={{ width: width, height } as any} className="rounded-xl overflow-hidden bg-surface-container-high">
       {thumbUri ? (
         <Image source={{ uri: thumbUri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
       ) : (

@@ -1,15 +1,6 @@
-import { API_URL } from '@/lib/api'
 import type { CommunityResDto } from '@/models/CommunityRes'
 import type { Community } from '@/models/Community'
-
-function toAbsoluteUrl(url: string | undefined): string | undefined {
-  if (!url) return undefined
-  if (url.startsWith('http')) return url
-  // URL is a relative path like /api/posts/media/{key}
-  // API_URL is http://host:port/api — strip the /api suffix to get the base host
-  const baseHost = API_URL.replace(/\/api\/?$/, '')
-  return `${baseHost}${url}`
-}
+import { toAbsoluteUrl } from '@/lib/media'
 
 const PALETTES = [
   { color: '#7c3aed', icon: 'disc' },

@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, Info, Lock } from "lucide-react";
+import Image from "next/image";
+import { ChevronLeft, Info, Lock, Check, X } from "lucide-react";
 import { useUser } from "@clerk/nextjs";
 import { useAuth } from "@clerk/nextjs";
 import { useMessages } from "@/hooks/useMessages";
+import { Message } from "@/types/chat";
 import { useConversations } from "@/hooks/useConversations";
 import { MessageThread } from "@/components/chat/MessageThread";
 import { MessageInput } from "@/components/chat/MessageInput";
@@ -26,7 +28,8 @@ export default function ConversationPage() {
   const conversationId = conversationIdValue ?? null;
 
   const { getToken } = useAuth();
-  const { conversations, markAsRead } = useConversations();
+  const { conversations, markAsRead, acceptRequest, denyRequest } = useConversations();
+  const [requestBusy, setRequestBusy] = useState(false);
   const { isOnline } = usePresence();
   const { ready: cryptoReady, makeEncrypt, makeDecrypt } = useCrypto();
 
@@ -56,7 +59,7 @@ export default function ConversationPage() {
     [cryptoReady, otherPublicKey, makeDecrypt]
   );
 
-  const { messages, isLoading, hasMore, loadMore, sendMessage, resendMessage } = useMessages(
+  const { messages, isLoading, hasMore, loadMore, sendMessage, resendMessage, rateLimitError, isDecrypting } = useMessages(
     conversationId,
     decryptFn,
     encryptFn
@@ -85,10 +88,34 @@ export default function ConversationPage() {
 
   // Set read status whenever we view it or when new msgs arrive
   useEffect(() => {
-    if (conversationId && conversation?.unreadCount) {
+    if (conversationId && conversation?.unreadCount && conversation.requestStatus === "ACCEPTED") {
       markAsRead(conversationId);
     }
-  }, [conversationId, messages.length, conversation?.unreadCount, markAsRead]);
+  }, [conversationId, messages.length, conversation?.unreadCount, conversation?.requestStatus, markAsRead]);
+
+  const handleAccept = useCallback(async () => {
+    if (!conversationId || requestBusy) return;
+    setRequestBusy(true);
+    try {
+      await acceptRequest(conversationId);
+    } catch (e) {
+      console.error("Failed to accept request", e);
+    } finally {
+      setRequestBusy(false);
+    }
+  }, [conversationId, requestBusy, acceptRequest]);
+
+  const handleDeny = useCallback(async () => {
+    if (!conversationId || requestBusy) return;
+    setRequestBusy(true);
+    try {
+      await denyRequest(conversationId);
+      router.push("/chat");
+    } catch (e) {
+      console.error("Failed to deny request", e);
+      setRequestBusy(false);
+    }
+  }, [conversationId, requestBusy, denyRequest, router]);
 
   // Derive header info (no impure calls — Date.now handled separately below)
   const { headerTitle, avatarUrl, isOtherOnline, otherUsername } = useMemo(() => {
@@ -132,10 +159,19 @@ export default function ConversationPage() {
     update();
   }, [conversation, user, isOnline]);
 
-  const handleSend = (content: string) => {
+  const handleSend = useCallback((content: string) => {
     if (!user) return;
     sendMessage(content, user.id, user.username || "me");
-  };
+  }, [user, sendMessage]);
+
+  const handleLoadMore = useCallback(() => {
+    const nextPage = Math.floor(messages.length / 30);
+    loadMore(nextPage);
+  }, [messages.length, loadMore]);
+
+  const handleRetry = useCallback((msg: Message) => {
+    if (msg.tempId) resendMessage(msg.tempId, msg.content);
+  }, [resendMessage]);
 
   return (
     <div className="flex flex-col h-full bg-surface">
@@ -154,8 +190,7 @@ export default function ConversationPage() {
             className="flex items-center gap-3 hover:opacity-80 transition-opacity"
           >
             {avatarUrl ? (
-               /* eslint-disable-next-line @next/next/no-img-element */
-              <img src={avatarUrl} alt={headerTitle} className="w-10 h-10 rounded-full object-cover" />
+              <Image src={avatarUrl} alt={headerTitle} width={40} height={40} className="rounded-full object-cover" />
             ) : (
               <div className="w-10 h-10 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-lg uppercase">
                 {headerTitle.charAt(0)}
@@ -204,21 +239,50 @@ export default function ConversationPage() {
         messages={messages}
         hasMore={hasMore}
         isLoadingMore={isLoading}
+        isDecrypting={isDecrypting}
         otherLastReadAt={otherLastReadAt}
-        onLoadMore={() => {
-          const nextPage = Math.floor(messages.length / 30);
-          loadMore(nextPage);
-        }}
-        onRetry={(msg) => {
-          if (msg.tempId) resendMessage(msg.tempId, msg.content);
-        }}
+        onLoadMore={handleLoadMore}
+        onRetry={handleRetry}
       />
 
-      {/* Input */}
-      <MessageInput 
-        conversationId={conversationId || ""} 
-        onSend={handleSend} 
-      />
+      {/* Input / Request banner */}
+      {conversation?.requestStatus === "PENDING_INCOMING" ? (
+        <div className="flex-shrink-0 border-t border-surface-container-high bg-surface p-4">
+          <p className="text-sm text-center text-on-surface-variant mb-3">
+            <span className="font-semibold text-on-surface">{headerTitle}</span> wants to send you a message.
+          </p>
+          <div className="flex gap-3">
+            <button
+              onClick={handleDeny}
+              disabled={requestBusy}
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-full bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-semibold transition-colors disabled:opacity-50"
+            >
+              <X className="w-4 h-4" />
+              Decline
+            </button>
+            <button
+              onClick={handleAccept}
+              disabled={requestBusy}
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-full bg-primary hover:bg-primary/90 text-on-primary font-semibold transition-colors disabled:opacity-50"
+            >
+              <Check className="w-4 h-4" />
+              Accept
+            </button>
+          </div>
+        </div>
+      ) : conversation?.requestStatus === "PENDING_OUTGOING" ? (
+        <div className="flex-shrink-0 border-t border-surface-container-high bg-surface px-4 py-5 text-center">
+          <p className="text-sm text-on-surface-variant">
+            Your request has been sent. You can message <span className="font-semibold text-on-surface">{headerTitle}</span> once they accept.
+          </p>
+        </div>
+      ) : (
+        <MessageInput
+          conversationId={conversationId || ""}
+          onSend={handleSend}
+          rateLimitError={rateLimitError}
+        />
+      )}
     </div>
   );
 }

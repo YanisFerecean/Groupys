@@ -6,16 +6,22 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import MarkdownContent from "@/components/ui/MarkdownContent";
 import AuthMedia from "@/components/ui/AuthMedia";
+import MediaLightbox, { LightboxItem } from "@/components/ui/MediaLightbox";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
+interface PostMedia {
+  url: string;
+  type: string;
+  order: number;
+}
+
 interface PostRes {
   id: string;
   content: string;
-  mediaUrl: string | null;
-  mediaType: string | null;
+  media: PostMedia[];
   communityId: string;
   communityName: string;
   authorId: string;
@@ -133,13 +139,15 @@ function CommentThread({
           onClick={() => router.push(`/profile/${comment.authorUsername}`)}
         >
           {comment.authorProfileImage ? (
-            <Image
-              src={comment.authorProfileImage}
-              alt={comment.authorDisplayName || comment.authorUsername}
-              width={28}
-              height={28}
-              className="shrink-0 rounded-full object-cover"
-            />
+            <div className="w-7 h-7 shrink-0 rounded-full overflow-hidden">
+              <Image
+                src={comment.authorProfileImage}
+                alt={comment.authorDisplayName || comment.authorUsername}
+                width={28}
+                height={28}
+                className="w-full h-full object-cover"
+              />
+            </div>
           ) : (
             <div className="w-7 h-7 shrink-0 rounded-full bg-surface-container-high flex items-center justify-center">
               <span className="material-symbols-outlined text-on-surface-variant/40 text-xs">
@@ -272,6 +280,7 @@ export default function PostDetail({ id }: { id: string }) {
   const [loading, setLoading] = useState(true);
   const [submittingComment, setSubmittingComment] = useState(false);
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -406,9 +415,6 @@ export default function PostDetail({ id }: { id: string }) {
     );
   }
 
-  const isImage = post.mediaType?.startsWith("image/");
-  const isVideo = post.mediaType?.startsWith("video/");
-  const isAudio = post.mediaType?.startsWith("audio/");
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-6 pb-12">
@@ -422,19 +428,34 @@ export default function PostDetail({ id }: { id: string }) {
 
       {/* Post card */}
       <div className="bg-surface-container-lowest/65 border border-white/80 rounded-2xl overflow-hidden shadow-sm">
+        {/* Community */}
+        <div className="px-5 pt-4 pb-1">
+          <button
+            onClick={() => router.push(`/discover/community/${post.communityId}`)}
+            className="flex items-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors"
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
+              group
+            </span>
+            {post.communityName}
+          </button>
+        </div>
+
         {/* Author header */}
         <div
-          className="flex items-center gap-3 px-5 pt-5 pb-3 cursor-pointer"
+          className="flex items-center gap-3 px-5 pt-2 pb-3 cursor-pointer"
           onClick={() => router.push(`/profile/${post.authorUsername}`)}
         >
           {post.authorProfileImage ? (
-            <Image
-              src={post.authorProfileImage}
-              alt={post.authorDisplayName || post.authorUsername}
-              width={44}
-              height={44}
-              className="shrink-0 rounded-full object-cover"
-            />
+            <div className="w-11 h-11 shrink-0 rounded-full overflow-hidden">
+              <Image
+                src={post.authorProfileImage}
+                alt={post.authorDisplayName || post.authorUsername}
+                width={44}
+                height={44}
+                className="w-full h-full object-cover"
+              />
+            </div>
           ) : (
             <div className="w-11 h-11 shrink-0 rounded-full bg-surface-container-high flex items-center justify-center">
               <span className="material-symbols-outlined text-on-surface-variant/40 text-base">
@@ -461,32 +482,67 @@ export default function PostDetail({ id }: { id: string }) {
         )}
 
         {/* Media */}
-        {post.mediaUrl && isImage && (
-          <div className="px-5 pb-4">
-            <AuthMedia
-              src={`${API_URL}${post.mediaUrl.replace(/^\/api/, "")}`}
-              type="image"
-              className="w-full max-h-[600px] object-cover rounded-xl"
-            />
-          </div>
-        )}
-        {post.mediaUrl && isVideo && (
-          <div className="px-5 pb-4">
-            <AuthMedia
-              src={`${API_URL}${post.mediaUrl.replace(/^\/api/, "")}`}
-              type="video"
-              className="w-full max-h-[600px] rounded-xl"
-            />
-          </div>
-        )}
-        {post.mediaUrl && isAudio && (
-          <div className="px-5 pb-4">
-            <AuthMedia
-              src={`${API_URL}${post.mediaUrl.replace(/^\/api/, "")}`}
-              type="audio"
-            />
-          </div>
-        )}
+        {post.media?.length > 0 && (() => {
+          const count = post.media.length;
+          const inGrid = count > 1;
+          const visualItems: LightboxItem[] = post.media
+            .filter((m) => m.type.startsWith("image/") || m.type.startsWith("video/"))
+            .map((m) => ({
+              src: `${API_URL}${m.url.replace(/^\/api/, "")}`,
+              type: m.type.startsWith("image/") ? "image" : "video",
+            }));
+          let vi = -1;
+          const visualIndexOf = post.media.map((m) =>
+            m.type.startsWith("image/") || m.type.startsWith("video/") ? ++vi : -1
+          );
+          return (
+            <>
+              <div className={`px-5 pb-4${inGrid ? " grid grid-cols-2 gap-1" : ""}`}>
+                {post.media.map((m, i) => {
+                  const src = `${API_URL}${m.url.replace(/^\/api/, "")}`;
+                  const isImage = m.type.startsWith("image/");
+                  const isVideo = m.type.startsWith("video/");
+                  const isAudio = m.type.startsWith("audio/");
+                  if (!isImage && !isVideo && !isAudio) return null;
+                  const spanFull = inGrid && (isAudio || (count === 3 && i === 0));
+                  const vIdx = visualIndexOf[i];
+                  const mediaClass = inGrid && !isAudio
+                    ? "w-full h-72 object-cover rounded-xl"
+                    : isImage ? "max-w-full max-h-[500px] rounded-xl" : isVideo ? "max-w-full max-h-[600px] rounded-xl" : undefined;
+                  return (
+                    <div key={i} className={`relative${spanFull ? " col-span-2" : ""}`}>
+                      {isImage ? (
+                        <div onClick={() => setLightboxIndex(vIdx)} className="cursor-zoom-in">
+                          <AuthMedia src={src} type="image" className={mediaClass} />
+                        </div>
+                      ) : isVideo ? (
+                        <div className="relative">
+                          <AuthMedia src={src} type="video" className={mediaClass} />
+                          <button
+                            onClick={() => setLightboxIndex(vIdx)}
+                            className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center text-white transition-colors"
+                          >
+                            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>fullscreen</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <AuthMedia src={src} type="audio" />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {lightboxIndex !== null && (
+                <MediaLightbox
+                  items={visualItems}
+                  index={lightboxIndex}
+                  onClose={() => setLightboxIndex(null)}
+                  onNav={setLightboxIndex}
+                />
+              )}
+            </>
+          );
+        })()}
 
         {/* Reaction bar */}
         <div className="flex items-center gap-1 px-4 py-2.5 border-t border-surface-container-high/50">

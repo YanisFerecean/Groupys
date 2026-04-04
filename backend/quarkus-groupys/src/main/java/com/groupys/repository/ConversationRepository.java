@@ -6,7 +6,9 @@ import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -20,10 +22,9 @@ public class ConversationRepository implements PanacheRepositoryBase<Conversatio
      */
     public List<Conversation> findByUserId(UUID userId) {
         return getEntityManager().createQuery(
-                "SELECT DISTINCT c FROM Conversation c " +
-                "JOIN c.participants cp " +
-                "WHERE cp.user.id = :userId " +
-                "ORDER BY c.updatedAt DESC NULLS LAST",
+                "SELECT c FROM Conversation c " +
+                "WHERE EXISTS (SELECT 1 FROM ConversationParticipant cp WHERE cp.conversation = c AND cp.user.id = :userId) " +
+                "ORDER BY COALESCE(c.lastMessageAt, c.updatedAt) DESC NULLS LAST",
                 Conversation.class
         ).setParameter("userId", userId).getResultList();
     }
@@ -34,11 +35,10 @@ public class ConversationRepository implements PanacheRepositoryBase<Conversatio
      * of the last item from the previous page.
      */
     public List<Conversation> findByUserIdPaged(UUID userId, int size, Instant cursor) {
-        String jpql = "SELECT DISTINCT c FROM Conversation c " +
-                "JOIN c.participants cp " +
-                "WHERE cp.user.id = :userId " +
-                (cursor != null ? "AND c.updatedAt < :cursor " : "") +
-                "ORDER BY c.updatedAt DESC NULLS LAST";
+        String jpql = "SELECT c FROM Conversation c " +
+                "WHERE EXISTS (SELECT 1 FROM ConversationParticipant cp WHERE cp.conversation = c AND cp.user.id = :userId) " +
+                (cursor != null ? "AND COALESCE(c.lastMessageAt, c.updatedAt) < :cursor " : "") +
+                "ORDER BY COALESCE(c.lastMessageAt, c.updatedAt) DESC NULLS LAST";
         var query = getEntityManager().createQuery(jpql, Conversation.class)
                 .setParameter("userId", userId)
                 .setMaxResults(size);
@@ -69,5 +69,50 @@ public class ConversationRepository implements PanacheRepositoryBase<Conversatio
                 "SELECT cp FROM ConversationParticipant cp WHERE cp.conversation.id = :cid AND cp.user.id = :uid",
                 ConversationParticipant.class
         ).setParameter("cid", conversationId).setParameter("uid", userId).getResultStream().findFirst();
+    }
+
+    public List<UUID> findDirectConversationPartnerIds(UUID userId) {
+        return getEntityManager().createQuery("""
+                SELECT DISTINCT cpOther.user.id
+                FROM Conversation c
+                JOIN c.participants cpMine
+                JOIN c.participants cpOther
+                WHERE c.isGroup = false
+                  AND cpMine.user.id = :userId
+                  AND cpOther.user.id <> :userId
+                """, UUID.class)
+                .setParameter("userId", userId)
+                .getResultList();
+    }
+
+    /**
+     * Returns all partner user IDs (across both direct and group conversations)
+     * for the given user, in a single JOIN query.
+     */
+    public List<UUID> findAllConversationPartnerIds(UUID userId) {
+        return getEntityManager().createQuery("""
+                SELECT DISTINCT cpOther.user.id
+                FROM Conversation c
+                JOIN c.participants cpMine
+                JOIN c.participants cpOther
+                WHERE cpMine.user.id = :userId
+                  AND cpOther.user.id <> :userId
+                """, UUID.class)
+                .setParameter("userId", userId)
+                .getResultList();
+    }
+
+    /**
+     * Returns a map of userId -> clerkId for all participants in the given conversation.
+     * Single JOIN query — avoids N separate user lookups.
+     */
+    public Map<UUID, String> findParticipantUserIdToClerkId(UUID conversationId) {
+        List<Object[]> rows = getEntityManager().createQuery(
+                "SELECT cp.user.id, cp.user.clerkId FROM ConversationParticipant cp WHERE cp.conversation.id = :cid",
+                Object[].class
+        ).setParameter("cid", conversationId).getResultList();
+        Map<UUID, String> map = new HashMap<>();
+        for (Object[] row : rows) map.put((UUID) row[0], (String) row[1]);
+        return map;
     }
 }

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { GoogleAnalytics } from "@next/third-parties/google";
 import NavBar from "@/components/landing/NavBar";
 import HeroSection from "@/components/landing/HeroSection";
 import FeaturesSection from "@/components/landing/FeaturesSection";
@@ -8,10 +9,20 @@ import FaqSection from "@/components/landing/FaqSection";
 import CtaSection from "@/components/landing/CtaSection";
 import Footer from "@/components/landing/Footer";
 
+const GA_ID = process.env.NEXT_PUBLIC_GA_ID ?? "G-WG945YLN9C";
+
 export const metadata: Metadata = {
   title: "Groupys – Find Your Music Community | Connect with Music Lovers",
   description:
     "Groupys is the music community app where you connect with music lovers, join music fan communities, rate albums with our album rating app, and discover your music social network.",
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+    },
+  },
   alternates: { canonical: "https://groupys.app" },
 };
 
@@ -140,6 +151,7 @@ const jsonLd = {
 export default function Home() {
   return (
     <>
+      {GA_ID ? <GoogleAnalytics gaId={GA_ID} /> : null}
       {/* Preload LCP image — top card in CommunitiesPreview is always drake.jpg on initial render */}
       <link
         rel="preload"
