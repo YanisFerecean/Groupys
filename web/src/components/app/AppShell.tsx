@@ -30,6 +30,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const getTokenRef = useRef(getToken);
   useEffect(() => { getTokenRef.current = getToken; }, [getToken]);
 
+  const onboardingCheckedRef = useRef(false);
+
   // Redirect unauthenticated users to home
   useEffect(() => {
     if (isAuthLoaded && !isSignedIn) {
@@ -46,6 +48,31 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       });
     });
   }, [isLoaded, isAuthLoaded, isSignedIn, user]);
+
+  // Redirect new users (no onboarding done yet) to the onboarding flow
+  useEffect(() => {
+    if (!isLoaded || !isAuthLoaded || !isSignedIn || !user) return;
+    if (onboardingCheckedRef.current) return;
+    if (pathname?.startsWith("/onboarding")) return;
+
+    onboardingCheckedRef.current = true;
+
+    const key = `onboarding_done_${user.id}`;
+    if (localStorage.getItem(key)) return;
+
+    getTokenRef.current().then((token) => {
+      fetchUserByClerkId(user.id, token).then((bu) => {
+        if (!bu) return;
+        // Existing users who already have widget data skip onboarding automatically
+        const hasData = !!bu.widgets && bu.widgets !== "[]" && bu.widgets !== "null";
+        if (hasData) {
+          localStorage.setItem(key, "true");
+        } else {
+          router.replace("/onboarding");
+        }
+      }).catch(() => {/* non-critical — don't block the app */});
+    });
+  }, [isLoaded, isAuthLoaded, isSignedIn, user, pathname, router]);
 
   const handleSpotifyDisconnected = useCallback(() => {
     setSpotifyConnected(false);

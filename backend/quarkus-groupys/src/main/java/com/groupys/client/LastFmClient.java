@@ -48,4 +48,11 @@ public interface LastFmClient {
                                             @QueryParam("tag") String tag,
                                             @QueryParam("api_key") String apiKey,
                                             @QueryParam("format") String format);
+
+    @GET
+    LastFmTopArtistsResponse getTagTopArtists(@QueryParam("method") String method,
+                                              @QueryParam("tag") String tag,
+                                              @QueryParam("limit") int limit,
+                                              @QueryParam("api_key") String apiKey,
+                                              @QueryParam("format") String format);
 }

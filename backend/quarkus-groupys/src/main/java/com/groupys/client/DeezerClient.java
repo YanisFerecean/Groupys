@@ -48,4 +48,9 @@ public interface DeezerClient {
     @Path("/genre")
     @ClientHeaderParam(name = "Accept-Language", value = "en")
     com.groupys.dto.deezer.DeezerGenreListResponse getGenres();
+
+    @GET
+    @Path("/genre/{id}/artists")
+    @ClientHeaderParam(name = "Accept-Language", value = "en")
+    DeezerArtistSearchResponse getArtistsByGenre(@PathParam("id") Long id);
 }

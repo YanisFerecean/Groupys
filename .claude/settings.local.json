@@ -50,7 +50,8 @@
       "Bash(grep -n \"useState\\\\|useEffect\\\\|useCallback\" /c/Uni/Projects/groupys-web-app/web/src/app/chat/[conversationId]/page.tsx)",
       "Bash(cmd /c \"mvnw.cmd compile -q\")",
       "Bash(cmd /c \"npm run build\")",
-      "Bash(find /c/Uni/Projects/groupys-web-app/mobile/components -type f -name *rofile* -o -name *Avatar* -o -name *ommunity*)"
+      "Bash(find /c/Uni/Projects/groupys-web-app/mobile/components -type f -name *rofile* -o -name *Avatar* -o -name *ommunity*)",
+      "Bash(find /c/Uni/Projects/groupys-web-app -type f -name *artist*)"
     ]
   }
 }

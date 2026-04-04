@@ -46,7 +46,7 @@ export default function UserSync() {
           }, token);
 
           setRedirecting(true);
-          router.replace("/profile");
+          router.replace("/onboarding");
         } else {
           // Sync profile image if it changed
           if (user.imageUrl && existing.profileImage !== user.imageUrl) {
