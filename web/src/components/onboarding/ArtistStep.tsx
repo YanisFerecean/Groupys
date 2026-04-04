@@ -4,14 +4,16 @@ import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@clerk/nextjs";
 import Image from "next/image";
 import type { ArtistSearchResult } from "@/lib/api";
-import { searchArtists } from "@/lib/api";
+import { searchArtists, fetchArtistsByGenre } from "@/lib/api";
 
 interface ArtistStepProps {
   selected: ArtistSearchResult[];
   onToggle: (artist: ArtistSearchResult) => void;
+  selectedGenres?: string[];
 }
 
-function ArtistCard({
+// Grid card used for genre-based suggestions
+function SuggestionCard({
   artist,
   isSelected,
   onToggle,
@@ -20,7 +22,62 @@ function ArtistCard({
   isSelected: boolean;
   onToggle: () => void;
 }) {
-  const imageUrl = artist.images[0]?.url;
+  const imageUrl = artist.images.find((img) => img.includes("400x400")) || artist.images[artist.images.length - 1];
+
+  return (
+    <button
+      onClick={onToggle}
+      className={`relative rounded-xl overflow-hidden aspect-square w-full transition-all duration-200 ${
+        isSelected ? "ring-2 ring-primary ring-offset-2 ring-offset-surface" : ""
+      }`}
+    >
+      {imageUrl ? (
+        <Image
+          src={imageUrl}
+          alt={artist.name}
+          fill
+          className="object-cover"
+          sizes="(max-width: 400px) 30vw, 120px"
+        />
+      ) : (
+        <div className="w-full h-full bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center">
+          <span className="text-3xl font-extrabold text-on-surface-variant">
+            {artist.name.charAt(0).toUpperCase()}
+          </span>
+        </div>
+      )}
+
+      {/* Bottom gradient + name */}
+      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent px-2 pt-6 pb-2">
+        <p className="text-white text-xs font-bold truncate leading-tight">{artist.name}</p>
+      </div>
+
+      {/* Selection indicator */}
+      {isSelected && (
+        <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+          <span
+            className="material-symbols-outlined text-on-primary"
+            style={{ fontSize: 12, fontVariationSettings: "'FILL' 1" }}
+          >
+            check
+          </span>
+        </div>
+      )}
+    </button>
+  );
+}
+
+// Row card used for search results
+function SearchResultCard({
+  artist,
+  isSelected,
+  onToggle,
+}: {
+  artist: ArtistSearchResult;
+  isSelected: boolean;
+  onToggle: () => void;
+}) {
+  const imageUrl = artist.images.find((img) => img.includes("400x400")) || artist.images[0];
 
   return (
     <button
@@ -31,7 +88,6 @@ function ArtistCard({
           : "border-transparent bg-surface-container hover:bg-surface-container-high"
       }`}
     >
-      {/* Artist image */}
       <div className="relative w-14 h-14 rounded-full overflow-hidden flex-shrink-0 bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center">
         {imageUrl ? (
           <Image
@@ -48,7 +104,6 @@ function ArtistCard({
         )}
       </div>
 
-      {/* Info */}
       <div className="flex-1 min-w-0">
         <p className="font-bold text-on-surface truncate">{artist.name}</p>
         {artist.primaryGenre && (
@@ -58,12 +113,9 @@ function ArtistCard({
         )}
       </div>
 
-      {/* Selection indicator */}
       <div
         className={`ml-auto flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
-          isSelected
-            ? "bg-primary border-primary"
-            : "border-outline-variant"
+          isSelected ? "bg-primary border-primary" : "border-outline-variant"
         }`}
       >
         {isSelected && (
@@ -79,15 +131,46 @@ function ArtistCard({
   );
 }
 
-export default function ArtistStep({ selected, onToggle }: ArtistStepProps) {
+export default function ArtistStep({ selected, onToggle, selectedGenres = [] }: ArtistStepProps) {
   const { getToken } = useAuth();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ArtistSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<ArtistSearchResult[]>([]);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const getTokenRef = useRef(getToken);
   useEffect(() => { getTokenRef.current = getToken; }, [getToken]);
+
+  useEffect(() => {
+    if (selectedGenres.length === 0) return;
+    setIsLoadingSuggestions(true);
+    getTokenRef.current().then(async (token) => {
+      try {
+        const perGenre = Math.ceil(10 / selectedGenres.length);
+        const all = await Promise.all(
+          selectedGenres.map((g) => fetchArtistsByGenre(g, token, perGenre))
+        );
+        const seen = new Set<string>();
+        const deduped: ArtistSearchResult[] = [];
+        for (const batch of all) {
+          for (const artist of batch) {
+            if (!seen.has(artist.id)) {
+              seen.add(artist.id);
+              deduped.push(artist);
+            }
+          }
+        }
+        setSuggestions(deduped.slice(0, 10));
+      } catch {
+        // suggestions are non-critical, silently fail
+      } finally {
+        setIsLoadingSuggestions(false);
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -117,6 +200,7 @@ export default function ArtistStep({ selected, onToggle }: ArtistStepProps) {
   }, [query]);
 
   const selectedIds = new Set(selected.map((a) => a.id));
+  const isQueryActive = query.trim().length > 0;
 
   return (
     <div className="space-y-6">
@@ -168,42 +252,75 @@ export default function ArtistStep({ selected, onToggle }: ArtistStepProps) {
         </div>
       )}
 
-      {/* Results area */}
-      <div className="space-y-2 max-h-72 overflow-y-auto">
-        {isSearching && (
-          <>
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="h-[72px] bg-surface-container-high rounded-2xl animate-pulse" />
-            ))}
-          </>
-        )}
+      {/* Search results (scrollable list) */}
+      {isQueryActive && (
+        <div className="space-y-2 max-h-72 overflow-y-auto">
+          {isSearching && (
+            <>
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="h-[72px] bg-surface-container-high rounded-2xl animate-pulse" />
+              ))}
+            </>
+          )}
 
-        {!isSearching && searchError && (
-          <p className="text-sm text-error text-center py-4">{searchError}</p>
-        )}
+          {!isSearching && searchError && (
+            <p className="text-sm text-error text-center py-4">{searchError}</p>
+          )}
 
-        {!isSearching && !searchError && query.trim().length === 0 && (
-          <div className="flex flex-col items-center justify-center py-10 gap-3 text-on-surface-variant/40">
-            <span className="material-symbols-outlined" style={{ fontSize: 48 }}>
-              search
-            </span>
-            <p className="text-sm font-medium">Search for artists you love</p>
-          </div>
-        )}
+          {!isSearching && !searchError && results.length === 0 && (
+            <p className="text-sm text-on-surface-variant text-center py-6">No artists found for &quot;{query}&quot;</p>
+          )}
 
-        {!isSearching && !searchError && query.trim().length > 0 && results.length === 0 && (
-          <p className="text-sm text-on-surface-variant text-center py-6">No artists found for &quot;{query}&quot;</p>
-        )}
+          {!isSearching && results.map((artist) => (
+            <SearchResultCard
+              key={artist.id}
+              artist={artist}
+              isSelected={selectedIds.has(artist.id)}
+              onToggle={() => onToggle(artist)}
+            />
+          ))}
+        </div>
+      )}
 
-        {!isSearching && results.map((artist) => (
-          <ArtistCard
-            key={artist.id}
-            artist={artist}
-            isSelected={selectedIds.has(artist.id)}
-            onToggle={() => onToggle(artist)}
-          />
-        ))}
-      </div>
+      {/* Genre-based suggestions (grid, no scroll) */}
+      {!isQueryActive && (
+        <>
+          {isLoadingSuggestions && (
+            <div className="grid grid-cols-5 gap-2">
+              {Array.from({ length: 10 }).map((_, i) => (
+                <div key={i} className="aspect-square rounded-xl bg-surface-container-high animate-pulse" />
+              ))}
+            </div>
+          )}
+
+          {!isLoadingSuggestions && suggestions.length > 0 && (
+            <>
+              <p className="text-xs font-bold text-on-surface-variant/50 uppercase tracking-wider -mb-2">
+                Based on your genres
+              </p>
+              <div className="grid grid-cols-5 gap-2">
+                {suggestions.map((artist) => (
+                  <SuggestionCard
+                    key={artist.id}
+                    artist={artist}
+                    isSelected={selectedIds.has(artist.id)}
+                    onToggle={() => onToggle(artist)}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+
+          {!isLoadingSuggestions && suggestions.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-10 gap-3 text-on-surface-variant/40">
+              <span className="material-symbols-outlined" style={{ fontSize: 48 }}>
+                search
+              </span>
+              <p className="text-sm font-medium">Search for artists you love</p>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

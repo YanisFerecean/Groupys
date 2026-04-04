@@ -55,4 +55,11 @@ public class ArtistResource {
     public List<ArtistResDto> getTopByCountry(@DefaultValue("United States") @QueryParam("country") String country) {
         return artistService.getTopByCountry(country);
     }
+
+    @GET
+    @Path("/genre/{genreName}")
+    public List<ArtistResDto> getByGenre(@PathParam("genreName") String genreName,
+                                         @DefaultValue("8") @QueryParam("limit") int limit) {
+        return artistService.getByGenre(genreName, limit);
+    }
 }

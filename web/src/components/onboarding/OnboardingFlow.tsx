@@ -131,7 +131,7 @@ export default function OnboardingFlow() {
                 id: a.id,
                 name: a.name,
                 genre: a.primaryGenre?.name,
-                imageUrl: a.images[0]?.url,
+                imageUrl: a.images[0],
               })),
             },
             token,
@@ -203,7 +203,7 @@ export default function OnboardingFlow() {
             )}
             {step === 2 && (
               <motion.div key="step-2" {...variants}>
-                <ArtistStep selected={selectedArtists} onToggle={handleToggleArtist} />
+                <ArtistStep selected={selectedArtists} onToggle={handleToggleArtist} selectedGenres={selectedGenres} />
               </motion.div>
             )}
             {step === 3 && (

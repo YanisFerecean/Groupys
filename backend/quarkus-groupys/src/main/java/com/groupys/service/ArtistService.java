@@ -126,6 +126,20 @@ public class ArtistService {
                 .toList();
     }
 
+    public List<ArtistResDto> getByGenre(String genreName, int limit) {
+        LastFmTopArtistsResponse response = lastFmClient.getTagTopArtists(
+                "tag.gettopartists", genreName, limit, lastfmApiKey, "json");
+
+        if (response == null || response.topartists() == null || response.topartists().artists() == null) {
+            return Collections.emptyList();
+        }
+
+        return response.topartists().artists().stream()
+                .map(a -> resolveByName(a.name()))
+                .filter(a -> a != null)
+                .toList();
+    }
+
     public ArtistResDto resolveByName(String artistName) {
         try {
             DeezerArtistSearchResponse searchResponse = deezerClient.searchArtists(artistName, 1);

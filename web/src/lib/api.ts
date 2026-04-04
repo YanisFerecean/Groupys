@@ -402,7 +402,7 @@ export interface ArtistSearchResult {
   id: string;
   name: string;
   primaryGenre: { id: string; name: string } | null;
-  images: { url: string }[];
+  images: string[];
   listeners: number;
   summary: string;
 }
@@ -416,6 +416,18 @@ export async function searchArtists(
   const params = new URLSearchParams({ q: query.trim(), limit: String(limit) });
   const res = await apiRequest(`/artists/search?${params}`, token);
   if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to search artists"));
+  return res.json();
+}
+
+export async function fetchArtistsByGenre(
+  genre: string,
+  token: string | null,
+  limit = 8,
+): Promise<ArtistSearchResult[]> {
+  if (!genre) return [];
+  const params = new URLSearchParams({ limit: String(limit) });
+  const res = await apiRequest(`/artists/genre/${encodeURIComponent(genre)}?${params}`, token);
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to fetch artists by genre"));
   return res.json();
 }
 
