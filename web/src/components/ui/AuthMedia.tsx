@@ -63,7 +63,9 @@ export default function AuthMedia({
     <Image
       src={src}
       alt="Post media"
-      loading="lazy"
+      width={0}
+      height={0}
+      sizes="100vw"
       className={className}
     />
   );
