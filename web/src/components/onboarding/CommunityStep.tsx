@@ -30,17 +30,21 @@ export default function CommunityStep({
   onToggle,
   token,
 }: CommunityStepProps) {
-  const [communities, setCommunities] = useState<CommunityRes[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  type State =
+    | { status: "loading" }
+    | { status: "idle" }
+    | { status: "error"; message: string }
+    | { status: "done"; communities: CommunityRes[] };
+
+  const [state, setState] = useState<State>(() =>
+    !token || selectedGenres.length === 0
+      ? { status: "idle" }
+      : { status: "loading" }
+  );
 
   useEffect(() => {
-    if (!token || selectedGenres.length === 0) {
-      setLoading(false);
-      return;
-    }
+    if (!token || selectedGenres.length === 0) return;
 
-    setLoading(true);
     Promise.allSettled(
       selectedGenres.map((g) => fetchCommunitiesByGenre(g, token)),
     ).then((results) => {
@@ -56,11 +60,9 @@ export default function CommunityStep({
           }
         }
       }
-      setCommunities(deduped);
-      setLoading(false);
+      setState({ status: "done", communities: deduped });
     }).catch(() => {
-      setError("Failed to load communities.");
-      setLoading(false);
+      setState({ status: "error", message: "Failed to load communities." });
     });
   }, [selectedGenres, token]);
 
@@ -75,7 +77,7 @@ export default function CommunityStep({
         </p>
       </div>
 
-      {loading && (
+      {state.status === "loading" && (
         <div className="grid grid-cols-2 gap-2.5">
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="h-24 bg-surface-container-high rounded-2xl animate-pulse" />
@@ -83,11 +85,11 @@ export default function CommunityStep({
         </div>
       )}
 
-      {!loading && error && (
-        <p className="text-sm text-error text-center py-6">{error}</p>
+      {state.status === "error" && (
+        <p className="text-sm text-error text-center py-6">{state.message}</p>
       )}
 
-      {!loading && !error && communities.length === 0 && (
+      {(state.status === "idle" || (state.status === "done" && state.communities.length === 0)) && (
         <div className="flex flex-col items-center justify-center py-10 gap-3 text-on-surface-variant/40">
           <span className="material-symbols-outlined" style={{ fontSize: 48 }}>
             group_off
@@ -98,9 +100,9 @@ export default function CommunityStep({
         </div>
       )}
 
-      {!loading && communities.length > 0 && (
+      {state.status === "done" && state.communities.length > 0 && (
         <div className="grid grid-cols-2 gap-2.5 max-h-72 overflow-y-auto pr-0.5">
-          {communities.map((community) => {
+          {state.communities.map((community) => {
             const isSelected = selectedCommunityIds.has(community.id);
             const color = communityColor(community.id);
 
