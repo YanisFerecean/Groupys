@@ -90,7 +90,7 @@ export default function FeedSidebar() {
   }, [showHotTakeNotification, setHasUnanswered]);
 
   return (
-    <aside className="hidden xl:flex w-80 h-[calc(100vh-5rem)] sticky top-20 border-l border-surface-container-highest px-8 py-12 flex-col gap-12 overflow-y-auto">
+    <aside className="hidden xl:flex w-80 h-[calc(100vh-5rem)] sticky top-20 border-l border-surface-container-highest px-8 py-12 flex-col gap-12 overflow-y-auto ml-auto">
 
       {/* Hot Take notification */}
       {showHotTakeNotification && (

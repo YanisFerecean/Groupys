@@ -10,7 +10,9 @@ export const metadata: Metadata = {
 export default function FeedPage() {
   return (
     <div className="flex">
-      <FeedContent />
+      <div className="flex-1 flex justify-center">
+        <FeedContent />
+      </div>
       <FeedSidebar />
     </div>
   );
