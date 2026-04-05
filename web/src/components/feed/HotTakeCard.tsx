@@ -12,13 +12,13 @@ import {
   type HotTakeRes,
 } from "@/lib/hot-take-api";
 import { searchCommunities, searchUsers, type BackendUser, type CommunityRes } from "@/lib/api";
-import { useHotTakeStore } from "@/store/hotTakeStore";
 import MusicSearchInput, {
   type ArtistResult,
   type TrackResult,
   type AlbumResult,
 } from "@/components/profile/MusicSearchInput";
 import { Input } from "@/components/ui/input";
+import { useHotTakeStore } from "@/store/hotTakeStore";
 
 interface Pending {
   name: string;
@@ -135,6 +135,10 @@ function CommunitySearchInput({ onSelect, token }: { onSelect: (name: string, im
 // ── Friends picks row ────────────────────────────────────────────────────────
 
 function FriendPickRow({ answer }: { answer: HotTakeAnswerRes }) {
+  const first = answer.answers[0];
+  const firstImage = answer.imageUrls[0] ?? null;
+  const extra = answer.answers.length - 1;
+
   return (
     <div className="flex items-center gap-3 py-2">
       {answer.profileImage ? (
@@ -146,11 +150,13 @@ function FriendPickRow({ answer }: { answer: HotTakeAnswerRes }) {
       )}
       <div className="flex-1 min-w-0">
         <p className="text-xs font-semibold truncate">{answer.displayName ?? answer.username}</p>
-        <p className="text-xs text-on-surface-variant truncate">{answer.answer}</p>
+        <p className="text-xs text-on-surface-variant truncate">
+          {first}{extra > 0 ? ` +${extra} more` : ""}
+        </p>
       </div>
-      {answer.imageUrl && (
+      {firstImage && (
         <div className="relative w-8 h-8 rounded-lg overflow-hidden shrink-0">
-          <Image src={answer.imageUrl} alt={answer.answer} fill className="object-cover" />
+          <Image src={firstImage} alt={first} fill className="object-cover" />
         </div>
       )}
     </div>
@@ -168,14 +174,17 @@ export default function HotTakeCard() {
   const [myAnswer, setMyAnswer] = useState<HotTakeAnswerRes | null>(null);
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState<string | null>(null);
-  const [pending, setPending] = useState<Pending | null>(null);
-  const [freeText, setFreeText] = useState("");
+
+  // Multi-pick state
+  const [picks, setPicks] = useState<Pending[]>([]);
+  const [freeTexts, setFreeTexts] = useState<string[]>([""]);
+
   const [showOnWidget, setShowOnWidget] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [editing, setEditing] = useState(false);
-
   const [dismissed, setDismissed] = useState(false);
   const setHasUnanswered = useHotTakeStore((s) => s.setHasUnanswered);
+
   const [friendsAnswers, setFriendsAnswers] = useState<HotTakeAnswerRes[]>([]);
   const [friendsExpanded, setFriendsExpanded] = useState(false);
 
@@ -198,6 +207,7 @@ export default function HotTakeCard() {
           setToken(tok);
           setHotTake(ht);
           setMyAnswer(answer);
+          if (ht) setFreeTexts(Array(ht.answerCount).fill(""));
           if (ht && localStorage.getItem(`hot-take-dismissed-${ht.id}`) === "1") {
             setDismissed(true);
           }
@@ -227,25 +237,20 @@ export default function HotTakeCard() {
 
   async function handleSubmit() {
     if (!hotTake) return;
-    const answerType = hotTake.answerType;
-    const isFreeText = answerType === "FREETEXT";
-    if (isFreeText && !freeText.trim()) return;
-    if (!isFreeText && !pending) return;
+    const isFreeText = hotTake.answerType === "FREETEXT";
+    if (isFreeText && freeTexts.some(t => !t.trim())) return;
+    if (!isFreeText && picks.length !== hotTake.answerCount) return;
 
     setSubmitting(true);
     try {
       const token = await getTokenRef.current();
-      const result = await submitHotTakeAnswer(
-        hotTake.id,
-        isFreeText ? freeText.trim() : pending!.name,
-        isFreeText ? null : pending!.imageUrl,
-        isFreeText ? null : pending!.musicType,
-        showOnWidget,
-        token,
-      );
+      const answers = isFreeText ? freeTexts.map(t => t.trim()) : picks.map(p => p.name);
+      const imageUrls = isFreeText ? freeTexts.map(() => null) : picks.map(p => p.imageUrl);
+      const musicTypes = isFreeText ? freeTexts.map(() => null) : picks.map(p => p.musicType);
+      const result = await submitHotTakeAnswer(hotTake.id, answers, imageUrls, musicTypes, showOnWidget, token);
       setMyAnswer(result);
-      setPending(null);
-      setFreeText("");
+      setPicks([]);
+      setFreeTexts(Array(hotTake.answerCount).fill(""));
       setEditing(false);
       window.dispatchEvent(new Event("hot-take-answered"));
       loadFriends();
@@ -256,12 +261,32 @@ export default function HotTakeCard() {
     }
   }
 
+  function handleStartEditing() {
+    if (!hotTake) return;
+    setEditing(true);
+    setPicks([]);
+    setFreeTexts(Array(hotTake.answerCount).fill(""));
+    setShowOnWidget(false);
+  }
+
+  function addPick(pick: Pending) {
+    if (!hotTake || picks.length >= hotTake.answerCount) return;
+    setPicks(prev => [...prev, pick]);
+  }
+
+  function removePick(index: number) {
+    setPicks(prev => prev.filter((_, i) => i !== index));
+  }
+
   if (loading || !hotTake || dismissed) return null;
 
   const answerType = hotTake.answerType;
   const answered = !!myAnswer && !editing;
   const isFreeText = answerType === "FREETEXT";
-  const canSubmit = isFreeText ? freeText.trim().length > 0 : !!pending;
+  const count = hotTake.answerCount;
+  const canSubmit = isFreeText
+    ? freeTexts.length === count && freeTexts.every(t => t.trim().length > 0)
+    : picks.length === count;
 
   const answerTypeIcon =
     answerType === "SONG" ? "music_note" :
@@ -269,6 +294,10 @@ export default function HotTakeCard() {
     answerType === "COMMUNITY" ? "group" :
     answerType === "USER" ? "person" :
     "person";
+
+  const pickLabel = count > 1
+    ? `Pick ${picks.length + 1} of ${count}`
+    : undefined;
 
   return (
     <div className="rounded-2xl overflow-hidden border border-primary/20 bg-gradient-to-br from-primary/10 via-surface-container-low to-surface-container-low mb-6">
@@ -295,7 +324,7 @@ export default function HotTakeCard() {
           {answered && (
             <button
               type="button"
-              onClick={() => { setEditing(true); setPending(null); setFreeText(""); setShowOnWidget(false); }}
+              onClick={handleStartEditing}
               className="text-xs font-semibold text-on-surface-variant hover:text-on-surface transition-colors"
             >
               Change
@@ -314,34 +343,41 @@ export default function HotTakeCard() {
 
       {/* Answered state */}
       {answered && myAnswer && (
-        <div className="px-5 pb-4 flex items-center gap-3">
-          {myAnswer.imageUrl ? (
-            <div className="relative w-12 h-12 rounded-xl overflow-hidden shrink-0 shadow">
-              <Image src={myAnswer.imageUrl} alt={myAnswer.answer} fill className="object-cover" />
+        <div className="px-5 pb-4 space-y-2">
+          {myAnswer.answers.map((ans, i) => (
+            <div key={i} className="flex items-center gap-3">
+              {myAnswer.imageUrls[i] ? (
+                <div className="relative w-12 h-12 rounded-xl overflow-hidden shrink-0 shadow">
+                  <Image src={myAnswer.imageUrls[i]!} alt={ans} fill className="object-cover" />
+                </div>
+              ) : (
+                <div className="w-12 h-12 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
+                  <span
+                    className="material-symbols-outlined text-primary"
+                    style={{ fontSize: 22, fontVariationSettings: "'FILL' 1" }}
+                  >
+                    {myAnswer.musicTypes[i] === "SONG" || myAnswer.musicTypes[i] === "track" ? "music_note" :
+                     myAnswer.musicTypes[i] === "ALBUM" || myAnswer.musicTypes[i] === "album" ? "album" :
+                     myAnswer.musicTypes[i] === "COMMUNITY" ? "group" :
+                     myAnswer.musicTypes[i] === "USER" ? "person" : "local_fire_department"}
+                  </span>
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                {count > 1 && <p className="text-xs text-on-surface-variant mb-0.5">Pick {i + 1}</p>}
+                {i === 0 && count === 1 && <p className="text-xs text-on-surface-variant mb-0.5">Your pick</p>}
+                <p className="font-bold text-sm text-on-surface truncate">{ans}</p>
+              </div>
+              {i === 0 && (
+                <span
+                  className="material-symbols-outlined text-primary ml-auto shrink-0"
+                  style={{ fontSize: 20, fontVariationSettings: "'FILL' 1" }}
+                >
+                  check_circle
+                </span>
+              )}
             </div>
-          ) : (
-            <div className="w-12 h-12 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
-              <span
-                className="material-symbols-outlined text-primary"
-                style={{ fontSize: 22, fontVariationSettings: "'FILL' 1" }}
-              >
-                {myAnswer.musicType === "SONG" || myAnswer.musicType === "track" ? "music_note" :
-                 myAnswer.musicType === "ALBUM" || myAnswer.musicType === "album" ? "album" :
-                 myAnswer.musicType === "COMMUNITY" ? "group" :
-                 myAnswer.musicType === "USER" ? "person" : "local_fire_department"}
-              </span>
-            </div>
-          )}
-          <div className="min-w-0">
-            <p className="text-xs text-on-surface-variant mb-0.5">Your pick</p>
-            <p className="font-bold text-sm text-on-surface truncate">{myAnswer.answer}</p>
-          </div>
-          <span
-            className="material-symbols-outlined text-primary ml-auto shrink-0"
-            style={{ fontSize: 20, fontVariationSettings: "'FILL' 1" }}
-          >
-            check_circle
-          </span>
+          ))}
         </div>
       )}
 
@@ -349,63 +385,82 @@ export default function HotTakeCard() {
       {!answered && (
         <div className="px-5 pb-5 space-y-3">
           {isFreeText ? (
-            <Input
-              value={freeText}
-              onChange={(e) => setFreeText(e.target.value)}
-              placeholder="Type your answer…"
-              onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
-            />
-          ) : pending ? (
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-surface-container">
-              {pending.imageUrl ? (
-                <div className="relative w-10 h-10 rounded-lg overflow-hidden shrink-0">
-                  <Image src={pending.imageUrl} alt={pending.name} fill className="object-cover" />
+            freeTexts.map((text, i) => (
+              <Input
+                key={i}
+                value={text}
+                onChange={(e) => setFreeTexts(prev => prev.map((v, idx) => idx === i ? e.target.value : v))}
+                placeholder={count > 1 ? `Answer ${i + 1}…` : "Type your answer…"}
+                onKeyDown={(e) => { if (e.key === "Enter" && i === freeTexts.length - 1) handleSubmit(); }}
+              />
+            ))
+          ) : (
+            <>
+              {/* Selected picks */}
+              {picks.map((pick, i) => (
+                <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-surface-container">
+                  {pick.imageUrl ? (
+                    <div className="relative w-10 h-10 rounded-lg overflow-hidden shrink-0">
+                      <Image src={pick.imageUrl} alt={pick.name} fill className="object-cover" />
+                    </div>
+                  ) : (
+                    <div className="w-10 h-10 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+                      <span className="material-symbols-outlined text-primary" style={{ fontSize: 18 }}>
+                        {answerTypeIcon}
+                      </span>
+                    </div>
+                  )}
+                  {count > 1 && <span className="text-xs text-on-surface-variant shrink-0">#{i + 1}</span>}
+                  <p className="flex-1 min-w-0 text-sm font-semibold truncate">{pick.name}</p>
+                  <button
+                    type="button"
+                    onClick={() => removePick(i)}
+                    className="text-on-surface-variant hover:text-on-surface transition-colors shrink-0"
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: 18 }}>close</span>
+                  </button>
                 </div>
-              ) : (
-                <div className="w-10 h-10 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
-                  <span className="material-symbols-outlined text-primary" style={{ fontSize: 18 }}>
-                    {answerTypeIcon}
-                  </span>
+              ))}
+
+              {/* Search input — shown until all picks are filled */}
+              {picks.length < count && (
+                <div className="space-y-1">
+                  {pickLabel && (
+                    <p className="text-xs font-semibold text-on-surface-variant">{pickLabel}</p>
+                  )}
+                  {answerType === "ARTIST" ? (
+                    <MusicSearchInput
+                      type="artist"
+                      placeholder="Search for an artist…"
+                      onSelect={(r: ArtistResult) => addPick({ name: r.name, imageUrl: r.imageUrl || null, musicType: "ARTIST" })}
+                    />
+                  ) : answerType === "ALBUM" ? (
+                    <MusicSearchInput
+                      type="album"
+                      placeholder="Search for an album…"
+                      onSelect={(r: AlbumResult) => addPick({ name: `${r.title} — ${r.artist}`, imageUrl: r.coverUrl || null, musicType: "ALBUM" })}
+                    />
+                  ) : answerType === "SONG" ? (
+                    <MusicSearchInput
+                      type="track"
+                      placeholder="Search for a song…"
+                      onSelect={(r: TrackResult) => addPick({ name: `${r.title} — ${r.artist}`, imageUrl: r.coverUrl || null, musicType: "SONG" })}
+                    />
+                  ) : answerType === "USER" ? (
+                    <UserSearchInput
+                      token={token}
+                      onSelect={(name, imageUrl) => addPick({ name, imageUrl, musicType: "USER" })}
+                    />
+                  ) : answerType === "COMMUNITY" ? (
+                    <CommunitySearchInput
+                      token={token}
+                      onSelect={(name, imageUrl) => addPick({ name, imageUrl, musicType: "COMMUNITY" })}
+                    />
+                  ) : null}
                 </div>
               )}
-              <p className="flex-1 min-w-0 text-sm font-semibold truncate">{pending.name}</p>
-              <button
-                type="button"
-                onClick={() => setPending(null)}
-                className="text-on-surface-variant hover:text-on-surface transition-colors shrink-0"
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>close</span>
-              </button>
-            </div>
-          ) : answerType === "ARTIST" ? (
-            <MusicSearchInput
-              type="artist"
-              placeholder="Search for an artist…"
-              onSelect={(r: ArtistResult) => setPending({ name: r.name, imageUrl: r.imageUrl || null, musicType: "ARTIST" })}
-            />
-          ) : answerType === "ALBUM" ? (
-            <MusicSearchInput
-              type="album"
-              placeholder="Search for an album…"
-              onSelect={(r: AlbumResult) => setPending({ name: `${r.title} — ${r.artist}`, imageUrl: r.coverUrl || null, musicType: "ALBUM" })}
-            />
-          ) : answerType === "SONG" ? (
-            <MusicSearchInput
-              type="track"
-              placeholder="Search for a song…"
-              onSelect={(r: TrackResult) => setPending({ name: `${r.title} — ${r.artist}`, imageUrl: r.coverUrl || null, musicType: "SONG" })}
-            />
-          ) : answerType === "USER" ? (
-            <UserSearchInput
-              token={token}
-              onSelect={(name, imageUrl) => setPending({ name, imageUrl, musicType: "USER" })}
-            />
-          ) : answerType === "COMMUNITY" ? (
-            <CommunitySearchInput
-              token={token}
-              onSelect={(name, imageUrl) => setPending({ name, imageUrl, musicType: "COMMUNITY" })}
-            />
-          ) : null}
+            </>
+          )}
 
           {/* Consent + submit */}
           {(canSubmit || isFreeText) && (
@@ -426,7 +481,7 @@ export default function HotTakeCard() {
             disabled={!canSubmit || submitting}
             className="w-full py-2.5 rounded-xl text-sm font-bold bg-primary text-on-primary hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {submitting ? "Submitting…" : "Submit my pick"}
+            {submitting ? "Submitting…" : count > 1 ? `Submit my ${count} picks` : "Submit my pick"}
           </button>
         </div>
       )}

@@ -133,23 +133,27 @@ export default function HotTakeAnswerModal({ open, hotTake, onClose, onAnswered 
   useEffect(() => { getTokenRef.current = getToken; }, [getToken]);
 
   const [token, setToken] = useState<string | null>(null);
-  const [pending, setPending] = useState<Pending | null>(null);
-  const [freeText, setFreeText] = useState("");
+  const [picks, setPicks] = useState<Pending[]>([]);
+  const [freeTexts, setFreeTexts] = useState<string[]>([""]);
   const [showOnWidget, setShowOnWidget] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  const count = hotTake.answerCount;
+  const answerType = hotTake.answerType;
+  const isFreeText = answerType === "FREETEXT";
 
   useEffect(() => {
     if (open) {
       getTokenRef.current().then(setToken);
-      setPending(null);
-      setFreeText("");
+      setPicks([]);
+      setFreeTexts(Array(count).fill(""));
       setShowOnWidget(false);
     }
-  }, [open]);
+  }, [open, count]);
 
-  const answerType = hotTake.answerType;
-  const isFreeText = answerType === "FREETEXT";
-  const canSubmit = isFreeText ? freeText.trim().length > 0 : !!pending;
+  const canSubmit = isFreeText
+    ? freeTexts.length === count && freeTexts.every(t => t.trim().length > 0)
+    : picks.length === count;
 
   const answerTypeIcon =
     answerType === "SONG" ? "music_note" :
@@ -158,19 +162,24 @@ export default function HotTakeAnswerModal({ open, hotTake, onClose, onAnswered 
     answerType === "USER" ? "person" :
     "person";
 
+  function addPick(pick: Pending) {
+    if (picks.length >= count) return;
+    setPicks(prev => [...prev, pick]);
+  }
+
+  function removePick(index: number) {
+    setPicks(prev => prev.filter((_, i) => i !== index));
+  }
+
   async function handleSubmit() {
     if (!canSubmit) return;
     setSubmitting(true);
     try {
       const tok = await getTokenRef.current();
-      await submitHotTakeAnswer(
-        hotTake.id,
-        isFreeText ? freeText.trim() : pending!.name,
-        isFreeText ? null : pending!.imageUrl,
-        isFreeText ? null : pending!.musicType,
-        showOnWidget,
-        tok,
-      );
+      const answers = isFreeText ? freeTexts.map(t => t.trim()) : picks.map(p => p.name);
+      const imageUrls = isFreeText ? freeTexts.map(() => null) : picks.map(p => p.imageUrl);
+      const musicTypes = isFreeText ? freeTexts.map(() => null) : picks.map(p => p.musicType);
+      await submitHotTakeAnswer(hotTake.id, answers, imageUrls, musicTypes, showOnWidget, tok);
       window.dispatchEvent(new Event("hot-take-answered"));
       onAnswered();
     } catch {
@@ -179,6 +188,10 @@ export default function HotTakeAnswerModal({ open, hotTake, onClose, onAnswered 
       setSubmitting(false);
     }
   }
+
+  const pickLabel = count > 1 && picks.length < count
+    ? `Pick ${picks.length + 1} of ${count}`
+    : undefined;
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
@@ -199,39 +212,54 @@ export default function HotTakeAnswerModal({ open, hotTake, onClose, onAnswered 
 
         <div className="space-y-3 pt-2">
           {isFreeText ? (
-            <Input
-              value={freeText}
-              onChange={(e) => setFreeText(e.target.value)}
-              placeholder="Type your answer..."
-              onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
-            />
-          ) : pending ? (
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-surface-container">
-              {pending.imageUrl ? (
-                <div className="relative w-10 h-10 rounded-lg overflow-hidden shrink-0">
-                  <Image src={pending.imageUrl} alt={pending.name} fill className="object-cover" />
+            freeTexts.map((text, i) => (
+              <Input
+                key={i}
+                value={text}
+                onChange={(e) => setFreeTexts(prev => prev.map((v, idx) => idx === i ? e.target.value : v))}
+                placeholder={count > 1 ? `Answer ${i + 1}...` : "Type your answer..."}
+                onKeyDown={(e) => { if (e.key === "Enter" && i === freeTexts.length - 1) handleSubmit(); }}
+              />
+            ))
+          ) : (
+            <>
+              {picks.map((pick, i) => (
+                <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-surface-container">
+                  {pick.imageUrl ? (
+                    <div className="relative w-10 h-10 rounded-lg overflow-hidden shrink-0">
+                      <Image src={pick.imageUrl} alt={pick.name} fill className="object-cover" />
+                    </div>
+                  ) : (
+                    <div className="w-10 h-10 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+                      <span className="material-symbols-outlined text-primary" style={{ fontSize: 18 }}>{answerTypeIcon}</span>
+                    </div>
+                  )}
+                  {count > 1 && <span className="text-xs text-on-surface-variant shrink-0">#{i + 1}</span>}
+                  <p className="flex-1 min-w-0 text-sm font-semibold truncate">{pick.name}</p>
+                  <button type="button" onClick={() => removePick(i)} className="text-on-surface-variant hover:text-on-surface transition-colors shrink-0">
+                    <span className="material-symbols-outlined" style={{ fontSize: 18 }}>close</span>
+                  </button>
                 </div>
-              ) : (
-                <div className="w-10 h-10 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
-                  <span className="material-symbols-outlined text-primary" style={{ fontSize: 18 }}>{answerTypeIcon}</span>
+              ))}
+
+              {picks.length < count && (
+                <div className="space-y-1">
+                  {pickLabel && <p className="text-xs font-semibold text-on-surface-variant">{pickLabel}</p>}
+                  {answerType === "ARTIST" ? (
+                    <MusicSearchInput type="artist" placeholder="Search for an artist..." onSelect={(r: ArtistResult) => addPick({ name: r.name, imageUrl: r.imageUrl || null, musicType: "ARTIST" })} />
+                  ) : answerType === "ALBUM" ? (
+                    <MusicSearchInput type="album" placeholder="Search for an album..." onSelect={(r: AlbumResult) => addPick({ name: `${r.title} — ${r.artist}`, imageUrl: r.coverUrl || null, musicType: "ALBUM" })} />
+                  ) : answerType === "SONG" ? (
+                    <MusicSearchInput type="track" placeholder="Search for a song..." onSelect={(r: TrackResult) => addPick({ name: `${r.title} — ${r.artist}`, imageUrl: r.coverUrl || null, musicType: "SONG" })} />
+                  ) : answerType === "USER" ? (
+                    <UserSearchInput token={token} onSelect={(name, imageUrl) => addPick({ name, imageUrl, musicType: "USER" })} />
+                  ) : answerType === "COMMUNITY" ? (
+                    <CommunitySearchInput token={token} onSelect={(name, imageUrl) => addPick({ name, imageUrl, musicType: "COMMUNITY" })} />
+                  ) : null}
                 </div>
               )}
-              <p className="flex-1 min-w-0 text-sm font-semibold truncate">{pending.name}</p>
-              <button type="button" onClick={() => setPending(null)} className="text-on-surface-variant hover:text-on-surface transition-colors shrink-0">
-                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>close</span>
-              </button>
-            </div>
-          ) : answerType === "ARTIST" ? (
-            <MusicSearchInput type="artist" placeholder="Search for an artist..." onSelect={(r: ArtistResult) => setPending({ name: r.name, imageUrl: r.imageUrl || null, musicType: "ARTIST" })} />
-          ) : answerType === "ALBUM" ? (
-            <MusicSearchInput type="album" placeholder="Search for an album..." onSelect={(r: AlbumResult) => setPending({ name: `${r.title} — ${r.artist}`, imageUrl: r.coverUrl || null, musicType: "ALBUM" })} />
-          ) : answerType === "SONG" ? (
-            <MusicSearchInput type="track" placeholder="Search for a song..." onSelect={(r: TrackResult) => setPending({ name: `${r.title} — ${r.artist}`, imageUrl: r.coverUrl || null, musicType: "SONG" })} />
-          ) : answerType === "USER" ? (
-            <UserSearchInput token={token} onSelect={(name, imageUrl) => setPending({ name, imageUrl, musicType: "USER" })} />
-          ) : answerType === "COMMUNITY" ? (
-            <CommunitySearchInput token={token} onSelect={(name, imageUrl) => setPending({ name, imageUrl, musicType: "COMMUNITY" })} />
-          ) : null}
+            </>
+          )}
 
           {(canSubmit || isFreeText) && (
             <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -251,7 +279,7 @@ export default function HotTakeAnswerModal({ open, hotTake, onClose, onAnswered 
             disabled={!canSubmit || submitting}
             className="w-full py-2.5 rounded-xl text-sm font-bold bg-primary text-on-primary hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {submitting ? "Submitting..." : "Submit my pick"}
+            {submitting ? "Submitting..." : count > 1 ? `Submit my ${count} picks` : "Submit my pick"}
           </button>
         </div>
       </DialogContent>

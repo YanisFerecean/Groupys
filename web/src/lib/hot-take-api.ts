@@ -5,6 +5,7 @@ export interface HotTakeRes {
   question: string;
   weekLabel: string;
   answerType: string; // FREETEXT | ARTIST | ALBUM | SONG | COMMUNITY | USER
+  answerCount: number;
   createdAt: string;
 }
 
@@ -14,9 +15,9 @@ export interface HotTakeAnswerRes {
   username: string;
   displayName: string | null;
   profileImage: string | null;
-  answer: string;
-  imageUrl: string | null;
-  musicType: string | null;
+  answers: string[];
+  imageUrls: (string | null)[];
+  musicTypes: (string | null)[];
   showOnWidget: boolean;
   answeredAt: string;
 }
@@ -69,9 +70,9 @@ export async function fetchFriendsHotTakeAnswers(
 
 export async function submitHotTakeAnswer(
   hotTakeId: string,
-  answer: string,
-  imageUrl: string | null,
-  musicType: string | null,
+  answers: string[],
+  imageUrls: (string | null)[],
+  musicTypes: (string | null)[],
   showOnWidget: boolean,
   token: string | null,
 ): Promise<HotTakeAnswerRes> {
@@ -81,7 +82,7 @@ export async function submitHotTakeAnswer(
       "Content-Type": "application/json",
       ...authHeaders(token),
     },
-    body: JSON.stringify({ hotTakeId, answer, imageUrl, musicType, showOnWidget }),
+    body: JSON.stringify({ hotTakeId, answers, imageUrls, musicTypes, showOnWidget }),
   });
   if (!res.ok) throw new Error(`Failed to submit answer (${res.status})`);
   return res.json();
