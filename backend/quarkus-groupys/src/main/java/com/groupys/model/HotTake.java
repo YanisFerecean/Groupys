@@ -28,5 +28,8 @@ public class HotTake {
     public String answerType = "ARTIST"; // FREETEXT | ARTIST | ALBUM | SONG | COMMUNITY | USER
 
     @Column(nullable = false)
+    public int answerCount = 1;
+
+    @Column(nullable = false)
     public Instant createdAt = Instant.now();
 }

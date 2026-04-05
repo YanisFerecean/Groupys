@@ -111,6 +111,7 @@ public class HotTakeResource {
                     .entity("question is required")
                     .build();
         }
-        return Response.ok(hotTakeService.create(dto.question(), dto.weekLabel(), dto.answerType())).build();
+        int answerCount = dto.answerCount() != null ? dto.answerCount() : 1;
+        return Response.ok(hotTakeService.create(dto.question(), dto.weekLabel(), dto.answerType(), answerCount)).build();
     }
 }

@@ -8,5 +8,6 @@ public record HotTakeResDto(
         String question,
         String weekLabel,
         String answerType,
+        int answerCount,
         Instant createdAt
 ) {}

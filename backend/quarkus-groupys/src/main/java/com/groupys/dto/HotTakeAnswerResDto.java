@@ -1,6 +1,7 @@
 package com.groupys.dto;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 public record HotTakeAnswerResDto(
@@ -9,9 +10,9 @@ public record HotTakeAnswerResDto(
         String username,
         String displayName,
         String profileImage,
-        String answer,
-        String imageUrl,
-        String musicType,
+        List<String> answers,
+        List<String> imageUrls,
+        List<String> musicTypes,
         boolean showOnWidget,
         Instant answeredAt
 ) {}

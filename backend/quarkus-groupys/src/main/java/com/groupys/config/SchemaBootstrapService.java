@@ -66,6 +66,8 @@ public class SchemaBootstrapService {
             run(statement, "UPDATE hot_take_answers SET show_on_widget = FALSE WHERE show_on_widget IS NULL");
             run(statement, "ALTER TABLE hot_take_answers ALTER COLUMN show_on_widget SET NOT NULL");
             run(statement, "ALTER TABLE hot_take_answers ALTER COLUMN show_on_widget SET DEFAULT FALSE");
+            run(statement, "ALTER TABLE hot_takes ADD COLUMN IF NOT EXISTS answer_count INT NOT NULL DEFAULT 1");
+            run(statement, "ALTER TABLE hot_take_answers ALTER COLUMN music_type TYPE TEXT");
 
             // Chat/feed read-model columns
             run(statement, "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS last_message_at timestamptz");
