@@ -173,6 +173,7 @@ export default function HotTakeCard() {
   const [submitting, setSubmitting] = useState(false);
   const [editing, setEditing] = useState(false);
 
+  const [dismissed, setDismissed] = useState(false);
   const [friendsAnswers, setFriendsAnswers] = useState<HotTakeAnswerRes[]>([]);
   const [friendsExpanded, setFriendsExpanded] = useState(false);
 
@@ -195,6 +196,9 @@ export default function HotTakeCard() {
           setToken(tok);
           setHotTake(ht);
           setMyAnswer(answer);
+          if (ht && localStorage.getItem(`hot-take-dismissed-${ht.id}`) === "1") {
+            setDismissed(true);
+          }
           if (answer) loadFriends();
         }
       } catch {
@@ -250,7 +254,7 @@ export default function HotTakeCard() {
     }
   }
 
-  if (loading || !hotTake) return null;
+  if (loading || !hotTake || dismissed) return null;
 
   const answerType = hotTake.answerType;
   const answered = !!myAnswer && !editing;
@@ -285,15 +289,25 @@ export default function HotTakeCard() {
             {hotTake.question}
           </p>
         </div>
-        {answered && (
+        <div className="flex items-center gap-2 shrink-0 mt-1">
+          {answered && (
+            <button
+              type="button"
+              onClick={() => { setEditing(true); setPending(null); setFreeText(""); setShowOnWidget(false); }}
+              className="text-xs font-semibold text-on-surface-variant hover:text-on-surface transition-colors"
+            >
+              Change
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => { setEditing(true); setPending(null); setFreeText(""); setShowOnWidget(false); }}
-            className="shrink-0 text-xs font-semibold text-on-surface-variant hover:text-on-surface transition-colors mt-1"
+            onClick={() => { localStorage.setItem(`hot-take-dismissed-${hotTake.id}`, "1"); setDismissed(true); }}
+            className="text-on-surface-variant hover:text-on-surface transition-colors"
+            aria-label="Dismiss hot take"
           >
-            Change
+            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>close</span>
           </button>
-        )}
+        </div>
       </div>
 
       {/* Answered state */}
