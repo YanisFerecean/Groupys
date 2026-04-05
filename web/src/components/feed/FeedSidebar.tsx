@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { fetchCurrentHotTake, fetchMyHotTakeAnswer, type HotTakeRes } from "@/lib/hot-take-api";
 import HotTakeAnswerModal from "./HotTakeAnswerModal";
+import { useHotTakeStore } from "@/store/hotTakeStore";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
 
@@ -42,6 +43,7 @@ export default function FeedSidebar() {
   const [hotTake, setHotTake] = useState<HotTakeRes | null>(null);
   const [answered, setAnswered] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const setHasUnanswered = useHotTakeStore((s) => s.setHasUnanswered);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,6 +84,10 @@ export default function FeedSidebar() {
 
   const visible = expanded ? communities : communities.slice(0, 3);
   const showHotTakeNotification = !!hotTake && !answered;
+
+  useEffect(() => {
+    setHasUnanswered(showHotTakeNotification);
+  }, [showHotTakeNotification, setHasUnanswered]);
 
   return (
     <aside className="hidden xl:flex w-80 h-[calc(100vh-5rem)] sticky top-20 border-l border-surface-container-highest px-8 py-12 flex-col gap-12 overflow-y-auto">

@@ -178,7 +178,7 @@ function getActiveWidgets(profile: ProfileCustomization): WidgetType[] {
     { type: "topSongs", active: !!profile.topSongs?.length && !hidden.includes("topSongs") },
     { type: "topArtists", active: !!profile.topArtists?.length && !hidden.includes("topArtists") },
     { type: "lastRatedAlbum", active: !!profile.showLastRatedAlbum && !hidden.includes("lastRatedAlbum") },
-    { type: "hotTake", active: profile.showHotTake !== false && !hidden.includes("hotTake") },
+    { type: "hotTake", active: !!profile.showHotTake && !hidden.includes("hotTake") },
   ];
   const defaultOrder: WidgetType[] = ["topAlbums", "currentlyListening", "topSongs", "topArtists", "lastRatedAlbum", "hotTake"];
   const order = (profile.widgetOrder as WidgetType[] | undefined) ?? defaultOrder;

@@ -55,6 +55,8 @@ export default function HotTakeWidget({ username, containerColor, size = "normal
     ? `Hot Take · ${hotTake.weekLabel}`
     : "Hot Take";
 
+  if (!loading && (!hotTake || !answer)) return null;
+
   return (
     <WidgetCard
       title={title}
@@ -65,28 +67,6 @@ export default function HotTakeWidget({ username, containerColor, size = "normal
       {loading ? (
         <div className="h-16 flex items-center justify-center">
           <div className="w-5 h-5 rounded-full border-2 border-outline border-t-primary animate-spin" />
-        </div>
-      ) : !hotTake ? (
-        <p
-          className="text-sm"
-          style={textColor ? { color: textColor, opacity: 0.6 } : { color: "var(--color-on-surface-variant)" }}
-        >
-          No hot take this week yet.
-        </p>
-      ) : !answer ? (
-        <div className="space-y-3">
-          <p
-            className="text-xs font-semibold leading-snug"
-            style={textColor ? { color: textColor, opacity: 0.7 } : { color: "var(--color-on-surface-variant)" }}
-          >
-            {hotTake.question}
-          </p>
-          <p
-            className="text-xs"
-            style={textColor ? { color: textColor, opacity: 0.5 } : { color: "var(--color-on-surface-variant)" }}
-          >
-            No answer yet.
-          </p>
         </div>
       ) : size === "small" ? (
         /* ── Small: image + answer text only ── */
