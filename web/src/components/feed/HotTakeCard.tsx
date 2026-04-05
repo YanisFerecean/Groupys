@@ -12,6 +12,7 @@ import {
   type HotTakeRes,
 } from "@/lib/hot-take-api";
 import { searchCommunities, searchUsers, type BackendUser, type CommunityRes } from "@/lib/api";
+import { useHotTakeStore } from "@/store/hotTakeStore";
 import MusicSearchInput, {
   type ArtistResult,
   type TrackResult,
@@ -174,6 +175,7 @@ export default function HotTakeCard() {
   const [editing, setEditing] = useState(false);
 
   const [dismissed, setDismissed] = useState(false);
+  const setHasUnanswered = useHotTakeStore((s) => s.setHasUnanswered);
   const [friendsAnswers, setFriendsAnswers] = useState<HotTakeAnswerRes[]>([]);
   const [friendsExpanded, setFriendsExpanded] = useState(false);
 
@@ -301,7 +303,7 @@ export default function HotTakeCard() {
           )}
           <button
             type="button"
-            onClick={() => { localStorage.setItem(`hot-take-dismissed-${hotTake.id}`, "1"); setDismissed(true); }}
+            onClick={() => { localStorage.setItem(`hot-take-dismissed-${hotTake.id}`, "1"); setDismissed(true); setHasUnanswered(false); }}
             className="text-on-surface-variant hover:text-on-surface transition-colors"
             aria-label="Dismiss hot take"
           >
