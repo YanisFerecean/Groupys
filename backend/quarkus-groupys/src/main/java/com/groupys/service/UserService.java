@@ -8,6 +8,7 @@ import com.groupys.repository.UserFollowRepository;
 import com.groupys.repository.UserRepository;
 import com.groupys.util.CountryUtil;
 import com.groupys.util.UserUtil;
+import io.quarkus.logging.Log;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -16,6 +17,7 @@ import jakarta.ws.rs.NotFoundException;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 @ApplicationScoped
 public class UserService {
@@ -140,7 +142,14 @@ public class UserService {
         if (dto.discoveryVisible() != null) {
             user.discoveryVisible = dto.discoveryVisible();
         }
-        discoveryService.refreshAfterUserChange(user.id);
+        final UUID userId = user.id;
+        CompletableFuture.runAsync(() -> {
+            try {
+                discoveryService.refreshAfterUserChange(userId);
+            } catch (Exception e) {
+                Log.warnf(e, "Background discovery refresh failed for user %s", userId);
+            }
+        });
         return mapUser(user);
     }
 
