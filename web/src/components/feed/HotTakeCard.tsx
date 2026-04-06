@@ -179,7 +179,6 @@ export default function HotTakeCard() {
   const [picks, setPicks] = useState<Pending[]>([]);
   const [freeTexts, setFreeTexts] = useState<string[]>([""]);
 
-  const [showOnWidget, setShowOnWidget] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [editing, setEditing] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -247,7 +246,7 @@ export default function HotTakeCard() {
       const answers = isFreeText ? freeTexts.map(t => t.trim()) : picks.map(p => p.name);
       const imageUrls = isFreeText ? freeTexts.map(() => null) : picks.map(p => p.imageUrl);
       const musicTypes = isFreeText ? freeTexts.map(() => null) : picks.map(p => p.musicType);
-      const result = await submitHotTakeAnswer(hotTake.id, answers, imageUrls, musicTypes, showOnWidget, token);
+      const result = await submitHotTakeAnswer(hotTake.id, answers, imageUrls, musicTypes, false, token);
       setMyAnswer(result);
       setPicks([]);
       setFreeTexts(Array(hotTake.answerCount).fill(""));
@@ -266,7 +265,6 @@ export default function HotTakeCard() {
     setEditing(true);
     setPicks([]);
     setFreeTexts(Array(hotTake.answerCount).fill(""));
-    setShowOnWidget(false);
   }
 
   function addPick(pick: Pending) {
@@ -460,19 +458,6 @@ export default function HotTakeCard() {
                 </div>
               )}
             </>
-          )}
-
-          {/* Consent + submit */}
-          {(canSubmit || isFreeText) && (
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={showOnWidget}
-                onChange={(e) => setShowOnWidget(e.target.checked)}
-                className="w-4 h-4 rounded accent-primary"
-              />
-              <span className="text-xs text-on-surface-variant">Show on my profile widget</span>
-            </label>
           )}
 
           <button

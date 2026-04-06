@@ -108,7 +108,6 @@ public class HotTakeService {
 
         return hotTakeRepository.findCurrent()
                 .flatMap(ht -> hotTakeAnswerRepository.findByHotTakeAndUser(ht.id, user.id))
-                .filter(a -> a.showOnWidget)
                 .map(this::toAnswerDto)
                 .orElse(null);
     }

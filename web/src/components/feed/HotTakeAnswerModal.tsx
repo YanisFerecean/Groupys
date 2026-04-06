@@ -135,7 +135,6 @@ export default function HotTakeAnswerModal({ open, hotTake, onClose, onAnswered 
   const [token, setToken] = useState<string | null>(null);
   const [picks, setPicks] = useState<Pending[]>([]);
   const [freeTexts, setFreeTexts] = useState<string[]>([""]);
-  const [showOnWidget, setShowOnWidget] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const count = hotTake.answerCount;
@@ -147,7 +146,6 @@ export default function HotTakeAnswerModal({ open, hotTake, onClose, onAnswered 
       getTokenRef.current().then(setToken);
       setPicks([]);
       setFreeTexts(Array(count).fill(""));
-      setShowOnWidget(false);
     }
   }, [open, count]);
 
@@ -179,7 +177,7 @@ export default function HotTakeAnswerModal({ open, hotTake, onClose, onAnswered 
       const answers = isFreeText ? freeTexts.map(t => t.trim()) : picks.map(p => p.name);
       const imageUrls = isFreeText ? freeTexts.map(() => null) : picks.map(p => p.imageUrl);
       const musicTypes = isFreeText ? freeTexts.map(() => null) : picks.map(p => p.musicType);
-      await submitHotTakeAnswer(hotTake.id, answers, imageUrls, musicTypes, showOnWidget, tok);
+      await submitHotTakeAnswer(hotTake.id, answers, imageUrls, musicTypes, false, tok);
       window.dispatchEvent(new Event("hot-take-answered"));
       onAnswered();
     } catch {
@@ -259,18 +257,6 @@ export default function HotTakeAnswerModal({ open, hotTake, onClose, onAnswered 
                 </div>
               )}
             </>
-          )}
-
-          {(canSubmit || isFreeText) && (
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={showOnWidget}
-                onChange={(e) => setShowOnWidget(e.target.checked)}
-                className="w-4 h-4 rounded accent-primary"
-              />
-              <span className="text-xs text-on-surface-variant">Show on my profile widget</span>
-            </label>
           )}
 
           <button

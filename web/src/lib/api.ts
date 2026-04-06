@@ -32,7 +32,7 @@ export interface BackendUser {
 
 function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCustomization> {
   const sorted = [...widgets].sort((a, b) => a.pos - b.pos);
-  const result: Partial<ProfileCustomization> = {};
+  const result: Partial<ProfileCustomization> = { showHotTake: false };
 
   result.widgetOrder = sorted.map((w) => w.type);
 
@@ -130,7 +130,7 @@ function profileToWidgets(profile: Partial<ProfileCustomization>): BackendWidget
   if (profile.showLastRatedAlbum) {
     widgetData.lastRatedAlbum = { type: "lastRatedAlbum", color: profile.lastRatedAlbumContainerColor ?? null, data: { size: profile.widgetSizes?.lastRatedAlbum ?? null, hidden: hidden.includes("lastRatedAlbum") } };
   }
-  if (profile.showHotTake !== false) {
+  if (profile.showHotTake === true) {
     widgetData.hotTake = { type: "hotTake", color: profile.hotTakeContainerColor ?? null, data: { show: true, size: profile.widgetSizes?.hotTake ?? null, hidden: hidden.includes("hotTake") } };
   }
   if (profile.topArtists?.length) {
@@ -393,7 +393,7 @@ export async function updateBackendUser(
     accentColor: data.accentColor ?? null,
     nameColor: data.nameColor ?? null,
     profileImage: data.profileImage ?? null,
-    widgets: widgets.length ? JSON.stringify(widgets) : null,
+    widgets: JSON.stringify(widgets),
     tags: data.tags ?? null,
   };
 
