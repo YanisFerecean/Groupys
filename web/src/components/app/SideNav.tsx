@@ -3,12 +3,13 @@
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { useHotTakeStore } from "@/store/hotTakeStore";
 
 const navItems = [
   { label: "Feed", icon: "rss_feed", href: "/feed" },
   { label: "Discover", icon: "explore", href: "/discover" },
   { label: "Mutuals", icon: "favorite", href: "/match" },
-{ label: "Profile", icon: "person_outline", href: "/profile" },
+  { label: "Profile", icon: "person_outline", href: "/profile" },
 ];
 
 interface SideNavProps {
@@ -18,6 +19,7 @@ interface SideNavProps {
 
 export default function SideNav({ open, onClose }: SideNavProps) {
   const pathname = usePathname();
+  const hasUnansweredHotTake = useHotTakeStore((s) => s.hasUnanswered);
 
   return (
     <>
@@ -61,8 +63,13 @@ export default function SideNav({ open, onClose }: SideNavProps) {
                       : "flex items-center gap-3 px-6 py-3 text-slate-500 font-medium hover:bg-surface-container rounded-xl transition-colors"
                   }
                 >
-                  <span className="material-symbols-outlined">
-                    {item.icon}
+                  <span className="relative">
+                    <span className="material-symbols-outlined">
+                      {item.icon}
+                    </span>
+                    {item.href === "/feed" && hasUnansweredHotTake && (
+                      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-primary border-2 border-surface" />
+                    )}
                   </span>
                   <span>{item.label}</span>
                 </Link>

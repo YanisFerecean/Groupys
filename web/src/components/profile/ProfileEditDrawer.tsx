@@ -152,6 +152,7 @@ export default function ProfileEditDrawer({
     artistsContainerColor: profile.artistsContainerColor,
     lastRatedAlbumContainerColor: profile.lastRatedAlbumContainerColor,
     currentlyListeningContainerColor: profile.currentlyListeningContainerColor,
+    hotTakeContainerColor: profile.hotTakeContainerColor,
   });
   const prevWidgetSettingsRef = useRef({
     widgetOrder: profile.widgetOrder,
@@ -167,7 +168,8 @@ export default function ProfileEditDrawer({
       profile.songsContainerColor !== prevColorsRef.current.songsContainerColor ||
       profile.artistsContainerColor !== prevColorsRef.current.artistsContainerColor ||
       profile.lastRatedAlbumContainerColor !== prevColorsRef.current.lastRatedAlbumContainerColor ||
-      profile.currentlyListeningContainerColor !== prevColorsRef.current.currentlyListeningContainerColor;
+      profile.currentlyListeningContainerColor !== prevColorsRef.current.currentlyListeningContainerColor ||
+      profile.hotTakeContainerColor !== prevColorsRef.current.hotTakeContainerColor;
 
     const settingsChanged =
       profile.widgetOrder !== prevWidgetSettingsRef.current.widgetOrder ||
@@ -183,6 +185,7 @@ export default function ProfileEditDrawer({
       artistsContainerColor: profile.artistsContainerColor,
       lastRatedAlbumContainerColor: profile.lastRatedAlbumContainerColor,
       currentlyListeningContainerColor: profile.currentlyListeningContainerColor,
+      hotTakeContainerColor: profile.hotTakeContainerColor,
     };
     prevWidgetSettingsRef.current = {
       widgetOrder: profile.widgetOrder,
@@ -199,6 +202,7 @@ export default function ProfileEditDrawer({
         artistsContainerColor: profile.artistsContainerColor,
         lastRatedAlbumContainerColor: profile.lastRatedAlbumContainerColor,
         currentlyListeningContainerColor: profile.currentlyListeningContainerColor,
+        hotTakeContainerColor: profile.hotTakeContainerColor,
       }),
       ...(settingsChanged && {
         widgetOrder: profile.widgetOrder,
@@ -213,6 +217,7 @@ export default function ProfileEditDrawer({
     profile.artistsContainerColor,
     profile.lastRatedAlbumContainerColor,
     profile.currentlyListeningContainerColor,
+    profile.hotTakeContainerColor,
     profile.widgetOrder,
     profile.widgetSizes,
     profile.hiddenWidgets,
@@ -852,6 +857,33 @@ const setListeningFromSearch = (result: TrackResult) => {
                   <span
                     className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow-md transition-transform duration-200 ${
                       form.showLastRatedAlbum ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Hot Take */}
+              <div className="flex items-center justify-between p-5 bg-surface-container-low rounded-2xl">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-primary text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>local_fire_department</span>
+                  </div>
+                  <div>
+                    <Label className="font-bold text-sm">Hot Take</Label>
+                    <p className="text-xs text-on-surface-variant mt-0.5">Show this week&apos;s hot take answer</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => set("showHotTake", form.showHotTake === false ? true : false)}
+                  className={`relative w-12 h-7 rounded-full transition-colors duration-200 ${
+                    form.showHotTake !== false ? "bg-primary" : "bg-surface-container-highest"
+                  }`}
+                  aria-label="Toggle hot take widget"
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow-md transition-transform duration-200 ${
+                      form.showHotTake !== false ? "translate-x-5" : "translate-x-0"
                     }`}
                   />
                 </button>

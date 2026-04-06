@@ -51,10 +51,12 @@
       "Bash(cmd /c \"mvnw.cmd compile -q\")",
       "Bash(cmd /c \"npm run build\")",
       "Bash(find /c/Uni/Projects/groupys-web-app/mobile/components -type f -name *rofile* -o -name *Avatar* -o -name *ommunity*)",
-      "Bash(find /c/Uni/Projects/groupys-web-app -type f \\\\\\(-iname *dm* -o -iname *direct* -o -iname *message* -o -iname *chat* -o -iname *conversation* \\\\\\))",
-      "Bash(find /c/Uni/Projects/groupys-web-app/backend -type f \\\\\\(-iname *dm* -o -iname *direct* -o -iname *message* -o -iname *chat* -o -iname *conversation* \\\\\\))",
-      "Bash(find /c/Uni/Projects/groupys-web-app/mobile -type f \\\\\\(-iname *dm* -o -iname *direct* -o -iname *message* -o -iname *chat* -o -iname *conversation* \\\\\\))",
-      "Bash(find /c/Uni/Projects/groupys-web-app -name *ws* -o -name *websocket*)"
+      "Bash(find /c/Uni/Projects/groupys-web-app/web/src/components/profile -name *.tsx)",
+      "Bash(find /c/Uni/Projects/groupys-web-app/web/src -name *.ts)",
+      "Bash(find /c/Uni/Projects/groupys-web-app/web/src/components/feed -name *.tsx)",
+      "Bash(\"/c/Uni/Projects/groupys-web-app/backend/quarkus-groupys/src/main/resources/application.properties\")",
+      "Bash(JAVA_HOME=\"\" ./mvnw compile -q)",
+      "Bash(find C:UniProjectsgroupys-web-app -type f -name *Match* -o -name *Friend* -o -name *Follow* -o -name *Connection*)"
     ]
   }
 }

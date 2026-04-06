@@ -100,7 +100,8 @@ const UserRecommendationCard = forwardRef<CardHandle, Props>(
           <Image
             src={user.profileImage}
             alt={user.displayName ?? user.username}
-            className="w-full h-full object-cover pointer-events-none"
+            fill
+            className="object-cover pointer-events-none"
             draggable={false}
           />
         ) : (

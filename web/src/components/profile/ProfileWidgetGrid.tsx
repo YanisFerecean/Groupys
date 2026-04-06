@@ -9,9 +9,10 @@ import CurrentlyListeningWidget from "./widgets/CurrentlyListeningWidget";
 import TopSongsWidget from "./widgets/TopSongsWidget";
 import TopArtistsWidget from "./widgets/TopArtistsWidget";
 import LastRatedAlbumWidget from "./widgets/LastRatedAlbumWidget";
+import HotTakeWidget from "./widgets/HotTakeWidget";
 import ColorPickerField from "./ColorPickerField";
 
-type WidgetType = "topAlbums" | "currentlyListening" | "topSongs" | "topArtists" | "lastRatedAlbum";
+type WidgetType = "topAlbums" | "currentlyListening" | "topSongs" | "topArtists" | "lastRatedAlbum" | "hotTake";
 type WidgetSize = "small" | "normal";
 type DropMode = "swap" | "before" | "after";
 
@@ -39,6 +40,7 @@ const WIDGET_COLOR_KEY: Partial<Record<WidgetType, keyof ProfileCustomization>> 
   topSongs: "songsContainerColor",
   topArtists: "artistsContainerColor",
   lastRatedAlbum: "lastRatedAlbumContainerColor",
+  hotTake: "hotTakeContainerColor",
 };
 
 function getWidgetColSpan(_type: WidgetType, size: WidgetSize): string {
@@ -176,8 +178,9 @@ function getActiveWidgets(profile: ProfileCustomization): WidgetType[] {
     { type: "topSongs", active: !!profile.topSongs?.length && !hidden.includes("topSongs") },
     { type: "topArtists", active: !!profile.topArtists?.length && !hidden.includes("topArtists") },
     { type: "lastRatedAlbum", active: !!profile.showLastRatedAlbum && !hidden.includes("lastRatedAlbum") },
+    { type: "hotTake", active: !!profile.showHotTake && !hidden.includes("hotTake") },
   ];
-  const defaultOrder: WidgetType[] = ["topAlbums", "currentlyListening", "topSongs", "topArtists", "lastRatedAlbum"];
+  const defaultOrder: WidgetType[] = ["topAlbums", "currentlyListening", "topSongs", "topArtists", "lastRatedAlbum", "hotTake"];
   const order = (profile.widgetOrder as WidgetType[] | undefined) ?? defaultOrder;
 
   const inOrder = order.filter((t) => all.find((w) => w.type === t)?.active);
@@ -207,6 +210,8 @@ function renderWidget(
       return <TopArtistsWidget artists={profile.topArtists} containerColor={profile.artistsContainerColor} size={size} />;
     case "lastRatedAlbum":
       return <LastRatedAlbumWidget username={username} containerColor={profile.lastRatedAlbumContainerColor} size={size} />;
+    case "hotTake":
+      return <HotTakeWidget username={username} containerColor={profile.hotTakeContainerColor} size={size} />;
   }
 }
 
