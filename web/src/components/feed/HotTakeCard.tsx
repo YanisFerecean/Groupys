@@ -140,7 +140,7 @@ function FriendPickRow({ answer }: { answer: HotTakeAnswerRes }) {
   const extra = answer.answers.length - 1;
 
   return (
-    <div className="flex items-center gap-3 py-2">
+    <div className="flex items-center gap-3 py-2.5">
       {answer.profileImage ? (
         <Image src={answer.profileImage} alt={answer.displayName ?? answer.username} width={32} height={32} className="rounded-full object-cover shrink-0" />
       ) : (
@@ -149,7 +149,7 @@ function FriendPickRow({ answer }: { answer: HotTakeAnswerRes }) {
         </div>
       )}
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-semibold truncate">{answer.displayName ?? answer.username}</p>
+        <p className="text-xs font-semibold text-on-surface truncate">{answer.displayName ?? answer.username}</p>
         <p className="text-xs text-on-surface-variant truncate">
           {first}{extra > 0 ? ` +${extra} more` : ""}
         </p>
@@ -298,217 +298,220 @@ export default function HotTakeCard() {
     : undefined;
 
   return (
-    <div className="rounded-2xl overflow-hidden border border-primary/20 bg-gradient-to-br from-primary/10 via-surface-container-low to-surface-container-low mb-6">
-      {/* Header */}
-      <div className="px-5 pt-5 pb-3 flex items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span
-              className="material-symbols-outlined text-primary"
-              style={{ fontSize: 18, fontVariationSettings: "'FILL' 1" }}
-            >
-              local_fire_department
-            </span>
-            <span className="text-xs font-bold uppercase tracking-widest text-primary">
-              Hot Take
-              {hotTake.weekLabel ? ` · ${hotTake.weekLabel}` : ""}
-            </span>
+    <div className="rounded-2xl overflow-hidden mb-6 border border-outline-variant shadow-sm">
+      {/* ── Red header ── */}
+      <div
+        className="px-5 pt-5 pb-5"
+        style={{ background: "linear-gradient(135deg, var(--color-primary) 0%, color-mix(in srgb, var(--color-primary) 75%, black) 100%)" }}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 mb-2">
+              <span
+                className="material-symbols-outlined text-white/90"
+                style={{ fontSize: 16, fontVariationSettings: "'FILL' 1" }}
+              >
+                local_fire_department
+              </span>
+              <span className="text-xs font-bold uppercase tracking-widest text-white/70">
+                Hot Take{hotTake.weekLabel ? ` · ${hotTake.weekLabel}` : ""}
+              </span>
+            </div>
+            <p className="text-[15px] font-bold text-white leading-snug">
+              {hotTake.question}
+            </p>
           </div>
-          <p className="text-base font-bold text-on-surface leading-snug">
-            {hotTake.question}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0 mt-1">
-          {answered && (
+          <div className="flex items-center gap-2 shrink-0">
+            {answered && (
+              <button
+                type="button"
+                onClick={handleStartEditing}
+                className="text-xs font-semibold text-white/60 hover:text-white transition-colors"
+              >
+                Edit
+              </button>
+            )}
             <button
               type="button"
-              onClick={handleStartEditing}
-              className="text-xs font-semibold text-on-surface-variant hover:text-on-surface transition-colors"
+              onClick={() => { localStorage.setItem(`hot-take-dismissed-${hotTake.id}`, "1"); setDismissed(true); setHasUnanswered(false); }}
+              className="text-white/50 hover:text-white transition-colors"
+              aria-label="Dismiss"
             >
-              Change
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>close</span>
             </button>
-          )}
-          <button
-            type="button"
-            onClick={() => { localStorage.setItem(`hot-take-dismissed-${hotTake.id}`, "1"); setDismissed(true); setHasUnanswered(false); }}
-            className="text-on-surface-variant hover:text-on-surface transition-colors"
-            aria-label="Dismiss hot take"
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>close</span>
-          </button>
+          </div>
         </div>
       </div>
 
-      {/* Answered state */}
-      {answered && myAnswer && (
-        <div className="px-5 pb-4 space-y-2">
-          {myAnswer.answers.map((ans, i) => (
-            <div key={i} className="flex items-center gap-3">
-              {myAnswer.imageUrls[i] ? (
-                <div className="relative w-12 h-12 rounded-xl overflow-hidden shrink-0 shadow">
-                  <Image src={myAnswer.imageUrls[i]!} alt={ans} fill className="object-cover" />
-                </div>
-              ) : (
-                <div className="w-12 h-12 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
-                  <span
-                    className="material-symbols-outlined text-primary"
-                    style={{ fontSize: 22, fontVariationSettings: "'FILL' 1" }}
-                  >
-                    {myAnswer.musicTypes[i] === "SONG" || myAnswer.musicTypes[i] === "track" ? "music_note" :
-                     myAnswer.musicTypes[i] === "ALBUM" || myAnswer.musicTypes[i] === "album" ? "album" :
-                     myAnswer.musicTypes[i] === "COMMUNITY" ? "group" :
-                     myAnswer.musicTypes[i] === "USER" ? "person" : "local_fire_department"}
-                  </span>
-                </div>
-              )}
-              <div className="min-w-0 flex-1">
-                {count > 1 && <p className="text-xs text-on-surface-variant mb-0.5">Pick {i + 1}</p>}
-                {i === 0 && count === 1 && <p className="text-xs text-on-surface-variant mb-0.5">Your pick</p>}
-                <p className="font-bold text-sm text-on-surface truncate">{ans}</p>
-              </div>
-              {i === 0 && (
-                <span
-                  className="material-symbols-outlined text-primary ml-auto shrink-0"
-                  style={{ fontSize: 20, fontVariationSettings: "'FILL' 1" }}
-                >
-                  check_circle
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+      {/* ── Body ── */}
+      <div className="bg-surface-container-low">
 
-      {/* Input state */}
-      {!answered && (
-        <div className="px-5 pb-5 space-y-3">
-          {isFreeText ? (
-            freeTexts.map((text, i) => (
-              <Input
-                key={i}
-                value={text}
-                onChange={(e) => setFreeTexts(prev => prev.map((v, idx) => idx === i ? e.target.value : v))}
-                placeholder={count > 1 ? `Answer ${i + 1}…` : "Type your answer…"}
-                onKeyDown={(e) => { if (e.key === "Enter" && i === freeTexts.length - 1) handleSubmit(); }}
-              />
-            ))
-          ) : (
-            <>
-              {/* Selected picks */}
-              {picks.map((pick, i) => (
-                <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-surface-container">
-                  {pick.imageUrl ? (
-                    <div className="relative w-10 h-10 rounded-lg overflow-hidden shrink-0">
-                      <Image src={pick.imageUrl} alt={pick.name} fill className="object-cover" />
-                    </div>
-                  ) : (
-                    <div className="w-10 h-10 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
-                      <span className="material-symbols-outlined text-primary" style={{ fontSize: 18 }}>
-                        {answerTypeIcon}
-                      </span>
-                    </div>
-                  )}
-                  {count > 1 && <span className="text-xs text-on-surface-variant shrink-0">#{i + 1}</span>}
-                  <p className="flex-1 min-w-0 text-sm font-semibold truncate">{pick.name}</p>
-                  <button
-                    type="button"
-                    onClick={() => removePick(i)}
-                    className="text-on-surface-variant hover:text-on-surface transition-colors shrink-0"
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: 18 }}>close</span>
-                  </button>
-                </div>
-              ))}
-
-              {/* Search input — shown until all picks are filled */}
-              {picks.length < count && (
-                <div className="space-y-1">
-                  {pickLabel && (
-                    <p className="text-xs font-semibold text-on-surface-variant">{pickLabel}</p>
-                  )}
-                  {answerType === "ARTIST" ? (
-                    <MusicSearchInput
-                      type="artist"
-                      placeholder="Search for an artist…"
-                      onSelect={(r: ArtistResult) => addPick({ name: r.name, imageUrl: r.imageUrl || null, musicType: "ARTIST" })}
-                    />
-                  ) : answerType === "ALBUM" ? (
-                    <MusicSearchInput
-                      type="album"
-                      placeholder="Search for an album…"
-                      onSelect={(r: AlbumResult) => addPick({ name: `${r.title} — ${r.artist}`, imageUrl: r.coverUrl || null, musicType: "ALBUM" })}
-                    />
-                  ) : answerType === "SONG" ? (
-                    <MusicSearchInput
-                      type="track"
-                      placeholder="Search for a song…"
-                      onSelect={(r: TrackResult) => addPick({ name: `${r.title} — ${r.artist}`, imageUrl: r.coverUrl || null, musicType: "SONG" })}
-                    />
-                  ) : answerType === "USER" ? (
-                    <UserSearchInput
-                      token={token}
-                      onSelect={(name, imageUrl) => addPick({ name, imageUrl, musicType: "USER" })}
-                    />
-                  ) : answerType === "COMMUNITY" ? (
-                    <CommunitySearchInput
-                      token={token}
-                      onSelect={(name, imageUrl) => addPick({ name, imageUrl, musicType: "COMMUNITY" })}
-                    />
-                  ) : null}
-                </div>
-              )}
-            </>
-          )}
-
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={!canSubmit || submitting}
-            className="w-full py-2.5 rounded-xl text-sm font-bold bg-primary text-on-primary hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {submitting ? "Submitting…" : count > 1 ? `Submit my ${count} picks` : "Submit my pick"}
-          </button>
-        </div>
-      )}
-
-      {/* Friends' picks */}
-      <div className="border-t border-surface-container-high/50">
-        {answered ? (
-          <div className="px-5 py-3">
-            <button
-              type="button"
-              onClick={() => setFriendsExpanded((e) => !e)}
-              className="flex items-center gap-2 text-xs font-semibold text-on-surface-variant hover:text-on-surface transition-colors w-full"
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>group</span>
-              See what your friends picked
-              <span className="material-symbols-outlined ml-auto" style={{ fontSize: 16 }}>
-                {friendsExpanded ? "expand_less" : "expand_more"}
-              </span>
-            </button>
-            {friendsExpanded && (
-              <div className="mt-2 divide-y divide-surface-container-high/50">
-                {friendsAnswers.length === 0 ? (
-                  <p className="text-xs text-on-surface-variant py-3 text-center">
-                    None of your friends have shared their pick yet.
-                  </p>
+        {/* Answered state */}
+        {answered && myAnswer && (
+          <div className="px-5 py-4 space-y-2.5">
+            {myAnswer.answers.map((ans, i) => (
+              <div key={i} className="flex items-center gap-3">
+                {myAnswer.imageUrls[i] ? (
+                  <div className="relative w-11 h-11 rounded-xl overflow-hidden shrink-0 shadow-sm">
+                    <Image src={myAnswer.imageUrls[i]!} alt={ans} fill className="object-cover" />
+                  </div>
                 ) : (
-                  friendsAnswers.map((a) => <FriendPickRow key={a.id} answer={a} />)
+                  <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                    <span
+                      className="material-symbols-outlined text-primary"
+                      style={{ fontSize: 20, fontVariationSettings: "'FILL' 1" }}
+                    >
+                      {myAnswer.musicTypes[i] === "SONG" || myAnswer.musicTypes[i] === "track" ? "music_note" :
+                       myAnswer.musicTypes[i] === "ALBUM" || myAnswer.musicTypes[i] === "album" ? "album" :
+                       myAnswer.musicTypes[i] === "COMMUNITY" ? "group" :
+                       myAnswer.musicTypes[i] === "USER" ? "person" : "local_fire_department"}
+                    </span>
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  {count > 1 && <p className="text-xs text-on-surface-variant mb-0.5">Pick {i + 1}</p>}
+                  {i === 0 && count === 1 && <p className="text-xs text-on-surface-variant mb-0.5">Your pick</p>}
+                  <p className="font-bold text-sm text-on-surface truncate">{ans}</p>
+                </div>
+                {i === 0 && (
+                  <span
+                    className="material-symbols-outlined text-primary ml-auto shrink-0"
+                    style={{ fontSize: 20, fontVariationSettings: "'FILL' 1" }}
+                  >
+                    check_circle
+                  </span>
                 )}
               </div>
-            )}
-          </div>
-        ) : (
-          <div className="px-5 py-3 flex items-center gap-2">
-            <div className="flex-1 blur-sm pointer-events-none select-none">
-              <div className="flex items-center gap-2 text-xs font-semibold text-on-surface-variant">
-                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>group</span>
-                See what your friends picked
-              </div>
-            </div>
-            <span className="text-xs text-on-surface-variant/60 shrink-0">Answer first to unlock</span>
+            ))}
           </div>
         )}
+
+        {/* Input state */}
+        {!answered && (
+          <div className="px-5 py-4 space-y-3">
+            {isFreeText ? (
+              freeTexts.map((text, i) => (
+                <Input
+                  key={i}
+                  value={text}
+                  onChange={(e) => setFreeTexts(prev => prev.map((v, idx) => idx === i ? e.target.value : v))}
+                  placeholder={count > 1 ? `Answer ${i + 1}…` : "Type your answer…"}
+                  onKeyDown={(e) => { if (e.key === "Enter" && i === freeTexts.length - 1) handleSubmit(); }}
+                />
+              ))
+            ) : (
+              <>
+                {/* Selected picks */}
+                {picks.map((pick, i) => (
+                  <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-surface-container">
+                    {pick.imageUrl ? (
+                      <div className="relative w-10 h-10 rounded-lg overflow-hidden shrink-0">
+                        <Image src={pick.imageUrl} alt={pick.name} fill className="object-cover" />
+                      </div>
+                    ) : (
+                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                        <span className="material-symbols-outlined text-primary" style={{ fontSize: 18 }}>
+                          {answerTypeIcon}
+                        </span>
+                      </div>
+                    )}
+                    {count > 1 && <span className="text-xs text-on-surface-variant shrink-0">#{i + 1}</span>}
+                    <p className="flex-1 min-w-0 text-sm font-semibold text-on-surface truncate">{pick.name}</p>
+                    <button
+                      type="button"
+                      onClick={() => removePick(i)}
+                      className="text-on-surface-variant hover:text-on-surface transition-colors shrink-0"
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 18 }}>close</span>
+                    </button>
+                  </div>
+                ))}
+
+                {/* Search input */}
+                {picks.length < count && (
+                  <div className="space-y-1">
+                    {pickLabel && (
+                      <p className="text-xs font-semibold text-on-surface-variant">{pickLabel}</p>
+                    )}
+                    {answerType === "ARTIST" ? (
+                      <MusicSearchInput
+                        type="artist"
+                        placeholder="Search for an artist…"
+                        onSelect={(r: ArtistResult) => addPick({ name: r.name, imageUrl: r.imageUrl || null, musicType: "ARTIST" })}
+                      />
+                    ) : answerType === "ALBUM" ? (
+                      <MusicSearchInput
+                        type="album"
+                        placeholder="Search for an album…"
+                        onSelect={(r: AlbumResult) => addPick({ name: `${r.title} — ${r.artist}`, imageUrl: r.coverUrl || null, musicType: "ALBUM" })}
+                      />
+                    ) : answerType === "SONG" ? (
+                      <MusicSearchInput
+                        type="track"
+                        placeholder="Search for a song…"
+                        onSelect={(r: TrackResult) => addPick({ name: `${r.title} — ${r.artist}`, imageUrl: r.coverUrl || null, musicType: "SONG" })}
+                      />
+                    ) : answerType === "USER" ? (
+                      <UserSearchInput
+                        token={token}
+                        onSelect={(name, imageUrl) => addPick({ name, imageUrl, musicType: "USER" })}
+                      />
+                    ) : answerType === "COMMUNITY" ? (
+                      <CommunitySearchInput
+                        token={token}
+                        onSelect={(name, imageUrl) => addPick({ name, imageUrl, musicType: "COMMUNITY" })}
+                      />
+                    ) : null}
+                  </div>
+                )}
+              </>
+            )}
+
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={!canSubmit || submitting}
+              className="w-full py-2.5 rounded-xl text-sm font-bold bg-primary text-white hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {submitting ? "Submitting…" : count > 1 ? `Submit my ${count} picks` : "Submit my pick"}
+            </button>
+          </div>
+        )}
+
+        {/* Friends' picks */}
+        <div className="border-t border-outline-variant">
+          {answered ? (
+            <div className="px-5 py-3">
+              <button
+                type="button"
+                onClick={() => setFriendsExpanded((e) => !e)}
+                className="flex items-center gap-2 text-xs font-semibold text-on-surface-variant hover:text-on-surface transition-colors w-full"
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>group</span>
+                See what your friends picked
+                <span className="material-symbols-outlined ml-auto" style={{ fontSize: 16 }}>
+                  {friendsExpanded ? "expand_less" : "expand_more"}
+                </span>
+              </button>
+              {friendsExpanded && (
+                <div className="mt-2 divide-y divide-outline-variant">
+                  {friendsAnswers.length === 0 ? (
+                    <p className="text-xs text-on-surface-variant py-3 text-center">
+                      None of your friends have answered yet.
+                    </p>
+                  ) : (
+                    friendsAnswers.map((a) => <FriendPickRow key={a.id} answer={a} />)
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="px-5 py-3 flex items-center gap-3">
+              <span className="material-symbols-outlined text-on-surface-variant/40" style={{ fontSize: 16 }}>lock</span>
+              <p className="text-xs text-on-surface-variant">Answer to see what your friends picked</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -127,7 +127,7 @@ export default function HotTakeWidget({ username, containerColor, size = "normal
                       className="material-symbols-outlined text-on-surface-variant/40"
                       style={{ fontSize: 20, fontVariationSettings: "'FILL' 1" }}
                     >
-                      {answer!.musicTypes[i] === "track" ? "music_note" : answer!.musicTypes[i] === "album" ? "album" : "person"}
+                      {answer!.musicTypes[i] === "SONG" || answer!.musicTypes[i] === "track" ? "music_note" : answer!.musicTypes[i] === "ALBUM" || answer!.musicTypes[i] === "album" ? "album" : answer!.musicTypes[i] === "COMMUNITY" ? "group" : "person"}
                     </span>
                   </div>
                 )}
