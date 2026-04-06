@@ -1,8 +1,9 @@
 "use client";
 
-import { memo, useRef } from "react";
+import { memo, useCallback, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { MessageCircle } from "lucide-react";
 import { Conversation } from "@/types/chat";
 import { useUser } from "@clerk/nextjs";
 
@@ -49,8 +50,10 @@ const ConversationItem = memo(function ConversationItem({
   return (
     <Link
       href={`/chat/${convo.id}`}
-      className={`flex items-center gap-3 p-3 w-full border-b border-surface-container-high transition-colors hover:bg-surface-container ${
-        isActive ? "bg-surface-container font-medium" : ""
+      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors ${
+        isActive
+          ? "bg-primary/10 font-medium"
+          : "hover:bg-surface-container/70"
       }`}
     >
       {/* Avatar */}
@@ -78,7 +81,7 @@ const ConversationItem = memo(function ConversationItem({
       {/* Details */}
       <div className="flex-1 min-w-0 flex flex-col justify-center">
         <div className="flex justify-between items-baseline mb-0.5">
-          <h3 className="truncate font-semibold text-on-surface text-sm">
+          <h3 className={`truncate text-on-surface text-sm ${convo.unreadCount > 0 ? "font-bold" : "font-semibold"}`}>
             {displayName}
           </h3>
           {convo.requestStatus !== "ACCEPTED" ? (
@@ -120,24 +123,28 @@ export function ConversationList({ conversations, activeId, hasMore, isLoadingMo
   const { user } = useUser();
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const handleScroll = () => {
+  const handleScroll = useCallback(() => {
     const el = containerRef.current;
     if (!el || !hasMore || isLoadingMore || !onLoadMore) return;
     if (el.scrollHeight - el.scrollTop - el.clientHeight < 100) {
       onLoadMore();
     }
-  };
+  }, [hasMore, isLoadingMore, onLoadMore]);
 
   if (conversations.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center p-4 text-center">
-        <p className="text-on-surface-variant text-sm">No conversations yet.</p>
+      <div className="flex-1 flex flex-col items-center justify-center p-4 text-center">
+        <div className="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center">
+          <MessageCircle className="w-7 h-7 text-on-surface-variant" />
+        </div>
+        <p className="text-sm font-medium text-on-surface mt-3">No conversations yet</p>
+        <p className="text-xs text-on-surface-variant mt-1 max-w-[180px]">Start a new chat with the + button above</p>
       </div>
     );
   }
 
   return (
-    <div ref={containerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto w-full custom-scrollbar">
+    <div ref={containerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto w-full custom-scrollbar px-2 py-2 space-y-0.5">
       {conversations.map((convo) => (
         <ConversationItem
           key={convo.id}

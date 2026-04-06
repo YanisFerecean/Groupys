@@ -405,6 +405,65 @@ export async function updateBackendUser(
   return res.json();
 }
 
+// ── Artist search ──────────────────────────────────────────────────────────
+
+export interface ArtistSearchResult {
+  id: string;
+  name: string;
+  primaryGenre: { id: string; name: string } | null;
+  images: string[];
+  listeners: number;
+  summary: string;
+}
+
+export async function searchArtists(
+  query: string,
+  token: string | null,
+  limit = 8,
+): Promise<ArtistSearchResult[]> {
+  if (!query || query.trim().length === 0) return [];
+  const params = new URLSearchParams({ q: query.trim(), limit: String(limit) });
+  const res = await apiRequest(`/artists/search?${params}`, token);
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to search artists"));
+  return res.json();
+}
+
+export async function fetchArtistsByGenre(
+  genre: string,
+  token: string | null,
+  limit = 8,
+): Promise<ArtistSearchResult[]> {
+  if (!genre) return [];
+  const params = new URLSearchParams({ limit: String(limit) });
+  const res = await apiRequest(`/artists/genre/${encodeURIComponent(genre)}?${params}`, token);
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to fetch artists by genre"));
+  return res.json();
+}
+
+// ── Community by genre ────────────────────────────────────────────────────
+
+export async function fetchCommunitiesByGenre(
+  genre: string,
+  token: string | null,
+): Promise<CommunityRes[]> {
+  if (!genre) return [];
+  const res = await apiRequest(`/communities/genre/${encodeURIComponent(genre)}`, token);
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to fetch communities by genre"));
+  return res.json();
+}
+
+// ── Community join ────────────────────────────────────────────────────────
+
+export async function joinCommunity(
+  communityId: string,
+  token: string | null,
+): Promise<void> {
+  const res = await apiRequest(`/communities/${encodeURIComponent(communityId)}/join`, token, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to join community"));
+}
+
 export async function uploadProfileBanner(
   file: File,
   token: string | null,

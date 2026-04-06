@@ -38,6 +38,7 @@ interface MessageThreadProps {
   messages: Message[];
   conversationId: string;
   hasMore: boolean;
+  isLoading?: boolean;
   isLoadingMore: boolean;
   isDecrypting?: boolean;
   onLoadMore: () => void;
@@ -45,7 +46,7 @@ interface MessageThreadProps {
   onRetry?: (msg: Message) => void;
 }
 
-export function MessageThread({ messages, conversationId, hasMore, isLoadingMore, isDecrypting, onLoadMore, otherLastReadAt, onRetry }: MessageThreadProps) {
+export function MessageThread({ messages, conversationId, hasMore, isLoading, isLoadingMore, isDecrypting, onLoadMore, otherLastReadAt, onRetry }: MessageThreadProps) {
   const { user } = useUser();
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -123,7 +124,7 @@ export function MessageThread({ messages, conversationId, hasMore, isLoadingMore
 
   return (
     <div
-      className="flex-1 overflow-y-auto p-4 custom-scrollbar"
+      className="flex-1 overflow-y-auto px-4 md:px-6 py-4 custom-scrollbar"
       ref={containerRef}
       onScroll={handleScroll}
     >
@@ -137,8 +138,10 @@ export function MessageThread({ messages, conversationId, hasMore, isLoadingMore
       )}
 
       {!hasMore && messages.length > 0 && (
-        <div className="text-center py-6 text-xs text-on-surface-variant">
-          This is the beginning of the conversation.
+        <div className="flex justify-center py-6">
+          <span className="text-[11px] text-on-surface-variant bg-surface-container px-3 py-1 rounded-full">
+            Beginning of conversation
+          </span>
         </div>
       )}
 
@@ -154,12 +157,12 @@ export function MessageThread({ messages, conversationId, hasMore, isLoadingMore
         </div>
       )}
 
-      {isDecrypting && (
+      {(isDecrypting || isLoading) && (
         <div className="flex flex-col space-y-3 animate-pulse">
-          {[72, 48, 96, 56, 80].map((w, i) => (
+          {[55, 35, 70, 45, 80, 30, 60].map((w, i) => (
             <div key={i} className={`flex ${i % 2 === 0 ? "justify-end" : "justify-start"}`}>
               <div
-                className={`h-9 rounded-2xl bg-surface-container-high ${i % 2 === 0 ? "rounded-br-sm" : "rounded-bl-sm"}`}
+                className={`h-9 rounded-3xl bg-surface-container-high ${i % 2 === 0 ? "rounded-br-sm" : "rounded-bl-sm"}`}
                 style={{ width: `${w}%`, maxWidth: "75%" }}
               />
             </div>
@@ -167,7 +170,7 @@ export function MessageThread({ messages, conversationId, hasMore, isLoadingMore
         </div>
       )}
 
-      <div className={`flex flex-col space-y-1 ${isDecrypting ? "invisible" : ""}`}>
+      <div className={`flex flex-col space-y-1 ${(isDecrypting || isLoading) ? "invisible" : ""}`}>
         {displayMessages.map((msg, idx) => {
           const isMine = msg.senderUsername === user?.username;
 
@@ -183,12 +186,10 @@ export function MessageThread({ messages, conversationId, hasMore, isLoadingMore
           return (
             <div key={msg.id || msg.tempId}>
               {showDateSeparator && (
-                <div className="flex items-center gap-3 my-4">
-                  <div className="flex-1 h-px bg-surface-container-high" />
-                  <span className="text-[11px] text-on-surface-variant font-medium px-1">
+                <div className="flex justify-center my-4">
+                  <span className="text-[11px] text-on-surface-variant font-medium bg-surface-container px-3 py-1 rounded-full">
                     {formatDay(msg.createdAt)}
                   </span>
-                  <div className="flex-1 h-px bg-surface-container-high" />
                 </div>
               )}
               <MessageBubble
