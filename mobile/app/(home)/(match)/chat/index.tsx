@@ -1,31 +1,36 @@
 import { Ionicons } from '@expo/vector-icons'
 import { useUser } from '@clerk/expo'
+import { SymbolView } from 'expo-symbols'
 import { useRouter } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
+  Platform,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { ChatRequestListItem } from '@/components/chat/ChatRequestListItem'
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import { ConversationListItem } from '@/components/chat/ConversationListItem'
-import { NewConversationModal } from '@/components/chat/NewConversationModal'
+import { buildMockRequestConversations } from '@/constants/chatRequestMockData'
 import { Colors } from '@/constants/colors'
 import { useChat } from '@/hooks/useChat'
 import { isEncrypted } from '@/lib/chat-crypto'
 import { publicProfilePath } from '@/lib/profileRoutes'
+import type { Conversation } from '@/models/Chat'
+
+const CONVERSATION_RENDER_BATCH = 12
+const MOCK_REQUEST_COUNT = 8
 
 export default function ChatInboxScreen() {
   const insets = useSafeAreaInsets()
   const router = useRouter()
+  const useGlass = isLiquidGlassAvailable()
   const { user } = useUser()
   const {
-    acceptDirectRequest,
     conversations,
-    denyDirectRequest,
     decryptForUsername,
     hasMore,
     isLoading,
@@ -33,19 +38,69 @@ export default function ChatInboxScreen() {
     loadMoreConversations,
     refreshConversations,
   } = useChat()
-  const [composerVisible, setComposerVisible] = useState(false)
+
   const [decryptedPreviews, setDecryptedPreviews] = useState<Record<string, string>>({})
-  const [requestAction, setRequestAction] = useState<{
-    action: 'accept' | 'deny'
-    conversationId: string
-  } | null>(null)
+  const [visibleConversationCount, setVisibleConversationCount] = useState(CONVERSATION_RENDER_BATCH)
   const decryptedKeysRef = useRef(new Set<string>())
+  const mockRequestConversationsRef = useRef<Conversation[]>(buildMockRequestConversations(MOCK_REQUEST_COUNT))
+
   const requestConversations = conversations.filter(
     conversation => conversation.requestStatus !== 'ACCEPTED',
   )
   const activeConversations = conversations.filter(
     conversation => conversation.requestStatus === 'ACCEPTED',
   )
+  const visibleActiveConversations = activeConversations.slice(0, visibleConversationCount)
+  const hasHiddenConversations = visibleConversationCount < activeConversations.length
+
+  const usingMockRequests = requestConversations.length === 0 && !isLoading
+  const hasChatRequests = usingMockRequests
+    ? mockRequestConversationsRef.current.length > 0
+    : requestConversations.length > 0
+
+  useEffect(() => {
+    setVisibleConversationCount(previous => {
+      if (activeConversations.length === 0) {
+        return CONVERSATION_RENDER_BATCH
+      }
+      if (previous > activeConversations.length) {
+        return activeConversations.length
+      }
+      if (previous < CONVERSATION_RENDER_BATCH) {
+        return Math.min(CONVERSATION_RENDER_BATCH, activeConversations.length)
+      }
+      return previous
+    })
+  }, [activeConversations.length])
+
+  const handleLoadMore = () => {
+    if (hasHiddenConversations) {
+      setVisibleConversationCount(previous =>
+        Math.min(previous + CONVERSATION_RENDER_BATCH, activeConversations.length),
+      )
+      return
+    }
+
+    if (hasMore && !isLoadingMore && !isLoading) {
+      void loadMoreConversations()
+    }
+  }
+
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back()
+    } else {
+      router.replace('/(home)/(match)')
+    }
+  }
+
+  const handleOpenComposer = () => {
+    router.push('/(home)/(match)/chat/new' as never)
+  }
+
+  const handleOpenRequests = () => {
+    router.push('/(home)/(match)/chat/requests' as never)
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -92,135 +147,144 @@ export default function ChatInboxScreen() {
         className="flex-row items-center justify-between bg-surface px-5 pb-4"
         style={{ paddingTop: insets.top + 8 }}
       >
-        <View>
-          <Text className="text-4xl font-extrabold tracking-tighter text-primary">
-            Messages
-          </Text>
-          <Text className="mt-2 text-[15px] font-medium text-on-surface-variant">
-            Requests and conversations in one place.
-          </Text>
+        <View className="flex-1 flex-row items-center gap-3 pr-4">
+          {useGlass ? (
+            <GlassView isInteractive style={{ borderRadius: 999, overflow: 'hidden' }}>
+              <TouchableOpacity
+                className="h-10 w-10 items-center justify-center rounded-full"
+                onPress={handleBack}
+                activeOpacity={0.75}
+              >
+                <Ionicons name="chevron-back" size={20} color="#000000" />
+              </TouchableOpacity>
+            </GlassView>
+          ) : (
+            <TouchableOpacity
+              className="h-10 w-10 items-center justify-center self-start rounded-full bg-surface-container"
+              onPress={handleBack}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="chevron-back" size={20} color="#000000" />
+            </TouchableOpacity>
+          )}
+
+          <View className="flex-1">
+            <Text className="text-4xl font-extrabold tracking-tighter text-primary">
+              DMs
+            </Text>
+          </View>
         </View>
-        <TouchableOpacity
-          className="h-11 w-11 items-center justify-center rounded-full bg-surface-container"
-          onPress={() => setComposerVisible(true)}
-        >
-          <Ionicons name="add" size={24} color={Colors.primary} />
-        </TouchableOpacity>
+        {useGlass ? (
+          <GlassView isInteractive style={{ borderRadius: 999, overflow: 'hidden' }}>
+            <TouchableOpacity
+              className="h-11 w-11 items-center justify-center rounded-full"
+              onPress={handleOpenComposer}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="add" size={24} color={Colors.primary} />
+            </TouchableOpacity>
+          </GlassView>
+        ) : (
+          <TouchableOpacity
+            className="h-11 w-11 items-center justify-center rounded-full bg-surface-container"
+            onPress={handleOpenComposer}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="add" size={24} color={Colors.primary} />
+          </TouchableOpacity>
+        )}
       </View>
 
-      <View className="px-5 pb-3">
-        <TouchableOpacity
-          className="flex-row items-center self-start rounded-full bg-surface-container px-3 py-2"
-          onPress={() => {
-            if (router.canGoBack()) {
-              router.back()
-            } else {
-              router.replace('/(home)/(match)')
-            }
-          }}
-        >
-          <Ionicons name="chevron-back" size={18} color={Colors.onSurface} />
-          <Text className="ml-1 text-sm font-semibold text-on-surface">Back to People</Text>
-        </TouchableOpacity>
-      </View>
+      {hasChatRequests ? (
+        <View className="px-5 pb-3">
+          <View className="flex-row items-center gap-3">
+            {useGlass ? (
+              <GlassView style={{ flex: 1, borderRadius: 999, overflow: 'hidden' }} isInteractive>
+                <TouchableOpacity
+                  onPress={handleOpenRequests}
+                  className="px-4 py-3"
+                  activeOpacity={0.85}
+                >
+                  <Text className="text-sm font-semibold tracking-wide text-primary">Chat Request</Text>
+                </TouchableOpacity>
+              </GlassView>
+            ) : (
+              <TouchableOpacity
+                className="flex-1 rounded-full bg-surface-container px-4 py-3"
+                onPress={handleOpenRequests}
+                activeOpacity={0.85}
+              >
+                <Text className="text-sm font-semibold tracking-wide text-primary">Chat Request</Text>
+              </TouchableOpacity>
+            )}
+
+            {useGlass ? (
+              <GlassView style={{ borderRadius: 999, overflow: 'hidden' }} isInteractive>
+                <TouchableOpacity
+                  className="h-11 w-11 items-center justify-center rounded-full"
+                  onPress={handleOpenRequests}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="chevron-forward" size={18} color={Colors.primary} />
+                </TouchableOpacity>
+              </GlassView>
+            ) : (
+              <TouchableOpacity
+                className="h-11 w-11 items-center justify-center rounded-full bg-surface-container"
+                onPress={handleOpenRequests}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="chevron-forward" size={18} color={Colors.onSurfaceVariant} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      ) : null}
 
       <FlatList
-        data={activeConversations}
+        data={visibleActiveConversations}
         keyExtractor={item => item.id}
         contentContainerStyle={{
-          flexGrow: activeConversations.length === 0 && requestConversations.length === 0 ? 1 : 0,
+          flexGrow: activeConversations.length === 0 ? 1 : 0,
           paddingBottom: 120,
         }}
-        ListHeaderComponent={requestConversations.length > 0 ? (
-          <View className="pb-2 pt-1">
-            <Text className="px-5 pb-3 text-sm font-semibold uppercase tracking-wider text-on-surface-variant">
-              Chat Requests
-            </Text>
-            {requestConversations.map(conversation => (
-              (() => {
-                const otherParticipant = conversation.participants.find(
-                  participant => participant.username !== user?.username,
-                )
+        initialNumToRender={CONVERSATION_RENDER_BATCH}
+        maxToRenderPerBatch={CONVERSATION_RENDER_BATCH}
+        windowSize={9}
+        removeClippedSubviews
+        renderItem={({ item }) => {
+          const otherParticipant = item.participants.find(
+            participant => participant.username !== user?.username,
+          )
 
-                return (
-              <ChatRequestListItem
-                key={conversation.id}
-                conversation={conversation}
-                currentUsername={user?.username}
-                busyAction={requestAction?.conversationId === conversation.id ? requestAction.action : null}
-                onProfilePress={otherParticipant
-                  ? () => {
-                      router.push(publicProfilePath(otherParticipant.userId, '(match)') as never)
-                    }
-                  : undefined}
-                onPress={() => {
-                  router.push(`/(home)/(match)/chat/${conversation.id}` as never)
-                }}
-                onAccept={() => {
-                  setRequestAction({ conversationId: conversation.id, action: 'accept' })
-                  void acceptDirectRequest(conversation.id)
-                    .catch(error => {
-                      console.error('[chat] failed to accept request', error)
-                    })
-                    .finally(() => {
-                      setRequestAction(current => (
-                        current?.conversationId === conversation.id ? null : current
-                      ))
-                    })
-                }}
-                onDeny={() => {
-                  setRequestAction({ conversationId: conversation.id, action: 'deny' })
-                  void denyDirectRequest(conversation.id)
-                    .catch(error => {
-                      console.error('[chat] failed to deny request', error)
-                    })
-                    .finally(() => {
-                      setRequestAction(current => (
-                        current?.conversationId === conversation.id ? null : current
-                      ))
-                    })
-                }}
-              />
-                )
-              })()
-            ))}
-            {activeConversations.length > 0 ? (
-              <Text className="px-5 pb-3 pt-3 text-sm font-semibold uppercase tracking-wider text-on-surface-variant">
-                Conversations
-              </Text>
-            ) : null}
-          </View>
-        ) : null}
-        renderItem={({ item }) => (
-          (() => {
-            const otherParticipant = item.participants.find(
-              participant => participant.username !== user?.username,
-            )
-
-            return (
-              <ConversationListItem
-                conversation={item}
-                currentUsername={user?.username}
-                preview={decryptedPreviews[item.id]}
-                onProfilePress={otherParticipant
-                  ? () => {
-                      router.push(publicProfilePath(otherParticipant.userId, '(match)') as never)
-                    }
-                  : undefined}
-                onPress={() => {
-                  router.push(`/(home)/(match)/chat/${item.id}` as never)
-                }}
-              />
-            )
-          })()
-        )}
-        ListEmptyComponent={requestConversations.length === 0 ? (
+          return (
+            <ConversationListItem
+              conversation={item}
+              currentUsername={user?.username}
+              preview={decryptedPreviews[item.id]}
+              useGlass={useGlass}
+              onProfilePress={otherParticipant
+                ? () => {
+                    router.push(publicProfilePath(otherParticipant.userId, '(match)') as never)
+                  }
+                : undefined}
+              onPress={() => {
+                router.push(`/(home)/(match)/chat/${item.id}` as never)
+              }}
+            />
+          )
+        }}
+        ListEmptyComponent={(
           <View className="flex-1 items-center justify-center px-10">
             {isLoading ? (
               <ActivityIndicator color={Colors.primary} />
             ) : (
               <>
-                <Ionicons name="chatbubble-ellipses-outline" size={44} color={Colors.onSurfaceVariant} />
+                {Platform.OS === 'ios' ? (
+                  <SymbolView name="paperplane.fill" size={42} tintColor={Colors.onSurfaceVariant} />
+                ) : (
+                  <Ionicons name="paper-plane-outline" size={42} color={Colors.onSurfaceVariant} />
+                )}
                 <Text className="mt-4 text-lg font-bold text-on-surface">No conversations yet</Text>
                 <Text className="mt-2 text-center text-sm font-medium text-on-surface-variant">
                   Tap the plus button to send a new chat request.
@@ -228,34 +292,34 @@ export default function ChatInboxScreen() {
               </>
             )}
           </View>
-        ) : activeConversations.length === 0 ? (
-          <View className="px-10 py-6">
-            <Text className="text-center text-sm font-medium text-on-surface-variant">
-              Accept a request or send a new one to start chatting.
-            </Text>
-          </View>
-        ) : null}
-        ListFooterComponent={isLoadingMore ? (
-          <View className="py-4">
-            <ActivityIndicator color={Colors.primary} />
-          </View>
-        ) : null}
-        onEndReached={() => {
-          if (hasMore && !isLoadingMore) {
-            void loadMoreConversations()
-          }
-        }}
+        )}
+        ListFooterComponent={
+          isLoadingMore ? (
+            <View className="py-4">
+              <ActivityIndicator color={Colors.primary} />
+            </View>
+          ) : hasHiddenConversations || hasMore ? (
+            <View className="items-center pb-3 pt-2">
+              <TouchableOpacity
+                onPress={handleLoadMore}
+                className="rounded-full bg-surface-container px-4 py-2"
+                activeOpacity={0.8}
+              >
+                <Text className="text-xs font-semibold uppercase tracking-wider text-primary">
+                  Load more
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : null
+        }
+        onEndReached={handleLoadMore}
         onEndReachedThreshold={0.35}
         onRefresh={() => {
+          setVisibleConversationCount(CONVERSATION_RENDER_BATCH)
           void refreshConversations()
         }}
         refreshing={isLoading && conversations.length > 0}
         showsVerticalScrollIndicator={false}
-      />
-
-      <NewConversationModal
-        visible={composerVisible}
-        onClose={() => setComposerVisible(false)}
       />
     </View>
   )

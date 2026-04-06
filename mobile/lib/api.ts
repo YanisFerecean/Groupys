@@ -1,7 +1,8 @@
 import type { ProfileCustomization } from '@/models/ProfileCustomization'
-import { apiRequest } from '@/lib/apiRequest'
+import { ApiError, apiRequest } from '@/lib/apiRequest'
+import { API_URL } from '@/lib/config'
 
-export const API_URL = process.env.EXPO_PUBLIC_API_URL!
+export { API_URL }
 
 export async function apiFetch<T>(path: string, token: string | null, cache = true): Promise<T> {
   return apiRequest<T>(path, { token, cache })
@@ -437,15 +438,9 @@ export async function apiPostMultipart<T>(
     body: formData,
   })
   if (!res.ok) {
-    let message = res.statusText
-    try {
-      const data = await res.json()
-      if (typeof data?.message === 'string') message = data.message
-      else if (typeof data?.error === 'string') message = data.error
-      else if (typeof data?.detail === 'string') message = data.detail
-      else if (typeof data?.title === 'string') message = data.title
-    } catch { /* use statusText */ }
-    throw new Error(`API error ${res.status}: ${message}`)
+    const detail = await readApiErrorDetail(res)
+    const message = detail || res.statusText || 'Request failed'
+    throw new ApiError(res.status, `API error ${res.status}: ${message}`)
   }
   return res.json() as Promise<T>
 }
@@ -455,21 +450,88 @@ export async function createPost(
   token: string,
   title: string,
   content: string,
-  mediaList?: { uri: string; type?: string | null }[],
+  mediaList?: { uri: string; type?: string | null; name?: string | null }[],
 ): Promise<any> {
   const formData = new FormData()
   formData.append('title', title)
   formData.append('content', content)
 
   if (mediaList && mediaList.length > 0) {
-    for (const media of mediaList) {
-      const ext = media.uri.split('.').pop() || 'jpg'
-      const mimeType = media.type === 'video' ? `video/${ext}` : `image/${ext}`
-      formData.append('files', {
+    const mimeByExtension: Record<string, string> = {
+      jpg: 'image/jpeg',
+      jpeg: 'image/jpeg',
+      png: 'image/png',
+      gif: 'image/gif',
+      webp: 'image/webp',
+      heic: 'image/heic',
+      heif: 'image/heif',
+      mp4: 'video/mp4',
+      mov: 'video/quicktime',
+      m4v: 'video/x-m4v',
+      avi: 'video/x-msvideo',
+      mkv: 'video/x-matroska',
+      webm: 'video/webm',
+      mp3: 'audio/mpeg',
+      m4a: 'audio/mp4',
+      wav: 'audio/wav',
+      aac: 'audio/aac',
+      ogg: 'audio/ogg',
+      pdf: 'application/pdf',
+      txt: 'text/plain',
+      csv: 'text/csv',
+      json: 'application/json',
+      doc: 'application/msword',
+      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      xls: 'application/vnd.ms-excel',
+      xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      ppt: 'application/vnd.ms-powerpoint',
+      pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      zip: 'application/zip',
+      rar: 'application/vnd.rar',
+    }
+
+    for (let index = 0; index < mediaList.length; index += 1) {
+      const media = mediaList[index]
+      const normalizedUri = media.uri.split('?')[0]
+      const uriName = normalizedUri.split('/').pop()
+      const uriExt = uriName?.includes('.') ? uriName.split('.').pop()?.toLowerCase() : undefined
+      const guessedMime = uriExt ? mimeByExtension[uriExt] : undefined
+      const isVideo = media.type === 'video'
+      const isImage = media.type === 'image'
+
+      let mimeType: string
+      if (media.type && media.type.includes('/')) {
+        mimeType = media.type
+      } else if (isVideo) {
+        mimeType = guessedMime?.startsWith('video/') ? guessedMime : 'video/mp4'
+      } else if (isImage) {
+        mimeType = guessedMime?.startsWith('image/') ? guessedMime : 'image/jpeg'
+      } else if (media.type && media.type !== 'application/octet-stream') {
+        mimeType = media.type
+      } else if (guessedMime) {
+        mimeType = guessedMime
+      } else {
+        mimeType = 'application/octet-stream'
+      }
+
+      const defaultExt = uriExt || (mimeType.includes('/') ? mimeType.split('/')[1] : 'bin')
+      const fallbackName = `upload_${Date.now()}_${index}.${defaultExt}`
+      const fileName = media.name?.trim() || uriName || fallbackName
+
+      const uploadFormData = new FormData()
+      uploadFormData.append('file', {
         uri: media.uri,
         type: mimeType,
-        name: `upload_${Date.now()}.${ext}`,
+        name: fileName,
       } as any)
+
+      const uploaded = await apiPostMultipart<{ url: string; type?: string }>(
+        '/posts/media/upload',
+        token,
+        uploadFormData,
+      )
+      formData.append('mediaUrls', uploaded.url)
+      formData.append('mediaTypes', uploaded.type || mimeType)
     }
   }
 

@@ -11,7 +11,7 @@ import {
   ViewToken,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { Audio, AVPlaybackStatus } from 'expo-av'
+import { AudioPlayer, createAudioPlayer } from 'expo-audio'
 import { useVideoPlayer, VideoView } from 'expo-video'
 import { Image } from 'expo-image'
 import * as Haptics from 'expo-haptics'
@@ -105,8 +105,8 @@ function AudioVisualizer({ isPlaying }: { isPlaying: boolean }) {
 
 const MediaSlide = React.memo(({ item, isActive, token }: MediaSlideProps) => {
   const [loading, setLoading] = useState(true)
-  const [sound, setSound] = useState<Audio.Sound | null>(null)
-  const soundRef = useRef<Audio.Sound | null>(null)
+  const [sound, setSound] = useState<AudioPlayer | null>(null)
+  const soundRef = useRef<AudioPlayer | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [position, setPosition] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -134,38 +134,32 @@ const MediaSlide = React.memo(({ item, isActive, token }: MediaSlideProps) => {
     }
   }, [isActive, isVideo, player])
 
-  const onPlaybackStatusUpdate = useCallback((status: AVPlaybackStatus) => {
-    if (status.isLoaded) {
-      setPosition(status.positionMillis)
-      setDuration(status.durationMillis || 0)
-      setIsPlaying(status.isPlaying)
-      if (status.didJustFinish) {
-        setIsPlaying(false)
-      }
-    }
-  }, [])
-
-  const loadAudio = useCallback(async () => {
+  const loadAudio = useCallback(() => {
     try {
       setLoading(true)
-      const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri: item.url, headers: token ? { Authorization: `Bearer ${token}` } : {} },
-        { shouldPlay: false },
-        onPlaybackStatusUpdate
+      const player = createAudioPlayer(
+        { uri: item.url, headers: token ? { Authorization: `Bearer ${token}` } : {} }
       )
-      soundRef.current = newSound
-      setSound(newSound)
-      setLoading(false)
+      player.addListener('playbackStatusUpdate', (status) => {
+        setPosition(status.currentTime * 1000)
+        setDuration(status.duration * 1000)
+        setIsPlaying(status.playing)
+        if (status.isLoaded) setLoading(false)
+        if (status.didJustFinish) setIsPlaying(false)
+      })
+      soundRef.current = player
+      setSound(player)
     } catch (error) {
       console.error('Error loading audio', error)
       setLoading(false)
     }
-  }, [item.url, token, onPlaybackStatusUpdate])
+  }, [item.url, token])
 
   // Unload on unmount — uses ref so it always has the live sound instance
   useEffect(() => {
     return () => {
-      soundRef.current?.stopAsync().then(() => soundRef.current?.unloadAsync())
+      soundRef.current?.pause()
+      soundRef.current?.remove()
       soundRef.current = null
     }
   }, [])
@@ -179,17 +173,17 @@ const MediaSlide = React.memo(({ item, isActive, token }: MediaSlideProps) => {
   // Pause when swiped away
   useEffect(() => {
     if (!isActive && isAudio && soundRef.current) {
-      soundRef.current.pauseAsync()
+      soundRef.current.pause()
     }
   }, [isActive, isAudio])
 
-  const handlePlayPause = async () => {
+  const handlePlayPause = () => {
     if (!sound) return
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     if (isPlaying) {
-      await sound.pauseAsync()
+      sound.pause()
     } else {
-      await sound.playAsync()
+      sound.play()
     }
   }
 

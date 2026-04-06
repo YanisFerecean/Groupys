@@ -2,6 +2,7 @@ import { useImperativeHandle } from 'react'
 import { Dimensions, Text, TouchableOpacity, View } from 'react-native'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, {
   Extrapolation,
@@ -35,6 +36,7 @@ interface Props {
 }
 
 export default function UserRecommendationCard({ user, stackIndex, onLike, onDismiss, onViewProfile, ref }: Props) {
+  const useGlass = isLiquidGlassAvailable()
   const translateX = useSharedValue(0)
   const translateY = useSharedValue(0)
   const cardRotation = useSharedValue(0)
@@ -184,18 +186,50 @@ export default function UserRecommendationCard({ user, stackIndex, onLike, onDis
               position: 'absolute',
               top: 44,
               left: 20,
-              borderWidth: 3,
-              borderColor: '#4ade80',
-              borderRadius: 10,
-              paddingHorizontal: 14,
-              paddingVertical: 6,
               transform: [{ rotate: '-18deg' }],
             },
           ]}
         >
-          <Text style={{ color: '#4ade80', fontWeight: '900', fontSize: 24, letterSpacing: 2 }}>
-            LIKE
-          </Text>
+          {useGlass ? (
+            <GlassView style={{ borderRadius: 16, overflow: 'hidden' }}>
+              <View
+                style={{
+                  borderWidth: 2,
+                  borderColor: 'rgba(74, 222, 128, 0.8)',
+                  borderRadius: 16,
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ color: '#4ade80', fontWeight: '900', fontSize: 20, letterSpacing: 1.2 }}>
+                  AUX YES 🎧
+                </Text>
+                <Text style={{ color: 'rgba(255,255,255,0.85)', fontWeight: '700', fontSize: 10, letterSpacing: 0.6 }}>
+                  BANGER ENERGY
+                </Text>
+              </View>
+            </GlassView>
+          ) : (
+            <View
+              style={{
+                borderWidth: 3,
+                borderColor: '#4ade80',
+                borderRadius: 16,
+                backgroundColor: 'rgba(8, 30, 12, 0.45)',
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{ color: '#4ade80', fontWeight: '900', fontSize: 20, letterSpacing: 1.2 }}>
+                AUX YES 🎧
+              </Text>
+              <Text style={{ color: 'rgba(255,255,255,0.85)', fontWeight: '700', fontSize: 10, letterSpacing: 0.6 }}>
+                BANGER ENERGY
+              </Text>
+            </View>
+          )}
         </Animated.View>
 
         {/* PASS stamp */}
@@ -206,18 +240,50 @@ export default function UserRecommendationCard({ user, stackIndex, onLike, onDis
               position: 'absolute',
               top: 44,
               right: 20,
-              borderWidth: 3,
-              borderColor: '#f87171',
-              borderRadius: 10,
-              paddingHorizontal: 14,
-              paddingVertical: 6,
               transform: [{ rotate: '18deg' }],
             },
           ]}
         >
-          <Text style={{ color: '#f87171', fontWeight: '900', fontSize: 24, letterSpacing: 2 }}>
-            PASS
-          </Text>
+          {useGlass ? (
+            <GlassView style={{ borderRadius: 16, overflow: 'hidden' }}>
+              <View
+                style={{
+                  borderWidth: 2,
+                  borderColor: 'rgba(248, 113, 113, 0.8)',
+                  borderRadius: 16,
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ color: '#f87171', fontWeight: '900', fontSize: 20, letterSpacing: 1.2 }}>
+                  SKIP IT ⏭️
+                </Text>
+                <Text style={{ color: 'rgba(255,255,255,0.85)', fontWeight: '700', fontSize: 10, letterSpacing: 0.6 }}>
+                  NOT ON MY AUX
+                </Text>
+              </View>
+            </GlassView>
+          ) : (
+            <View
+              style={{
+                borderWidth: 3,
+                borderColor: '#f87171',
+                borderRadius: 16,
+                backgroundColor: 'rgba(32, 10, 10, 0.45)',
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{ color: '#f87171', fontWeight: '900', fontSize: 20, letterSpacing: 1.2 }}>
+                SKIP IT ⏭️
+              </Text>
+              <Text style={{ color: 'rgba(255,255,255,0.85)', fontWeight: '700', fontSize: 10, letterSpacing: 0.6 }}>
+                NOT ON MY AUX
+              </Text>
+            </View>
+          )}
         </Animated.View>
 
         {/* Bottom metadata */}
@@ -298,13 +364,25 @@ export default function UserRecommendationCard({ user, stackIndex, onLike, onDis
           )}
 
           {onViewProfile ? (
-            <TouchableOpacity
-              activeOpacity={0.85}
-              onPress={onViewProfile}
-              className="self-start mt-2 rounded-full bg-white/15 px-4 py-2"
-            >
-              <Text className="text-xs font-bold text-white">View Profile</Text>
-            </TouchableOpacity>
+            useGlass ? (
+              <GlassView isInteractive style={{ borderRadius: 999, overflow: 'hidden', alignSelf: 'flex-start', marginTop: 8 }}>
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={onViewProfile}
+                  className="rounded-full px-4 py-2"
+                >
+                  <Text className="text-xs font-bold text-white">View Profile</Text>
+                </TouchableOpacity>
+              </GlassView>
+            ) : (
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={onViewProfile}
+                className="self-start mt-2 rounded-full bg-white/15 px-4 py-2"
+              >
+                <Text className="text-xs font-bold text-white">View Profile</Text>
+              </TouchableOpacity>
+            )
           ) : null}
         </View>
       </Animated.View>

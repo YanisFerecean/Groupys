@@ -3,6 +3,7 @@ import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated'
 import { useAuth } from '@clerk/expo'
 import { useEffect, useRef, useState } from 'react'
@@ -42,22 +43,18 @@ function AuthedImage({ uri, style }: AuthedImageProps) {
 interface Props {
   community: SuggestedCommunity
   onJoin: () => void
-  onDismiss: () => void
   onPress: () => void
+  widthRatio?: number
 }
 
-export default function CommunityRecommendationCard({ community, onJoin, onDismiss, onPress }: Props) {
+export default function CommunityRecommendationCard({ community, onJoin, onPress, widthRatio = 0.72 }: Props) {
   const { width: screenWidth } = useWindowDimensions()
-  const cardWidth = screenWidth * 0.72
+  const cardWidth = screenWidth * widthRatio
+  const useGlass = isLiquidGlassAvailable()
 
   const handleJoin = () => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     onJoin()
-  }
-
-  const handleDismiss = () => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-    onDismiss()
   }
 
   const bannerSrc = normalizeMediaUrl(community.bannerUrl || community.imageUrl)
@@ -87,19 +84,6 @@ export default function CommunityRecommendationCard({ community, onJoin, onDismi
             style={{ position: 'absolute', inset: 0 }}
           />
 
-          {/* Dismiss */}
-          <TouchableOpacity
-            onPress={handleDismiss}
-            style={{
-              position: 'absolute', top: 10, right: 10,
-              width: 28, height: 28, borderRadius: 14,
-              backgroundColor: 'rgba(0,0,0,0.4)',
-              alignItems: 'center', justifyContent: 'center',
-            }}
-          >
-            <Ionicons name="close" size={14} color="rgba(255,255,255,0.9)" />
-          </TouchableOpacity>
-
           {/* Name + meta on banner */}
           <View style={{ position: 'absolute', bottom: 12, left: 14, right: 14, gap: 6 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -121,26 +105,97 @@ export default function CommunityRecommendationCard({ community, onJoin, onDismi
                   {community.memberCount.toLocaleString()}
                 </Text>
               </View>
-              {community.countryMatch && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                  <Ionicons name="location" size={12} color="rgba(255,255,255,0.7)" />
-                  <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '600' }}>
-                    Near you
-                  </Text>
-                </View>
-              )}
             </View>
           </View>
         </View>
 
         {/* Bottom strip */}
-        <View style={{
-          backgroundColor: Colors.surfaceContainerLow,
-          paddingHorizontal: 14,
-          paddingTop: 12,
-          paddingBottom: 14,
-          gap: 10,
-        }}>
+        {useGlass ? (
+          <GlassView style={{ overflow: 'hidden' }}>
+            <View style={{
+              paddingHorizontal: 14,
+              paddingTop: 12,
+              paddingBottom: 14,
+              gap: 10,
+            }}>
+              {/* Creator row */}
+              {creatorName && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+                  {creatorSrc ? (
+                    <Image
+                      source={{ uri: creatorSrc }}
+                      style={{ width: 20, height: 20, borderRadius: 10 }}
+                      contentFit="cover"
+                    />
+                  ) : (
+                    <View style={{
+                      width: 20, height: 20, borderRadius: 10,
+                      backgroundColor: Colors.surfaceContainerHighest,
+                      alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <Text style={{ fontSize: 9, fontWeight: '700', color: Colors.onSurfaceVariant }}>
+                        {creatorName.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+                  <Text style={{ fontSize: 12, color: Colors.onSurfaceVariant, fontWeight: '500' }} numberOfLines={1}>
+                    by {creatorName}
+                  </Text>
+                </View>
+              )}
+
+              {/* Tags */}
+              {tags.length > 0 && (
+                <View style={{ flexDirection: 'row', gap: 5, flexWrap: 'wrap' }}>
+                  {tags.map((tag) => (
+                    <GlassView
+                      key={tag}
+                      style={{ borderRadius: 20, overflow: 'hidden' }}
+                    >
+                      <View
+                        style={{
+                          backgroundColor: `${Colors.primary}1A`,
+                          paddingHorizontal: 8,
+                          paddingVertical: 3,
+                          borderRadius: 20,
+                        }}
+                      >
+                        <Text style={{ color: Colors.primary, fontSize: 11, fontWeight: '700' }}>
+                          {tag}
+                        </Text>
+                      </View>
+                    </GlassView>
+                  ))}
+                </View>
+              )}
+
+              {/* Join CTA */}
+              <GlassView isInteractive style={{ borderRadius: 999, overflow: 'hidden' }}>
+                <View style={{ backgroundColor: `${Colors.primary}20`, borderRadius: 999 }}>
+                  <TouchableOpacity
+                    onPress={handleJoin}
+                    style={{
+                      borderRadius: 999,
+                      paddingVertical: 11,
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Text style={{ color: Colors.primary, fontWeight: '800', fontSize: 14 }}>
+                      Join
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </GlassView>
+            </View>
+          </GlassView>
+        ) : (
+          <View style={{
+            backgroundColor: Colors.surfaceContainerLow,
+            paddingHorizontal: 14,
+            paddingTop: 12,
+            paddingBottom: 14,
+            gap: 10,
+          }}>
           {/* Creator row */}
           {creatorName && (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
@@ -192,7 +247,7 @@ export default function CommunityRecommendationCard({ community, onJoin, onDismi
             onPress={handleJoin}
             style={{
               backgroundColor: Colors.primary,
-              borderRadius: 50,
+              borderRadius: 999,
               paddingVertical: 11,
               alignItems: 'center',
             }}
@@ -201,7 +256,8 @@ export default function CommunityRecommendationCard({ community, onJoin, onDismi
               Join
             </Text>
           </TouchableOpacity>
-        </View>
+          </View>
+        )}
       </TouchableOpacity>
     </Animated.View>
   )

@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '@clerk/expo'
-import { useEffect, useState } from 'react'
-import { ScrollView, Text, TouchableOpacity, View, RefreshControl } from 'react-native'
-import { router } from 'expo-router'
+import { useEffect } from 'react'
+import { ScrollView, Text, View, RefreshControl } from 'react-native'
+import { router, useLocalSearchParams } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import SwipeableTabScreen from '@/components/navigation/SwipeableTabScreen'
 import SectionHeader from '@/components/ui/SectionHeader'
@@ -11,6 +11,7 @@ import CommunityRecommendationCard from '@/components/discover/CommunityRecommen
 import UserOnlineCard from '@/components/discover/UserOnlineCard'
 import SearchOverlay from '@/components/discover/SearchOverlay'
 import { Colors } from '@/constants/colors'
+import { DISCOVER_PREVIEW_COMMUNITY_COUNT } from '@/constants/discovery'
 import { activeUsers } from '@/constants/mockData'
 import { useDiscovery } from '@/hooks/useDiscovery'
 
@@ -18,15 +19,16 @@ export default function DiscoverScreen() {
   const insets = useSafeAreaInsets()
   const { isLoaded: isAuthLoaded } = useAuth()
   const { artists, expanded, loading: artistsLoading, toggleExpand } = useTopArtists()
-  const [searchOpen, setSearchOpen] = useState(false)
-  
+  const params = useLocalSearchParams<{ search?: string; q?: string }>()
+  const searchOpen = params.search === '1'
+  const searchQuery = typeof params.q === 'string' ? params.q : ''
+
   const {
     communities,
     communitiesLoading,
     communitiesRefreshing,
     loadCommunities,
     joinCommunity,
-    dismiss
   } = useDiscovery()
 
   useEffect(() => {
@@ -34,8 +36,25 @@ export default function DiscoverScreen() {
     loadCommunities()
   }, [isAuthLoaded, loadCommunities])
 
+  const displayedCommunities = communities
+  const displayedCommunitiesLoading = communitiesLoading
+  const displayedCommunitiesRefreshing = communitiesRefreshing
+  const previewCommunities = displayedCommunities.slice(0, DISCOVER_PREVIEW_COMMUNITY_COUNT)
+
+  const handleCommunitiesRefresh = () => {
+    loadCommunities(true)
+  }
+
   const navigateToCommunity = (communityId: string) => {
     router.push(`/(home)/(discover)/community/${communityId}` as any)
+  }
+
+  const handleJoinCommunity = (communityId: string) => {
+    joinCommunity(communityId)
+  }
+
+  const handleShowMoreCommunities = () => {
+    router.push('/(home)/(discover)/communities' as any)
   }
 
   return (
@@ -47,23 +66,17 @@ export default function DiscoverScreen() {
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
-              refreshing={communitiesRefreshing}
-              onRefresh={() => loadCommunities(true)}
+              refreshing={displayedCommunitiesRefreshing}
+              onRefresh={handleCommunitiesRefresh}
               tintColor={Colors.primary}
             />
           }
         >
           {/* Header */}
-          <View
-            className="flex-row items-center justify-between px-5"
-            style={{ paddingTop: insets.top + 8 }}
-          >
+          <View className="px-5" style={{ paddingTop: insets.top + 8 }}>
             <Text className="text-4xl font-extrabold tracking-tighter text-primary">
               Tap In
             </Text>
-            <TouchableOpacity onPress={() => setSearchOpen(true)}>
-              <Ionicons name="search" size={24} color={Colors.primary} />
-            </TouchableOpacity>
           </View>
 
           {/* Trending Now */}
@@ -85,13 +98,17 @@ export default function DiscoverScreen() {
           {/* Explore Communities (Recommendations) */}
           <View className="pt-8 pb-2">
             <View className="px-5">
-              <SectionHeader title="Suggested for you" actionText={communities.length > 0 ? 'Refresh' : undefined} onAction={() => loadCommunities(true)} />
+              <SectionHeader
+                title="Suggested for you"
+                actionText={displayedCommunities.length > DISCOVER_PREVIEW_COMMUNITY_COUNT ? 'Show More' : undefined}
+                onAction={handleShowMoreCommunities}
+              />
             </View>
-            {communitiesLoading ? (
+            {displayedCommunitiesLoading ? (
               <View className="mt-4 items-center py-6">
                 <Text className="text-on-surface-variant text-sm font-medium">Finding communities...</Text>
               </View>
-            ) : communities.length === 0 ? (
+            ) : displayedCommunities.length === 0 ? (
               <View className="mt-4 mx-5 items-center py-6">
                 <Ionicons name="people-outline" size={32} color={Colors.onSurfaceVariant} />
                 <Text className="text-on-surface-variant text-sm mt-2 font-medium">No suggestions right now</Text>
@@ -102,13 +119,12 @@ export default function DiscoverScreen() {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 14, gap: 12 }}
               >
-                {communities.map((community) => (
+                {previewCommunities.map((community) => (
                   <CommunityRecommendationCard
                     key={community.communityId}
                     community={community}
                     onPress={() => navigateToCommunity(community.communityId)}
-                    onJoin={() => joinCommunity(community.communityId)}
-                    onDismiss={() => dismiss('community', community.communityId)}
+                    onJoin={() => handleJoinCommunity(community.communityId)}
                   />
                 ))}
               </ScrollView>
@@ -133,7 +149,12 @@ export default function DiscoverScreen() {
         </ScrollView>
 
         {/* Search overlay */}
-        {searchOpen && <SearchOverlay onClose={() => setSearchOpen(false)} />}
+        {searchOpen && (
+          <SearchOverlay
+            initialQuery={searchQuery}
+            onClose={() => router.setParams({ search: undefined, q: undefined } as any)}
+          />
+        )}
       </View>
     </SwipeableTabScreen>
   )

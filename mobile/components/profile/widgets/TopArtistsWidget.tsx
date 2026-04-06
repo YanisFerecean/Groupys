@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native'
 import { Image } from 'expo-image'
-import { useRootNavigationState, useRouter } from 'expo-router'
+import { Link, useRootNavigationState, useRouter } from 'expo-router'
 import { useAuth } from '@clerk/expo'
 import * as Haptics from 'expo-haptics'
 import { searchArtists } from '@/lib/musicSearch'
@@ -73,45 +73,51 @@ export default function TopArtistsWidget({
       style={{ backgroundColor: containerColor ?? 'rgba(0,0,0,0.02)' }}
     >
       <Text
-        className="text-xs font-semibold uppercase tracking-widest mb-1 ml-1"
+        className="text-sm font-extrabold uppercase tracking-widest mb-1 ml-1"
         style={{ color: textColor ?? undefined }}
       >
         {size === 'small' ? 'Top Artist' : 'Top Artists'}
       </Text>
       {size === 'small' ? (
-        <TouchableOpacity
-          className="items-center gap-4 py-1"
-          activeOpacity={0.8}
-          onPress={() => handleArtistPress(visibleArtists[0], 0)}
-          disabled={resolvingArtistKey !== null}
+        <Link
+          href={{ pathname: '/(home)/(profile)/artist/[id]', params: { id: String(visibleArtists[0]?.id ?? '') } }}
+          asChild
         >
-          <View className="w-full aspect-square rounded-full overflow-hidden bg-surface-container-high border-2 border-white/20">
-            {visibleArtists[0]?.imageUrl ? (
-              <Image
-                source={{ uri: visibleArtists[0].imageUrl }}
-                style={{ width: '100%', height: '100%', borderRadius: 999 }}
-                contentFit="cover"
-                transition={200}
-              />
-            ) : (
-              <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
-                <Text className="text-5xl font-bold" style={{ color: textColor ?? undefined }}>
-                  {visibleArtists[0]?.name.charAt(0).toUpperCase()}
-                </Text>
+          <TouchableOpacity
+            className="items-center gap-4 py-1"
+            activeOpacity={0.8}
+            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+          >
+            <Link.AppleZoom>
+              <View className="w-full aspect-square rounded-full overflow-hidden bg-surface-container-high border-2 border-white/20">
+                {visibleArtists[0]?.imageUrl ? (
+                  <Image
+                    source={{ uri: visibleArtists[0].imageUrl }}
+                    style={{ width: '100%', height: '100%', borderRadius: 999 }}
+                    contentFit="cover"
+                    transition={200}
+                  />
+                ) : (
+                  <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text className="text-5xl font-bold" style={{ color: textColor ?? undefined }}>
+                      {visibleArtists[0]?.name.charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
               </View>
-            )}
-          </View>
-          <View className="w-full items-center">
-            <Text className="text-base font-bold text-center" style={{ color: textColor ?? undefined }} numberOfLines={1}>
-              {visibleArtists[0]?.name}
-            </Text>
-            {visibleArtists[0]?.genre ? (
-              <Text className="mt-1 text-sm text-center" style={{ color: textColor ?? undefined }} numberOfLines={1}>
-                {visibleArtists[0].genre}
+            </Link.AppleZoom>
+            <View className="w-full items-center">
+              <Text className="text-base font-bold text-center" style={{ color: textColor ?? undefined }} numberOfLines={1}>
+                {visibleArtists[0]?.name}
               </Text>
-            ) : null}
-          </View>
-        </TouchableOpacity>
+              {visibleArtists[0]?.genre ? (
+                <Text className="mt-1 text-sm text-center" style={{ color: textColor ?? undefined }} numberOfLines={1}>
+                  {visibleArtists[0].genre}
+                </Text>
+              ) : null}
+            </View>
+          </TouchableOpacity>
+        </Link>
       ) : (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 16, paddingVertical: 4 }}>
           {visibleArtists.map((artist, i) => {
@@ -119,29 +125,31 @@ export default function TopArtistsWidget({
           const isResolving = resolvingArtistKey === key
           const body = (
             <>
-              <View className="w-24 h-24 rounded-full overflow-hidden bg-surface-container-high border-2 border-white/20">
-                {artist.imageUrl ? (
-                  <Image
-                    source={{ uri: artist.imageUrl }}
-                    style={{ width: '100%', height: '100%', borderRadius: 999 }}
-                    contentFit="cover"
-                    transition={200}
-                  />
-                ) : (
-                  <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
-                    <Text className="text-3xl font-bold" style={{ color: textColor ?? undefined }}>
-                      {artist.name.charAt(0).toUpperCase()}
-                    </Text>
-                  </View>
-                )}
-                {isResolving ? (
-                  <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
-                    <View className="w-9 h-9 rounded-full items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.35)' }}>
-                      <ActivityIndicator size="small" color={Colors.primary} />
+              <Link.AppleZoom>
+                <View className="w-24 h-24 rounded-full overflow-hidden bg-surface-container-high border-2 border-white/20">
+                  {artist.imageUrl ? (
+                    <Image
+                      source={{ uri: artist.imageUrl }}
+                      style={{ width: '100%', height: '100%', borderRadius: 999 }}
+                      contentFit="cover"
+                      transition={200}
+                    />
+                  ) : (
+                    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
+                      <Text className="text-3xl font-bold" style={{ color: textColor ?? undefined }}>
+                        {artist.name.charAt(0).toUpperCase()}
+                      </Text>
                     </View>
-                  </View>
-                ) : null}
-              </View>
+                  )}
+                  {isResolving ? (
+                    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
+                      <View className="w-9 h-9 rounded-full items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.35)' }}>
+                        <ActivityIndicator size="small" color={Colors.primary} />
+                      </View>
+                    </View>
+                  ) : null}
+                </View>
+              </Link.AppleZoom>
               <Text className="text-sm font-bold text-center" style={{ color: textColor ?? undefined }} numberOfLines={1}>
                 {artist.name}
               </Text>
@@ -154,16 +162,33 @@ export default function TopArtistsWidget({
           )
 
           return (
-            <TouchableOpacity
-              key={i}
-              className="items-center gap-2"
-              style={{ width: 96 }}
-              activeOpacity={0.8}
-              onPress={() => handleArtistPress(artist, i)}
-              disabled={resolvingArtistKey !== null}
-            >
-              {body}
-            </TouchableOpacity>
+            artist.id ? (
+              <Link
+                key={i}
+                href={{ pathname: '/(home)/(profile)/artist/[id]', params: { id: String(artist.id) } }}
+                asChild
+              >
+                <TouchableOpacity
+                  className="items-center gap-2"
+                  style={{ width: 96 }}
+                  activeOpacity={0.8}
+                  onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+                >
+                  {body}
+                </TouchableOpacity>
+              </Link>
+            ) : (
+              <TouchableOpacity
+                key={i}
+                className="items-center gap-2"
+                style={{ width: 96 }}
+                activeOpacity={0.8}
+                onPress={() => handleArtistPress(artist, i)}
+                disabled={resolvingArtistKey !== null}
+              >
+                {body}
+              </TouchableOpacity>
+            )
           )
           })}
         </ScrollView>

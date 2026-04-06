@@ -5,7 +5,6 @@ import type { MatchProfile } from '@/models/MatchProfile'
 import type { UserProfile } from '@/models/UserProfile'
 import type { AlbumOfWeek } from '@/models/AlbumOfWeek'
 import type { Genre } from '@/models/Genre'
-import type { Community } from '@/models/Community'
 import type { ChatMessage } from '@/models/ChatMessage'
 import type { ListeningMetric } from '@/models/ListeningMetric'
 import type { DiscoverUser } from '@/models/DiscoverUser'
@@ -83,15 +82,6 @@ export const genres: Genre[] = [
   { id: '2', name: 'Neo-Soul', color: '#c2410c', icon: 'heart' },
   { id: '3', name: 'Ambient Noir', color: '#18181b', icon: 'moon' },
   { id: '4', name: 'Lush Pop', color: '#0f766e', icon: 'sparkles' },
-]
-
-export const communities: Community[] = [
-  { id: '1', name: 'Vinyl Heads', tagline: 'Crate diggers & analog lovers', members: 12400, color: '#7c3aed', icon: 'disc', isLive: true },
-  { id: '2', name: 'Late Night Beats', tagline: 'After-hours producers & DJs', members: 8700, color: '#be185d', icon: 'moon', isLive: false },
-  { id: '3', name: 'Synth Collective', tagline: 'Modular jams & sound design', members: 5200, color: '#0891b2', icon: 'pulse', isLive: true },
-  { id: '4', name: 'Acoustic Sessions', tagline: 'Stripped-back & soulful', members: 9100, color: '#b45309', icon: 'cafe', isLive: false },
-  { id: '5', name: 'Bass Culture', tagline: 'Sub-heavy & genre-bending', members: 15300, color: '#059669', icon: 'volume-high', isLive: false },
-  { id: '6', name: 'Dream Pop Society', tagline: 'Shoegaze, ethereal & hazy', members: 6800, color: '#6366f1', icon: 'cloudy-night', isLive: true },
 ]
 
 export const curators: CuratorProfile[] = [

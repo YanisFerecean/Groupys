@@ -1,15 +1,23 @@
 import { useState } from 'react'
 import { Image, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import type { ImageResizeMode, StyleProp, ImageStyle } from 'react-native'
 
 interface AuthImageProps {
   uri: string
   token: string | null
   className?: string
-  style?: object
+  style?: StyleProp<ImageStyle>
+  resizeMode?: ImageResizeMode
 }
 
-export default function AuthImage({ uri, token, className, style }: AuthImageProps) {
+export default function AuthImage({
+  uri,
+  token,
+  className,
+  style,
+  resizeMode = 'cover',
+}: AuthImageProps) {
   const [error, setError] = useState(false)
 
   if (error) {
@@ -31,7 +39,7 @@ export default function AuthImage({ uri, token, className, style }: AuthImagePro
       }}
       className={className}
       style={style}
-      resizeMode="cover"
+      resizeMode={resizeMode}
       onError={() => setError(true)}
     />
   )

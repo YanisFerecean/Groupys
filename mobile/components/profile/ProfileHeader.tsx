@@ -2,6 +2,7 @@ import { Colors } from '@/constants/colors'
 import type { ProfileCustomization } from '@/models/ProfileCustomization'
 import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useMemo, useState } from 'react'
 import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native'
@@ -56,6 +57,8 @@ export interface ProfileHeaderProps {
   postsCount: number
   followingCount?: number
   followersCount?: number
+  ratedAlbumsCount?: number
+  onRatedAlbumsPress?: () => void
   onEditPress: () => void
   onAvatarPress?: () => void
   isUploadingAvatar?: boolean
@@ -69,6 +72,8 @@ export default function ProfileHeader({
   memberYear,
   followingCount = 0,
   followersCount = 0,
+  ratedAlbumsCount,
+  onRatedAlbumsPress,
   onEditPress,
   onAvatarPress,
   isUploadingAvatar = false,
@@ -76,6 +81,7 @@ export default function ProfileHeader({
   const [avatarError, setAvatarError] = useState(false)
   const [isBioExpanded, setIsBioExpanded] = useState(false)
   const accentColor = profile.accentColor ?? Colors.primary
+  const useGlass = isLiquidGlassAvailable()
 
   const bannerColors = getBannerColors(profile.bannerUrl)
   const isBannerImage = profile.bannerUrl && !bannerColors
@@ -238,14 +244,63 @@ export default function ProfileHeader({
 
         {/* Stats Row */}
         <View className="flex-row items-center gap-4 mt-5 mb-2">
-          <TouchableOpacity className="flex-row items-center gap-1.5">
-            <Text className="text-[16px] font-bold text-on-surface">{followingCount}</Text>
-            <Text className="text-[16px] text-on-surface-variant">Following</Text>
-          </TouchableOpacity>
-          <TouchableOpacity className="flex-row items-center gap-1.5">
-            <Text className="text-[16px] font-bold text-on-surface">{followersCount}</Text>
-            <Text className="text-[16px] text-on-surface-variant">Followers</Text>
-          </TouchableOpacity>
+          {typeof ratedAlbumsCount === 'number' ? (
+            useGlass ? (
+              <GlassView isInteractive style={{ borderRadius: 999 }}>
+                <TouchableOpacity
+                  onPress={onRatedAlbumsPress}
+                  disabled={!onRatedAlbumsPress}
+                  activeOpacity={0.75}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    borderRadius: 999,
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    opacity: onRatedAlbumsPress ? 1 : 0.8,
+                  }}
+                >
+                  <Text className="text-[16px] font-bold text-on-surface">{ratedAlbumsCount}</Text>
+                  <Text className="text-[16px] text-on-surface-variant">Rated Albums</Text>
+                  <Ionicons name="chevron-forward" size={14} color={Colors.onSurfaceVariant} />
+                </TouchableOpacity>
+              </GlassView>
+            ) : (
+              <TouchableOpacity
+                onPress={onRatedAlbumsPress}
+                disabled={!onRatedAlbumsPress}
+                activeOpacity={0.75}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: Colors.outlineVariant,
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  backgroundColor: Colors.surfaceContainerLow,
+                  opacity: onRatedAlbumsPress ? 1 : 0.8,
+                }}
+              >
+                <Text className="text-[16px] font-bold text-on-surface">{ratedAlbumsCount}</Text>
+                <Text className="text-[16px] text-on-surface-variant">Rated Albums</Text>
+                <Ionicons name="chevron-forward" size={14} color={Colors.onSurfaceVariant} />
+              </TouchableOpacity>
+            )
+          ) : (
+            <>
+              <TouchableOpacity className="flex-row items-center gap-1.5">
+                <Text className="text-[16px] font-bold text-on-surface">{followingCount}</Text>
+                <Text className="text-[16px] text-on-surface-variant">Following</Text>
+              </TouchableOpacity>
+              <TouchableOpacity className="flex-row items-center gap-1.5">
+                <Text className="text-[16px] font-bold text-on-surface">{followersCount}</Text>
+                <Text className="text-[16px] text-on-surface-variant">Followers</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </View>
     </View>

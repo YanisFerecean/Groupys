@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons'
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'
 import { useFocusEffect, useRouter } from 'expo-router'
+import { SymbolView } from 'expo-symbols'
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native'
+import { ActivityIndicator, Platform, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '@clerk/expo'
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import UserRecommendationCard, { type CardHandle } from '@/components/match/UserRecommendationCard'
 import ActionButtons from '@/components/match/ActionButtons'
 import MatchCelebrationModal from '@/components/match/MatchCelebrationModal'
@@ -15,13 +16,16 @@ import { useDiscovery } from '@/hooks/useDiscovery'
 import { publicProfilePath } from '@/lib/profileRoutes'
 import { useMatches } from '@/hooks/useMatches'
 
+const TAB_BAR_HEIGHT = 80
+
 export default function MatchScreen() {
   const insets = useSafeAreaInsets()
-  const tabBarHeight = useBottomTabBarHeight()
+  const tabBarHeight = TAB_BAR_HEIGHT
   const router = useRouter()
   const { isLoaded } = useAuth()
   const { conversations, totalUnread } = useChat()
   const { width, height } = useWindowDimensions()
+  const useGlass = isLiquidGlassAvailable()
 
   const cardRef = useRef<CardHandle>(null)
   const [headerHeight, setHeaderHeight] = useState(88)
@@ -105,28 +109,73 @@ export default function MatchScreen() {
         >
           <Text className="text-4xl font-extrabold tracking-tighter text-primary">Mutuals</Text>
           <View className="flex-row items-center gap-3">
-            <TouchableOpacity
-              className="h-11 w-11 items-center justify-center rounded-full bg-surface-container"
-              onPress={() => router.push('/(home)/(match)/history')}
-            >
-              <Ionicons name="time-outline" size={22} color={Colors.primary} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              className="relative h-11 w-11 items-center justify-center rounded-full bg-surface-container"
-              onPress={() => router.push('/(home)/(match)/chat')}
-            >
-              <Ionicons name="chatbubble-ellipses-outline" size={22} color={Colors.primary} />
-              {totalUnread > 0 ? (
-                <View
-                  className="absolute -right-1 -top-1 items-center justify-center rounded-full bg-primary"
-                  style={{ minWidth: 20, height: 20, paddingHorizontal: 5 }}
+            {useGlass ? (
+              <GlassView isInteractive style={{ borderRadius: 999, overflow: 'hidden' }}>
+                <TouchableOpacity
+                  className="h-11 w-11 items-center justify-center rounded-full"
+                  onPress={() => router.push('/(home)/(match)/history')}
+                  activeOpacity={0.75}
                 >
-                  <Text className="text-[11px] font-bold text-on-primary">
-                    {totalUnread > 99 ? '99+' : totalUnread}
-                  </Text>
-                </View>
-              ) : null}
-            </TouchableOpacity>
+                  <Ionicons name="time-outline" size={22} color={Colors.primary} />
+                </TouchableOpacity>
+              </GlassView>
+            ) : (
+              <TouchableOpacity
+                className="h-11 w-11 items-center justify-center rounded-full bg-surface-container"
+                onPress={() => router.push('/(home)/(match)/history')}
+                activeOpacity={0.75}
+              >
+                <Ionicons name="time-outline" size={22} color={Colors.primary} />
+              </TouchableOpacity>
+            )}
+
+            {useGlass ? (
+              <GlassView isInteractive style={{ borderRadius: 999, overflow: 'hidden' }}>
+                <TouchableOpacity
+                  className="relative h-11 w-11 items-center justify-center rounded-full"
+                  onPress={() => router.push('/(home)/(match)/chat')}
+                  activeOpacity={0.75}
+                >
+                  {Platform.OS === 'ios' ? (
+                    <SymbolView name="paperplane.fill" size={21} tintColor={Colors.primary} />
+                  ) : (
+                    <Ionicons name="paper-plane-outline" size={21} color={Colors.primary} />
+                  )}
+                  {totalUnread > 0 ? (
+                    <View
+                      className="absolute -right-1 -top-1 items-center justify-center rounded-full bg-primary"
+                      style={{ minWidth: 20, height: 20, paddingHorizontal: 5 }}
+                    >
+                      <Text className="text-[11px] font-bold text-on-primary">
+                        {totalUnread > 99 ? '99+' : totalUnread}
+                      </Text>
+                    </View>
+                  ) : null}
+                </TouchableOpacity>
+              </GlassView>
+            ) : (
+              <TouchableOpacity
+                className="relative h-11 w-11 items-center justify-center rounded-full bg-surface-container"
+                onPress={() => router.push('/(home)/(match)/chat')}
+                activeOpacity={0.75}
+              >
+                {Platform.OS === 'ios' ? (
+                  <SymbolView name="paperplane.fill" size={21} tintColor={Colors.primary} />
+                ) : (
+                  <Ionicons name="paper-plane-outline" size={21} color={Colors.primary} />
+                )}
+                {totalUnread > 0 ? (
+                  <View
+                    className="absolute -right-1 -top-1 items-center justify-center rounded-full bg-primary"
+                    style={{ minWidth: 20, height: 20, paddingHorizontal: 5 }}
+                  >
+                    <Text className="text-[11px] font-bold text-on-primary">
+                      {totalUnread > 99 ? '99+' : totalUnread}
+                    </Text>
+                  </View>
+                ) : null}
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
@@ -139,16 +188,34 @@ export default function MatchScreen() {
             </View>
           ) : filteredUsers.length === 0 ? (
             <View className="items-center gap-3">
-              <Ionicons name="musical-notes-outline" size={52} color={Colors.onSurfaceVariant} />
+              {Platform.OS === 'ios' ? (
+                <SymbolView name="person.3.fill" size={52} tintColor={Colors.onSurfaceVariant} />
+              ) : (
+                <Ionicons name="people-outline" size={52} color={Colors.onSurfaceVariant} />
+              )}
               <Text className="text-on-surface-variant text-base font-medium text-center">
                 No one new to show right now
               </Text>
-              <TouchableOpacity
-                onPress={() => loadUsers(true)}
-                className="mt-2 bg-primary px-6 py-3 rounded-full"
-              >
-                <Text className="text-on-primary font-bold">Refresh</Text>
-              </TouchableOpacity>
+              {useGlass ? (
+                <View className="mt-2">
+                  <GlassView isInteractive style={{ borderRadius: 999, overflow: 'hidden' }}>
+                    <TouchableOpacity
+                      onPress={() => loadUsers(true)}
+                      className="h-11 items-center justify-center rounded-full px-6"
+                      activeOpacity={0.75}
+                    >
+                      <Text className="font-bold" style={{ color: Colors.primary }}>Refresh</Text>
+                    </TouchableOpacity>
+                  </GlassView>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  onPress={() => loadUsers(true)}
+                  className="mt-2 rounded-full bg-primary px-6 py-3"
+                >
+                  <Text className="font-bold text-on-primary">Refresh</Text>
+                </TouchableOpacity>
+              )}
             </View>
           ) : (
             <View style={{ width: CARD_WIDTH, height: CARD_HEIGHT, position: 'relative' }}>

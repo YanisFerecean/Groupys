@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
+import { GlassView } from 'expo-glass-effect'
 import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native'
 import { Colors } from '@/constants/colors'
 import type { Conversation } from '@/models/Chat'
@@ -12,6 +13,7 @@ interface ChatRequestListItemProps {
   onDeny?: () => void
   onPress: () => void
   onProfilePress?: () => void
+  useGlass?: boolean
 }
 
 export function ChatRequestListItem({
@@ -22,6 +24,7 @@ export function ChatRequestListItem({
   onDeny,
   onPress,
   onProfilePress,
+  useGlass = false,
 }: ChatRequestListItemProps) {
   const otherParticipant = conversation.participants.find(participant => participant.username !== currentUsername)
   const displayName = otherParticipant?.displayName || otherParticipant?.username || 'Unknown user'
@@ -32,55 +35,77 @@ export function ChatRequestListItem({
     ? 'Wants to start a chat with you.'
     : 'Request sent. Waiting for them to respond.'
 
-  return (
-    <View className="mx-5 mb-3 rounded-3xl bg-surface-container p-4">
-      <TouchableOpacity className="flex-row items-center gap-3" onPress={onPress} activeOpacity={0.9}>
-        <TouchableOpacity
-          onPress={(event) => {
-            event.stopPropagation()
-            ;(onProfilePress ?? onPress)()
-          }}
-          activeOpacity={0.8}
-        >
-          {avatarUrl ? (
-            <Image
-              source={{ uri: avatarUrl }}
-              style={{ width: 52, height: 52, borderRadius: 26 }}
-              contentFit="cover"
-            />
-          ) : (
+  const rowHeader = (
+    <TouchableOpacity className="flex-row items-center gap-3" onPress={onPress} activeOpacity={0.9}>
+      <TouchableOpacity
+        onPress={(event) => {
+          event.stopPropagation()
+          ;(onProfilePress ?? onPress)()
+        }}
+        activeOpacity={0.8}
+      >
+        {avatarUrl ? (
+          <Image
+            source={{ uri: avatarUrl }}
+            style={{ width: 52, height: 52, borderRadius: 26 }}
+            contentFit="cover"
+          />
+        ) : useGlass ? (
+          <GlassView style={{ borderRadius: 999, overflow: 'hidden' }}>
             <View
-              className="items-center justify-center rounded-full bg-primary/10"
+              className="items-center justify-center rounded-full"
               style={{ width: 52, height: 52 }}
             >
               <Text className="text-lg font-bold text-primary">{initial}</Text>
             </View>
-          )}
-        </TouchableOpacity>
+          </GlassView>
+        ) : (
+          <View
+            className="items-center justify-center rounded-full bg-primary/10"
+            style={{ width: 52, height: 52 }}
+          >
+            <Text className="text-lg font-bold text-primary">{initial}</Text>
+          </View>
+        )}
+      </TouchableOpacity>
 
-        <View className="flex-1">
-          <View className="flex-row items-center gap-2">
-            <Text className="flex-1 text-base font-bold text-on-surface" numberOfLines={1}>
-              {displayName}
-            </Text>
+      <View className="flex-1">
+        <View className="flex-row items-center gap-2">
+          <Text className="flex-1 text-base font-bold text-on-surface" numberOfLines={1}>
+            {displayName}
+          </Text>
+          {useGlass ? (
+            <GlassView style={{ borderRadius: 999, overflow: 'hidden' }}>
+              <View className="px-3 py-1">
+                <Text className="text-[11px] font-bold uppercase tracking-wide text-primary">
+                  {isIncoming ? 'Request' : 'Pending'}
+                </Text>
+              </View>
+            </GlassView>
+          ) : (
             <View className="rounded-full bg-primary/10 px-3 py-1">
               <Text className="text-[11px] font-bold uppercase tracking-wide text-primary">
                 {isIncoming ? 'Request' : 'Pending'}
               </Text>
             </View>
-          </View>
-          <Text className="mt-1 text-sm font-medium text-on-surface-variant" numberOfLines={2}>
-            {description}
-          </Text>
+          )}
         </View>
-      </TouchableOpacity>
+        <Text className="mt-1 text-sm font-medium text-on-surface-variant" numberOfLines={2}>
+          {description}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  )
 
-      {isIncoming ? (
-        <View className="mt-4 flex-row gap-3">
+  const actions = isIncoming ? (
+    <View className="mt-4 flex-row gap-3">
+      {useGlass ? (
+        <GlassView style={{ flex: 1, borderRadius: 16, overflow: 'hidden' }} isInteractive>
           <TouchableOpacity
-            className="flex-1 items-center justify-center rounded-2xl bg-surface px-4 py-3"
+            className="items-center justify-center px-4 py-3"
             disabled={busyAction !== null}
             onPress={onDeny}
+            activeOpacity={0.8}
           >
             {busyAction === 'deny' ? (
               <ActivityIndicator color={Colors.onSurface} />
@@ -88,30 +113,101 @@ export function ChatRequestListItem({
               <Text className="text-sm font-bold text-on-surface">Deny</Text>
             )}
           </TouchableOpacity>
-          <TouchableOpacity
-            className="flex-1 items-center justify-center rounded-2xl bg-primary px-4 py-3"
-            disabled={busyAction !== null}
-            onPress={onAccept}
-          >
-            {busyAction === 'accept' ? (
-              <ActivityIndicator color={Colors.onPrimary} />
-            ) : (
-              <Text className="text-sm font-bold text-on-primary">Accept</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+        </GlassView>
       ) : (
         <TouchableOpacity
-          className="mt-4 flex-row items-center justify-between rounded-2xl bg-surface px-4 py-3"
-          onPress={onPress}
-          activeOpacity={0.85}
+          className="flex-1 items-center justify-center rounded-2xl bg-surface px-4 py-3"
+          disabled={busyAction !== null}
+          onPress={onDeny}
         >
-          <Text className="text-sm font-semibold text-on-surface-variant">
-            Open request
-          </Text>
-          <Ionicons name="chevron-forward" size={16} color={Colors.onSurfaceVariant} />
+          {busyAction === 'deny' ? (
+            <ActivityIndicator color={Colors.onSurface} />
+          ) : (
+            <Text className="text-sm font-bold text-on-surface">Deny</Text>
+          )}
         </TouchableOpacity>
       )}
+      {useGlass ? (
+        <GlassView style={{ flex: 1, borderRadius: 16, overflow: 'hidden' }} isInteractive>
+          <TouchableOpacity
+            className="items-center justify-center px-4 py-3"
+            disabled={busyAction !== null}
+            onPress={onAccept}
+            activeOpacity={0.8}
+          >
+            {busyAction === 'accept' ? (
+              <ActivityIndicator color={Colors.primary} />
+            ) : (
+              <Text className="text-sm font-bold text-primary">Accept</Text>
+            )}
+          </TouchableOpacity>
+        </GlassView>
+      ) : (
+        <TouchableOpacity
+          className="flex-1 items-center justify-center rounded-2xl bg-primary px-4 py-3"
+          disabled={busyAction !== null}
+          onPress={onAccept}
+        >
+          {busyAction === 'accept' ? (
+            <ActivityIndicator color={Colors.onPrimary} />
+          ) : (
+            <Text className="text-sm font-bold text-on-primary">Accept</Text>
+          )}
+        </TouchableOpacity>
+      )}
+    </View>
+  ) : useGlass ? (
+    <GlassView style={{ marginTop: 16, borderRadius: 16, overflow: 'hidden' }} isInteractive>
+      <TouchableOpacity
+        className="flex-row items-center justify-between px-4 py-3"
+        onPress={onPress}
+        activeOpacity={0.85}
+      >
+        <Text className="text-sm font-semibold text-on-surface-variant">
+          Open request
+        </Text>
+        <GlassView style={{ borderRadius: 999, overflow: 'hidden' }} isInteractive>
+          <View className="h-8 w-8 items-center justify-center rounded-full">
+            <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
+          </View>
+        </GlassView>
+      </TouchableOpacity>
+    </GlassView>
+  ) : (
+    <TouchableOpacity
+      className="mt-4 flex-row items-center justify-between rounded-2xl bg-surface px-4 py-3"
+      onPress={onPress}
+      activeOpacity={0.85}
+    >
+      <Text className="text-sm font-semibold text-on-surface-variant">
+        Open request
+      </Text>
+      <Ionicons name="chevron-forward" size={16} color={Colors.onSurfaceVariant} />
+    </TouchableOpacity>
+  )
+
+  const content = (
+    <>
+      {rowHeader}
+      {actions}
+    </>
+  )
+
+  if (useGlass) {
+    return (
+      <View className="mx-5 mb-3">
+        <GlassView style={{ borderRadius: 24, overflow: 'hidden' }} isInteractive>
+          <View className="p-4">
+            {content}
+          </View>
+        </GlassView>
+      </View>
+    )
+  }
+
+  return (
+    <View className="mx-5 mb-3 rounded-3xl bg-surface-container p-4">
+      {content}
     </View>
   )
 }

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import { useAuth, useUser } from '@clerk/expo'
+import { AppState } from 'react-native'
 
 interface AuthTokenContextType {
   token: string | null
@@ -13,10 +14,14 @@ const AuthTokenContext = createContext<AuthTokenContextType>({
   refreshToken: async () => null,
 })
 
+const TOKEN_REFRESH_INTERVAL_MS = 4 * 60 * 1000
+const TOKEN_REFRESH_FOREGROUND_THROTTLE_MS = 45 * 1000
+
 export function AuthTokenProvider({ children }: { children: React.ReactNode }) {
   const { getToken, isSignedIn } = useAuth()
   const { isLoaded } = useUser()
   const getTokenRef = useRef(getToken)
+  const lastRefreshAtRef = useRef(0)
   const [token, setToken] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -33,6 +38,7 @@ export function AuthTokenProvider({ children }: { children: React.ReactNode }) {
     try {
       const t = await getTokenRef.current()
       setToken(t)
+      lastRefreshAtRef.current = Date.now()
       return t
     } catch (err) {
       console.error('Failed to get auth token:', err)
@@ -44,9 +50,35 @@ export function AuthTokenProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (isLoaded) {
-      refreshToken()
+      void refreshToken()
     }
   }, [isLoaded, refreshToken])
+
+  useEffect(() => {
+    if (!isSignedIn) return
+
+    const interval = setInterval(() => {
+      void refreshToken()
+    }, TOKEN_REFRESH_INTERVAL_MS)
+
+    return () => {
+      clearInterval(interval)
+    }
+  }, [isSignedIn, refreshToken])
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'active') return
+      if (!isSignedIn) return
+      const now = Date.now()
+      if (now - lastRefreshAtRef.current < TOKEN_REFRESH_FOREGROUND_THROTTLE_MS) return
+      void refreshToken()
+    })
+
+    return () => {
+      sub.remove()
+    }
+  }, [isSignedIn, refreshToken])
 
   return (
     <AuthTokenContext.Provider value={{ token, loading, refreshToken }}>

@@ -37,7 +37,7 @@ export default function TopAlbumsWidget({
       style={{ backgroundColor: containerColor ?? 'rgba(0,0,0,0.02)' }}
     >
       <Text
-        className="text-xs font-semibold uppercase tracking-widest mb-1 ml-1"
+        className="text-sm font-extrabold uppercase tracking-widest mb-1 ml-1"
         style={{ color: textColor ?? undefined }}
       >
         {size === 'small' ? 'Top Album' : 'Top Albums'}
@@ -77,9 +77,9 @@ export default function TopAlbumsWidget({
                   }}
                 >
                   <Ionicons name="star" size={10} color="#FFD700" />
-                  <Text style={{ color: '#fff', fontSize: 11, fontWeight: 'bold' }}>
-                    {userRatingScores[visibleAlbums[0].id]}
-                  </Text>
+            <Text style={{ color: '#fff', fontSize: 11, fontWeight: 'bold' }}>
+              {(userRatingScores[visibleAlbums[0].id] / 2).toFixed(1)}
+            </Text>
                 </View>
               )}
             </View>
@@ -135,9 +135,9 @@ export default function TopAlbumsWidget({
                     }}
                   >
                     <Ionicons name="star" size={10} color="#FFD700" />
-                    <Text style={{ color: '#fff', fontSize: 11, fontWeight: 'bold' }}>
-                      {userRatingScores[album.id]}
-                    </Text>
+            <Text style={{ color: '#fff', fontSize: 11, fontWeight: 'bold' }}>
+              {(userRatingScores[album.id] / 2).toFixed(1)}
+            </Text>
                   </View>
                 )}
               </View>
