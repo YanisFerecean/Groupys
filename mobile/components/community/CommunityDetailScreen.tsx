@@ -8,9 +8,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
-import { router, useSegments } from 'expo-router'
+import { Link, router, useSegments } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import { apiFetch, apiPost } from '@/lib/api'
 import { normalizeMediaUrl } from '@/lib/media'
 import { formatCount } from '@/lib/timeAgo'
@@ -28,6 +29,7 @@ const HERO_COLORS = [
   '#7c3aed', '#be185d', '#0891b2', '#b45309', '#059669', '#6366f1',
   '#dc2626', '#2563eb', '#7c2d12', '#4f46e5',
 ]
+const TOP_BUTTON_TINT = 'rgba(186, 0, 43, 0.6)'
 
 function heroColor(id: string): string {
   let hash = 0
@@ -46,6 +48,7 @@ interface Props {
 export default function CommunityDetailScreen({ communityId, postRoute, communityRoute }: Props) {
   const insets = useSafeAreaInsets()
   const segments = useSegments()
+  const useGlass = isLiquidGlassAvailable()
   const currentTab = resolveHomeTab(segments)
   const { refreshToken } = useAuthToken()
 
@@ -133,9 +136,21 @@ export default function CommunityDetailScreen({ communityId, postRoute, communit
       <View className="flex-1 bg-surface items-center justify-center px-10">
         <Ionicons name="alert-circle-outline" size={40} color={Colors.primary} />
         <Text className="text-on-surface font-bold text-lg mt-3">Community not found</Text>
-        <TouchableOpacity onPress={() => router.back()} className="mt-4">
-          <Text className="text-primary font-semibold">Go back</Text>
-        </TouchableOpacity>
+        {useGlass ? (
+          <GlassView isInteractive style={{ marginTop: 16, borderRadius: 999, overflow: 'hidden' }}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={{ paddingHorizontal: 16, paddingVertical: 10 }}
+              activeOpacity={0.7}
+            >
+              <Text className="text-primary font-semibold">Go back</Text>
+            </TouchableOpacity>
+          </GlassView>
+        ) : (
+          <TouchableOpacity onPress={() => router.back()} className="mt-4">
+            <Text className="text-primary font-semibold">Go back</Text>
+          </TouchableOpacity>
+        )}
       </View>
     )
   }
@@ -144,22 +159,50 @@ export default function CommunityDetailScreen({ communityId, postRoute, communit
 
   return (
     <View className="flex-1 bg-surface">
-      <TouchableOpacity
-        onPress={() => router.back()}
-        className="absolute z-10 left-5 items-center justify-center w-9 h-9 rounded-full bg-black/30"
-        style={{ top: insets.top + 8 }}
-      >
-        <Ionicons name="chevron-back" size={22} color="#fff" />
-      </TouchableOpacity>
+      {useGlass ? (
+        <View className="absolute z-10" style={{ left: 20, top: insets.top + 8 }}>
+          <GlassView isInteractive tintColor={TOP_BUTTON_TINT} style={{ borderRadius: 999, overflow: 'hidden' }}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={{ padding: 10 }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="chevron-back" size={22} color="#fff" />
+            </TouchableOpacity>
+          </GlassView>
+        </View>
+      ) : (
+        <TouchableOpacity
+          onPress={() => router.back()}
+          className="absolute z-10 left-5 items-center justify-center w-9 h-9 rounded-full"
+          style={{ top: insets.top + 8, backgroundColor: TOP_BUTTON_TINT }}
+        >
+          <Ionicons name="chevron-back" size={22} color="#fff" />
+        </TouchableOpacity>
+      )}
 
       {isOwner && (
-        <TouchableOpacity
-          onPress={() => setShowEditModal(true)}
-          className="absolute z-10 right-5 items-center justify-center w-8 h-8 rounded-full bg-black/30"
-          style={{ top: insets.top + 8 }}
-        >
-          <Ionicons name="settings-sharp" size={16} color="#fff" />
-        </TouchableOpacity>
+        useGlass ? (
+          <View className="absolute z-10" style={{ right: 20, top: insets.top + 8 }}>
+            <GlassView isInteractive tintColor={TOP_BUTTON_TINT} style={{ borderRadius: 999, overflow: 'hidden' }}>
+              <TouchableOpacity
+                onPress={() => setShowEditModal(true)}
+                style={{ padding: 10 }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="settings-sharp" size={16} color="#fff" />
+              </TouchableOpacity>
+            </GlassView>
+          </View>
+        ) : (
+          <TouchableOpacity
+            onPress={() => setShowEditModal(true)}
+            className="absolute z-10 right-5 items-center justify-center w-8 h-8 rounded-full"
+            style={{ top: insets.top + 8, backgroundColor: TOP_BUTTON_TINT }}
+          >
+            <Ionicons name="settings-sharp" size={16} color="#fff" />
+          </TouchableOpacity>
+        )
       )}
 
       <ScrollView
@@ -168,55 +211,57 @@ export default function CommunityDetailScreen({ communityId, postRoute, communit
         showsVerticalScrollIndicator={false}
       >
         {/* Hero */}
-        <View style={{ backgroundColor: color, height: 230 }} className="justify-end relative">
-          {community.bannerUrl ? (
-            <AuthImageWithToken 
-              uri={normalizeMediaUrl(community.bannerUrl)!} 
-              className="absolute"
-              style={{ position: 'absolute', width: '100%', height: '100%' }}
-            />
-          ) : null}
-          <View className="absolute inset-0 bg-black/40" />
-          
-          <View className="px-5 pb-5 flex-row items-end gap-3">
-            {/* Icon */}
-            {community.iconType === 'EMOJI' && community.iconEmoji ? (
-              <View className="w-16 h-16 rounded-2xl bg-white/20 items-center justify-center mb-1">
-                <Text className="text-3xl">{community.iconEmoji}</Text>
-              </View>
-            ) : community.iconUrl ? (
+        <Link.AppleZoomTarget>
+          <View style={{ backgroundColor: color, height: 230 }} className="justify-end relative">
+            {community.bannerUrl ? (
               <AuthImageWithToken 
-                uri={normalizeMediaUrl(community.iconUrl)!} 
-                style={{ width: 64, height: 64, borderRadius: 16, marginBottom: 4 }} 
+                uri={normalizeMediaUrl(community.bannerUrl)!} 
+                className="absolute"
+                style={{ position: 'absolute', width: '100%', height: '100%' }}
               />
             ) : null}
-
-            <View className="flex-1">
-              <Text className="text-white text-3xl font-extrabold tracking-tight" numberOfLines={2}>
-                {community.name}
-              </Text>
-            {community.description ? (
-              <Text className="text-white/80 text-sm mt-1" numberOfLines={2}>
-                {community.description}
-              </Text>
-            ) : null}
-            <View className="flex-row items-center gap-4 mt-3">
-              <View className="flex-row items-center gap-1">
-                <Ionicons name="people" size={14} color="rgba(255,255,255,0.8)" />
-                <Text className="text-white/80 text-xs font-semibold">
-                  {formatCount(community.memberCount)} members
-                </Text>
-              </View>
-              {community.genre ? (
-                <View className="flex-row items-center gap-1">
-                  <Ionicons name="musical-notes" size={14} color="rgba(255,255,255,0.8)" />
-                  <Text className="text-white/80 text-xs font-semibold">{community.genre}</Text>
+            <View className="absolute inset-0 bg-black/40" />
+            
+            <View className="px-5 pb-5 flex-row items-end gap-3">
+              {/* Icon */}
+              {community.iconType === 'EMOJI' && community.iconEmoji ? (
+                <View className="w-16 h-16 rounded-2xl bg-white/20 items-center justify-center mb-1">
+                  <Text className="text-3xl">{community.iconEmoji}</Text>
                 </View>
+              ) : community.iconUrl ? (
+                <AuthImageWithToken 
+                  uri={normalizeMediaUrl(community.iconUrl)!} 
+                  style={{ width: 64, height: 64, borderRadius: 16, marginBottom: 4 }} 
+                />
               ) : null}
+
+              <View className="flex-1">
+                <Text className="text-white text-3xl font-extrabold tracking-tight" numberOfLines={2}>
+                  {community.name}
+                </Text>
+              {community.description ? (
+                <Text className="text-white/80 text-sm mt-1" numberOfLines={2}>
+                  {community.description}
+                </Text>
+              ) : null}
+              <View className="flex-row items-center gap-4 mt-3">
+                <View className="flex-row items-center gap-1">
+                  <Ionicons name="people" size={14} color="rgba(255,255,255,0.8)" />
+                  <Text className="text-white/80 text-xs font-semibold">
+                    {formatCount(community.memberCount)} members
+                  </Text>
+                </View>
+                {community.genre ? (
+                  <View className="flex-row items-center gap-1">
+                    <Ionicons name="musical-notes" size={14} color="rgba(255,255,255,0.8)" />
+                    <Text className="text-white/80 text-xs font-semibold">{community.genre}</Text>
+                  </View>
+                ) : null}
+              </View>
             </View>
           </View>
-        </View>
-        </View>
+          </View>
+        </Link.AppleZoomTarget>
 
         {/* Tags + Join */}
         <View className="px-5 pt-4 pb-2">
@@ -228,22 +273,43 @@ export default function CommunityDetailScreen({ communityId, postRoute, communit
                 </View>
               ))}
             </View>
-            <TouchableOpacity
-              onPress={handleJoinLeave}
-              disabled={joining}
-              className={`px-5 py-2 rounded-full ${
-                isMember ? 'bg-surface-container-high' : 'bg-primary'
-              }`}
-              activeOpacity={0.7}
-            >
-              <Text
-                className={`text-sm font-bold ${
-                  isMember ? 'text-on-surface' : 'text-on-primary'
+            {useGlass ? (
+              <GlassView isInteractive style={{ borderRadius: 999, overflow: 'hidden' }}>
+                <TouchableOpacity
+                  onPress={handleJoinLeave}
+                  disabled={joining}
+                  className={`px-5 py-2 ${
+                    isMember ? 'bg-surface-container-high/50' : 'bg-primary/85'
+                  }`}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    className={`text-sm font-bold ${
+                      isMember ? 'text-on-surface' : 'text-on-primary'
+                    }`}
+                  >
+                    {joining ? '...' : isMember ? 'Joined' : 'Join'}
+                  </Text>
+                </TouchableOpacity>
+              </GlassView>
+            ) : (
+              <TouchableOpacity
+                onPress={handleJoinLeave}
+                disabled={joining}
+                className={`px-5 py-2 rounded-full ${
+                  isMember ? 'bg-surface-container-high' : 'bg-primary'
                 }`}
+                activeOpacity={0.7}
               >
-                {joining ? '...' : isMember ? 'Joined' : 'Join'}
-              </Text>
-            </TouchableOpacity>
+                <Text
+                  className={`text-sm font-bold ${
+                    isMember ? 'text-on-surface' : 'text-on-primary'
+                  }`}
+                >
+                  {joining ? '...' : isMember ? 'Joined' : 'Join'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
@@ -261,33 +327,67 @@ export default function CommunityDetailScreen({ communityId, postRoute, communit
               contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }}
             >
               {members.slice(0, 15).map((member) => (
-                <TouchableOpacity
-                  key={member.id}
-                  className="items-center"
-                  style={{ width: 64 }}
-                  activeOpacity={0.8}
-                  onPress={() => router.push(publicProfilePath(member.userId, currentTab) as any)}
-                >
-                  {member.profileImage ? (
-                    <Image
-                      source={{ uri: member.profileImage }}
-                      className="w-12 h-12 rounded-full"
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View className="w-12 h-12 rounded-full bg-surface-container-high items-center justify-center">
-                      <Ionicons name="person" size={20} color="#999" />
-                    </View>
-                  )}
-                  <Text className="text-xs text-on-surface-variant mt-1 text-center" numberOfLines={1}>
-                    {member.displayName || member.username}
-                  </Text>
-                  {member.role === 'owner' ? (
-                    <View className="bg-primary/15 px-2 py-0.5 rounded-full mt-0.5">
-                      <Text className="text-primary text-[10px] font-bold">OWNER</Text>
-                    </View>
-                  ) : null}
-                </TouchableOpacity>
+                useGlass ? (
+                  <GlassView
+                    key={member.id}
+                    isInteractive
+                    style={{ width: 64, borderRadius: 16, overflow: 'hidden' }}
+                  >
+                    <TouchableOpacity
+                      className="items-center px-1 py-2"
+                      activeOpacity={0.8}
+                      onPress={() => router.push(publicProfilePath(member.userId, currentTab) as any)}
+                    >
+                      {member.profileImage ? (
+                        <Image
+                          source={{ uri: member.profileImage }}
+                          className="w-12 h-12 rounded-full"
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <View className="w-12 h-12 rounded-full bg-surface-container-high items-center justify-center">
+                          <Ionicons name="person" size={20} color="#999" />
+                        </View>
+                      )}
+                      <Text className="text-xs text-on-surface-variant mt-1 text-center" numberOfLines={1}>
+                        {member.displayName || member.username}
+                      </Text>
+                      {member.role === 'owner' ? (
+                        <View className="bg-primary/15 px-2 py-0.5 rounded-full mt-0.5">
+                          <Text className="text-primary text-[10px] font-bold">OWNER</Text>
+                        </View>
+                      ) : null}
+                    </TouchableOpacity>
+                  </GlassView>
+                ) : (
+                  <TouchableOpacity
+                    key={member.id}
+                    className="items-center"
+                    style={{ width: 64 }}
+                    activeOpacity={0.8}
+                    onPress={() => router.push(publicProfilePath(member.userId, currentTab) as any)}
+                  >
+                    {member.profileImage ? (
+                      <Image
+                        source={{ uri: member.profileImage }}
+                        className="w-12 h-12 rounded-full"
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View className="w-12 h-12 rounded-full bg-surface-container-high items-center justify-center">
+                        <Ionicons name="person" size={20} color="#999" />
+                      </View>
+                    )}
+                    <Text className="text-xs text-on-surface-variant mt-1 text-center" numberOfLines={1}>
+                      {member.displayName || member.username}
+                    </Text>
+                    {member.role === 'owner' ? (
+                      <View className="bg-primary/15 px-2 py-0.5 rounded-full mt-0.5">
+                        <Text className="text-primary text-[10px] font-bold">OWNER</Text>
+                      </View>
+                    ) : null}
+                  </TouchableOpacity>
+                )
               ))}
             </ScrollView>
           </View>

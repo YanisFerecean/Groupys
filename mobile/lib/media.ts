@@ -1,4 +1,4 @@
-import { API_URL } from '@/lib/api'
+import { API_URL } from '@/lib/config'
 
 const MEDIA_PATH_PREFIX = /^\/api\/posts\/media\//
 

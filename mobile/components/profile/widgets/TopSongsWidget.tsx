@@ -1,12 +1,14 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native'
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, type GestureResponderEvent } from 'react-native'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
-import { Ionicons } from '@expo/vector-icons'
-import { Audio, type AVPlaybackStatus } from 'expo-av'
+import { SymbolView } from 'expo-symbols'
+import { GlassView } from 'expo-glass-effect'
+import { AudioPlayer, createAudioPlayer, setAudioModeAsync } from 'expo-audio'
 import { useAuth } from '@clerk/expo'
 import * as Haptics from 'expo-haptics'
 import { useFocusEffect } from 'expo-router'
+import { useIsFocused } from '@react-navigation/native'
 import { searchTracks } from '@/lib/musicSearch'
 import { Colors } from '@/constants/colors'
 import type { TopSong } from '@/models/ProfileCustomization'
@@ -32,27 +34,28 @@ export default function TopSongsWidget({
   size = 'normal',
 }: TopSongsWidgetProps) {
   const { getToken } = useAuth()
-  const soundRef = useRef<Audio.Sound | null>(null)
+  const isFocused = useIsFocused()
+  const soundRef = useRef<AudioPlayer | null>(null)
+  const loadingRef = useRef<number | string | null>(null)
+  const operationRef = useRef(0)
   const [playingId, setPlayingId] = useState<number | string | null>(null)
   const [loadingId, setLoadingId] = useState<number | string | null>(null)
   // Cache resolved preview URLs so we only fetch once per song
   const previewCache = useRef<Record<string, string>>({})
   const failedPreviewUrls = useRef(new Set<string>())
 
-  const stopPlayback = useCallback(async () => {
+  const stopPlayback = useCallback(() => {
+    operationRef.current += 1
+    loadingRef.current = null
+
     if (!soundRef.current) {
       setPlayingId(null)
       setLoadingId(null)
       return
     }
 
-    try {
-      await soundRef.current.stopAsync()
-    } catch {}
-
-    try {
-      await soundRef.current.unloadAsync()
-    } catch {}
+    try { soundRef.current.pause() } catch {}
+    try { soundRef.current.remove() } catch {}
 
     soundRef.current = null
     setPlayingId(null)
@@ -72,6 +75,16 @@ export default function TopSongsWidget({
       }
     }, [stopPlayback]),
   )
+
+  useEffect(() => {
+    if (!isFocused) {
+      void stopPlayback()
+    }
+  }, [isFocused, stopPlayback])
+
+  useEffect(() => {
+    void stopPlayback()
+  }, [size, stopPlayback])
 
   const resolvePreviewUrl = useCallback(
     async (song: TopSong, forceRefresh = false): Promise<string | null> => {
@@ -134,37 +147,54 @@ export default function TopSongsWidget({
   )
 
   const playPreview = useCallback(
-    async (previewUrl: string, songKey: number | string) => {
-      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true })
+    async (previewUrl: string, songKey: number | string, operationId: number): Promise<boolean> => {
+      if (operationId !== operationRef.current) return false
+      await setAudioModeAsync({ playsInSilentMode: true })
+      if (operationId !== operationRef.current) return false
 
-      const sound = new Audio.Sound()
-      sound.setOnPlaybackStatusUpdate((status: AVPlaybackStatus) => {
-          if (status.isLoaded && status.didJustFinish) {
+      const player = createAudioPlayer({ uri: previewUrl })
+
+      await new Promise<void>((resolve, reject) => {
+        let settled = false
+
+        const timeoutId = setTimeout(() => {
+          if (settled) return
+          settled = true
+          player.remove()
+          reject(new Error(PREVIEW_TIMEOUT_MESSAGE))
+        }, PREVIEW_LOAD_TIMEOUT_MS)
+
+        player.addListener('playbackStatusUpdate', (status) => {
+          if (!settled && status.isLoaded) {
+            settled = true
+            clearTimeout(timeoutId)
+            resolve()
+          }
+          if (status.didJustFinish && soundRef.current === player) {
             setPlayingId(null)
-            soundRef.current?.unloadAsync()
+            loadingRef.current = null
+            setLoadingId(null)
+            soundRef.current?.remove()
             soundRef.current = null
           }
         })
+      })
 
-      let timeoutId: ReturnType<typeof setTimeout> | null = null
-
-      try {
-        await Promise.race([
-          sound.loadAsync({ uri: previewUrl }, { shouldPlay: false }),
-          new Promise<never>((_, reject) => {
-            timeoutId = setTimeout(() => reject(new Error(PREVIEW_TIMEOUT_MESSAGE)), PREVIEW_LOAD_TIMEOUT_MS)
-          }),
-        ])
-        await sound.playAsync()
-      } catch (error) {
-        await sound.unloadAsync().catch(() => undefined)
-        throw error
-      } finally {
-        if (timeoutId) clearTimeout(timeoutId)
+      if (operationId !== operationRef.current) {
+        try { player.pause() } catch {}
+        try { player.remove() } catch {}
+        return false
       }
 
-      soundRef.current = sound
+      player.play()
+      if (operationId !== operationRef.current) {
+        try { player.pause() } catch {}
+        try { player.remove() } catch {}
+        return false
+      }
+      soundRef.current = player
       setPlayingId(songKey)
+      return true
     },
     [],
   )
@@ -174,6 +204,9 @@ export default function TopSongsWidget({
       const songKey = song.id ?? `idx-${index}`
 
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+
+      // Ignore repeated taps while preview is resolving/loading.
+      if (loadingRef.current !== null) return
 
       // Tap playing song → stop
       if (playingId === songKey) {
@@ -186,26 +219,37 @@ export default function TopSongsWidget({
         await stopPlayback()
       }
 
+      const operationId = operationRef.current + 1
+      operationRef.current = operationId
+      loadingRef.current = songKey
       setLoadingId(songKey)
       try {
         const previewUrl = await resolvePreviewUrl(song)
+        if (operationId !== operationRef.current) return
         if (!previewUrl) return
 
         try {
-          await playPreview(previewUrl, songKey)
+          const played = await playPreview(previewUrl, songKey, operationId)
+          if (!played) return
         } catch (firstErr) {
+          if (operationId !== operationRef.current) return
           failedPreviewUrls.current.add(previewUrl)
           const refreshedUrl = await resolvePreviewUrl(song, true)
+          if (operationId !== operationRef.current) return
           if (!refreshedUrl || refreshedUrl === previewUrl) throw firstErr
-          await playPreview(refreshedUrl, songKey)
+          const played = await playPreview(refreshedUrl, songKey, operationId)
+          if (!played) return
           previewCache.current[`${song.title}::${song.artist}`] = refreshedUrl
         }
       } catch (err) {
-        if (!isPreviewTimeoutError(err)) {
+        if (operationId === operationRef.current && !isPreviewTimeoutError(err)) {
           console.error('Playback error:', err)
         }
       } finally {
-        setLoadingId(null)
+        if (operationId === operationRef.current) {
+          loadingRef.current = null
+          setLoadingId(null)
+        }
       }
     },
     [playingId, playPreview, resolvePreviewUrl, stopPlayback]
@@ -213,6 +257,51 @@ export default function TopSongsWidget({
 
   if (!songs?.length) return null
   const visibleSongs = songs.slice(0, size === 'small' ? 1 : 3)
+  const singleSong = visibleSongs[0]
+  if (!singleSong) return null
+  const singleSongKey = singleSong?.id ?? 'idx-0'
+  const isSinglePlaying = playingId === singleSongKey
+  const isSingleLoading = loadingId === singleSongKey
+
+  const renderPlayerButton = (
+    isLoading: boolean,
+    isPlaying: boolean,
+    onPress: () => void,
+    glassKey: string,
+  ) => {
+    const iconName = isPlaying ? 'pause.fill' : 'play.fill'
+    return (
+      <GlassView
+        key={glassKey}
+        isInteractive
+        style={{
+          borderRadius: 22,
+        }}
+      >
+        <TouchableOpacity
+          onPress={(event: GestureResponderEvent) => {
+            event.stopPropagation()
+            onPress()
+          }}
+          activeOpacity={0.85}
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+        >
+          {isLoading ? (
+            <ActivityIndicator size="small" color={Colors.primary} />
+          ) : (
+            <SymbolView name={iconName} size={18} tintColor={Colors.primary} />
+          )}
+        </TouchableOpacity>
+      </GlassView>
+    )
+  }
 
   return (
     <View
@@ -220,7 +309,7 @@ export default function TopSongsWidget({
       style={{ backgroundColor: containerColor ?? 'rgba(0,0,0,0.02)' }}
     >
       <Text
-        className="text-xs font-semibold uppercase tracking-widest mb-1 ml-1"
+        className="text-sm font-extrabold uppercase tracking-widest mb-1 ml-1"
         style={{ color: textColor ?? undefined }}
       >
         {size === 'small' ? 'Top Song' : 'Top Songs'}
@@ -229,19 +318,20 @@ export default function TopSongsWidget({
         <TouchableOpacity
           className="gap-3"
           activeOpacity={0.85}
-          onPress={() => handlePress(visibleSongs[0], 0)}
+          onPress={() => handlePress(singleSong, 0)}
         >
           <View className="aspect-square rounded-3xl overflow-hidden bg-surface-container-high relative">
-            {visibleSongs[0]?.coverUrl ? (
+            {singleSong?.coverUrl ? (
               <Image
-                source={{ uri: visibleSongs[0].coverUrl }}
-                style={{ position: 'absolute', top: '-2%', left: '-2%', width: '104%', height: '104%' }}
+                source={{ uri: singleSong.coverUrl }}
+                style={{ position: 'absolute', top: -4, left: -4, right: -4, bottom: -4 }}
                 contentFit="cover"
               />
             ) : null}
 
             <LinearGradient
-              colors={['transparent', 'rgba(0,0,0,0.8)']}
+              colors={['transparent', 'rgba(0,0,0,0.85)']}
+              locations={[0.4, 1]}
               style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
             />
 
@@ -250,6 +340,15 @@ export default function TopSongsWidget({
               style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
             >
               <Text className="text-xs font-bold text-white">1</Text>
+            </View>
+
+            <View className="absolute inset-0 items-center justify-center" pointerEvents="box-none">
+              {renderPlayerButton(
+                isSingleLoading,
+                isSinglePlaying,
+                () => { void handlePress(singleSong, 0) },
+                `small-${singleSongKey}-${isSingleLoading ? 'loading' : 'idle'}-${isSinglePlaying ? 'playing' : 'paused'}`,
+              )}
             </View>
           </View>
 
@@ -272,42 +371,33 @@ export default function TopSongsWidget({
           return (
             <TouchableOpacity
               key={i}
-              className="w-[140px] h-[140px] rounded-3xl overflow-hidden bg-surface-container-high shrink-0 relative border border-black/5"
+              className="w-[140px] h-[140px] rounded-3xl overflow-hidden bg-surface-container-high shrink-0 relative"
               activeOpacity={0.85}
               onPress={() => handlePress(song, i)}
             >
               {song.coverUrl ? (
                 <Image
                   source={{ uri: song.coverUrl }}
-                  style={{ position: 'absolute', top: '-2%', left: '-2%', width: '104%', height: '104%' }}
+                  style={{ position: 'absolute', top: -4, left: -4, right: -4, bottom: -4 }}
                   contentFit="cover"
                 />
               ) : null}
 
               <LinearGradient
-                colors={['transparent', 'rgba(0,0,0,0.8)']}
+                colors={['transparent', 'rgba(0,0,0,0.85)']}
+                locations={[0.4, 1]}
                 style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
               />
 
               {/* Play/pause overlay */}
-              {(isPlaying || isLoading) && (
-                <View className="absolute inset-0 items-center justify-center">
-                  <View
-                    className="w-11 h-11 rounded-full items-center justify-center"
-                    style={{ backgroundColor: isPlaying ? Colors.primary : 'rgba(186,0,43,0.6)' }}
-                  >
-                    {isLoading ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <Ionicons
-                        name="pause"
-                        size={18}
-                        color="#fff"
-                      />
-                    )}
-                  </View>
-                </View>
-              )}
+              <View className="absolute inset-0 items-center justify-center" pointerEvents="box-none">
+                {renderPlayerButton(
+                  isLoading,
+                  isPlaying,
+                  () => { void handlePress(song, i) },
+                  `normal-${songKey}-${isLoading ? 'loading' : 'idle'}-${isPlaying ? 'playing' : 'paused'}`,
+                )}
+              </View>
 
               {/* Title + artist */}
               <View className="absolute bottom-0 left-0 right-0 p-3 pt-6">

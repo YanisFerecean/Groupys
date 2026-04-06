@@ -7,16 +7,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Animated,
   Image,
-  InteractionManager,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Audio, AVPlaybackStatus } from 'expo-av'
+import { AudioPlayer, createAudioPlayer, setAudioModeAsync } from 'expo-audio'
 import type { BackendUser } from '@/lib/api'
 import { searchCommunities } from '@/lib/api'
 import { searchUsers } from '@/lib/chat-api'
@@ -86,7 +84,6 @@ function AlbumRow({ album, onPress }: { album: AlbumRes; onPress: () => void }) 
         <Text style={styles.rowTitle} numberOfLines={1}>{album.title}</Text>
         <Text style={styles.rowSub} numberOfLines={1}>{album.artist?.name}</Text>
       </View>
-      <Ionicons name="star-outline" size={16} color="rgba(0,0,0,0.25)" />
     </TouchableOpacity>
   )
 }
@@ -205,6 +202,7 @@ function UserRow({ user, onPress }: { user: BackendUser; onPress: () => void }) 
 
 interface SearchOverlayProps {
   onClose: () => void
+  initialQuery?: string
 }
 
 type Category = 'all' | 'artists' | 'songs' | 'albums' | 'users' | 'communities'
@@ -258,20 +256,19 @@ function SearchingDots() {
   )
 }
 
-export default function SearchOverlay({ onClose }: SearchOverlayProps) {
+export default function SearchOverlay({ onClose, initialQuery = '' }: SearchOverlayProps) {
   const { getToken, isLoaded: isAuthLoaded } = useAuth()
   const { user } = useUser()
   const insets = useSafeAreaInsets()
-  const inputRef = useRef<TextInput>(null)
   const [ratingAlbum, setRatingAlbum] = useState<TopAlbum | null>(null)
   const getTokenRef = useRef(getToken)
 
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(initialQuery)
   const [category, setCategory] = useState<Category>('all')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [playingId, setPlayingId] = useState<number | null>(null)
   const [loadingId, setLoadingId] = useState<number | null>(null)
-  const soundRef = useRef<Audio.Sound | null>(null)
+  const soundRef = useRef<AudioPlayer | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
   const fadeAnim = useRef(new Animated.Value(0)).current
@@ -282,24 +279,13 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
     getTokenRef.current = getToken
   }, [getToken])
 
-  // Fade in on mount, auto-focus input
+  useEffect(() => {
+    setQuery(initialQuery)
+  }, [initialQuery])
+
+  // Fade in on mount
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 220, useNativeDriver: true }).start()
-    let cancelled = false
-    let task: ReturnType<typeof InteractionManager.runAfterInteractions> | null = null
-    const t = setTimeout(() => {
-      task = InteractionManager.runAfterInteractions(() => {
-        if (!cancelled) {
-          inputRef.current?.focus()
-        }
-      })
-    }, 100)
-
-    return () => {
-      cancelled = true
-      clearTimeout(t)
-      task?.cancel()
-    }
   }, [fadeAnim])
 
   // Debounce: update debouncedQuery 300ms after the user stops typing
@@ -459,46 +445,45 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
 
   // Stop sound on unmount
   useEffect(() => {
-    return () => { soundRef.current?.unloadAsync() }
+    return () => { soundRef.current?.remove() }
   }, [])
 
-  const handleClose = () => {
-    soundRef.current?.stopAsync().then(() => soundRef.current?.unloadAsync())
+  const handleClose = useCallback(() => {
+    soundRef.current?.pause()
+    soundRef.current?.remove()
     soundRef.current = null
     setPlayingId(null)
     Animated.timing(fadeAnim, { toValue: 0, duration: 180, useNativeDriver: true }).start(onClose)
-  }
+  }, [fadeAnim, onClose])
 
   const handleTrackPress = useCallback(async (track: TrackRes) => {
     if (playingId === track.id) {
-      await soundRef.current?.stopAsync()
-      await soundRef.current?.unloadAsync()
+      soundRef.current?.pause()
+      soundRef.current?.remove()
       soundRef.current = null
       setPlayingId(null)
       return
     }
     if (soundRef.current) {
-      await soundRef.current.stopAsync()
-      await soundRef.current.unloadAsync()
+      soundRef.current.pause()
+      soundRef.current.remove()
       soundRef.current = null
       setPlayingId(null)
     }
     if (!track.preview || !track.preview.startsWith('http')) return
     setLoadingId(track.id)
     try {
-      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true })
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: track.preview },
-        { shouldPlay: true },
-        (status: AVPlaybackStatus) => {
-          if (status.isLoaded && status.didJustFinish) {
-            setPlayingId(null)
-            soundRef.current?.unloadAsync()
-            soundRef.current = null
-          }
+      await setAudioModeAsync({ playsInSilentMode: true })
+      const player = createAudioPlayer({ uri: track.preview })
+      player.addListener('playbackStatusUpdate', (status) => {
+        if (status.didJustFinish) {
+          setPlayingId(null)
+          soundRef.current?.remove()
+          soundRef.current = null
         }
-      )
-      soundRef.current = sound
+      })
+      player.play()
+      soundRef.current = player
       setPlayingId(track.id)
     } catch (err) {
       console.error('Playback error:', err)
@@ -548,32 +533,6 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
 
       {/* Overlay content */}
       <View style={[styles.container, { paddingTop: insets.top + 12 }]}>
-
-        {/* Search input row */}
-        <View style={styles.inputRow}>
-          <View style={styles.inputWrap}>
-            <Ionicons name="search" size={18} color={Colors.outline} style={{ marginRight: 8 }} />
-            <TextInput
-              ref={inputRef}
-              style={styles.input}
-              placeholder="Artists, albums, or tracks"
-              placeholderTextColor={Colors.outline}
-              value={query}
-              onChangeText={setQuery}
-              returnKeyType="search"
-              autoCorrect={false}
-            />
-            {query.length > 0 && (
-              <TouchableOpacity onPress={() => setQuery('')} hitSlop={8}>
-                <Ionicons name="close-circle" size={18} color={Colors.outline} />
-              </TouchableOpacity>
-            )}
-          </View>
-          <TouchableOpacity onPress={handleClose} style={styles.cancelBtn}>
-            <Text style={styles.cancelText}>Cancel</Text>
-          </TouchableOpacity>
-        </View>
-
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -617,7 +576,7 @@ export default function SearchOverlay({ onClose }: SearchOverlayProps) {
           >
             {/* Initial empty state */}
             {!query && !hasResults && (
-              <Text style={styles.hint}>Start typing to search</Text>
+              <Text style={styles.hint}>Type in the dock search field to search</Text>
             )}
 
             {/* Inline loading indicator — only when no results to show yet */}
@@ -714,42 +673,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 16,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 12,
-  },
-  inputWrap: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.75)',
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.9)',
-    // shadow
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-  },
-  input: {
-    flex: 1,
-    fontSize: 15,
-    color: Colors.onSurface,
-  },
-  cancelBtn: {
-    paddingVertical: 6,
-    paddingLeft: 2,
-  },
-  cancelText: {
-    fontSize: 15,
-    color: Colors.primary,
-    fontWeight: '600',
   },
   categoryScroll: {
     marginBottom: 10,

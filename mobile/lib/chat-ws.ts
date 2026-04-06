@@ -1,4 +1,4 @@
-import { API_URL } from '@/lib/api'
+import { API_URL, resolveRuntimeUrl } from '@/lib/config'
 import { logError } from '@/lib/logging'
 import type { WsInbound, WsOutbound } from '@/models/Chat'
 
@@ -6,7 +6,7 @@ type GetToken = () => Promise<string | null>
 
 function deriveWsUrl() {
   if (process.env.EXPO_PUBLIC_WS_URL) {
-    return process.env.EXPO_PUBLIC_WS_URL
+    return resolveRuntimeUrl(process.env.EXPO_PUBLIC_WS_URL)
   }
 
   const baseUrl = API_URL.replace(/\/api\/?$/, '')
@@ -28,7 +28,7 @@ export class ChatWebSocketClient {
   private isAuthenticated = false
   private hasConnectedBefore = false
   private messageQueue: WsOutbound[] = []
-  private readonly handlers = new Map<string, Array<(payload: unknown) => void>>()
+  private readonly handlers = new Map<string, ((payload: unknown) => void)[]>()
 
   constructor(private readonly url: string) {}
 

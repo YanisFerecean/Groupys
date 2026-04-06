@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
+import { GlassView } from 'expo-glass-effect'
 import { Text, TouchableOpacity, View } from 'react-native'
 import { Colors } from '@/constants/colors'
 import { timeAgo } from '@/lib/timeAgo'
@@ -11,6 +12,7 @@ interface ConversationListItemProps {
   preview?: string
   onPress: () => void
   onProfilePress?: () => void
+  useGlass?: boolean
 }
 
 export function ConversationListItem({
@@ -19,6 +21,7 @@ export function ConversationListItem({
   preview,
   onPress,
   onProfilePress,
+  useGlass = false,
 }: ConversationListItemProps) {
   const otherParticipant = conversation.participants.find(participant => participant.username !== currentUsername)
   const displayName = conversation.isGroup
@@ -28,12 +31,8 @@ export function ConversationListItem({
   const avatarUrl = conversation.isGroup ? null : otherParticipant?.profileImage
   const initial = displayName.charAt(0).toUpperCase()
 
-  return (
-    <TouchableOpacity
-      className="flex-row items-center gap-4 px-5 py-4"
-      onPress={onPress}
-      activeOpacity={0.85}
-    >
+  const rowContent = (
+    <>
       <TouchableOpacity
         className="relative"
         onPress={(event) => {
@@ -48,6 +47,15 @@ export function ConversationListItem({
             style={{ width: 56, height: 56, borderRadius: 28 }}
             contentFit="cover"
           />
+        ) : useGlass ? (
+          <GlassView style={{ borderRadius: 999, overflow: 'hidden' }}>
+            <View
+              className="items-center justify-center rounded-full"
+              style={{ width: 56, height: 56 }}
+            >
+              <Text className="text-lg font-bold text-primary">{initial}</Text>
+            </View>
+          </GlassView>
         ) : (
           <View
             className="items-center justify-center rounded-full bg-primary/10"
@@ -87,9 +95,43 @@ export function ConversationListItem({
           >
             {preview ?? conversation.lastMessage ?? 'Start a conversation...'}
           </Text>
-          <Ionicons name="chevron-forward" size={16} color={Colors.onSurfaceVariant} />
+          {useGlass ? (
+            <GlassView style={{ borderRadius: 999, overflow: 'hidden' }} isInteractive>
+              <View className="h-8 w-8 items-center justify-center rounded-full">
+                <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
+              </View>
+            </GlassView>
+          ) : (
+            <Ionicons name="chevron-forward" size={16} color={Colors.onSurfaceVariant} />
+          )}
         </View>
       </View>
+    </>
+  )
+
+  if (useGlass) {
+    return (
+      <View className="mx-5 mb-3">
+        <GlassView style={{ borderRadius: 24, overflow: 'hidden' }} isInteractive>
+          <TouchableOpacity
+            className="flex-row items-center gap-4 px-4 py-4"
+            onPress={onPress}
+            activeOpacity={0.85}
+          >
+            {rowContent}
+          </TouchableOpacity>
+        </GlassView>
+      </View>
+    )
+  }
+
+  return (
+    <TouchableOpacity
+      className="flex-row items-center gap-4 px-5 py-4"
+      onPress={onPress}
+      activeOpacity={0.85}
+    >
+      {rowContent}
     </TouchableOpacity>
   )
 }

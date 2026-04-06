@@ -93,7 +93,7 @@ public class ArtistService {
             return Collections.emptyList();
         }
 
-        ArtistResDto enrichedArtist = getById(artistId);
+        ArtistResDto enrichedArtist = getByIdWithoutPersist(artistId);
 
         return response.data().stream()
                 .map(t -> {
@@ -177,6 +177,27 @@ public class ArtistService {
                 && deezerArtist.id() != null
                 && deezerArtist.name() != null
                 && !deezerArtist.name().isBlank();
+    }
+
+    private ArtistResDto getByIdWithoutPersist(Long id) {
+        Artist existing = artistRepository.findById(id);
+        if (existing != null) {
+            return artistMapper.toResDto(existing);
+        }
+
+        DeezerArtistDto deezerArtist;
+        try {
+            deezerArtist = deezerClient.getArtistById(id);
+        } catch (Exception e) {
+            deezerArtist = null;
+        }
+
+        if (!hasRequiredArtistData(deezerArtist)) {
+            return null;
+        }
+
+        LastFmArtistInfoResponse.LastFmArtistDetail lastfmDetail = fetchLastFmInfo(deezerArtist.name());
+        return artistMapper.toResDto(deezerArtist, lastfmDetail);
     }
 
     private void mergeArtist(Artist existing, Artist incoming) {

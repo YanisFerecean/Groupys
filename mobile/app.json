@@ -7,7 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "mobile",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.kyawit.mobile"
@@ -44,7 +44,10 @@
       "expo-apple-authentication",
       "expo-secure-store",
       "expo-video",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-font",
+      "expo-image",
+      "expo-audio"
     ],
     "extra": {
       "EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME": "${EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME}"

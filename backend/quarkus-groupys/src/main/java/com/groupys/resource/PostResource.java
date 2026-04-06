@@ -52,7 +52,8 @@ public class PostResource {
     @Inject
     UserRepository userRepository;
 
-    private static final long MAX_FILE_BYTES = 25L * 1024 * 1024; // 25 MB
+    private static final long MAX_NON_VIDEO_FILE_BYTES = 25L * 1024 * 1024; // 25 MB
+    private static final long MAX_VIDEO_FILE_BYTES = 100L * 1024 * 1024; // 100 MB
 
     @GET
     @Path("/feed")
@@ -101,11 +102,17 @@ public class PostResource {
         if (file == null) {
             return Response.status(400).entity(java.util.Map.of("error", "No file provided")).build();
         }
-        if (file.size() > MAX_FILE_BYTES) {
-            return Response.status(400).entity(java.util.Map.of("error", "File exceeds 25 MB limit")).build();
-        }
         try {
             String mediaType = file.contentType();
+            boolean isVideo = mediaType != null && mediaType.startsWith("video/");
+            long maxAllowedBytes = isVideo ? MAX_VIDEO_FILE_BYTES : MAX_NON_VIDEO_FILE_BYTES;
+            if (file.size() > maxAllowedBytes) {
+                String message = isVideo
+                        ? "Video file exceeds 100 MB limit"
+                        : "File exceeds 25 MB limit";
+                return Response.status(400).entity(java.util.Map.of("error", message)).build();
+            }
+
             String mediaUrl;
             String finalType;
             if (mediaType != null && mediaType.startsWith("image/")) {

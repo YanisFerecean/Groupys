@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Animated, Easing, Image, Text, TouchableOpacity, View } from 'react-native'
 import * as Haptics from 'expo-haptics'
 import { useAuth } from '@clerk/expo'
-import { router } from 'expo-router'
+import { Link, router } from 'expo-router'
 import { useTrendingArtistsStore } from '@/stores/useTrendingArtistsStore'
 import type { ArtistRes as ChartArtist } from '@/models/ArtistRes'
 
@@ -21,28 +21,34 @@ function ArtistBubble({ artist }: { artist: ChartArtist }) {
     `https://picsum.photos/seed/${artist.id}/300/300`
 
   return (
-    <TouchableOpacity
-      className="flex-1 items-center gap-2"
-      activeOpacity={0.75}
-      onPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-        router.push({ pathname: '/artist/[id]', params: { id: artist.id } })
-      }}
+    <Link
+      href={{ pathname: '/artist/[id]', params: { id: artist.id } }}
+      asChild
     >
-      <View className="w-28 h-28 rounded-full overflow-hidden bg-white/10">
-        <Image
-          source={{ uri: imageUrl }}
-          className="w-full h-full"
-          resizeMode="cover"
-        />
-      </View>
-      <Text className="text-on-surface font-bold text-sm text-center" numberOfLines={1}>
-        {artist.name}
-      </Text>
-      <Text className="text-on-surface-variant text-xs">
-        {formatCount(artist.listeners)} listeners
-      </Text>
-    </TouchableOpacity>
+      <TouchableOpacity
+        className="flex-1 items-center gap-2"
+        activeOpacity={0.75}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+        }}
+      >
+        <Link.AppleZoom>
+          <View className="w-28 h-28 rounded-full overflow-hidden bg-white/10">
+            <Image
+              source={{ uri: imageUrl }}
+              className="w-full h-full"
+              resizeMode="cover"
+            />
+          </View>
+        </Link.AppleZoom>
+        <Text className="text-on-surface font-bold text-sm text-center" numberOfLines={1}>
+          {artist.name}
+        </Text>
+        <Text className="text-on-surface-variant text-xs">
+          {formatCount(artist.listeners)} listeners
+        </Text>
+      </TouchableOpacity>
+    </Link>
   )
 }
 

@@ -1,6 +1,6 @@
-import { Ionicons } from '@expo/vector-icons'
+import { SymbolView } from 'expo-symbols'
 import { useAuth } from '@clerk/expo'
-import { router, useLocalSearchParams } from 'expo-router'
+import { Link, router, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Animated,
@@ -12,15 +12,17 @@ import {
   TouchableOpacity,
   UIManager,
   View,
+  useWindowDimensions,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Audio, AVPlaybackStatus } from 'expo-av'
+import { AudioPlayer, createAudioPlayer, setAudioModeAsync } from 'expo-audio'
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
+import { LinearGradient } from 'expo-linear-gradient'
 import { apiFetch } from '@/lib/api'
 import { formatCount } from '@/lib/timeAgo'
 import { communityResToCard } from '@/lib/communityUtils'
 import { Colors } from '@/constants/colors'
 import CommunityCard from '@/components/discover/CommunityCard'
-import CreateCommunityModal from '@/components/community/CreateCommunityModal'
 import type { ArtistRes as ChartArtist } from '@/models/ArtistRes'
 import type { TrackRes } from '@/models/TrackRes'
 import type { CommunityResDto } from '@/models/CommunityRes'
@@ -33,24 +35,6 @@ function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60)
   const s = seconds % 60
   return `${m}:${String(s).padStart(2, '0')}`
-}
-
-function AnimatedExpandRow({ children }: { children: React.ReactNode }) {
-  const fadeAnim = useRef(new Animated.Value(0)).current
-  const translateY = useRef(new Animated.Value(-12)).current
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 280, useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: 0, duration: 280, useNativeDriver: true }),
-    ]).start()
-  }, [fadeAnim, translateY])
-
-  return (
-    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY }] }}>
-      {children}
-    </Animated.View>
-  )
 }
 
 function TrackRow({
@@ -93,10 +77,10 @@ function TrackRow({
       <View className="w-5 items-center justify-center">
         {isLoading ? (
           <Animated.View style={{ transform: [{ rotate: spin }] }}>
-            <Ionicons name="sync" size={16} color={Colors.primary} />
+            <SymbolView name="arrow.clockwise" size={16} tintColor="rgba(186, 0, 43, 0.6)" />
           </Animated.View>
         ) : isPlaying ? (
-          <Ionicons name="pause" size={16} color={Colors.primary} />
+          <SymbolView name="pause.fill" size={16} tintColor="rgba(186, 0, 43, 0.6)" />
         ) : (
           <Text className="text-on-surface-variant text-sm text-center">{index + 1}</Text>
         )}
@@ -106,7 +90,7 @@ function TrackRow({
         <Image source={{ uri: albumCover }} className="w-11 h-11 rounded-md" resizeMode="cover" />
       ) : (
         <View className="w-11 h-11 rounded-md bg-white/10 items-center justify-center">
-          <Ionicons name="musical-note" size={18} color="#888" />
+          <SymbolView name="music.note" size={18} tintColor="#888" />
         </View>
       )}
 
@@ -161,6 +145,7 @@ export default function ArtistScreen() {
   const { getToken, isLoaded: isAuthLoaded } = useAuth()
   const getTokenRef = useRef(getToken)
   const insets = useSafeAreaInsets()
+  const { height: screenHeight } = useWindowDimensions()
 
   const [artist, setArtist] = useState<ChartArtist | null>(null)
   const [tracks, setTracks] = useState<TrackRes[]>([])
@@ -168,12 +153,10 @@ export default function ArtistScreen() {
   const [loading, setLoading] = useState(true)
   const [tracksLoading, setTracksLoading] = useState(true)
   const [expanded, setExpanded] = useState(false)
-  const [communitiesExpanded, setCommunitiesExpanded] = useState(false)
-  const [showCreateCommunity, setShowCreateCommunity] = useState(false)
 
   const [playingId, setPlayingId] = useState<number | null>(null)
   const [loadingId, setLoadingId] = useState<number | null>(null)
-  const soundRef = useRef<Audio.Sound | null>(null)
+  const soundRef = useRef<AudioPlayer | null>(null)
 
   const fadeAnim = useRef(new Animated.Value(0)).current
   const slideAnim = useRef(new Animated.Value(24)).current
@@ -221,44 +204,67 @@ export default function ArtistScreen() {
     }
   }, [loading, fadeAnim, slideAnim])
 
-  useEffect(() => {
-    return () => { soundRef.current?.unloadAsync() }
+  const stopPlayback = useCallback(() => {
+    soundRef.current?.pause()
+    soundRef.current?.remove()
+    soundRef.current = null
+    setPlayingId(null)
+    setLoadingId(null)
   }, [])
+
+  useEffect(() => {
+    return () => { stopPlayback() }
+  }, [stopPlayback])
+
+  const refreshCommunities = useCallback(async () => {
+    if (!id || !isAuthLoaded) return
+    try {
+      const token = await getTokenRef.current()
+      const communitiesData = await apiFetch<CommunityResDto[]>(
+        `/communities/artist/${id}`,
+        token,
+      ).catch(() => [] as CommunityResDto[])
+      setCommunities(communitiesData)
+    } catch (err) {
+      console.error('Failed to refresh communities:', err)
+    }
+  }, [id, isAuthLoaded])
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshCommunities()
+      return () => {
+        stopPlayback()
+      }
+    }, [refreshCommunities, stopPlayback]),
+  )
 
   const handleTrackPress = useCallback(
     async (track: TrackRes) => {
       if (playingId === track.id) {
-        await soundRef.current?.stopAsync()
-        await soundRef.current?.unloadAsync()
-        soundRef.current = null
-        setPlayingId(null)
+        stopPlayback()
         return
       }
 
       if (soundRef.current) {
-        await soundRef.current.stopAsync()
-        await soundRef.current.unloadAsync()
-        soundRef.current = null
-        setPlayingId(null)
+        stopPlayback()
       }
 
       if (!track.preview || !track.preview.startsWith('http')) return
 
       setLoadingId(track.id)
       try {
-        await Audio.setAudioModeAsync({ playsInSilentModeIOS: true })
-        const { sound } = await Audio.Sound.createAsync(
-          { uri: track.preview },
-          { shouldPlay: true },
-          (status: AVPlaybackStatus) => {
-            if (status.isLoaded && status.didJustFinish) {
-              setPlayingId(null)
-              soundRef.current?.unloadAsync()
-              soundRef.current = null
-            }
+        await setAudioModeAsync({ playsInSilentMode: true })
+        const player = createAudioPlayer({ uri: track.preview })
+        player.addListener('playbackStatusUpdate', (status) => {
+          if (status.didJustFinish) {
+            setPlayingId(null)
+            soundRef.current?.remove()
+            soundRef.current = null
           }
-        )
-        soundRef.current = sound
+        })
+        player.play()
+        soundRef.current = player
         setPlayingId(track.id)
       } catch (err) {
         console.error('Playback error:', err)
@@ -266,22 +272,36 @@ export default function ArtistScreen() {
         setLoadingId(null)
       }
     },
-    [playingId]
+    [playingId, stopPlayback]
   )
 
-  const handleCommunityCreated = useCallback((newCommunity: CommunityResDto) => {
-    setCommunities((prev) => [newCommunity, ...prev])
-    setShowCreateCommunity(false)
-  }, [])
+  const openCreateCommunitySheet = useCallback(() => {
+    if (!artist || !id) return
+    router.push({
+      pathname: '/(home)/(discover)/artist/create-community',
+      params: {
+        artistId: id,
+        artistName: artist.name,
+        homeTab: '(discover)',
+      },
+    } as any)
+  }, [artist, id])
 
-  const navigateToCommunity = useCallback((communityId: string) => {
-    router.push(`/(home)/(discover)/community/${communityId}` as any)
-  }, [])
+  const openAllCommunitiesScreen = useCallback(() => {
+    if (!id) return
+    router.push({
+      pathname: '/(home)/(discover)/artist-communities',
+      params: {
+        id,
+        artistName: artist?.name ?? '',
+      },
+    } as any)
+  }, [artist?.name, id])
 
   const visibleTracks = expanded ? tracks.slice(0, 5) : tracks.slice(0, 3)
   const canExpand = tracks.length > 3
   const communityCards = communities.map(communityResToCard)
-  const visibleCommunities = communitiesExpanded ? communityCards : communityCards.slice(0, 2)
+  const previewCommunities = communityCards.slice(0, 2)
 
   const heroImage =
     artist?.images[artist.images.length - 1] ||
@@ -291,13 +311,31 @@ export default function ArtistScreen() {
   return (
     <View className="flex-1 bg-surface">
       {/* Back button */}
-      <TouchableOpacity
-        onPress={() => router.navigate('/(home)/(discover)')}
-        className="absolute z-10 left-5 items-center justify-center w-9 h-9 rounded-full bg-black/30"
-        style={{ top: insets.top + 8 }}
-      >
-        <Ionicons name="chevron-back" size={22} color="#fff" />
-      </TouchableOpacity>
+      {isLiquidGlassAvailable() ? (
+        <View
+          className="absolute z-10"
+          style={{ left: 20, top: insets.top + 8 }}
+        >
+          <GlassView isInteractive tintColor="rgba(186, 0, 43, 0.6)" style={{ borderRadius: 50 }}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={{ padding: 10 }}
+              activeOpacity={0.7}
+            >
+              <SymbolView name="chevron.left" size={22} tintColor="white" />
+            </TouchableOpacity>
+          </GlassView>
+        </View>
+      ) : (
+        <TouchableOpacity
+          onPress={() => router.back()}
+          className="absolute z-10 left-5 w-10 h-10 rounded-full items-center justify-center"
+          style={{ top: insets.top + 8, backgroundColor: Colors.primary }}
+          activeOpacity={0.7}
+        >
+          <SymbolView name="chevron.left" size={24} tintColor="white" />
+        </TouchableOpacity>
+      )}
 
       {loading ? (
         <LoadingGroupys />
@@ -311,38 +349,49 @@ export default function ArtistScreen() {
             showsVerticalScrollIndicator={false}
           >
             {/* Hero */}
-            <View className="relative" style={{ height: 320 }}>
-              {heroImage ? (
-                <Image source={{ uri: heroImage }} className="w-full h-full" resizeMode="cover" />
-              ) : (
-                <View className="w-full h-full bg-white/10 items-center justify-center">
-                  <Ionicons name="person" size={64} color="#888" />
-                </View>
-              )}
+            <View className="relative" style={{ height: screenHeight * 0.55 }}>
+              <Link.AppleZoomTarget>
+                {heroImage ? (
+                  <Image source={{ uri: heroImage }} className="w-full h-full" resizeMode="cover" />
+                ) : (
+                  <View className="w-full h-full bg-white/10 items-center justify-center">
+                    <SymbolView name="person.fill" size={64} tintColor="#888" />
+                  </View>
+                )}
+              </Link.AppleZoomTarget>
+              <LinearGradient
+                colors={['transparent', '#f9f9fb']}
+                locations={[0.85, 1]}
+                style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: screenHeight * 2.5}}
+              />
               <View
-                className="absolute bottom-0 left-0 right-0 px-5 pb-5"
-                style={{ paddingTop: 80, backgroundColor: 'rgba(0,0,0,0.45)' }}
+                className="absolute bottom-0 left-0 right-0 px-5 pb-4"
+                style={{ paddingTop: 60 }}
               >
-                <Text className="text-white text-3xl font-extrabold tracking-tight" numberOfLines={1}>
+                <Text
+                  className="text-white font-extrabold tracking-tight"
+                  numberOfLines={1}
+                  style={{ fontSize: 40, textShadowColor: 'rgba(0,0,0,0.4)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }}
+                >
                   {artist.name}
                 </Text>
               </View>
             </View>
 
-            {/* Stats */}
-            <View className="flex-row px-5 pt-5 gap-6">
+            {/* Stats - pulled up to overlap the gradient */}
+            <View className="flex-row px-5 pt-2 gap-6">
               <View>
                 <Text className="text-primary font-extrabold text-xl">
                   {formatCount(artist.listeners)}
                 </Text>
-                <Text className="text-on-surface-variant text-xs mt-0.5">listeners</Text>
+                <Text className="text-on-surface-variant text-xs mt-0.5">Listeners</Text>
               </View>
               <View className="w-px bg-white/10" />
               <View>
                 <Text className="text-primary font-extrabold text-xl">
                   {formatCount(artist.playcount)}
                 </Text>
-                <Text className="text-on-surface-variant text-xs mt-0.5">plays</Text>
+                <Text className="text-on-surface-variant text-xs mt-0.5">Plays</Text>
               </View>
             </View>
 
@@ -350,68 +399,42 @@ export default function ArtistScreen() {
             <View className="px-5 pt-8 pb-2">
               <View className="flex-row items-center justify-between mb-4">
                 <Text className="text-on-surface font-bold text-base">Communities</Text>
-                <View className="flex-row items-center gap-3">
-                  <TouchableOpacity onPress={() => setShowCreateCommunity(true)}>
-                    <Ionicons name="add-circle-outline" size={22} color={Colors.primary} />
-                  </TouchableOpacity>
-                  {communityCards.length > 2 ? (
-                    <TouchableOpacity
-                      onPress={() => {
-                        LayoutAnimation.configureNext(
-                          LayoutAnimation.create(280, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity)
-                        )
-                        setCommunitiesExpanded((e) => !e)
-                      }}
-                    >
-                      <Text className="text-primary text-sm font-semibold">
-                        {communitiesExpanded ? 'Show less' : 'Show more'}
-                      </Text>
-                    </TouchableOpacity>
-                  ) : null}
-                </View>
+                <TouchableOpacity onPress={openAllCommunitiesScreen} activeOpacity={0.7}>
+                  <Text className="text-primary text-sm font-semibold">Show more</Text>
+                </TouchableOpacity>
               </View>
 
               {communities.length === 0 ? (
                 <View className="items-center py-6">
-                  <Ionicons name="people-outline" size={32} color={Colors.onSurfaceVariant} />
+                  <SymbolView name="person.2" size={32} tintColor={Colors.onSurfaceVariant} />
                   <Text className="text-on-surface-variant text-sm mt-2">No communities yet</Text>
                   <TouchableOpacity
-                    onPress={() => setShowCreateCommunity(true)}
-                    className="mt-3 bg-primary px-5 py-2 rounded-full"
+                    onPress={openCreateCommunitySheet}
+                    className="mt-3 px-5 py-2 rounded-full flex-row items-center gap-2"
+                    style={{ backgroundColor: Colors.primary }}
+                    activeOpacity={0.7}
                   >
-                    <Text className="text-on-primary text-sm font-bold">Create One</Text>
+                    <SymbolView name="plus" size={18} tintColor="white" />
+                    <Text className="text-white text-sm font-bold">Create One</Text>
                   </TouchableOpacity>
                 </View>
               ) : (
                 <View className="gap-3">
-                  {/* First row */}
                   <View className="flex-row gap-3">
-                    {visibleCommunities.slice(0, 2).map((c) => (
-                      <CommunityCard
-                        key={c.id}
-                        community={c}
-                        onPress={() => navigateToCommunity(communities.find((dto) => dto.id === c.id || dto.name === c.name)?.id ?? c.id)}
-                      />
-                    ))}
+                    {previewCommunities.map((c) => {
+                      const targetId = communities.find((dto) => dto.id === c.id || dto.name === c.name)?.id ?? c.id
+                      return (
+                        <CommunityCard
+                          key={c.id}
+                          community={c}
+                          href={{ pathname: '/(home)/(discover)/community/[id]', params: { id: targetId } }}
+                          replace
+                          withAppleZoom
+                        />
+                      )
+                    })}
+                    {previewCommunities.length === 1 ? <View className="flex-1" /> : null}
                   </View>
-                  {/* Additional rows */}
-                  {communitiesExpanded && communityCards.length > 2 ? (
-                    <AnimatedExpandRow>
-                      <View className="gap-3">
-                        {Array.from({ length: Math.ceil((communityCards.length - 2) / 2) }).map((_, rowIdx) => (
-                          <View key={rowIdx} className="flex-row gap-3">
-                            {communityCards.slice(2 + rowIdx * 2, 4 + rowIdx * 2).map((c) => (
-                              <CommunityCard
-                                key={c.id}
-                                community={c}
-                                onPress={() => navigateToCommunity(communities.find((dto) => dto.name === c.name)?.id ?? c.id)}
-                              />
-                            ))}
-                          </View>
-                        ))}
-                      </View>
-                    </AnimatedExpandRow>
-                  ) : null}
                 </View>
               )}
             </View>
@@ -460,20 +483,12 @@ export default function ArtistScreen() {
               )}
             </View>
 
-            {/* Bio */}
-            {artist.summary ? (
-              <View className="px-5 pt-6">
-                <Text className="text-on-surface font-bold text-base mb-2">About</Text>
-                <Text className="text-on-surface-variant text-sm leading-5" numberOfLines={6}>
-                  {artist.summary.replace(/<[^>]*>/g, '').split('\n')[0]}
-                </Text>
-              </View>
-            ) : null}
+            {/* Bio - moved to info sheet */}
           </ScrollView>
         </Animated.View>
       ) : (
         <View className="flex-1 items-center justify-center px-10">
-          <Ionicons name="alert-circle-outline" size={40} color={Colors.primary} />
+          <SymbolView name="exclamationmark.circle" size={40} tintColor="black" />
           <Text className="text-on-surface font-bold text-lg mt-3">Artist not found</Text>
           <TouchableOpacity onPress={() => router.back()} className="mt-4">
             <Text className="text-primary">Go back</Text>
@@ -481,16 +496,66 @@ export default function ArtistScreen() {
         </View>
       )}
 
-      {/* Create Community Modal */}
       {artist ? (
-        <CreateCommunityModal
-          visible={showCreateCommunity}
-          onClose={() => setShowCreateCommunity(false)}
-          onCreated={handleCommunityCreated}
-          artistId={artist.id}
-          artistName={artist.name}
-        />
+        <>
+          <View className="absolute" style={{ left: 16, bottom: 30, zIndex: 10 }}>
+            {isLiquidGlassAvailable() ? (
+              <GlassView isInteractive tintColor="rgba(186, 0, 43, 0.6)" style={{ borderRadius: 50 }}>
+                <TouchableOpacity
+                  onPress={() => {
+                    router.push({
+                      pathname: '/(home)/(discover)/artist/bio',
+                      params: { name: artist.name, bio: artist.summary ?? '' },
+                    })
+                  }}
+                  style={{ padding: 12 }}
+                  activeOpacity={0.7}
+                >
+                  <SymbolView name="info" size={22} tintColor="white" />
+                </TouchableOpacity>
+              </GlassView>
+            ) : (
+              <TouchableOpacity
+                onPress={() => {
+                  router.push({
+                    pathname: '/(home)/(discover)/artist/bio',
+                    params: { name: artist.name, bio: artist.summary ?? '' },
+                  })
+                }}
+                className="w-12 h-12 rounded-full items-center justify-center"
+                style={{ backgroundColor: Colors.primary }}
+                activeOpacity={0.7}
+              >
+                <SymbolView name="info" size={22} tintColor="white" />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <View className="absolute" style={{ right: 16, bottom: 30, zIndex: 10 }}>
+            {isLiquidGlassAvailable() ? (
+              <GlassView isInteractive tintColor="rgba(186, 0, 43, 0.6)" style={{ borderRadius: 50 }}>
+                <TouchableOpacity
+                  onPress={openCreateCommunitySheet}
+                  style={{ padding: 12 }}
+                  activeOpacity={0.7}
+                >
+                  <SymbolView name="plus" size={22} tintColor="white" />
+                </TouchableOpacity>
+              </GlassView>
+            ) : (
+              <TouchableOpacity
+                onPress={openCreateCommunitySheet}
+                className="w-12 h-12 rounded-full items-center justify-center"
+                style={{ backgroundColor: Colors.primary }}
+                activeOpacity={0.7}
+              >
+                <SymbolView name="plus" size={22} tintColor="white" />
+              </TouchableOpacity>
+            )}
+          </View>
+        </>
       ) : null}
+
     </View>
   )
 }
