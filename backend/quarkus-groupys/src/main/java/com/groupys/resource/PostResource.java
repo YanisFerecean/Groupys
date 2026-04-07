@@ -72,6 +72,14 @@ public class PostResource {
     }
 
     @GET
+    @Path("/liked")
+    public List<PostResDto> getLikedPosts(
+            @QueryParam("page") @DefaultValue("0") int page,
+            @QueryParam("size") @DefaultValue("20") int size) {
+        return postService.getLikedPosts(jwt.getSubject(), page, Math.min(size, 50));
+    }
+
+    @GET
     @Path("/author/{userId}")
     public List<PostResDto> getByAuthor(@PathParam("userId") UUID userId) {
         return postService.getByAuthor(userId, jwt.getSubject());

@@ -5,6 +5,7 @@ import { useAuth, useUser } from "@clerk/nextjs";
 import { useRouter, usePathname } from "next/navigation";
 import SideNav from "@/components/app/SideNav";
 import TopBar from "@/components/app/TopBar";
+import ProfileRightSidebar from "@/components/profile/ProfileRightSidebar";
 import SearchOverlay from "@/components/discover/SearchOverlay";
 import SettingsDialog from "@/components/app/SettingsDialog";
 import CreatePostModal from "@/components/ui/CreatePostModal";
@@ -88,7 +89,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         onSearchClick={() => setSearchOpen(true)}
         onSettingsClick={() => setSettingsOpen(true)}
       />
-      <main className="lg:ml-64 pt-16 lg:pt-20 min-h-screen">{children}</main>
+      <ProfileRightSidebar />
+      <main className={`lg:ml-64 pt-16 lg:pt-20 min-h-screen${pathname === "/profile" ? " lg:mr-52" : ""}`}>{children}</main>
 
       {/* Floating action button — hidden in DMs */}
       {!pathname.startsWith("/chat") && (
