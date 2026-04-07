@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
@@ -326,9 +327,12 @@ export default function FeedContent() {
           setPosts((prev) =>
             prev.map((p) => (p.id === postId ? updated : p)),
           );
+        } else {
+          toast.error("Failed to react");
         }
       } catch (err) {
         console.error("React error:", err);
+        toast.error("Failed to react");
       }
     },
     [],

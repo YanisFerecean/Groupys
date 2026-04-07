@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import UserSync from "@/components/UserSync";
 import FontLoader from "@/components/FontLoader";
+import { Toaster } from "sonner";
 import "./globals.css";
 
 const inter = Inter({
@@ -73,6 +74,7 @@ export default function RootLayout({
       {CLERK_ENABLED ? <UserSync /> : null}
       <FontLoader />
       {children}
+      <Toaster />
     </>
   );
 

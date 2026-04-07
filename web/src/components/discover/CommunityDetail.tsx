@@ -8,6 +8,7 @@ import MarkdownContent from "@/components/ui/MarkdownContent";
 import AuthMedia from "@/components/ui/AuthMedia";
 import MediaLightbox, { LightboxItem } from "@/components/ui/MediaLightbox";
 import { resizeImage } from "@/lib/imageResize";
+import { toast } from "sonner";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
 
@@ -603,6 +604,7 @@ export default function CommunityDetail({ id }: { id: string }) {
         );
       } catch (err) {
         console.error("React error:", err);
+        toast.error("Failed to react");
       }
     },
     [getToken],
@@ -618,8 +620,10 @@ export default function CommunityDetail({ id }: { id: string }) {
         });
         if (!res.ok) throw new Error("Failed to delete post");
         setPosts((prev) => prev.filter((p) => p.id !== postId));
+        toast.success("Post deleted");
       } catch (err) {
         console.error("Delete error:", err);
+        toast.error("Failed to delete post");
       }
     },
     [getToken],

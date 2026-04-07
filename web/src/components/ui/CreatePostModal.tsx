@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { resizeImage } from "@/lib/imageResize";
+import { toast } from "sonner";
 import LexicalEditorProvider from "@/components/ui/LexicalEditorProvider";
 import type { LexicalEditorRef } from "@/components/ui/LexicalEditor";
 
@@ -266,6 +267,7 @@ export default function CreatePostModal({
           // ignore
         }
         setPostError(message);
+        toast.error(message);
         return;
       }
 
@@ -276,9 +278,11 @@ export default function CreatePostModal({
       justSubmittedRef.current = true;
       setEntries([]);
       if (fileRef.current) fileRef.current.value = "";
+      toast.success("Post created");
       onClose();
     } catch {
       setPostError("Failed to create post");
+      toast.error("Failed to create post");
     } finally {
       setPosting(false);
     }
