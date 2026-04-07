@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
 import type { ProfileCustomization } from "@/types/profile";
 import { countryFlag } from "@/lib/countries";
@@ -35,6 +36,7 @@ export default function ProfileHeader({
   albumsRatedCount,
   onEditClick,
 }: ProfileHeaderProps) {
+  const [avatarError, setAvatarError] = useState(false);
   const displayName = profile.displayName || clerkName;
   const bannerStyle = bannerBackground(profile.bannerUrl);
 
@@ -50,13 +52,20 @@ export default function ProfileHeader({
       <div className="px-6 md:px-12 -mt-16 md:-mt-20 relative z-10">
         <div className="flex flex-col items-center md:flex-row md:items-end gap-6">
           {/* Avatar */}
-          <div className="relative w-32 h-32 md:w-40 md:h-40 shrink-0 rounded-2xl overflow-hidden shadow-2xl border-4 border-surface">
-            <Image
-              alt={displayName}
-              fill
-              className="object-cover"
-              src={avatarUrl}
-            />
+          <div className="relative w-32 h-32 md:w-40 md:h-40 shrink-0 rounded-2xl overflow-hidden shadow-2xl border-4 border-surface bg-surface-container-high">
+            {avatarError ? (
+              <div className="w-full h-full flex items-center justify-center">
+                <span className="material-symbols-outlined text-on-surface-variant/30 text-5xl">person</span>
+              </div>
+            ) : (
+              <Image
+                alt={displayName}
+                fill
+                className="object-cover"
+                src={avatarUrl}
+                onError={() => setAvatarError(true)}
+              />
+            )}
           </div>
 
           {/* Info */}

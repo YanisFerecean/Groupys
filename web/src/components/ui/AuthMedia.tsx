@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import Image from "next/image";
 
 function useStopWhenHidden(ref: React.RefObject<HTMLVideoElement | HTMLAudioElement | null>) {
   useEffect(() => {
@@ -59,14 +58,6 @@ export default function AuthMedia({
     );
   }
 
-  return (
-    <Image
-      src={src}
-      alt="Post media"
-      width={0}
-      height={0}
-      sizes="100vw"
-      className={className}
-    />
-  );
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={src} alt="Post media" className={className} />;
 }

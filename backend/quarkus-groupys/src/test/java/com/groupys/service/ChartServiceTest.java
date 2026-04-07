@@ -116,5 +116,10 @@ class ChartServiceTest {
         public LastFmTagAlbumsResponse getTagTopAlbums(String method, String tag, String apiKey, String format) {
             throw new UnsupportedOperationException("Not used in this test");
         }
+
+        @Override
+        public LastFmTopArtistsResponse getTagTopArtists(String method, String tag, int limit, String apiKey, String format) {
+            throw new UnsupportedOperationException("Not used in this test");
+        }
     }
 }

@@ -30,6 +30,7 @@ export default function ConversationPage() {
   const { getToken } = useAuth();
   const { conversations, markAsRead, acceptRequest, denyRequest } = useConversations();
   const [requestBusy, setRequestBusy] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
   const { isOnline } = usePresence();
   const { ready: cryptoReady, makeEncrypt, makeDecrypt } = useCrypto();
 
@@ -195,8 +196,8 @@ export default function ConversationPage() {
             href={otherUsername ? `/profile/${otherUsername}` : "#"}
             className="flex items-center gap-3 hover:opacity-80 transition-opacity"
           >
-            {avatarUrl ? (
-              <Image src={avatarUrl} alt={headerTitle} width={48} height={48} className="rounded-full object-cover" />
+            {avatarUrl && !avatarError ? (
+              <Image src={avatarUrl} alt={headerTitle} width={48} height={48} className="rounded-full object-cover" onError={() => setAvatarError(true)} />
             ) : (
               <div className="w-12 h-12 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-lg uppercase">
                 {headerTitle.charAt(0)}
