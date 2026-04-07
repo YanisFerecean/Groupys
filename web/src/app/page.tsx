@@ -3,6 +3,8 @@ import { GoogleAnalytics } from "@next/third-parties/google";
 import NavBar from "@/components/landing/NavBar";
 import HeroSection from "@/components/landing/HeroSection";
 import FeaturesSection from "@/components/landing/FeaturesSection";
+import SocialProofSection from "@/components/landing/SocialProofSection";
+import LogoCarousel from "@/components/landing/LogoCarousel";
 import AppShowcase from "@/components/landing/AppShowcase";
 import TrendingArtists from "@/components/landing/TrendingArtists";
 import FaqSection from "@/components/landing/FaqSection";
@@ -168,6 +170,8 @@ export default function Home() {
         <NavBar />
         <main className="pt-24 md:pt-32">
           <HeroSection />
+          <LogoCarousel />
+          <SocialProofSection />
           <FeaturesSection />
           <AppShowcase />
           <TrendingArtists />

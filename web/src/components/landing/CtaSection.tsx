@@ -14,6 +14,9 @@ export default function CtaSection() {
             Groupys is currently in private beta. Be among the first to join communities, match
             with listeners like you, and build your musical identity.
           </p>
+          <p className="text-sm text-white/60">
+            Private beta closes when we hit capacity.
+          </p>
           <div className="pt-4 md:pt-8 flex justify-center">
             <WaitlistForm variant="dark" />
           </div>

@@ -29,7 +29,7 @@ const faqs = [
       "Communities are genre or artist-based spaces where members post, comment, rate albums, and discuss music. Each community is built around a shared taste — whether that's an artist, a genre, or a vibe.",
   },
   {
-    question: "What plattforms is Groupys available on?",
+    question: "What platforms is Groupys available on?",
     answer:
       "Groupys is being built for iOS and Android. You can join the waitlist now to get early access when we launch.",
   },
