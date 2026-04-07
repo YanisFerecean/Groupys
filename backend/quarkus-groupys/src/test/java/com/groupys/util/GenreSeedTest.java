@@ -154,5 +154,10 @@ class GenreSeedTest {
         public DeezerGenreListResponse getGenres() {
             return genreListResponse;
         }
+
+        @Override
+        public DeezerArtistSearchResponse getArtistsByGenre(Long id) {
+            throw new UnsupportedOperationException("Not used in this test");
+        }
     }
 }

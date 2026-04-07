@@ -508,7 +508,9 @@ export default function PostDetail({ id }: { id: string }) {
                   const vIdx = visualIndexOf[i];
                   const mediaClass = inGrid && !isAudio
                     ? "w-full h-72 object-cover rounded-xl"
-                    : isImage ? "max-w-full max-h-[500px] rounded-xl" : isVideo ? "max-w-full max-h-[600px] rounded-xl" : undefined;
+                    : isImage ? "max-w-full max-h-[500px] rounded-xl"
+                    : isVideo ? "max-w-full max-h-[600px] rounded-xl"
+                    : undefined;
                   return (
                     <div key={i} className={`relative${spanFull ? " col-span-2" : ""}`}>
                       {isImage ? (

@@ -57,6 +57,7 @@ export default function PublicProfileView({
   const [friendStatus, setFriendStatus] = useState<FriendStatus>("NONE");
   const [friendshipId, setFriendshipId] = useState<string | null>(null);
   const [friendLoading, setFriendLoading] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
 
   async function handleFriend() {
     if (!backendUser || friendLoading) return;
@@ -211,12 +212,13 @@ export default function PublicProfileView({
           <div className="flex flex-col items-center md:flex-row md:items-end gap-6">
             {/* Avatar */}
             <div className="relative w-32 h-32 md:w-40 md:h-40 shrink-0 rounded-full overflow-hidden shadow-2xl border-4 border-surface bg-surface-container-high">
-              {avatarUrl ? (
+              {avatarUrl && !avatarError ? (
                 <Image
                   alt={displayName}
                   fill
                   className="object-cover"
                   src={avatarUrl}
+                  onError={() => setAvatarError(true)}
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">

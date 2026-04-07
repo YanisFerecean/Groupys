@@ -26,10 +26,6 @@ export default function UserSync() {
     // 1. Safety check for SSR and Auth
     if (!isLoaded || !isAuthLoaded || !isSignedIn || !user || syncedRef.current) return;
 
-    // 2. Only run this if we are on the root path to avoid unnecessary syncs on every page load
-    // (Optional: remove this check if you want to sync on every page mount)
-    if (pathname !== "/") return;
-
     syncedRef.current = true;
 
     (async () => {
@@ -69,7 +65,7 @@ export default function UserSync() {
         syncedRef.current = false; // Allow retry on error
       }
     })();
-  }, [getToken, isAuthLoaded, isSignedIn, isLoaded, user, pathname, router]);
+  }, [getToken, isAuthLoaded, isSignedIn, isLoaded, user, router]);
 
   // If we aren't on "/", we shouldn't show the redirecting overlay anyway
   if (!redirecting || pathname !== "/") return null;

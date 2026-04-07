@@ -144,5 +144,10 @@ class AlbumServiceTest {
         public com.groupys.dto.deezer.DeezerGenreListResponse getGenres() {
             throw new UnsupportedOperationException("Not used in this test");
         }
+
+        @Override
+        public DeezerArtistSearchResponse getArtistsByGenre(Long id) {
+            throw new UnsupportedOperationException("Not used in this test");
+        }
     }
 }
