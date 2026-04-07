@@ -40,6 +40,18 @@ public class PostRepository implements PanacheRepositoryBase<Post, UUID> {
                 .page(page, size).list();
     }
 
+    public List<Post> findLikedByUserPaged(UUID userId, int page, int size) {
+        return getEntityManager().createQuery(
+                "SELECT p FROM Post p JOIN PostReaction r ON r.post.id = p.id " +
+                "WHERE r.user.id = :uid AND r.reactionType = 'like' " +
+                "ORDER BY r.createdAt DESC",
+                Post.class
+        ).setParameter("uid", userId)
+                .setFirstResult(page * size)
+                .setMaxResults(size)
+                .getResultList();
+    }
+
     public long countByAuthor(UUID authorId) {
         return count("author.id", authorId);
     }

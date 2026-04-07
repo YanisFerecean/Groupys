@@ -79,6 +79,17 @@ export default function SideNav({ open, onClose }: SideNavProps) {
 
           <div className="mt-auto pt-8">
             <div className="bg-surface-container h-px mb-6" />
+            <div className="flex flex-col gap-1 mb-6">
+              <Link href="/privacy" onClick={onClose} className="px-6 py-1.5 text-xs text-on-surface-variant/60 hover:text-on-surface-variant transition-colors rounded-lg hover:bg-surface-container">
+                Privacy Policy
+              </Link>
+              <Link href="/terms" onClick={onClose} className="px-6 py-1.5 text-xs text-on-surface-variant/60 hover:text-on-surface-variant transition-colors rounded-lg hover:bg-surface-container">
+                Terms of Use
+              </Link>
+              <Link href="/impressum" onClick={onClose} className="px-6 py-1.5 text-xs text-on-surface-variant/60 hover:text-on-surface-variant transition-colors rounded-lg hover:bg-surface-container">
+                Impressum
+              </Link>
+            </div>
             <p className="px-6 text-[0.6875rem] font-semibold uppercase tracking-widest text-on-surface-variant opacity-40">
               High-Fidelity
             </p>

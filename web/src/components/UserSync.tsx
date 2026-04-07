@@ -19,8 +19,9 @@ export default function UserSync() {
   // Start false so it doesn't try to render/logic on the server
   const [redirecting, setRedirecting] = useState(false);
 
-  // REMOVED: The useEffect that was causing the "cascading renders" error.
-  // Instead, we handle the state reset inside the main logic or via the path change.
+  useEffect(() => {
+    if (pathname !== "/") setRedirecting(false);
+  }, [pathname]);
 
   useEffect(() => {
     // 1. Safety check for SSR and Auth
