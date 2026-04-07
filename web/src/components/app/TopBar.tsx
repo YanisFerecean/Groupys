@@ -3,7 +3,6 @@
 import { UserButton } from "@clerk/nextjs";
 import { usePathname, useRouter } from "next/navigation";
 import { History, MessageCircle } from "lucide-react";
-import DmButton from "./DmButton";
 import FriendsSheet from "@/components/friends/FriendsSheet";
 
 interface TopBarProps {
@@ -16,7 +15,6 @@ export default function TopBar({ onMenuClick, onSearchClick, onSettingsClick }: 
   const pathname = usePathname();
   const router = useRouter();
   const isProfile = pathname === "/profile" || pathname.startsWith("/profile/");
-  const isFeed = pathname === "/feed" || pathname.startsWith("/feed/");
   const isMutuals = pathname === "/match" || pathname.startsWith("/match/");
 
   return (
@@ -68,7 +66,6 @@ export default function TopBar({ onMenuClick, onSearchClick, onSettingsClick }: 
               <span className="material-symbols-outlined">settings</span>
             </button>
           )}
-          {isFeed && <DmButton />}
           {isMutuals && (
             <>
               <button
