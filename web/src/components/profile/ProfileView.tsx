@@ -104,6 +104,20 @@ function PostList({ posts, loading, onClickPost }: {
   );
 }
 
+const CARD_COLORS = [
+  "from-violet-500 to-purple-700",
+  "from-pink-500 to-rose-700",
+  "from-cyan-500 to-teal-700",
+  "from-amber-500 to-orange-700",
+  "from-emerald-500 to-green-700",
+  "from-indigo-500 to-blue-700",
+];
+
+function cardColorFromId(id: string) {
+  const hash = id.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
+  return CARD_COLORS[hash % CARD_COLORS.length];
+}
+
 function CommunityList({ communities, loading, onClickCommunity }: {
   communities: CommunityRes[];
   loading: boolean;
@@ -111,8 +125,10 @@ function CommunityList({ communities, loading, onClickCommunity }: {
 }) {
   if (loading) {
     return (
-      <div className="flex justify-center py-16">
-        <div className="w-10 h-10 rounded-full bg-surface-container-high animate-pulse" />
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="aspect-[3/4] rounded-2xl bg-surface-container-high animate-pulse" />
+        ))}
       </div>
     );
   }
@@ -125,28 +141,45 @@ function CommunityList({ communities, loading, onClickCommunity }: {
     );
   }
   return (
-    <div className="flex flex-col gap-3">
-      {communities.map((c) => (
-        <div
-          key={c.id}
-          onClick={() => onClickCommunity(c.id)}
-          className="bg-surface-container-lowest/65 border border-white/80 rounded-2xl px-4 py-3 cursor-pointer hover:border-white transition-colors flex items-center gap-3"
-        >
-          {c.imageUrl ? (
-            <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0">
-              <Image src={`${API_URL}${c.imageUrl.replace(/^\/api/, "")}`} alt={c.name} width={40} height={40} className="w-full h-full object-cover" />
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+      {communities.map((c) => {
+        const imgSrc = c.imageUrl
+          ? `${API_URL}${c.imageUrl.replace(/^\/api/, "")}`
+          : null;
+        return (
+          <div
+            key={c.id}
+            onClick={() => onClickCommunity(c.id)}
+            className="relative aspect-[3/4] rounded-2xl overflow-hidden cursor-pointer shadow-lg hover:scale-[1.02] transition-transform"
+          >
+            {imgSrc ? (
+              <Image src={imgSrc} alt={c.name} fill className="object-cover" sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw" />
+            ) : (
+              <div className={`absolute inset-0 bg-gradient-to-br ${cardColorFromId(c.id)}`} />
+            )}
+            <div
+              className="absolute inset-0"
+              style={{ background: "linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.82) 100%)" }}
+            />
+            <div className="absolute bottom-0 left-0 right-0 p-4 space-y-1.5">
+              <div className="flex flex-wrap gap-1">
+                {c.tags?.slice(0, 2).map((tag) => (
+                  <span key={tag} className="bg-white/25 text-white px-2 py-0.5 rounded-full text-[9px] font-bold tracking-widest uppercase">
+                    {tag}
+                  </span>
+                ))}
+                {c.genre && (
+                  <span className="bg-white/25 text-white px-2 py-0.5 rounded-full text-[9px] font-bold tracking-widest uppercase">
+                    {c.genre}
+                  </span>
+                )}
+              </div>
+              <h3 className="text-white font-extrabold text-base leading-tight">{c.name}</h3>
+              <p className="text-white/70 text-xs font-semibold">{c.memberCount} members</p>
             </div>
-          ) : (
-            <div className="w-10 h-10 rounded-xl bg-primary/10 shrink-0 flex items-center justify-center">
-              <span className="material-symbols-outlined text-primary">group</span>
-            </div>
-          )}
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-sm text-on-surface truncate">{c.name}</p>
-            <p className="text-xs text-on-surface-variant">{c.memberCount} members</p>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
