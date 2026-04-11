@@ -96,7 +96,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="bg-surface text-on-surface min-h-screen">
-      <SideNav open={sidebarOpen} onClose={() => setSidebarOpen(false)} onSettingsClick={() => setSettingsOpen(true)} />
+      <SideNav open={sidebarOpen} onClose={() => setSidebarOpen(false)} onSettingsClick={() => setSettingsOpen(true)} onCreatePost={() => setCreatePostOpen(true)} />
       <TopBar
         onMenuClick={() => setSidebarOpen(true)}
         onSearchClick={() => setSearchOpen(true)}
@@ -104,18 +104,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <ProfileRightSidebar />
       <main className={`lg:ml-64 pt-16 lg:pt-20 min-h-screen${pathname === "/profile" ? " lg:mr-52" : ""}`}>{children}</main>
 
-      {/* Floating action button — hidden in DMs */}
-      {!pathname.startsWith("/chat") && (
-        <button
-          onClick={() => setCreatePostOpen(true)}
-          className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-primary text-on-primary shadow-lg hover:opacity-90 active:scale-95 transition-all flex items-center justify-center"
-          aria-label="Create post"
-        >
-          <span className="material-symbols-outlined text-2xl">add</span>
-        </button>
-      )}
-
-      {searchOpen && <SearchOverlay onClose={() => setSearchOpen(false)} />}
+{searchOpen && <SearchOverlay onClose={() => setSearchOpen(false)} />}
       <SettingsDialog
         open={settingsOpen}
         onOpenChange={setSettingsOpen}

@@ -19,9 +19,10 @@ interface SideNavProps {
   open?: boolean;
   onClose?: () => void;
   onSettingsClick?: () => void;
+  onCreatePost?: () => void;
 }
 
-export default function SideNav({ open, onClose, onSettingsClick }: SideNavProps) {
+export default function SideNav({ open, onClose, onSettingsClick, onCreatePost }: SideNavProps) {
   const pathname = usePathname();
   const hasUnansweredHotTake = useHotTakeStore((s) => s.hasUnanswered);
   const hasMessageNotification = useConversationStore((s) =>
@@ -82,6 +83,13 @@ export default function SideNav({ open, onClose, onSettingsClick }: SideNavProps
                 </Link>
               );
             })}
+            <button
+              onClick={() => { onClose?.(); onCreatePost?.(); }}
+              className="flex items-center gap-3 px-6 py-3 mt-1 w-full text-on-primary font-bold bg-primary hover:opacity-90 active:scale-95 rounded-xl transition-all"
+            >
+              <span className="material-symbols-outlined">add</span>
+              <span>Create Post</span>
+            </button>
           </nav>
 
           <div className="mt-auto pt-8">
