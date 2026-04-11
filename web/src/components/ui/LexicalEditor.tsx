@@ -53,7 +53,7 @@ function PlaceholderPlugin() {
   return (
     <div
       ref={ref}
-      className="absolute top-0 left-0 text-base text-on-surface-variant/50 pointer-events-none select-none p-0"
+      className="absolute top-3 left-0 text-base text-on-surface-variant/50 pointer-events-none select-none"
     >
       {PLACEHOLDER}
     </div>
