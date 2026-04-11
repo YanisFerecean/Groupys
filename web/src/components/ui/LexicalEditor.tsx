@@ -175,7 +175,7 @@ export default function LexicalEditor({
 
   useEffect(() => {
     if (!editorRef) return;
-    const handle: LexicalEditorRef = {
+    editorRef.current = {
       getMarkdown: () => markdown,
       clear: () => {
         editor.update(() => {
@@ -193,7 +193,6 @@ export default function LexicalEditor({
         return empty;
       },
     };
-    editorRef.current = handle;
   }, [editor, editorRef, markdown]);
 
   // Keyboard shortcuts

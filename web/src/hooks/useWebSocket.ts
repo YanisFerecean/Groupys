@@ -32,7 +32,7 @@ export function useWebSocket() {
   // Keep the conversation store's unread counts up to date globally
   // so the sidebar badge reflects new messages on any page.
   useEffect(() => {
-    const unsub = chatWs.on("MESSAGE_NEW", (payload: Message) => {
+    return chatWs.on("MESSAGE_NEW", (payload: Message) => {
       const { bubbleConversation, conversations } = useConversationStore.getState();
       const current = conversations.find((c) => c.id === payload.conversationId);
       bubbleConversation(payload.conversationId, {
@@ -41,8 +41,7 @@ export function useWebSocket() {
         unreadCount: (current?.unreadCount ?? 0) + 1,
       });
     });
-    return unsub;
   }, []);
 
-  return { isConnected: !!(isLoaded && isSignedIn), chatWs };
+  return { isConnected: (isLoaded && isSignedIn), chatWs };
 }

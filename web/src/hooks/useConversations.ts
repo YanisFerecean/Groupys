@@ -11,7 +11,7 @@ export function useConversations() {
   const getTokenRef = useRef(getToken);
   useEffect(() => { getTokenRef.current = getToken; }, [getToken]);
   const store = useConversationStore();
-  const { conversations, setConversations, appendConversations, updateConversation, removeConversation, bubbleConversation } = store;
+  const { conversations, setConversations, appendConversations, updateConversation, removeConversation } = store;
 
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);

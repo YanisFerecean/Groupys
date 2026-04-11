@@ -75,9 +75,10 @@ export default function TrendingArtistsSection() {
         const res = await fetch(`${API_URL}/charts/artists/global`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (!res.ok) throw new Error("Failed to fetch");
-        const data: ChartArtist[] = await res.json();
-        if (!cancelled) setArtists(data.slice(0, 6));
+        if (res.ok) {
+          const data: ChartArtist[] = await res.json();
+          if (!cancelled) setArtists(data.slice(0, 6));
+        }
       } catch (err) {
         console.error("Failed to fetch top artists:", err);
       } finally {

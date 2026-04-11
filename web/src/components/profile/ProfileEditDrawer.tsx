@@ -875,7 +875,7 @@ const setListeningFromSearch = (result: TrackResult) => {
                 </div>
                 <button
                   type="button"
-                  onClick={() => set("showHotTake", form.showHotTake === false ? true : false)}
+                  onClick={() => set("showHotTake", form.showHotTake === false)}
                   className={`relative w-12 h-7 rounded-full transition-colors duration-200 ${
                     form.showHotTake !== false ? "bg-primary" : "bg-surface-container-highest"
                   }`}
