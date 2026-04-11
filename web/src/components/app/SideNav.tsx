@@ -4,6 +4,8 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useHotTakeStore } from "@/store/hotTakeStore";
+import FriendsSheet from "@/components/friends/FriendsSheet";
+import { MessageCircle, Settings } from "lucide-react";
 
 const navItems = [
   { label: "Feed", icon: "rss_feed", href: "/feed" },
@@ -15,9 +17,10 @@ const navItems = [
 interface SideNavProps {
   open?: boolean;
   onClose?: () => void;
+  onSettingsClick?: () => void;
 }
 
-export default function SideNav({ open, onClose }: SideNavProps) {
+export default function SideNav({ open, onClose, onSettingsClick }: SideNavProps) {
   const pathname = usePathname();
   const hasUnansweredHotTake = useHotTakeStore((s) => s.hasUnanswered);
 
@@ -78,7 +81,30 @@ export default function SideNav({ open, onClose }: SideNavProps) {
           </nav>
 
           <div className="mt-auto pt-8">
-            <div className="bg-surface-container h-px mb-6" />
+            <div className="flex flex-col gap-1">
+              <FriendsSheet>
+                <button className="flex items-center gap-3 px-6 py-3 w-full text-slate-500 font-medium hover:bg-surface-container rounded-xl transition-colors">
+                  <span className="material-symbols-outlined">group</span>
+                  <span>Friends</span>
+                </button>
+              </FriendsSheet>
+              <Link
+                href="/chat"
+                onClick={onClose}
+                className="flex items-center gap-3 px-6 py-3 text-slate-500 font-medium hover:bg-surface-container rounded-xl transition-colors"
+              >
+                <MessageCircle className="w-6 h-6" />
+                <span>Messages</span>
+              </Link>
+              <button
+                onClick={() => { onClose?.(); onSettingsClick?.(); }}
+                className="flex items-center gap-3 px-6 py-3 w-full text-slate-500 font-medium hover:bg-surface-container rounded-xl transition-colors"
+              >
+                <Settings className="w-6 h-6" />
+                <span>Settings</span>
+              </button>
+            </div>
+            <div className="bg-surface-container h-px mb-6 mt-2" />
             <div className="flex flex-col gap-1 mb-6">
               <Link href="/privacy" onClick={onClose} className="px-6 py-1.5 text-xs text-on-surface-variant/60 hover:text-on-surface-variant transition-colors rounded-lg hover:bg-surface-container">
                 Privacy Policy

@@ -83,11 +83,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="bg-surface text-on-surface min-h-screen">
-      <SideNav open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <SideNav open={sidebarOpen} onClose={() => setSidebarOpen(false)} onSettingsClick={() => setSettingsOpen(true)} />
       <TopBar
         onMenuClick={() => setSidebarOpen(true)}
         onSearchClick={() => setSearchOpen(true)}
-        onSettingsClick={() => setSettingsOpen(true)}
       />
       <ProfileRightSidebar />
       <main className={`lg:ml-64 pt-16 lg:pt-20 min-h-screen${pathname === "/profile" ? " lg:mr-52" : ""}`}>{children}</main>
