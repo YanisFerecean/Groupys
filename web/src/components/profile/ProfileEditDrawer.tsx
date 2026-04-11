@@ -501,7 +501,7 @@ const setListeningFromSearch = (result: TrackResult) => {
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-h-[85vh] flex flex-col rounded-3xl max-w-3xl overflow-hidden p-0 gap-0">
+      <DialogContent className="max-h-[85vh] flex flex-col rounded-3xl max-w-3xl overflow-hidden p-0 gap-0" showCloseButton={false}>
         {/* Accent bar */}
         <div className="h-1 bg-gradient-to-r from-primary via-primary-container to-secondary shrink-0" />
 
