@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import type { CommunityRes } from "@/lib/api";
-import { fetchCommunitiesByGenre } from "@/lib/api";
+import { fetchCommunitiesByGenre, fetchCommunitiesByArtist } from "@/lib/api";
 
 const PALETTE = ["#7c3aed", "#be185d", "#0891b2", "#b45309", "#065f46", "#1e3a5f"];
 
@@ -19,6 +19,7 @@ function formatMembers(count: number): string {
 
 interface CommunityStepProps {
   selectedGenres: string[];
+  selectedArtists: { id: string; name: string }[];
   selectedCommunityIds: Set<string>;
   onToggle: (communityId: string) => void;
   token: string | null;
@@ -26,6 +27,7 @@ interface CommunityStepProps {
 
 export default function CommunityStep({
   selectedGenres,
+  selectedArtists,
   selectedCommunityIds,
   onToggle,
   token,
@@ -37,17 +39,18 @@ export default function CommunityStep({
     | { status: "done"; communities: CommunityRes[] };
 
   const [state, setState] = useState<State>(() =>
-    !token || selectedGenres.length === 0
+    !token || (selectedGenres.length === 0 && selectedArtists.length === 0)
       ? { status: "idle" }
       : { status: "loading" }
   );
 
   useEffect(() => {
-    if (!token || selectedGenres.length === 0) return;
+    if (!token || (selectedGenres.length === 0 && selectedArtists.length === 0)) return;
 
-    Promise.allSettled(
-      selectedGenres.map((g) => fetchCommunitiesByGenre(g, token)),
-    ).then((results) => {
+    Promise.allSettled([
+      ...selectedGenres.map((g) => fetchCommunitiesByGenre(g, token)),
+      ...selectedArtists.map((a) => fetchCommunitiesByArtist(a.id, token)),
+    ]).then((results) => {
       const seen = new Set<string>();
       const deduped: CommunityRes[] = [];
       for (const r of results) {
@@ -64,7 +67,7 @@ export default function CommunityStep({
     }).catch(() => {
       setState({ status: "error", message: "Failed to load communities." });
     });
-  }, [selectedGenres, token]);
+  }, [selectedGenres, selectedArtists, token]);
 
   return (
     <div className="space-y-5">
