@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Impressum",
+  title: "Legal Notice",
   description: "Legal information and contact details for Groupys.",
   alternates: { canonical: "https://groupys.app/impressum" },
   robots: { index: true, follow: false },
@@ -31,7 +31,7 @@ export default function ImpressumPage() {
 
         <div className="mb-16">
           <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-4">Legal</p>
-          <h1 className="text-display-lg text-on-surface mb-6">Impressum</h1>
+          <h1 className="text-display-lg text-on-surface mb-6">Legal Notice</h1>
           <p className="text-on-surface-variant">
             Information in accordance with § 5 TMG (German Telemedia Act).
           </p>

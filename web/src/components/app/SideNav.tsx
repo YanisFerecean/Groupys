@@ -113,7 +113,7 @@ export default function SideNav({ open, onClose, onSettingsClick }: SideNavProps
                 Terms of Use
               </Link>
               <Link href="/impressum" onClick={onClose} className="px-6 py-1.5 text-xs text-on-surface-variant/60 hover:text-on-surface-variant transition-colors rounded-lg hover:bg-surface-container">
-                Impressum
+                Legal Notice
               </Link>
             </div>
             <p className="px-6 text-[0.6875rem] font-semibold uppercase tracking-widest text-on-surface-variant opacity-40">
