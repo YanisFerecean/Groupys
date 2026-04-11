@@ -64,7 +64,7 @@ export default function TopBar({ onMenuClick, onSearchClick }: TopBarProps) {
               <History className="w-5 h-5 text-primary" />
             </button>
           )}
-          <UserButton />
+          <UserButton appearance={{ elements: { avatarBox: { width: 40, height: 40 } } }} />
         </div>
       </div>
     </header>
