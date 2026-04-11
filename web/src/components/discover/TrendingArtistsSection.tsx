@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useAuth } from "@clerk/nextjs";
 import SectionHeader from "@/components/discover/SectionHeader";
@@ -66,7 +66,6 @@ export default function TrendingArtistsSection() {
   const { getToken } = useAuth();
   const [artists, setArtists] = useState<ChartArtist[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -90,28 +89,14 @@ export default function TrendingArtistsSection() {
     };
   }, [getToken]);
 
-  const toggleExpand = useCallback(() => setExpanded((p) => !p), []);
-
-  const visible = expanded ? artists : artists.slice(0, 3);
-
   return (
     <section className="mb-12 lg:mb-16">
-      <SectionHeader
-        title="Trending Now"
-        actionText={
-          !loading && artists.length > 3
-            ? expanded
-              ? "Show Less"
-              : "View All"
-            : undefined
-        }
-        onAction={toggleExpand}
-      />
+      <SectionHeader title="Trending Now" />
 
-      <div className="flex flex-wrap gap-6 lg:gap-8">
+      <div className="flex flex-nowrap gap-6 lg:gap-8 overflow-hidden">
         {loading
-          ? Array.from({ length: 3 }).map((_, i) => <ArtistSkeleton key={i} />)
-          : visible.map((artist) => (
+          ? Array.from({ length: 6 }).map((_, i) => <ArtistSkeleton key={i} />)
+          : artists.map((artist) => (
               <ArtistBubble key={artist.id} artist={artist} />
             ))}
       </div>
