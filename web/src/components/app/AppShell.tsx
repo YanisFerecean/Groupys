@@ -10,6 +10,8 @@ import SearchOverlay from "@/components/discover/SearchOverlay";
 import SettingsDialog from "@/components/app/SettingsDialog";
 import CreatePostModal from "@/components/ui/CreatePostModal";
 import { fetchUserByClerkId } from "@/lib/api";
+import { fetchConversations } from "@/lib/chat-api";
+import { useConversationStore } from "@/store/conversationStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -74,6 +76,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       }).catch(() => {/* non-critical — don't block the app */});
     });
   }, [isLoaded, isAuthLoaded, isSignedIn, user, pathname, router]);
+
+  // Load conversations once on auth so the sidebar badge is always populated
+  useEffect(() => {
+    if (!isAuthLoaded || !isSignedIn) return;
+    getTokenRef.current().then(async (token) => {
+      try {
+        const convos = await fetchConversations(token, undefined, 50);
+        useConversationStore.getState().setConversations(convos);
+      } catch { /* non-critical */ }
+    });
+  }, [isAuthLoaded, isSignedIn]);
 
   const handleSpotifyDisconnected = useCallback(() => {
     setSpotifyConnected(false);

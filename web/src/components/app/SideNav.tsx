@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { useHotTakeStore } from "@/store/hotTakeStore";
 import FriendsSheet from "@/components/friends/FriendsSheet";
 import { MessageCircle, Settings } from "lucide-react";
+import { useConversationStore } from "@/store/conversationStore";
 
 const navItems = [
   { label: "Feed", icon: "rss_feed", href: "/feed" },
@@ -23,6 +24,9 @@ interface SideNavProps {
 export default function SideNav({ open, onClose, onSettingsClick }: SideNavProps) {
   const pathname = usePathname();
   const hasUnansweredHotTake = useHotTakeStore((s) => s.hasUnanswered);
+  const hasMessageNotification = useConversationStore((s) =>
+    s.conversations.some((c) => c.unreadCount > 0 || c.requestStatus === "PENDING_INCOMING")
+  );
 
   return (
     <>
@@ -83,17 +87,29 @@ export default function SideNav({ open, onClose, onSettingsClick }: SideNavProps
           <div className="mt-auto pt-8">
             <div className="flex flex-col gap-1">
               <FriendsSheet>
-                <button className="flex items-center gap-3 px-6 py-3 w-full text-slate-500 font-medium hover:bg-surface-container rounded-xl transition-colors">
-                  <span className="material-symbols-outlined">group</span>
-                  <span>Friends</span>
-                </button>
+                {(pendingCount) => (
+                  <button className="flex items-center gap-3 px-6 py-3 w-full text-slate-500 font-medium hover:bg-surface-container rounded-xl transition-colors">
+                    <span className="relative">
+                      <span className="material-symbols-outlined">group</span>
+                      {pendingCount > 0 && (
+                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-primary border-2 border-surface" />
+                      )}
+                    </span>
+                    <span>Friends</span>
+                  </button>
+                )}
               </FriendsSheet>
               <Link
                 href="/chat"
                 onClick={onClose}
                 className="flex items-center gap-3 px-6 py-3 text-slate-500 font-medium hover:bg-surface-container rounded-xl transition-colors"
               >
-                <MessageCircle className="w-6 h-6" />
+                <span className="relative">
+                  <MessageCircle className="w-6 h-6" />
+                  {hasMessageNotification && (
+                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-primary border-2 border-surface" />
+                  )}
+                </span>
                 <span>Messages</span>
               </Link>
               <button

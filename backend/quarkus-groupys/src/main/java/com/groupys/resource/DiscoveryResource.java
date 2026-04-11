@@ -83,4 +83,11 @@ public class DiscoveryResource {
     public DiscoverySyncResDto syncMusic() {
         return discoveryService.syncMusic(jwt.getSubject());
     }
+
+    @POST
+    @Path("/onboarding/artists")
+    public Response saveOnboardingArtists(List<Long> artistIds) {
+        discoveryService.saveOnboardingArtistPreferences(jwt.getSubject(), artistIds);
+        return Response.noContent().build();
+    }
 }

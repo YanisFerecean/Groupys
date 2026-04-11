@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { chatWs } from "@/lib/ws";
+import { useConversationStore } from "@/store/conversationStore";
+import type { Message } from "@/types/chat";
 
 export function useWebSocket() {
   const { getToken, isLoaded, isSignedIn } = useAuth();
@@ -13,9 +15,6 @@ export function useWebSocket() {
 
     chatWs.connect(getToken);
 
-    // Disconnect when the browser stores the page in bfcache (or unloads),
-    // then reconnect if the page is restored from bfcache.
-    // This is required for the page to be eligible for bfcache.
     const handlePageHide = () => chatWs.disconnect();
     const handlePageShow = (e: PageTransitionEvent) => {
       if (e.persisted) chatWs.connect(getToken);
@@ -29,6 +28,21 @@ export function useWebSocket() {
       window.removeEventListener("pageshow", handlePageShow);
     };
   }, [getToken, isLoaded, isSignedIn]);
+
+  // Keep the conversation store's unread counts up to date globally
+  // so the sidebar badge reflects new messages on any page.
+  useEffect(() => {
+    const unsub = chatWs.on("MESSAGE_NEW", (payload: Message) => {
+      const { bubbleConversation, conversations } = useConversationStore.getState();
+      const current = conversations.find((c) => c.id === payload.conversationId);
+      bubbleConversation(payload.conversationId, {
+        lastMessage: payload.content,
+        lastMessageAt: payload.createdAt,
+        unreadCount: (current?.unreadCount ?? 0) + 1,
+      });
+    });
+    return unsub;
+  }, []);
 
   return { isConnected: !!(isLoaded && isSignedIn), chatWs };
 }
