@@ -178,7 +178,7 @@ export default function OnboardingFlow() {
         {/* Wordmark */}
         <div className="text-center mb-6">
           <span className="text-2xl font-black tracking-tight text-primary">
-            groupys
+            Groupys
           </span>
         </div>
 
