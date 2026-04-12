@@ -2,6 +2,7 @@ import { useAuth, useUser } from '@clerk/expo'
 import { Redirect, useRouter } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native'
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import AuthScaffold from '@/components/auth/AuthScaffold'
 import AuthTextField from '@/components/auth/AuthTextField'
 import FullscreenSpinner from '@/components/ui/FullscreenSpinner'
@@ -88,8 +89,10 @@ export default function CompleteProfileScreen() {
   }
 
   if (!isSignedIn) {
-    return <Redirect href="/(auth)/sign-in" />
+    return <Redirect href="/(auth)/landing" />
   }
+
+  const useGlass = isLiquidGlassAvailable()
 
   if (isAccountSetupComplete(user)) {
     return <Redirect href="/(home)/(feed)" />
@@ -208,9 +211,17 @@ export default function CompleteProfileScreen() {
       }
     >
       {error ? (
-        <View className="mb-5 rounded-2xl bg-red-50 px-4 py-3">
-          <Text className="text-sm text-red-600">{error}</Text>
-        </View>
+        useGlass ? (
+          <GlassView style={{ borderRadius: 16, overflow: 'hidden', marginBottom: 20 }}>
+            <View style={{ backgroundColor: 'rgba(239,68,68,0.12)', paddingHorizontal: 16, paddingVertical: 12 }}>
+              <Text style={{ fontSize: 13, color: '#dc2626' }}>{error}</Text>
+            </View>
+          </GlassView>
+        ) : (
+          <View className="mb-5 rounded-2xl bg-red-50 px-4 py-3">
+            <Text className="text-sm text-red-600">{error}</Text>
+          </View>
+        )
       ) : null}
 
       <AuthTextField
@@ -236,17 +247,35 @@ export default function CompleteProfileScreen() {
         placeholder="your public handle"
       />
 
-      <TouchableOpacity
-        className="mt-2 items-center rounded-2xl bg-primary py-4 active:opacity-90"
-        onPress={handleContinue}
-        disabled={loading}
-      >
-        {loading ? (
-          <ActivityIndicator color={Colors.onPrimary} />
-        ) : (
-          <Text className="text-base font-semibold text-on-primary">Save and continue</Text>
-        )}
-      </TouchableOpacity>
+      {useGlass ? (
+        <GlassView isInteractive style={{ borderRadius: 16, overflow: 'hidden', marginTop: 8 }}>
+          <View style={{ backgroundColor: `${Colors.primary}33`, borderRadius: 16 }}>
+            <TouchableOpacity
+              onPress={handleContinue}
+              disabled={loading}
+              style={{ paddingVertical: 16, alignItems: 'center' }}
+            >
+              {loading ? (
+                <ActivityIndicator color={Colors.primary} />
+              ) : (
+                <Text style={{ fontSize: 16, fontWeight: '600', color: Colors.primary }}>Save and continue</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </GlassView>
+      ) : (
+        <TouchableOpacity
+          className="mt-2 items-center rounded-2xl bg-primary py-4 active:opacity-90"
+          onPress={handleContinue}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color={Colors.onPrimary} />
+          ) : (
+            <Text className="text-base font-semibold text-on-primary">Save and continue</Text>
+          )}
+        </TouchableOpacity>
+      )}
     </AuthScaffold>
   )
 }

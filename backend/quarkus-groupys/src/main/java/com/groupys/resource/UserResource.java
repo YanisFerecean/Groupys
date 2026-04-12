@@ -118,6 +118,13 @@ public class UserResource {
         return Response.noContent().build();
     }
 
+    @DELETE
+    @Path("/me")
+    public Response deleteMe() {
+        userService.deleteOwnAccount(jwt.getSubject());
+        return Response.noContent().build();
+    }
+
     private static final long MAX_BANNER_SIZE = 5 * 1024 * 1024; // 5 MB
     private static final String BANNER_PREFIX = "/api/users/banner/";
 

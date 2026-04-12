@@ -1,8 +1,16 @@
 import type { ProfileCustomization } from '@/models/ProfileCustomization'
 import { ApiError, apiRequest } from '@/lib/apiRequest'
 import { API_URL } from '@/lib/config'
+import {
+  buildWidgetSyncFlags,
+  resolveMusicConnected,
+  resolveMusicSync,
+  resolveWidgetSyncFlags,
+} from '@/lib/musicCompatibility'
+import { getMusicErrorMessage } from '@/lib/musicErrors'
 
 export { API_URL }
+export { getMusicErrorMessage }
 
 export async function apiFetch<T>(path: string, token: string | null, cache = true): Promise<T> {
   return apiRequest<T>(path, { token, cache })
@@ -35,6 +43,10 @@ export interface BackendUser {
   widgets: string | null
   dateJoined: string
   tags?: string[]
+  musicConnected?: boolean
+  /**
+   * @deprecated legacy alias from older backend payloads
+   */
   spotifyConnected?: boolean
   isVerified?: boolean
   website?: string | null
@@ -44,26 +56,35 @@ export interface BackendUser {
   followingCount?: number
 }
 
-export interface SpotifyTrackRes {
+export interface MusicTrackRes {
   title: string
   artist: string
   coverUrl?: string | null
 }
 
-export interface SpotifyArtistRes {
+export interface MusicArtistRes {
   name: string
   imageUrl?: string | null
 }
 
-export interface SpotifyAlbumRes {
+export interface MusicAlbumRes {
   title: string
   artist: string
   coverUrl?: string | null
 }
 
+export type SpotifyTrackRes = MusicTrackRes
+export type SpotifyArtistRes = MusicArtistRes
+export type SpotifyAlbumRes = MusicAlbumRes
+
+export interface MusicDeveloperTokenRes {
+  token: string
+  expiresAtEpochSeconds: number
+}
+
 // ── Widget conversion ───────────────────────────────────────────────────────
 
-function parseWidgets(raw: string | null): BackendWidget[] {
+export function parseWidgets(raw: string | null): BackendWidget[] {
   if (!raw) return []
   try {
     const parsed = JSON.parse(raw) as unknown
@@ -199,7 +220,7 @@ function normalizeArtistItem(item: UnknownRecord) {
   }
 }
 
-function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCustomization> {
+export function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCustomization> {
   const sorted = [...widgets].sort((a, b) => a.pos - b.pos)
   const result: Partial<ProfileCustomization> = {
     widgetOrder: sorted.map(w => w.type),
@@ -213,7 +234,11 @@ function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCustomizatio
 
     switch (w.type) {
       case 'topSongs':
-        result.syncTopSongsWithSpotify = data.syncWithSpotify === true || data.synced === true
+        {
+          const synced = resolveWidgetSyncFlags(data)
+          result.syncTopSongsWithMusic = synced
+          result.syncTopSongsWithSpotify = synced
+        }
         result.topSongs = items
           .map((i) => asRecord(i))
           .filter((i): i is UnknownRecord => i !== null)
@@ -228,7 +253,11 @@ function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCustomizatio
         }
         break
       case 'topArtists':
-        result.syncTopArtistsWithSpotify = data.syncWithSpotify === true || data.synced === true
+        {
+          const synced = resolveWidgetSyncFlags(data)
+          result.syncTopArtistsWithMusic = synced
+          result.syncTopArtistsWithSpotify = synced
+        }
         result.topArtists = items
           .map((i) => asRecord(i))
           .filter((i): i is UnknownRecord => i !== null)
@@ -243,7 +272,11 @@ function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCustomizatio
         }
         break
       case 'topAlbums':
-        result.syncTopAlbumsWithSpotify = data.syncWithSpotify === true || data.synced === true
+        {
+          const synced = resolveWidgetSyncFlags(data)
+          result.syncTopAlbumsWithMusic = synced
+          result.syncTopAlbumsWithSpotify = synced
+        }
         result.topAlbums = items
           .map((i) => asRecord(i))
           .filter((i): i is UnknownRecord => i !== null)
@@ -282,14 +315,26 @@ function profileToWidgets(profile: Partial<ProfileCustomization>): BackendWidget
   type WidgetData = Omit<BackendWidget, 'pos'>
   const hidden = profile.hiddenWidgets ?? []
   const widgetMap: Partial<Record<string, WidgetData>> = {}
+  const syncTopAlbums = resolveMusicSync(
+    profile.syncTopAlbumsWithMusic,
+    profile.syncTopAlbumsWithSpotify,
+  )
+  const syncTopSongs = resolveMusicSync(
+    profile.syncTopSongsWithMusic,
+    profile.syncTopSongsWithSpotify,
+  )
+  const syncTopArtists = resolveMusicSync(
+    profile.syncTopArtistsWithMusic,
+    profile.syncTopArtistsWithSpotify,
+  )
 
-  if (profile.topAlbums?.length || profile.syncTopAlbumsWithSpotify) {
+  if (profile.topAlbums?.length || syncTopAlbums) {
     widgetMap.topAlbums = {
       type: 'topAlbums',
       color: profile.albumsContainerColor ?? null,
       data: {
         items: profile.topAlbums ?? [],
-        syncWithSpotify: profile.syncTopAlbumsWithSpotify === true,
+        ...buildWidgetSyncFlags(syncTopAlbums),
         size: profile.widgetSizes?.topAlbums ?? 'normal',
         hidden: hidden.includes('topAlbums'),
       },
@@ -307,26 +352,26 @@ function profileToWidgets(profile: Partial<ProfileCustomization>): BackendWidget
     }
   }
 
-  if (profile.topSongs?.length || profile.syncTopSongsWithSpotify) {
+  if (profile.topSongs?.length || syncTopSongs) {
     widgetMap.topSongs = {
       type: 'topSongs',
       color: profile.songsContainerColor ?? null,
       data: {
         items: profile.topSongs ?? [],
-        syncWithSpotify: profile.syncTopSongsWithSpotify === true,
+        ...buildWidgetSyncFlags(syncTopSongs),
         size: profile.widgetSizes?.topSongs ?? 'normal',
         hidden: hidden.includes('topSongs'),
       },
     }
   }
 
-  if (profile.topArtists?.length || profile.syncTopArtistsWithSpotify) {
+  if (profile.topArtists?.length || syncTopArtists) {
     widgetMap.topArtists = {
       type: 'topArtists',
       color: profile.artistsContainerColor ?? null,
       data: {
         items: profile.topArtists ?? [],
-        syncWithSpotify: profile.syncTopArtistsWithSpotify === true,
+        ...buildWidgetSyncFlags(syncTopArtists),
         size: profile.widgetSizes?.topArtists ?? 'normal',
         hidden: hidden.includes('topArtists'),
       },
@@ -355,13 +400,15 @@ function profileToWidgets(profile: Partial<ProfileCustomization>): BackendWidget
 }
 
 export function backendUserToProfile(user: BackendUser): ProfileCustomization {
+  const musicConnected = resolveMusicConnected(user.musicConnected, user.spotifyConnected)
   return {
     id: user.id ?? undefined,
     displayName: user.displayName ?? undefined,
     bio: user.bio ?? undefined,
     country: user.country ?? undefined,
     tags: user.tags || [],
-    spotifyConnected: user.spotifyConnected ?? false,
+    musicConnected,
+    spotifyConnected: musicConnected,
     bannerUrl: user.bannerUrl ?? undefined,
     bannerText: user.bannerText ?? undefined,
     accentColor: user.accentColor ?? undefined,
@@ -425,6 +472,10 @@ export async function apiDelete(
   token: string | null,
 ): Promise<void> {
   return apiRequest<void>(path, { method: 'DELETE', token })
+}
+
+export async function deleteMyAccount(token: string | null): Promise<void> {
+  return apiDelete('/users/me', token)
 }
 
 export async function apiPostMultipart<T>(
@@ -801,85 +852,119 @@ export async function dismissRecommendation(
   })
 }
 
-export async function syncSpotifyMusic(
+export async function getMusicDeveloperToken(
+  token: string | null,
+): Promise<MusicDeveloperTokenRes> {
+  return apiFetch<MusicDeveloperTokenRes>('/music/developer-token', token, false)
+}
+
+export async function connectMusic(
+  token: string | null,
+  musicUserToken: string,
+): Promise<unknown> {
+  return apiPost('/music/connect', token, { musicUserToken })
+}
+
+export async function disconnectMusic(
+  token: string | null,
+): Promise<void> {
+  await apiDelete('/music/disconnect', token)
+}
+
+export async function syncMusic(
   token: string | null,
 ): Promise<void> {
   await apiPost('/discovery/music/sync', token, {})
 }
 
-export async function fetchSpotifyTopTracks(
+export const syncSpotifyMusic = syncMusic
+
+export async function fetchMusicTopTracks(
   token: string | null,
-): Promise<SpotifyTrackRes[]> {
-  return apiFetch<SpotifyTrackRes[]>('/spotify/top-tracks', token, false)
+): Promise<MusicTrackRes[]> {
+  return apiFetch<MusicTrackRes[]>('/music/top-tracks', token, false)
 }
 
-export async function fetchSpotifyTopTracksByUserId(
+export async function fetchMusicTopTracksByUserId(
   userId: string,
   token: string | null,
-): Promise<SpotifyTrackRes[]> {
-  return apiFetch<SpotifyTrackRes[]>(
-    `/spotify/users/${encodeURIComponent(userId)}/top-tracks`,
+): Promise<MusicTrackRes[]> {
+  return apiFetch<MusicTrackRes[]>(
+    `/music/users/${encodeURIComponent(userId)}/top-tracks`,
     token,
     false,
   )
 }
 
-export async function fetchSpotifyTopArtists(
+export async function fetchMusicTopArtists(
   token: string | null,
-): Promise<SpotifyArtistRes[]> {
-  return apiFetch<SpotifyArtistRes[]>('/spotify/top-artists', token, false)
+): Promise<MusicArtistRes[]> {
+  return apiFetch<MusicArtistRes[]>('/music/top-artists', token, false)
 }
 
-export async function fetchSpotifyTopArtistsByUserId(
+export async function fetchMusicTopArtistsByUserId(
   userId: string,
   token: string | null,
-): Promise<SpotifyArtistRes[]> {
-  return apiFetch<SpotifyArtistRes[]>(
-    `/spotify/users/${encodeURIComponent(userId)}/top-artists`,
+): Promise<MusicArtistRes[]> {
+  return apiFetch<MusicArtistRes[]>(
+    `/music/users/${encodeURIComponent(userId)}/top-artists`,
     token,
     false,
   )
 }
 
-export async function fetchSpotifyTopAlbums(
+export async function fetchMusicTopAlbums(
   token: string | null,
-): Promise<SpotifyAlbumRes[]> {
-  return apiFetch<SpotifyAlbumRes[]>('/spotify/saved-albums', token, false)
+): Promise<MusicAlbumRes[]> {
+  return apiFetch<MusicAlbumRes[]>('/music/top-albums', token, false)
 }
 
-export async function fetchSpotifyTopAlbumsByUserId(
+export async function fetchMusicTopAlbumsByUserId(
   userId: string,
   token: string | null,
-): Promise<SpotifyAlbumRes[]> {
-  return apiFetch<SpotifyAlbumRes[]>(
-    `/spotify/users/${encodeURIComponent(userId)}/saved-albums`,
+): Promise<MusicAlbumRes[]> {
+  return apiFetch<MusicAlbumRes[]>(
+    `/music/users/${encodeURIComponent(userId)}/top-albums`,
     token,
     false,
   )
 }
 
-export async function fetchSpotifyCurrentlyPlaying(
+export async function fetchMusicCurrentlyPlaying(
   token: string | null,
-): Promise<SpotifyTrackRes | null> {
-  const res = await fetch(`${API_URL}/spotify/currently-playing`, {
+): Promise<MusicTrackRes | null> {
+  const res = await fetch(`${API_URL}/music/currently-playing`, {
     headers: makeHeaders(token),
   })
   if (res.status === 204 || res.status === 404) return null
-  if (!res.ok) throw new Error(`Failed to fetch currently playing (${res.status})`)
+  if (!res.ok) {
+    throw new ApiError(res.status, await readApiErrorDetail(res) || `Failed to fetch currently playing (${res.status})`)
+  }
   return res.json()
 }
 
-export async function fetchSpotifyCurrentlyPlayingByUserId(
+export async function fetchMusicCurrentlyPlayingByUserId(
   userId: string,
   token: string | null,
-): Promise<SpotifyTrackRes | null> {
-  const res = await fetch(`${API_URL}/spotify/users/${encodeURIComponent(userId)}/currently-playing`, {
+): Promise<MusicTrackRes | null> {
+  const res = await fetch(`${API_URL}/music/users/${encodeURIComponent(userId)}/currently-playing`, {
     headers: makeHeaders(token),
   })
   if (res.status === 204 || res.status === 404) return null
-  if (!res.ok) throw new Error(`Failed to fetch currently playing (${res.status})`)
+  if (!res.ok) {
+    throw new ApiError(res.status, await readApiErrorDetail(res) || `Failed to fetch currently playing (${res.status})`)
+  }
   return res.json()
 }
+
+export const fetchSpotifyTopTracks = fetchMusicTopTracks
+export const fetchSpotifyTopTracksByUserId = fetchMusicTopTracksByUserId
+export const fetchSpotifyTopArtists = fetchMusicTopArtists
+export const fetchSpotifyTopArtistsByUserId = fetchMusicTopArtistsByUserId
+export const fetchSpotifyTopAlbums = fetchMusicTopAlbums
+export const fetchSpotifyTopAlbumsByUserId = fetchMusicTopAlbumsByUserId
+export const fetchSpotifyCurrentlyPlaying = fetchMusicCurrentlyPlaying
+export const fetchSpotifyCurrentlyPlayingByUserId = fetchMusicCurrentlyPlayingByUserId
 
 export async function followUser(
   userId: string,
@@ -951,6 +1036,17 @@ export async function fetchMyAlbumRatings(
   token: string | null,
 ): Promise<AlbumRatingRes[]> {
   return apiFetch<AlbumRatingRes[]>('/album-ratings/mine', token, false)
+}
+
+export async function fetchAlbumRatingsByUsername(
+  username: string,
+  token: string | null,
+): Promise<AlbumRatingRes[]> {
+  return apiFetch<AlbumRatingRes[]>(
+    `/album-ratings/user/${encodeURIComponent(username)}`,
+    token,
+    false,
+  )
 }
 
 export async function deleteAlbumRating(

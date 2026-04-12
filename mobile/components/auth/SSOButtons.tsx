@@ -7,6 +7,7 @@ import * as WebBrowser from 'expo-web-browser'
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, Platform, Text, TouchableOpacity, View } from 'react-native'
 import Svg, { Path } from 'react-native-svg'
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import { Colors } from '@/constants/colors'
 
 const BROWSER_SSO_CALLBACK_PATH = 'sso-callback'
@@ -378,6 +379,7 @@ export default function SSOButtons({ mode }: SSOButtonsProps) {
 
   const label = mode === 'sign-in' ? 'Sign in' : 'Sign up'
   const isLoading = loadingStrategy !== null
+  const useGlass = isLiquidGlassAvailable()
 
   return (
     <View className="gap-3">
@@ -395,36 +397,76 @@ export default function SSOButtons({ mode }: SSOButtonsProps) {
         </View>
       ) : null}
 
-      <TouchableOpacity
-        className="flex-row items-center justify-center gap-3 rounded-2xl border border-outline-variant bg-surface-container-lowest py-4 active:opacity-90"
-        onPress={handleGoogleSSO}
-        disabled={isLoading}
-      >
-        {loadingStrategy === 'google' ? (
-          <ActivityIndicator color={Colors.onSurface} />
-        ) : (
-          <>
-            <GoogleIcon />
-            <Text className="text-base font-semibold text-on-surface">{label} with Google</Text>
-          </>
-        )}
-      </TouchableOpacity>
-
-      {Platform.OS === 'ios' ? (
+      {useGlass ? (
+        <GlassView isInteractive style={{ borderRadius: 16, overflow: 'hidden' }}>
+          <TouchableOpacity
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, paddingVertical: 16 }}
+            onPress={handleGoogleSSO}
+            disabled={isLoading}
+          >
+            {loadingStrategy === 'google' ? (
+              <ActivityIndicator color={Colors.onSurface} />
+            ) : (
+              <>
+                <GoogleIcon />
+                <Text style={{ fontSize: 16, fontWeight: '600', color: Colors.onSurface }}>{label} with Google</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </GlassView>
+      ) : (
         <TouchableOpacity
-          className="flex-row items-center justify-center gap-3 rounded-2xl bg-black py-4 active:opacity-90"
-          onPress={handleAppleSSO}
+          className="flex-row items-center justify-center gap-3 rounded-2xl border border-outline-variant bg-surface-container-lowest py-4 active:opacity-90"
+          onPress={handleGoogleSSO}
           disabled={isLoading}
         >
-          {loadingStrategy === 'apple' ? (
-            <ActivityIndicator color="#ffffff" />
+          {loadingStrategy === 'google' ? (
+            <ActivityIndicator color={Colors.onSurface} />
           ) : (
             <>
-              <AppleIcon />
-              <Text className="text-base font-semibold text-white">{label} with Apple</Text>
+              <GoogleIcon />
+              <Text className="text-base font-semibold text-on-surface">{label} with Google</Text>
             </>
           )}
         </TouchableOpacity>
+      )}
+
+      {Platform.OS === 'ios' ? (
+        useGlass ? (
+          <GlassView isInteractive style={{ borderRadius: 16, overflow: 'hidden' }}>
+            <View style={{ backgroundColor: 'rgba(0,0,0,0.08)', borderRadius: 16 }}>
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, paddingVertical: 16 }}
+                onPress={handleAppleSSO}
+                disabled={isLoading}
+              >
+                {loadingStrategy === 'apple' ? (
+                  <ActivityIndicator color={Colors.onSurface} />
+                ) : (
+                  <>
+                    <AppleIcon />
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: Colors.onSurface }}>{label} with Apple</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </GlassView>
+        ) : (
+          <TouchableOpacity
+            className="flex-row items-center justify-center gap-3 rounded-2xl bg-black py-4 active:opacity-90"
+            onPress={handleAppleSSO}
+            disabled={isLoading}
+          >
+            {loadingStrategy === 'apple' ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <>
+                <AppleIcon />
+                <Text className="text-base font-semibold text-white">{label} with Apple</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )
       ) : null}
     </View>
   )

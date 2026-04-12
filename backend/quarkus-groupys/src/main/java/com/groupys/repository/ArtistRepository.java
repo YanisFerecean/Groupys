@@ -9,8 +9,8 @@ import java.util.Optional;
 @ApplicationScoped
 public class ArtistRepository implements PanacheRepositoryBase<Artist, Long> {
 
-    public Optional<Artist> findBySpotifyId(String spotifyId) {
-        return find("spotifyId", spotifyId).firstResultOptional();
+    public Optional<Artist> findByAppleMusicId(String appleMusicId) {
+        return find("appleMusicId", appleMusicId).firstResultOptional();
     }
 
     public Optional<Artist> findByNameIgnoreCase(String name) {

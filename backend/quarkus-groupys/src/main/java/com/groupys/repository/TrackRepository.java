@@ -9,7 +9,7 @@ import java.util.Optional;
 @ApplicationScoped
 public class TrackRepository implements PanacheRepositoryBase<Track, Long> {
 
-    public Optional<Track> findBySpotifyId(String spotifyId) {
-        return find("spotifyId", spotifyId).firstResultOptional();
+    public Optional<Track> findByAppleMusicId(String appleMusicId) {
+        return find("appleMusicId", appleMusicId).firstResultOptional();
     }
 }

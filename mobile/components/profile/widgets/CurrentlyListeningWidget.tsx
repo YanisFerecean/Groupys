@@ -6,8 +6,9 @@ import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '@clerk/expo'
 import { Ionicons } from '@expo/vector-icons'
 import {
-  fetchSpotifyCurrentlyPlaying,
-  fetchSpotifyCurrentlyPlayingByUserId,
+  fetchMusicCurrentlyPlaying,
+  fetchMusicCurrentlyPlayingByUserId,
+  getMusicErrorMessage,
 } from '@/lib/api'
 import { logError } from '@/lib/logging'
 
@@ -64,9 +65,29 @@ interface TrackInfo {
   coverUrl?: string
 }
 
+function toTrackInfo(track: {
+  title: string
+  artist?: string | null
+  coverUrl?: string | null
+}): TrackInfo {
+  return {
+    title: track.title,
+    artist: track.artist ?? '',
+    coverUrl: track.coverUrl ?? undefined,
+  }
+}
+
 interface CurrentlyListeningWidgetProps {
   track?: TrackInfo
+  musicConnected?: boolean
+  musicUserId?: string
+  /**
+   * @deprecated temporary compatibility alias
+   */
   spotifyConnected?: boolean
+  /**
+   * @deprecated temporary compatibility alias
+   */
   spotifyUserId?: string
   autoRefreshMs?: number
 }
@@ -83,14 +104,16 @@ function isSameSong(a: TrackInfo | null, b: TrackInfo | null): boolean {
 
 export default function CurrentlyListeningWidget({
   track: manualTrack,
+  musicConnected,
+  musicUserId,
   spotifyConnected,
   spotifyUserId,
   autoRefreshMs = 0,
 }: CurrentlyListeningWidgetProps) {
   const { getToken } = useAuth()
   const getTokenRef = useRef(getToken)
-  const [spotifyTrack, setSpotifyTrack] = useState<TrackInfo | null>(null)
-  const spotifyTrackRef = useRef<TrackInfo | null>(null)
+  const [liveTrack, setLiveTrack] = useState<TrackInfo | null>(null)
+  const liveTrackRef = useRef<TrackInfo | null>(null)
   const [activeCoverUrl, setActiveCoverUrl] = useState<string | undefined>(undefined)
   const activeCoverUrlRef = useRef<string | undefined>(undefined)
   const [incomingCoverUrl, setIncomingCoverUrl] = useState<string | undefined>(undefined)
@@ -112,9 +135,12 @@ export default function CurrentlyListeningWidget({
     outputRange: [0, 0, 1],
   })
 
+  const resolvedMusicConnected = musicConnected ?? spotifyConnected
+  const resolvedMusicUserId = musicUserId ?? spotifyUserId
+
   useEffect(() => {
-    spotifyTrackRef.current = spotifyTrack
-  }, [spotifyTrack])
+    liveTrackRef.current = liveTrack
+  }, [liveTrack])
 
   useEffect(() => {
     activeCoverUrlRef.current = activeCoverUrl
@@ -125,8 +151,8 @@ export default function CurrentlyListeningWidget({
   }, [getToken])
 
   useEffect(() => {
-    if (!spotifyConnected) {
-      setSpotifyTrack(null)
+    if (!resolvedMusicConnected) {
+      setLiveTrack(null)
       setActiveCoverUrl(undefined)
       setIncomingCoverUrl(undefined)
       slideAnim.setValue(0)
@@ -147,9 +173,9 @@ export default function CurrentlyListeningWidget({
         const token = await getTokenRef.current()
         if (!token) return
 
-        const data = spotifyUserId
-          ? await fetchSpotifyCurrentlyPlayingByUserId(spotifyUserId, token)
-          : await fetchSpotifyCurrentlyPlaying(token)
+        const data = resolvedMusicUserId
+          ? await fetchMusicCurrentlyPlayingByUserId(resolvedMusicUserId, token)
+          : await fetchMusicCurrentlyPlaying(token)
 
         // Keep last known track when playback stops.
         if (!data) {
@@ -157,11 +183,12 @@ export default function CurrentlyListeningWidget({
         }
 
         if (!cancelled && data.title) {
-          const prev = spotifyTrackRef.current
-          if (isSameSong(prev, data)) return
+          const nextTrack = toTrackInfo(data)
+          const prev = liveTrackRef.current
+          if (isSameSong(prev, nextTrack)) return
 
           const prevCover = activeCoverUrlRef.current ?? prev?.coverUrl
-          const nextCover = data.coverUrl
+          const nextCover = nextTrack.coverUrl
           if (isCoverAnimatingRef.current) {
             return
           }
@@ -184,9 +211,9 @@ export default function CurrentlyListeningWidget({
                 easing: Easing.inOut(Easing.ease),
                 useNativeDriver: true,
               }).start(() => {
-                setSpotifyTrack(data)
-                spotifyTrackRef.current = data
-                setActiveCoverUrl(data.coverUrl)
+                setLiveTrack(nextTrack)
+                liveTrackRef.current = nextTrack
+                setActiveCoverUrl(nextTrack.coverUrl)
                 setIncomingCoverUrl(undefined)
                 slideAnim.setValue(0)
                 isCoverAnimatingRef.current = false
@@ -195,13 +222,13 @@ export default function CurrentlyListeningWidget({
             return
           }
 
-          setSpotifyTrack(data)
-          spotifyTrackRef.current = data
-          setActiveCoverUrl(data.coverUrl)
+          setLiveTrack(nextTrack)
+          liveTrackRef.current = nextTrack
+          setActiveCoverUrl(nextTrack.coverUrl)
         }
       } catch (err) {
-        if (!cancelled) {
-          logError('Failed to fetch Spotify status', err)
+        if (!cancelled && autoRefreshMs <= 0) {
+          logError('Failed to fetch Apple Music status', getMusicErrorMessage(err, 'Failed to fetch Apple Music status'))
         }
       } finally {
         isFetchingRef.current = false
@@ -221,11 +248,11 @@ export default function CurrentlyListeningWidget({
       cancelled = true
       clearInterval(interval)
     }
-  }, [autoRefreshMs, spotifyConnected, spotifyUserId, slideAnim])
+  }, [autoRefreshMs, resolvedMusicConnected, resolvedMusicUserId, slideAnim])
 
-  const track = spotifyConnected ? (spotifyTrack ?? manualTrack) : manualTrack
-  const isCurrentlyPlaying = !!spotifyTrack?.title
-  const displayCoverUrl = spotifyConnected ? (activeCoverUrl ?? track?.coverUrl) : track?.coverUrl
+  const track = resolvedMusicConnected ? (liveTrack ?? manualTrack) : manualTrack
+  const isCurrentlyPlaying = !!liveTrack?.title
+  const displayCoverUrl = resolvedMusicConnected ? (activeCoverUrl ?? track?.coverUrl) : track?.coverUrl
   if (!track?.title) return null
 
   return (

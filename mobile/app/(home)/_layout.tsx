@@ -444,7 +444,7 @@ export default function HomeLayout() {
     return <FullscreenSpinner />
   }
 
-  if (!isSignedIn) return <Redirect href="/(auth)/sign-in" />
+  if (!isSignedIn) return <Redirect href="/(auth)/landing" />
 
   if (!isAccountSetupComplete(user)) return <Redirect href="/complete-profile" />
 
@@ -534,7 +534,7 @@ export default function HomeLayout() {
                 ? HOME_TAB_ROUTE[rememberedHomeTab]
                 : rememberedRoute
               requestAnimationFrame(() => {
-                router.push(targetRoute as any)
+                router.replace(targetRoute as any)
               })
             }}
           />

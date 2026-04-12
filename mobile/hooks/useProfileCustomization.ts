@@ -24,44 +24,76 @@ export function useProfileCustomization() {
     getTokenRef.current = getToken
   }, [getToken])
 
+  const fetchAndEnsureBackendUser = useCallback(async () => {
+    if (!user || !hasUsername(user)) {
+      throw new Error('No signed-in user available')
+    }
+
+    const token = await getTokenRef.current()
+    let bu = await fetchUserByClerkId(user.id, token)
+
+    if (!bu) {
+      await new Promise((r) => setTimeout(r, 1000))
+      bu = await fetchUserByClerkId(user.id, token)
+    }
+
+    if (!bu) {
+      bu = await createBackendUser(
+        {
+          clerkId: user.id,
+          username: user.username ?? user.id,
+          displayName: user.fullName ?? undefined,
+          profileImage: user.imageUrl ?? undefined,
+        },
+        token,
+      )
+    } else if (user.imageUrl && bu.profileImage !== user.imageUrl) {
+      bu = await syncUserProfileImage(bu, user.imageUrl, token)
+    }
+
+    return bu
+  }, [user])
+
   useEffect(() => {
-    if (!isLoaded || !isAuthLoaded || !user || !hasUsername(user)) return
+    if (!isLoaded || !isAuthLoaded) return
+
+    if (!user || !hasUsername(user)) {
+      setBackendUser(null)
+      setFetching(false)
+      return
+    }
+
     let cancelled = false
+    setFetching(true)
 
-      ; (async () => {
-        try {
-          const token = await getTokenRef.current()
-          let bu = await fetchUserByClerkId(user.id, token)
+    ;(async () => {
+      try {
+        const bu = await fetchAndEnsureBackendUser()
+        if (!cancelled) setBackendUser(bu)
+      } catch (err) {
+        console.error('Failed to fetch profile:', err)
+      } finally {
+        if (!cancelled) setFetching(false)
+      }
+    })()
 
-          if (!bu) {
-            await new Promise((r) => setTimeout(r, 1000))
-            bu = await fetchUserByClerkId(user.id, token)
-          }
+    return () => {
+      cancelled = true
+    }
+  }, [fetchAndEnsureBackendUser, isLoaded, isAuthLoaded, user])
 
-          if (!bu) {
-            bu = await createBackendUser(
-              {
-                clerkId: user.id,
-                username: user.username ?? user.id,
-                displayName: user.fullName ?? undefined,
-                profileImage: user.imageUrl ?? undefined,
-              },
-              token,
-            )
-          } else if (user.imageUrl && bu.profileImage !== user.imageUrl) {
-            bu = await syncUserProfileImage(bu, user.imageUrl, token)
-          }
+  const refreshProfile = useCallback(async () => {
+    if (!isLoaded || !isAuthLoaded || !user || !hasUsername(user)) return null
 
-          if (!cancelled) setBackendUser(bu)
-        } catch (err) {
-          console.error('Failed to fetch profile:', err)
-        } finally {
-          if (!cancelled) setFetching(false)
-        }
-      })()
-
-    return () => { cancelled = true }
-  }, [isLoaded, isAuthLoaded, user])
+    try {
+      const refreshed = await fetchAndEnsureBackendUser()
+      setBackendUser(refreshed)
+      return refreshed
+    } catch (err) {
+      console.error('Failed to refresh profile:', err)
+      return null
+    }
+  }, [fetchAndEnsureBackendUser, isAuthLoaded, isLoaded, user])
 
   const updateProfile = useCallback(
     async (partial: Partial<ProfileCustomization>) => {
@@ -83,6 +115,7 @@ export function useProfileCustomization() {
     profile: backendUser ? backendUserToProfile(backendUser) : ({} as ProfileCustomization),
     backendUser,
     updateProfile,
+    refreshProfile,
     isLoaded: isLoaded && isAuthLoaded && !fetching,
     isSaving,
   }

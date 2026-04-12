@@ -1,11 +1,23 @@
-import { useRouter } from 'expo-router'
-import { Text, TouchableOpacity, View } from 'react-native'
+import { Image, Text, View, useWindowDimensions } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import MusicPeopleGraphic from '@/components/landing/MusicPeopleGraphic'
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
+import SSOButtons from '@/components/auth/SSOButtons'
+
+const BASE_WIDTH = 390
+
+const stickers = [
+  { src: require('../../assets/illustrations/weeknd.png'), top: '-3%', left: '-5%',  width: 165, rotate: '180deg'  },
+  { src: require('../../assets/illustrations/lips.png'),   top: '30%', left: '35%',  width: 130, rotate: '-17deg'  },
+  { src: require('../../assets/illustrations/sade.png'),   top: '65%', left: '-5%',  width: 150, rotate: '0deg'    },
+  { src: require('../../assets/illustrations/lamar.png'),  top: '0%',  left: '70%',  width: 180, rotate: '180deg'  },
+  { src: require('../../assets/illustrations/ocean.png'),  top: '60%', left: '70%',  width: 170, rotate: '0deg'    },
+]
 
 export default function LandingScreen() {
-  const router = useRouter()
   const insets = useSafeAreaInsets()
+  const { width: screenWidth } = useWindowDimensions()
+  const scale = screenWidth / BASE_WIDTH
+  const useGlass = isLiquidGlassAvailable()
 
   return (
     <View
@@ -20,34 +32,67 @@ export default function LandingScreen() {
         <Text className="text-4xl font-extrabold tracking-tighter text-on-surface">
           Music is{'\n'}better together.
         </Text>
-        <Text className="mt-3 text-lg text-on-surface-variant">
+        <Text className="mt-3 mb-3 text-lg text-on-surface-variant">
           Discover, connect, and share.
         </Text>
       </View>
 
-      {/* Animated illustration */}
-      <View className="flex-1 items-center justify-center mb-5">
-        <MusicPeopleGraphic />
-      </View>
+      {/* Sticker wall */}
+      {useGlass ? (
+        <GlassView isInteractive style={{ flex: 1, borderRadius: 28, overflow: 'hidden', marginVertical: 8 }}>
+          {stickers.map((s, i) => {
+            const size = s.width * scale
+            return (
+              <Image
+                key={i}
+                source={s.src}
+                style={{
+                  position: 'absolute',
+                  top: s.top as any,
+                  left: s.left as any,
+                  width: size,
+                  height: size,
+                  resizeMode: 'contain',
+                  transform: [{ rotate: s.rotate }],
+                }}
+              />
+            )
+          })}
+        </GlassView>
+      ) : (
+        <View
+          style={{
+            flex: 1,
+            borderRadius: 28,
+            overflow: 'hidden',
+            marginVertical: 8,
+            backgroundColor: 'rgba(0,0,0,0.04)',
+          }}
+        >
+          {stickers.map((s, i) => {
+            const size = s.width * scale
+            return (
+              <Image
+                key={i}
+                source={s.src}
+                style={{
+                  position: 'absolute',
+                  top: s.top as any,
+                  left: s.left as any,
+                  width: size,
+                  height: size,
+                  resizeMode: 'contain',
+                  transform: [{ rotate: s.rotate }],
+                }}
+              />
+            )
+          })}
+        </View>
+      )}
 
       {/* CTAs */}
-      <View className="gap-3 mt-8">
-        <TouchableOpacity
-          className="items-center rounded-2xl bg-primary py-4 active:opacity-90"
-          onPress={() => router.push('/(auth)/sign-in')}
-        >
-          <Text className="text-base font-semibold text-white">
-            Continue with SSO
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          className="items-center rounded-2xl bg-surface-container-high py-4 active:opacity-90"
-          onPress={() => router.push('/(auth)/sign-in')}
-        >
-          <Text className="text-base font-semibold text-on-surface">
-            Already have an account?
-          </Text>
-        </TouchableOpacity>
+      <View className="mt-8">
+        <SSOButtons mode="sign-up" />
       </View>
     </View>
   )

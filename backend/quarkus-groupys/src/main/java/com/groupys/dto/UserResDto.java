@@ -24,7 +24,7 @@ public record UserResDto(
         String website,
         String jobTitle,
         String location,
-        boolean spotifyConnected,
+        boolean musicConnected,
         Instant lastMusicSyncAt,
         String tasteSummaryText,
         boolean recommendationOptOut,

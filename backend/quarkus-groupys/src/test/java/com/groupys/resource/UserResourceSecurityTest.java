@@ -35,4 +35,12 @@ class UserResourceSecurityTest {
         assertEquals("/search", method.getAnnotation(jakarta.ws.rs.Path.class).value());
         assertTrue(method.getParameterCount() == 2);
     }
+
+    @Test
+    void userResourceExposesDeleteMeEndpoint() throws NoSuchMethodException {
+        Method method = UserResource.class.getDeclaredMethod("deleteMe");
+
+        assertNotNull(method.getAnnotation(jakarta.ws.rs.DELETE.class), "deleteMe should be a DELETE endpoint");
+        assertEquals("/me", method.getAnnotation(jakarta.ws.rs.Path.class).value());
+    }
 }

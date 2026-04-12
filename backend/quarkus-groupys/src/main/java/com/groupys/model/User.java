@@ -60,14 +60,11 @@ public class User {
     @Column(columnDefinition = "jsonb")
     public String widgets;
 
-    @Column(name = "spotify_access_token", length = 512)
-    public String spotifyAccessToken;
+    @Column(name = "apple_music_user_token", length = 1024)
+    public String appleMusicUserToken;
 
-    @Column(name = "spotify_refresh_token", length = 512)
-    public String spotifyRefreshToken;
-
-    @Column(name = "spotify_token_expiry")
-    public Instant spotifyTokenExpiry;
+    @Column(name = "apple_music_connected_at")
+    public Instant appleMusicConnectedAt;
 
     @Column(name = "last_seen_at")
     public Instant lastSeenAt;

@@ -1,9 +1,9 @@
 import { Colors } from '@/constants/colors'
-import { fetchMyAlbumRatings, type AlbumRatingRes } from '@/lib/api'
+import { fetchAlbumRatingsByUsername, fetchMyAlbumRatings, type AlbumRatingRes } from '@/lib/api'
 import { useAuth, useUser } from '@clerk/expo'
 import { Image } from 'expo-image'
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
-import { router, useFocusEffect } from 'expo-router'
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import * as Haptics from 'expo-haptics'
 import { SymbolView } from 'expo-symbols'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -41,6 +41,18 @@ export default function RatedAlbumsScreen() {
   const { getToken } = useAuth()
   const useGlass = isLiquidGlassAvailable()
   const getTokenRef = useRef(getToken)
+  const params = useLocalSearchParams<{ username?: string | string[]; displayName?: string | string[] }>()
+
+  const usernameParam = Array.isArray(params.username) ? params.username[0] : params.username
+  const displayNameParam = Array.isArray(params.displayName) ? params.displayName[0] : params.displayName
+  const targetUsername = usernameParam?.trim() ? usernameParam.trim() : null
+  const targetDisplayName = displayNameParam?.trim() ? displayNameParam.trim() : null
+  const isPublicProfileView = Boolean(
+    targetUsername && targetUsername.toLowerCase() !== (user?.username ?? '').toLowerCase(),
+  )
+  const headerTitle = isPublicProfileView
+    ? `${targetDisplayName ?? targetUsername}'s Rated Albums`
+    : 'Rated Albums'
 
   const [ratings, setRatings] = useState<AlbumRatingRes[]>([])
   const [loading, setLoading] = useState(true)
@@ -61,7 +73,9 @@ export default function RatedAlbumsScreen() {
     setError(null)
     try {
       const token = await getTokenRef.current()
-      const data = await fetchMyAlbumRatings(token)
+      const data = isPublicProfileView && targetUsername
+        ? await fetchAlbumRatingsByUsername(targetUsername, token)
+        : await fetchMyAlbumRatings(token)
       const sorted = [...data].sort(
         (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
       )
@@ -72,7 +86,7 @@ export default function RatedAlbumsScreen() {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [])
+  }, [isPublicProfileView, targetUsername])
 
   useFocusEffect(
     useCallback(() => {
@@ -82,6 +96,7 @@ export default function RatedAlbumsScreen() {
 
   const handleOpenRating = useCallback(
     (rating: AlbumRatingRes) => {
+      if (isPublicProfileView) return
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
       router.push({
         pathname: '/(home)/(profile)/rating',
@@ -95,7 +110,7 @@ export default function RatedAlbumsScreen() {
         },
       } as never)
     },
-    [user?.id],
+    [isPublicProfileView, user?.id],
   )
 
   const contentHorizontalPadding = 20
@@ -131,7 +146,7 @@ export default function RatedAlbumsScreen() {
         {useGlass ? (
           <GlassView style={{ borderRadius: 999, overflow: 'hidden' }}>
             <View style={{ alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8 }}>
-              <Text className="text-[18px] font-bold text-on-surface">Rated Albums</Text>
+              <Text className="text-[18px] font-bold text-on-surface">{headerTitle}</Text>
               {!loading ? (
                 <Text className="text-[12px] text-on-surface-variant" style={{ fontVariant: ['tabular-nums'] }}>
                   {ratings.length} total
@@ -141,7 +156,7 @@ export default function RatedAlbumsScreen() {
           </GlassView>
         ) : (
           <View className="items-center">
-            <Text className="text-[18px] font-bold text-on-surface">Rated Albums</Text>
+            <Text className="text-[18px] font-bold text-on-surface">{headerTitle}</Text>
             {!loading ? (
               <Text className="text-[12px] text-on-surface-variant" style={{ fontVariant: ['tabular-nums'] }}>
                 {ratings.length} total
@@ -214,7 +229,9 @@ export default function RatedAlbumsScreen() {
                   </View>
                   <Text className="text-[18px] font-bold text-on-surface">No rated albums yet</Text>
                   <Text className="text-center text-[14px] text-on-surface-variant">
-                    Rate albums from your Top Albums widget, then they will show up here.
+                    {isPublicProfileView
+                      ? `When ${targetDisplayName ?? targetUsername} rates albums, they will appear here.`
+                      : 'Rate albums from your Top Albums widget, then they will show up here.'}
                   </Text>
                 </View>
               </GlassView>
@@ -232,7 +249,9 @@ export default function RatedAlbumsScreen() {
                 </View>
                 <Text className="text-[18px] font-bold text-on-surface">No rated albums yet</Text>
                 <Text className="text-center text-[14px] text-on-surface-variant">
-                  Rate albums from your Top Albums widget, then they will show up here.
+                  {isPublicProfileView
+                    ? `When ${targetDisplayName ?? targetUsername} rates albums, they will appear here.`
+                    : 'Rate albums from your Top Albums widget, then they will show up here.'}
                 </Text>
               </View>
             )
@@ -292,7 +311,7 @@ export default function RatedAlbumsScreen() {
                   return (
                     <GlassView
                       key={rating.id}
-                      isInteractive
+                      isInteractive={!isPublicProfileView}
                       style={{
                         width: cardWidth,
                         borderRadius: 16,
@@ -301,7 +320,8 @@ export default function RatedAlbumsScreen() {
                     >
                       <TouchableOpacity
                         onPress={() => handleOpenRating(rating)}
-                        activeOpacity={0.78}
+                        disabled={isPublicProfileView}
+                        activeOpacity={isPublicProfileView ? 1 : 0.78}
                         style={{ width: '100%' }}
                       >
                         {cardBody}
@@ -314,7 +334,8 @@ export default function RatedAlbumsScreen() {
                   <TouchableOpacity
                     key={rating.id}
                     onPress={() => handleOpenRating(rating)}
-                    activeOpacity={0.78}
+                    disabled={isPublicProfileView}
+                    activeOpacity={isPublicProfileView ? 1 : 0.78}
                     style={{
                       width: cardWidth,
                       borderRadius: 16,
