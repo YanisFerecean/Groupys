@@ -288,13 +288,6 @@ export default function UserRecommendationCard({ user, stackIndex, onLike, onDis
 
         {/* Bottom metadata */}
         <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20, gap: 6 }}>
-          {/* Vibe badge */}
-          <View className="flex-row mb-1">
-            <View className="bg-primary rounded-full px-3 py-1">
-              <Text className="text-xs font-black text-on-primary">{vibePercent}% VIBE</Text>
-            </View>
-          </View>
-
           {/* Name */}
           <Text className="text-[26px] font-extrabold text-white" numberOfLines={1}>
             {user.displayName ?? user.username}

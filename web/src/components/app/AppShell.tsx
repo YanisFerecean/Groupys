@@ -16,7 +16,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [createPostOpen, setCreatePostOpen] = useState(false);
-  const [spotifyConnected, setSpotifyConnected] = useState(false);
+  const [musicConnected, setMusicConnected] = useState(false);
   const { getToken, isLoaded: isAuthLoaded, isSignedIn } = useAuth();
   const { user, isLoaded } = useUser();
   const router = useRouter();
@@ -39,12 +39,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, [isAuthLoaded, isSignedIn, router]);
 
-  // Load spotify connection status from backend
+  // Load music connection status from backend
   useEffect(() => {
     if (!isLoaded || !isAuthLoaded || !isSignedIn || !user) return;
     getTokenRef.current().then((token) => {
       fetchUserByClerkId(user.id, token).then((bu) => {
-        if (bu) setSpotifyConnected(bu.spotifyConnected);
+        if (bu) setMusicConnected((bu.musicConnected ?? bu.spotifyConnected) === true);
       });
     });
   }, [isLoaded, isAuthLoaded, isSignedIn, user]);
@@ -74,8 +74,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     });
   }, [isLoaded, isAuthLoaded, isSignedIn, user, pathname, router]);
 
-  const handleSpotifyDisconnected = useCallback(() => {
-    setSpotifyConnected(false);
+  const handleMusicConnected = useCallback(() => {
+    setMusicConnected(true);
+  }, []);
+
+  const handleMusicDisconnected = useCallback(() => {
+    setMusicConnected(false);
   }, []);
 
   if (!isAuthLoaded || !isSignedIn) return null;
@@ -105,8 +109,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <SettingsDialog
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
-        spotifyConnected={spotifyConnected}
-        onSpotifyDisconnected={handleSpotifyDisconnected}
+        musicConnected={musicConnected}
+        onMusicConnected={handleMusicConnected}
+        onMusicDisconnected={handleMusicDisconnected}
       />
       <CreatePostModal
         open={createPostOpen}

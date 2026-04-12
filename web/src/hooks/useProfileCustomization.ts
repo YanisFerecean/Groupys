@@ -47,7 +47,7 @@ export function useProfileCustomization() {
         }
 
         setBackendUserId(backendUser.id);
-        setSpotifyConnected(backendUser.spotifyConnected);
+        setSpotifyConnected((backendUser.musicConnected ?? backendUser.spotifyConnected) === true);
         setProfile(backendUserToProfile(backendUser));
       } catch (err) {
         console.error("Failed to load profile from backend:", err);

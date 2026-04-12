@@ -8,11 +8,9 @@ import SwipeableTabScreen from '@/components/navigation/SwipeableTabScreen'
 import SectionHeader from '@/components/ui/SectionHeader'
 import { TopArtistRows, TopArtistsSkeleton, useTopArtists } from '@/components/discover/TopArtistsSection'
 import CommunityRecommendationCard from '@/components/discover/CommunityRecommendationCard'
-import UserOnlineCard from '@/components/discover/UserOnlineCard'
 import SearchOverlay from '@/components/discover/SearchOverlay'
 import { Colors } from '@/constants/colors'
 import { DISCOVER_PREVIEW_COMMUNITY_COUNT } from '@/constants/discovery'
-import { activeUsers } from '@/constants/mockData'
 import { useDiscovery } from '@/hooks/useDiscovery'
 
 export default function DiscoverScreen() {
@@ -131,21 +129,7 @@ export default function DiscoverScreen() {
             )}
           </View>
 
-          {/* Who's On */}
-          <View className="pt-8 pb-2">
-            <View className="px-5">
-              <SectionHeader title="Who's On?" actionText="See All" />
-            </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, gap: 10 }}
-            >
-              {activeUsers.map((user) => (
-                <UserOnlineCard key={user.id} user={user} />
-              ))}
-            </ScrollView>
-          </View>
+
         </ScrollView>
 
         {/* Search overlay */}

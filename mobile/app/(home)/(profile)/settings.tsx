@@ -1,21 +1,24 @@
 import { Ionicons } from '@expo/vector-icons'
-import { useAuth } from '@clerk/expo'
+import { useAuth, useUser } from '@clerk/expo'
 import { useRouter } from 'expo-router'
 import { useState } from 'react'
-import { ActivityIndicator, ScrollView, Switch, Text, TouchableOpacity, View } from 'react-native'
+import { ActivityIndicator, Alert, ScrollView, Switch, Text, TouchableOpacity, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Colors } from '@/constants/colors'
+import { deleteMyAccount } from '@/lib/api'
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets()
   const router = useRouter()
-  const { signOut } = useAuth()
+  const { signOut, getToken } = useAuth()
+  const { user } = useUser()
 
   const [invisible, setInvisible] = useState(false)
   const [showHistory, setShowHistory] = useState(true)
   const [showTopArtists, setShowTopArtists] = useState(true)
   const [showMutual, setShowMutual] = useState(false)
   const [isSigningOut, setIsSigningOut] = useState(false)
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false)
 
   async function handleSignOut() {
     setIsSigningOut(true)
@@ -26,6 +29,66 @@ export default function SettingsScreen() {
     } finally {
       setIsSigningOut(false)
     }
+  }
+
+  async function handleDeleteAccount() {
+    setIsDeletingAccount(true)
+
+    try {
+      const token = await getToken()
+      if (!token) {
+        throw new Error('Missing auth token')
+      }
+
+      await deleteMyAccount(token)
+
+      let authAccountDeleted = false
+      if (user?.deleteSelfEnabled) {
+        try {
+          await user.delete()
+          authAccountDeleted = true
+        } catch (error) {
+          console.error('Failed to delete Clerk auth account:', error)
+        }
+      }
+
+      try {
+        await signOut()
+      } catch (error) {
+        console.warn('Sign-out after account deletion failed:', error)
+      }
+
+      router.replace('/(auth)/landing')
+
+      if (!authAccountDeleted && user?.deleteSelfEnabled) {
+        Alert.alert(
+          'Account data deleted',
+          'Your Groupys data is deleted, but we could not fully remove your sign-in account. Please try again later.',
+        )
+      }
+    } catch (error) {
+      console.error('Failed to delete account:', error)
+      Alert.alert('Delete account failed', 'We could not delete your account. Please try again.')
+    } finally {
+      setIsDeletingAccount(false)
+    }
+  }
+
+  function confirmDeleteAccount() {
+    Alert.alert(
+      'Delete account?',
+      'This will permanently delete your Groupys account and all associated data. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Account',
+          style: 'destructive',
+          onPress: () => {
+            void handleDeleteAccount()
+          },
+        },
+      ],
+    )
   }
 
   return (
@@ -112,7 +175,7 @@ export default function SettingsScreen() {
           <TouchableOpacity
             className={`items-center rounded-2xl bg-red-50 py-4 ${isSigningOut ? 'opacity-70' : ''}`}
             onPress={handleSignOut}
-            disabled={isSigningOut}
+            disabled={isSigningOut || isDeletingAccount}
           >
             <View className="flex-row items-center gap-2">
               {isSigningOut ? (
@@ -122,6 +185,23 @@ export default function SettingsScreen() {
               )}
               <Text className="font-semibold text-primary">
                 {isSigningOut ? 'Signing Out...' : 'Sign Out of Groupys'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            className={`mt-3 items-center rounded-2xl border border-red-200 bg-white py-4 ${isDeletingAccount ? 'opacity-70' : ''}`}
+            onPress={confirmDeleteAccount}
+            disabled={isSigningOut || isDeletingAccount}
+          >
+            <View className="flex-row items-center gap-2">
+              {isDeletingAccount ? (
+                <ActivityIndicator color={Colors.primary} />
+              ) : (
+                <Ionicons name="trash-outline" size={20} color={Colors.primary} />
+              )}
+              <Text className="font-semibold text-primary">
+                {isDeletingAccount ? 'Deleting Account...' : 'Delete Account Permanently'}
               </Text>
             </View>
           </TouchableOpacity>

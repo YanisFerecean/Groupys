@@ -12,6 +12,7 @@ interface TopAlbumsWidgetProps {
   size?: 'small' | 'normal'
   onAlbumPress?: (album: TopAlbum) => void
   userRatingScores?: Record<number, number>
+  title?: string
 }
 
 export default function TopAlbumsWidget({
@@ -21,6 +22,7 @@ export default function TopAlbumsWidget({
   size = 'normal',
   onAlbumPress,
   userRatingScores,
+  title,
 }: TopAlbumsWidgetProps) {
   if (!albums?.length) return null
   const visibleAlbums = albums.slice(0, size === 'small' ? 1 : 3)
@@ -40,7 +42,7 @@ export default function TopAlbumsWidget({
         className="text-sm font-extrabold uppercase tracking-widest mb-1 ml-1"
         style={{ color: textColor ?? undefined }}
       >
-        {size === 'small' ? 'Top Album' : 'Top Albums'}
+        {title ?? (size === 'small' ? 'Top Album' : 'Top Albums')}
       </Text>
       {size === 'small' ? (
         <View className="gap-3">

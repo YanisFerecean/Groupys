@@ -13,6 +13,7 @@ interface TopArtistsWidgetProps {
   containerColor?: string
   textColor?: string
   size?: 'small' | 'normal'
+  title?: string
 }
 
 export default function TopArtistsWidget({
@@ -20,6 +21,7 @@ export default function TopArtistsWidget({
   containerColor,
   textColor,
   size = 'normal',
+  title,
 }: TopArtistsWidgetProps) {
   const router = useRouter()
   const rootNavigationState = useRootNavigationState()
@@ -76,7 +78,7 @@ export default function TopArtistsWidget({
         className="text-sm font-extrabold uppercase tracking-widest mb-1 ml-1"
         style={{ color: textColor ?? undefined }}
       >
-        {size === 'small' ? 'Top Artist' : 'Top Artists'}
+        {title ?? (size === 'small' ? 'Top Artist' : 'Top Artists')}
       </Text>
       {size === 'small' ? (
         <Link

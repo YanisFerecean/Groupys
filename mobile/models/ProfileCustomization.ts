@@ -26,6 +26,10 @@ export interface ProfileCustomization {
   bio?: string
   country?: string
   tags?: string[]
+  musicConnected?: boolean
+  /**
+   * @deprecated temporary read/write compatibility for legacy Spotify-shaped payloads
+   */
   spotifyConnected?: boolean
   bannerUrl?: string
   bannerText?: string
@@ -34,8 +38,20 @@ export interface ProfileCustomization {
   topSongs?: TopSong[]
   topArtists?: TopArtist[]
   topAlbums?: TopAlbum[]
+  syncTopSongsWithMusic?: boolean
+  syncTopArtistsWithMusic?: boolean
+  syncTopAlbumsWithMusic?: boolean
+  /**
+   * @deprecated temporary read/write compatibility for legacy Spotify-shaped payloads
+   */
   syncTopSongsWithSpotify?: boolean
+  /**
+   * @deprecated temporary read/write compatibility for legacy Spotify-shaped payloads
+   */
   syncTopArtistsWithSpotify?: boolean
+  /**
+   * @deprecated temporary read/write compatibility for legacy Spotify-shaped payloads
+   */
   syncTopAlbumsWithSpotify?: boolean
   currentlyListening?: { id?: number; title: string; artist: string; coverUrl?: string }
   albumsContainerColor?: string

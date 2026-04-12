@@ -1,14 +1,16 @@
 import { useCallback, useRef } from 'react'
 import { useAuth } from '@clerk/expo'
 import { useChat } from '@/hooks/useChat'
+import type { UserMatch } from '@/models/Match'
 import { useDiscoveryStore } from '@/store/discoveryStore'
 import { useMatchStore } from '@/store/matchStore'
 import {
   fetchSuggestedCommunities,
   fetchSuggestedUsers,
+  getMusicErrorMessage,
   likeUser,
   passUser,
-  syncSpotifyMusic,
+  syncMusic,
   apiPost,
 } from '@/lib/api'
 import type { SuggestedUser } from '@/models/SuggestedUser'
@@ -107,7 +109,7 @@ export function useDiscovery() {
       const token = await getTokenRef.current()
       const response = await likeUser(user.userId, token)
       if (response.isMatch && response.matchId && response.conversationId) {
-        const match = {
+        const match: UserMatch = {
           matchId: response.matchId,
           otherUserId: user.userId,
           otherUsername: user.username,
@@ -130,9 +132,9 @@ export function useDiscovery() {
   const triggerMusicSync = useCallback(async () => {
     try {
       const token = await getTokenRef.current()
-      await syncSpotifyMusic(token)
+      await syncMusic(token)
     } catch (err) {
-      console.error('Failed background music sync:', err)
+      console.error('Failed background music sync:', getMusicErrorMessage(err, 'Failed background music sync'))
     }
   }, [])
 

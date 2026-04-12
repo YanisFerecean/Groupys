@@ -10,7 +10,13 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.kyawit.mobile"
+      "bundleIdentifier": "groupys.app",
+      "infoPlist": {
+        "NSAppleMusicUsageDescription": "Groupys uses Apple Music to connect your account and sync your top music."
+      },
+      "entitlements": {
+        "com.apple.developer.music-user-token": true
+      }
     },
     "android": {
       "adaptiveIcon": {

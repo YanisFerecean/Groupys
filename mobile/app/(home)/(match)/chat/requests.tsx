@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useUser } from '@clerk/expo'
 import { useRouter } from 'expo-router'
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Animated,
@@ -13,7 +13,6 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ChatRequestListItem } from '@/components/chat/ChatRequestListItem'
-import { buildMockRequestConversations } from '@/constants/chatRequestMockData'
 import { Colors } from '@/constants/colors'
 import { useChat } from '@/hooks/useChat'
 import { publicProfilePath } from '@/lib/profileRoutes'
@@ -26,7 +25,6 @@ const REQUEST_TABS: { key: RequestTab; label: string }[] = [
   { key: 'outgoing', label: 'Requested' },
 ]
 
-const MOCK_REQUEST_COUNT = 8
 const TAB_SWITCHER_PADDING = 6
 const TAB_SWITCHER_GAP = 6
 
@@ -129,32 +127,17 @@ export default function ChatRequestsScreen() {
     action: 'accept' | 'deny'
     conversationId: string
   } | null>(null)
-  const [dismissedMockRequestIds, setDismissedMockRequestIds] = useState<Set<string>>(() => new Set())
   const tabIndicatorX = useRef(new Animated.Value(0)).current
   const tabIndicatorInitializedRef = useRef(false)
-  const mockRequestConversationsRef = useRef<Conversation[]>(
-    buildMockRequestConversations(MOCK_REQUEST_COUNT),
-  )
 
-  const realRequestConversations = conversations.filter(
+  const requestConversations = conversations.filter(
     conversation => conversation.requestStatus !== 'ACCEPTED',
   )
-  const mockRequestConversations = useMemo(
-    () =>
-      mockRequestConversationsRef.current.filter(
-        conversation => !dismissedMockRequestIds.has(conversation.id),
-      ),
-    [dismissedMockRequestIds],
-  )
-  const usingMockRequests = realRequestConversations.length === 0 && !isLoading
-  const displayedRequestConversations = usingMockRequests
-    ? mockRequestConversations
-    : realRequestConversations
 
-  const incomingRequests = displayedRequestConversations.filter(
+  const incomingRequests = requestConversations.filter(
     conversation => conversation.requestStatus === 'PENDING_INCOMING',
   )
-  const outgoingRequests = displayedRequestConversations.filter(
+  const outgoingRequests = requestConversations.filter(
     conversation => conversation.requestStatus === 'PENDING_OUTGOING',
   )
 
@@ -183,12 +166,6 @@ export default function ChatRequestsScreen() {
   }, [tabIndicatorTargetX, tabIndicatorWidth, tabIndicatorX])
 
   const handleAccept = (conversation: Conversation) => {
-    const isMockRequest = conversation.id.startsWith('mock-request-')
-    if (isMockRequest) {
-      setDismissedMockRequestIds((prev) => new Set(prev).add(conversation.id))
-      return
-    }
-
     setRequestAction({ conversationId: conversation.id, action: 'accept' })
     void acceptDirectRequest(conversation.id)
       .catch(error => {
@@ -202,12 +179,6 @@ export default function ChatRequestsScreen() {
   }
 
   const handleDeny = (conversation: Conversation) => {
-    const isMockRequest = conversation.id.startsWith('mock-request-')
-    if (isMockRequest) {
-      setDismissedMockRequestIds((prev) => new Set(prev).add(conversation.id))
-      return
-    }
-
     setRequestAction({ conversationId: conversation.id, action: 'deny' })
     void denyDirectRequest(conversation.id)
       .catch(error => {
@@ -242,7 +213,7 @@ export default function ChatRequestsScreen() {
   ) => (
     <FlatList
       data={data}
-      key={`${activeTab}-${usingMockRequests ? 'mock' : 'real'}`}
+      key={activeTab}
       keyExtractor={(item) => item.id}
       contentContainerStyle={{
         flexGrow: data.length === 0 ? 1 : 0,
@@ -252,7 +223,6 @@ export default function ChatRequestsScreen() {
         const otherParticipant = item.participants.find(
           participant => participant.username !== user?.username,
         )
-        const isMockRequest = item.id.startsWith('mock-request-')
 
         return (
           <ChatRequestListItem
@@ -260,13 +230,12 @@ export default function ChatRequestsScreen() {
             currentUsername={user?.username}
             useGlass={useGlass}
             busyAction={requestAction?.conversationId === item.id ? requestAction.action : null}
-            onProfilePress={!isMockRequest && otherParticipant
+            onProfilePress={otherParticipant
               ? () => {
                   router.push(publicProfilePath(otherParticipant.userId, '(match)') as never)
                 }
               : undefined}
             onPress={() => {
-              if (isMockRequest) return
               router.push(`/(home)/(match)/chat/${item.id}` as never)
             }}
             onAccept={() => handleAccept(item)}
@@ -299,10 +268,9 @@ export default function ChatRequestsScreen() {
       onEndReached={handleLoadMore}
       onEndReachedThreshold={0.35}
       onRefresh={() => {
-        setDismissedMockRequestIds(new Set())
         void refreshConversations()
       }}
-      refreshing={isLoading && realRequestConversations.length > 0}
+      refreshing={isLoading && requestConversations.length > 0}
       showsVerticalScrollIndicator={false}
     />
   )

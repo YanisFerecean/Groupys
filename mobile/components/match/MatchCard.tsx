@@ -23,13 +23,6 @@ export default function MatchCard({ profile }: MatchCardProps) {
             className="absolute bottom-0 left-0 right-0 h-1/3"
           />
           <View className="absolute bottom-0 left-0 right-0 p-5 gap-2">
-            <View className="flex-row items-center gap-2">
-              <View className="rounded-full bg-primary px-3 py-1">
-                <Text className="text-xs font-bold text-white">
-                  {profile.vibePercent}% VIBE
-                </Text>
-              </View>
-            </View>
             <Text className="text-xs font-semibold uppercase tracking-wider text-white/70">
               SYNTHESIZED GROOVE
             </Text>
