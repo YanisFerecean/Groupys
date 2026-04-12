@@ -193,22 +193,46 @@ export default function HotTakeAnswerModal({ open, hotTake, onClose, onAnswered 
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="material-symbols-outlined text-primary" style={{ fontSize: 18, fontVariationSettings: "'FILL' 1" }}>
+      <DialogContent className="sm:max-w-md p-0 overflow-hidden gap-0">
+        {/* Gradient header */}
+        <div
+          className="px-6 pt-6 pb-5"
+          style={{ background: "linear-gradient(135deg, var(--color-primary) 0%, color-mix(in srgb, var(--color-primary) 75%, black) 100%)" }}
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <span className="material-symbols-outlined text-white/90" style={{ fontSize: 16, fontVariationSettings: "'FILL' 1" }}>
               local_fire_department
             </span>
-            <span className="text-xs font-bold uppercase tracking-widest text-primary">
+            <span className="text-xs font-bold uppercase tracking-widest text-white/70">
               Hot Take{hotTake.weekLabel ? ` · ${hotTake.weekLabel}` : ""}
             </span>
           </div>
-          <DialogTitle className="text-base font-bold leading-snug text-left">
+          <DialogTitle className="text-lg font-bold leading-snug text-white text-left">
             {hotTake.question}
           </DialogTitle>
-        </DialogHeader>
 
-        <div className="space-y-3 pt-2">
+          {/* Multi-pick progress dots */}
+          {count > 1 && (
+            <div className="flex items-center gap-1.5 mt-4">
+              {Array.from({ length: count }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-1.5 rounded-full transition-all duration-300"
+                  style={{
+                    width: i < picks.length ? 24 : 8,
+                    backgroundColor: i < picks.length ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.3)",
+                  }}
+                />
+              ))}
+              <span className="text-xs text-white/60 ml-1">
+                {picks.length}/{count}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Body */}
+        <div className="px-6 py-5 space-y-3 bg-surface-container-low">
           {isFreeText ? (
             freeTexts.map((text, i) => (
               <Input
@@ -221,28 +245,40 @@ export default function HotTakeAnswerModal({ open, hotTake, onClose, onAnswered 
             ))
           ) : (
             <>
-              {picks.map((pick, i) => (
-                <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-surface-container">
-                  {pick.imageUrl ? (
-                    <div className="relative w-10 h-10 rounded-lg overflow-hidden shrink-0">
-                      <Image src={pick.imageUrl} alt={pick.name} fill className="object-cover" />
+              {/* Selected picks */}
+              {picks.length > 0 && (
+                <div className="space-y-2">
+                  {picks.map((pick, i) => (
+                    <div key={i} className="flex items-center gap-3 p-3 rounded-2xl bg-surface-container border border-outline-variant/50">
+                      {pick.imageUrl ? (
+                        <div className="relative w-11 h-11 rounded-xl overflow-hidden shrink-0 shadow-sm">
+                          <Image src={pick.imageUrl} alt={pick.name} fill className="object-cover" />
+                        </div>
+                      ) : (
+                        <div className="w-11 h-11 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
+                          <span className="material-symbols-outlined text-primary" style={{ fontSize: 20, fontVariationSettings: "'FILL' 1" }}>{answerTypeIcon}</span>
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        {count > 1 && <p className="text-xs text-on-surface-variant mb-0.5">Pick {i + 1}</p>}
+                        <p className="text-sm font-bold truncate">{pick.name}</p>
+                      </div>
+                      <button type="button" onClick={() => removePick(i)} className="w-7 h-7 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest transition-colors shrink-0">
+                        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
+                      </button>
                     </div>
-                  ) : (
-                    <div className="w-10 h-10 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
-                      <span className="material-symbols-outlined text-primary" style={{ fontSize: 18 }}>{answerTypeIcon}</span>
-                    </div>
-                  )}
-                  {count > 1 && <span className="text-xs text-on-surface-variant shrink-0">#{i + 1}</span>}
-                  <p className="flex-1 min-w-0 text-sm font-semibold truncate">{pick.name}</p>
-                  <button type="button" onClick={() => removePick(i)} className="text-on-surface-variant hover:text-on-surface transition-colors shrink-0">
-                    <span className="material-symbols-outlined" style={{ fontSize: 18 }}>close</span>
-                  </button>
+                  ))}
                 </div>
-              ))}
+              )}
 
+              {/* Search input */}
               {picks.length < count && (
-                <div className="space-y-1">
-                  {pickLabel && <p className="text-xs font-semibold text-on-surface-variant">{pickLabel}</p>}
+                <div className="space-y-2">
+                  {pickLabel && (
+                    <p className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide">
+                      {pickLabel}
+                    </p>
+                  )}
                   {answerType === "ARTIST" ? (
                     <MusicSearchInput type="artist" placeholder="Search for an artist..." onSelect={(r: ArtistResult) => addPick({ name: r.name, imageUrl: r.imageUrl || null, musicType: "ARTIST" })} />
                   ) : answerType === "ALBUM" ? (
@@ -263,7 +299,7 @@ export default function HotTakeAnswerModal({ open, hotTake, onClose, onAnswered 
             type="button"
             onClick={handleSubmit}
             disabled={!canSubmit || submitting}
-            className="w-full py-2.5 rounded-xl text-sm font-bold bg-primary text-on-primary hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full py-3 rounded-2xl text-sm font-bold bg-primary text-on-primary hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {submitting ? "Submitting..." : count > 1 ? `Submit my ${count} picks` : "Submit my pick"}
           </button>
