@@ -10,14 +10,23 @@ import ProfileHeader from "./ProfileHeader";
 import ProfileWidgetGrid from "./ProfileWidgetGrid";
 import ProfileEditDrawer from "./ProfileEditDrawer";
 import MarkdownContent from "@/components/ui/MarkdownContent";
+import AuthMedia from "@/components/ui/AuthMedia";
+import MediaLightbox, { LightboxItem } from "@/components/ui/MediaLightbox";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
 
 type Tab = "overview" | "posts" | "likes" | "communities";
 
+interface PostMedia {
+  url: string;
+  type: string;
+  order: number;
+}
+
 interface PostRes {
   id: string;
   content: string;
+  media: PostMedia[];
   communityName: string;
   authorUsername: string;
   authorDisplayName: string;
@@ -44,6 +53,119 @@ function timeAgo(iso: string) {
   return `${Math.floor(s / 86400)}d ago`;
 }
 
+function PostCard({ post, onClickPost }: { post: PostRes; onClickPost: (id: string) => void }) {
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+
+  const visualItems: LightboxItem[] = (post.media ?? [])
+    .filter((m) => m.type.startsWith("image/") || m.type.startsWith("video/"))
+    .map((m) => ({
+      src: `${API_URL}${m.url.replace(/^\/api/, "")}`,
+      type: m.type.startsWith("image/") ? "image" : "video",
+    }));
+
+  let vi = -1;
+  const visualIndexOf = (post.media ?? []).map((m) =>
+    m.type.startsWith("image/") || m.type.startsWith("video/") ? ++vi : -1
+  );
+
+  const mediaItems = post.media ?? [];
+  const count = mediaItems.length;
+  const inGrid = count > 1;
+
+  return (
+    <div
+      key={post.id}
+      onClick={() => onClickPost(post.id)}
+      className="bg-surface-container-lowest/65 border border-white/80 rounded-2xl overflow-hidden cursor-pointer hover:border-white transition-colors"
+    >
+      {/* Header */}
+      <div className="flex items-center gap-2 px-4 pt-3 pb-2">
+        {post.authorProfileImage ? (
+          <div className="w-7 h-7 rounded-full overflow-hidden shrink-0">
+            <Image src={post.authorProfileImage} alt={post.authorDisplayName || post.authorUsername} width={28} height={28} className="w-full h-full object-cover" />
+          </div>
+        ) : (
+          <div className="w-7 h-7 rounded-full bg-surface-container-high shrink-0 flex items-center justify-center">
+            <span className="material-symbols-outlined text-xs text-on-surface-variant/40">person</span>
+          </div>
+        )}
+        <span className="text-xs text-on-surface-variant">{timeAgo(post.createdAt)}</span>
+        <span className="text-xs text-on-surface-variant/50 ml-auto">{post.communityName}</span>
+      </div>
+
+      {/* Content */}
+      {post.content && (
+        <div className="px-4 pb-2">
+          <MarkdownContent content={post.content} truncate className="text-sm text-on-surface" />
+        </div>
+      )}
+
+      {/* Media */}
+      {count > 0 && (
+        <div
+          className={`px-4 pb-3${inGrid ? " grid grid-cols-2 gap-1" : ""}`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {mediaItems.map((m, i) => {
+            const src = `${API_URL}${m.url.replace(/^\/api/, "")}`;
+            const isImage = m.type.startsWith("image/");
+            const isVideo = m.type.startsWith("video/");
+            const isAudio = m.type.startsWith("audio/");
+            if (!isImage && !isVideo && !isAudio) return null;
+            const spanFull = inGrid && (isAudio || (count === 3 && i === 0));
+            const vIdx = visualIndexOf[i];
+            const mediaClass = inGrid && !isAudio
+              ? "w-full h-56 object-cover rounded-xl"
+              : isImage ? "max-w-full max-h-72 rounded-xl" : isVideo ? "max-w-full max-h-[400px] rounded-xl" : undefined;
+            return (
+              <div key={i} className={`relative${spanFull ? " col-span-2" : ""}`}>
+                {isImage ? (
+                  <div onClick={() => setLightboxIndex(vIdx)} className="cursor-zoom-in">
+                    <AuthMedia src={src} type="image" className={mediaClass} />
+                  </div>
+                ) : isVideo ? (
+                  <div className="relative">
+                    <AuthMedia src={src} type="video" className={mediaClass} />
+                    <button
+                      onClick={() => setLightboxIndex(vIdx)}
+                      className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center text-white transition-colors"
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 18 }}>fullscreen</span>
+                    </button>
+                  </div>
+                ) : (
+                  <AuthMedia src={src} type="audio" />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {lightboxIndex !== null && (
+        <MediaLightbox
+          items={visualItems}
+          index={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+          onNav={setLightboxIndex}
+        />
+      )}
+
+      {/* Footer */}
+      <div className="flex items-center gap-4 px-4 py-2 border-t border-surface-container-high/50 text-xs text-on-surface-variant">
+        <span className="flex items-center gap-1">
+          <span className="material-symbols-outlined text-sm">thumb_up</span>
+          {post.likeCount}
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="material-symbols-outlined text-sm">chat_bubble_outline</span>
+          {post.commentCount}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function PostList({ posts, loading, onClickPost }: {
   posts: PostRes[];
   loading: boolean;
@@ -67,38 +189,7 @@ function PostList({ posts, loading, onClickPost }: {
   return (
     <div className="flex flex-col gap-3">
       {posts.map((post) => (
-        <div
-          key={post.id}
-          onClick={() => onClickPost(post.id)}
-          className="bg-surface-container-lowest/65 border border-white/80 rounded-2xl px-4 py-3 cursor-pointer hover:border-white transition-colors"
-        >
-          <div className="flex items-center gap-2 mb-2">
-            {post.authorProfileImage ? (
-              <div className="w-7 h-7 rounded-full overflow-hidden shrink-0">
-                <Image src={post.authorProfileImage} alt={post.authorDisplayName || post.authorUsername} width={28} height={28} className="w-full h-full object-cover" />
-              </div>
-            ) : (
-              <div className="w-7 h-7 rounded-full bg-surface-container-high shrink-0 flex items-center justify-center">
-                <span className="material-symbols-outlined text-xs text-on-surface-variant/40">person</span>
-              </div>
-            )}
-            <span className="text-xs text-on-surface-variant">{timeAgo(post.createdAt)}</span>
-            <span className="text-xs text-on-surface-variant/50 ml-auto">{post.communityName}</span>
-          </div>
-          {post.content && (
-            <MarkdownContent content={post.content} truncate className="text-sm text-on-surface" />
-          )}
-          <div className="flex items-center gap-4 mt-2 text-xs text-on-surface-variant">
-            <span className="flex items-center gap-1">
-              <span className="material-symbols-outlined text-sm">thumb_up</span>
-              {post.likeCount}
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="material-symbols-outlined text-sm">chat_bubble_outline</span>
-              {post.commentCount}
-            </span>
-          </div>
-        </div>
+        <PostCard key={post.id} post={post} onClickPost={onClickPost} />
       ))}
     </div>
   );
@@ -341,7 +432,7 @@ export default function ProfileView() {
         />
       )}
       {activeTab !== "overview" && (
-        <div className="px-6 md:px-12 py-8">
+        <div className="px-4 py-8 max-w-2xl mx-auto">
           {activeTab === "posts" && (
             <PostList
               posts={posts}
