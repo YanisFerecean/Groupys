@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { toast } from "sonner";
+import CountrySelect from "@/components/profile/CountrySelect";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
 
@@ -174,14 +175,7 @@ export default function CreateCommunityModal({
             <label className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-1.5 block">
               Country
             </label>
-            <input
-              type="text"
-              value={country}
-              onChange={(e) => setCountry(e.target.value)}
-              maxLength={60}
-              className="w-full bg-surface-container-high rounded-xl px-4 py-3 text-sm text-on-surface placeholder:text-outline border-none outline-none focus:ring-2 focus:ring-primary/30 transition-shadow"
-              placeholder="e.g. United States"
-            />
+            <CountrySelect value={country} onChange={setCountry} placeholder="Select a country..." />
           </div>
 
           {/* Tags */}
