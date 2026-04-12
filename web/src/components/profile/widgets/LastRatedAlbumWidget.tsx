@@ -67,8 +67,18 @@ export default function LastRatedAlbumWidget({ username, containerColor, size = 
               <p className="font-bold text-sm truncate" style={{ color: textColor ?? "inherit" }}>
                 {ratings[0].albumTitle}
               </p>
-              <p className="text-xs font-bold mt-0.5" style={{ color: textColor ?? "var(--profile-accent, var(--color-primary))" }}>
-                {ratings[0].score}/10
+              <p className="text-xs font-bold mt-0.5 flex items-baseline gap-1.5 min-w-0">
+                <span style={{ color: textColor ?? "var(--profile-accent, var(--color-primary))", flexShrink: 0 }}>
+                  {ratings[0].score}/10
+                </span>
+                {ratings[0].review && (
+                  <span
+                    className="truncate font-normal"
+                    style={textColor ? { color: textColor, opacity: 0.6 } : { color: "var(--color-on-surface-variant)" }}
+                  >
+                    · {ratings[0].review}
+                  </span>
+                )}
               </p>
             </div>
           </button>
@@ -108,8 +118,18 @@ export default function LastRatedAlbumWidget({ username, containerColor, size = 
                       {rating.artistName}
                     </p>
                   )}
-                  <p className="text-xs font-bold mt-0.5" style={{ color: textColor ?? "var(--profile-accent, var(--color-primary))" }}>
-                    {rating.score}/10
+                  <p className="text-xs font-bold mt-0.5 flex items-baseline gap-1.5 min-w-0">
+                    <span style={{ color: textColor ?? "var(--profile-accent, var(--color-primary))", flexShrink: 0 }}>
+                      {rating.score}/10
+                    </span>
+                    {rating.review && (
+                      <span
+                        className="truncate font-normal"
+                        style={textColor ? { color: textColor, opacity: 0.6 } : { color: "var(--color-on-surface-variant)" }}
+                      >
+                        · {rating.review}
+                      </span>
+                    )}
                   </p>
                 </div>
               </button>

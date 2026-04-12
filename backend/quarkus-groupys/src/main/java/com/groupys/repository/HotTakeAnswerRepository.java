@@ -19,6 +19,6 @@ public class HotTakeAnswerRepository implements PanacheRepositoryBase<HotTakeAns
         if (userIds == null || userIds.isEmpty()) {
             return List.of();
         }
-        return list("hotTake.id = ?1 and user.id in ?2 and showOnWidget = true", hotTakeId, userIds);
+        return list("hotTake.id = ?1 and user.id in ?2", hotTakeId, userIds);
     }
 }
