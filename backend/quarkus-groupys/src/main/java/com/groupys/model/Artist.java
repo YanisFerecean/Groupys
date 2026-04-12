@@ -18,7 +18,7 @@ import java.util.List;
 @Entity
 @Table(name = "artists", indexes = {
         @jakarta.persistence.Index(name = "idx_artists_name", columnList = "name"),
-        @jakarta.persistence.Index(name = "idx_artists_spotify_id", columnList = "spotify_id"),
+        @jakarta.persistence.Index(name = "idx_artists_apple_music_id", columnList = "apple_music_id"),
         @jakarta.persistence.Index(name = "idx_artists_primary_genre", columnList = "primary_genre_id")
 })
 public class Artist {
@@ -29,8 +29,8 @@ public class Artist {
     @Column(nullable = false)
     private String name;
 
-    @Column(name = "spotify_id", length = 64, unique = true)
-    private String spotifyId;
+    @Column(name = "apple_music_id", length = 64, unique = true)
+    private String appleMusicId;
 
     @Column(name = "lastfm_name")
     private String lastfmName;
@@ -112,12 +112,12 @@ public class Artist {
         this.summary = summary;
     }
 
-    public String getSpotifyId() {
-        return spotifyId;
+    public String getAppleMusicId() {
+        return appleMusicId;
     }
 
-    public void setSpotifyId(String spotifyId) {
-        this.spotifyId = spotifyId;
+    public void setAppleMusicId(String appleMusicId) {
+        this.appleMusicId = appleMusicId;
     }
 
     public String getLastfmName() {

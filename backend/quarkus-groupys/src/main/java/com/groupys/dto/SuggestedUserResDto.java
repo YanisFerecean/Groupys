@@ -15,6 +15,8 @@ public record SuggestedUserResDto(
         List<DiscoveryMatchDto> matchedGenres,
         int sharedCommunityCount,
         boolean sameCountry,
-        int mutualFollowCount
+        int mutualFollowCount,
+        String bio,
+        String widgets
 ) {
 }

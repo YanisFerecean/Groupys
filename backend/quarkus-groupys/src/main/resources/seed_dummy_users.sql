@@ -21,7 +21,7 @@ INSERT INTO genres (name, deezer_id) VALUES
 ON CONFLICT (name) DO NOTHING;
 
 -- ─── Artists (IDs in the 9_000_000 range won't clash with real Deezer data) ──
-INSERT INTO artists (id, name, spotify_id, popularity_score, genres_enriched) VALUES
+INSERT INTO artists (id, name, apple_music_id, popularity_score, genres_enriched) VALUES
   (9000001,'The Weeknd',       'seed_weeknd',     0.98,false),
   (9000002,'Drake',            'seed_drake',      0.97,false),
   (9000003,'Kendrick Lamar',   'seed_kendrick',   0.96,false),
@@ -399,7 +399,7 @@ SELECT
   gen_random_uuid(),
   u.id,
   ap.artist_id,
-  'SPOTIFY_TOP_ARTISTS',
+  'APPLE_TOP_ARTISTS',
   'MEDIUM_TERM',
   ap.rank_pos,
   GREATEST(0.10, 0.95 - (ap.rank_pos - 1) * 0.045),
@@ -481,7 +481,7 @@ SELECT
   gen_random_uuid(),
   u.id,
   g.id,
-  'SPOTIFY_TOP_ARTISTS',
+  'APPLE_TOP_ARTISTS',
   GREATEST(0.10, 0.90 - (gp.rank_pos - 1) * 0.20),
   GREATEST(0.10, 0.90 - (gp.rank_pos - 1) * 0.20),
   1.0,

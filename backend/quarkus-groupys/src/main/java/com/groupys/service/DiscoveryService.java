@@ -4,10 +4,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.groupys.config.PerformanceFeatureFlags;
-import com.groupys.client.SpotifyApiClient;
+import com.groupys.client.LastFmClient;
 import com.groupys.dto.*;
-import com.groupys.dto.spotify.SpotifyTopArtistsResponse;
-import com.groupys.dto.spotify.SpotifyTopTracksResponse;
+import com.groupys.dto.lastfm.LastFmArtistInfoResponse;
 import com.groupys.model.*;
 import com.groupys.repository.*;
 import com.groupys.util.CountryUtil;
@@ -21,7 +20,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.NotFoundException;
-import jakarta.ws.rs.core.Response;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 
 import java.io.ByteArrayInputStream;
@@ -40,8 +39,8 @@ public class DiscoveryService {
 
     private static final int TOP_ARTIST_LIMIT = 20;
     private static final int TOP_TRACK_LIMIT = 20;
-    private static final String SOURCE_SPOTIFY_TOP_ARTISTS = "SPOTIFY_TOP_ARTISTS";
-    private static final String SOURCE_SPOTIFY_TOP_TRACKS = "SPOTIFY_TOP_TRACKS";
+    private static final String SOURCE_APPLE_TOP_ARTISTS = "APPLE_TOP_ARTISTS";
+    private static final String SOURCE_APPLE_TOP_TRACKS = "APPLE_TOP_TRACKS";
     private static final String SOURCE_COMMUNITY_MEMBERSHIP = "COMMUNITY_MEMBERSHIP";
     private static final int CACHE_TTL_HOURS = 12;
     private static final DateTimeFormatter YEAR_FORMAT = DateTimeFormatter.ofPattern("yyyy").withZone(ZoneOffset.UTC);
@@ -123,11 +122,14 @@ public class DiscoveryService {
     CommentReactionRepository commentReactionRepository;
 
     @Inject
-    SpotifyService spotifyService;
+    MusicService musicService;
 
     @Inject
     @RestClient
-    SpotifyApiClient spotifyApiClient;
+    LastFmClient lastFmClient;
+
+    @ConfigProperty(name = "lastfm.api.key")
+    String lastfmApiKey;
 
     @Inject
     DiscoveryService self;
@@ -154,26 +156,21 @@ public class DiscoveryService {
     @Transactional
     public DiscoverySyncResDto syncMusic(String clerkId) {
         User user = getUserByClerkId(clerkId);
-        String token = spotifyService.getValidAccessToken(clerkId);
+        MusicService.DiscoveryPayload payload = musicService.fetchDiscoveryPayload(clerkId, TOP_ARTIST_LIMIT, TOP_TRACK_LIMIT);
 
-        String artistsPayload = fetchSpotifyPayload(() -> spotifyApiClient.getTopArtists("Bearer " + token, TOP_ARTIST_LIMIT, "medium_term"));
-        String tracksPayload = fetchSpotifyPayload(() -> spotifyApiClient.getTopTracks("Bearer " + token, TOP_TRACK_LIMIT, "medium_term"));
+        String artistsPayload = payload.artistsPayload();
+        String tracksPayload = payload.tracksPayload();
 
-        MusicSourceSnapshot artistsSnapshot = persistSnapshot(user, SOURCE_SPOTIFY_TOP_ARTISTS, "TOP_ARTISTS", artistsPayload, "PROCESSED", null);
-        MusicSourceSnapshot tracksSnapshot = persistSnapshot(user, SOURCE_SPOTIFY_TOP_TRACKS, "TOP_TRACKS", tracksPayload, "PROCESSED", null);
-
-        String effectiveArtistsPayload = resolveSnapshotPayloadForProcessing(artistsSnapshot, artistsPayload);
-        String effectiveTracksPayload = resolveSnapshotPayloadForProcessing(tracksSnapshot, tracksPayload);
-        SpotifyTopArtistsResponse topArtists = readValue(effectiveArtistsPayload, SpotifyTopArtistsResponse.class);
-        SpotifyTopTracksResponse topTracks = readValue(effectiveTracksPayload, SpotifyTopTracksResponse.class);
+        persistSnapshot(user, SOURCE_APPLE_TOP_ARTISTS, "TOP_ARTISTS", artistsPayload, "PROCESSED", null);
+        persistSnapshot(user, SOURCE_APPLE_TOP_TRACKS, "TOP_TRACKS", tracksPayload, "PROCESSED", null);
 
         userArtistPreferenceRepository.deleteByUser(user.id);
         userGenrePreferenceRepository.deleteByUser(user.id);
         userTrackPreferenceRepository.deleteByUser(user.id);
 
         Map<Long, Double> genreWeights = new LinkedHashMap<>();
-        int artistCount = persistSpotifyArtistPreferences(user, topArtists, genreWeights);
-        persistSpotifyTrackPreferences(user, topTracks, genreWeights);
+        int artistCount = persistAppleArtistPreferences(user, payload.artists(), genreWeights);
+        persistAppleTrackPreferences(user, payload.tracks(), genreWeights);
         int genreCount = persistGenrePreferences(user, genreWeights);
 
         rebuildCommunityDerivedPreferences(user);
@@ -563,12 +560,14 @@ public class DiscoveryService {
             long mutualFollows = userFollowRepository.countMutualFollowers(user.id, candidate.id);
             double followGraphScore = DiscoveryScoreUtil.normalizedCount(mutualFollows, 5);
 
-            double finalScore = 0.30 * artistScore
-                    + 0.20 * genreScore
-                    + 0.20 * sharedCommunityScore
-                    + 0.15 * activityScore
-                    + 0.05 * countryScore
-                    + 0.05 * followGraphScore;
+            double finalScore = DiscoveryScoreUtil.userMatchScore(
+                    artistScore,
+                    genreScore,
+                    sharedCommunityScore,
+                    activityScore,
+                    countryScore,
+                    followGraphScore
+            );
             if (finalScore <= 0.05d) {
                 continue;
             }
@@ -790,57 +789,57 @@ public class DiscoveryService {
         }
     }
 
-    private int persistSpotifyArtistPreferences(User user, SpotifyTopArtistsResponse topArtists, Map<Long, Double> genreWeights) {
-        if (topArtists == null || topArtists.items() == null) {
+    private int persistAppleArtistPreferences(User user, List<MusicService.MusicArtistItem> topArtists, Map<Long, Double> genreWeights) {
+        if (topArtists == null || topArtists.isEmpty()) {
             return 0;
         }
-        int total = topArtists.items().size();
-        for (int index = 0; index < topArtists.items().size(); index++) {
-            SpotifyTopArtistsResponse.SpotifyArtistItem item = topArtists.items().get(index);
+        int total = topArtists.size();
+        for (int index = 0; index < topArtists.size(); index++) {
+            MusicService.MusicArtistItem item = topArtists.get(index);
             Artist artist = resolveArtist(item);
             double normalized = DiscoveryScoreUtil.normalizedRankScore(index + 1, total);
 
             UserArtistPreference pref = new UserArtistPreference();
             pref.user = user;
             pref.artist = artist;
-            pref.source = SOURCE_SPOTIFY_TOP_ARTISTS;
-            pref.sourceWindow = "MEDIUM_TERM";
+            pref.source = SOURCE_APPLE_TOP_ARTISTS;
+            pref.sourceWindow = "LATEST";
             pref.rankPosition = index + 1;
             pref.rawScore = (double) (total - index);
             pref.normalizedScore = normalized;
             pref.confidence = 1d;
             userArtistPreferenceRepository.persist(pref);
 
-            if (item.genres() != null) {
+            List<String> artistGenres = resolveArtistGenres(item);
+            if (!artistGenres.isEmpty()) {
                 int genreRank = 0;
-                for (String genreName : item.genres()) {
+                for (String genreName : artistGenres) {
                     Genre genre = resolveGenre(genreName);
-                    if (genre == null) {
-                        continue;
+                    if (genre != null) {
+                        upsertArtistGenre(artist, genre, genreRank++ == 0, normalized);
+                        genreWeights.merge(genre.id, normalized, Double::sum);
                     }
-                    upsertArtistGenre(artist, genre, genreRank++ == 0, normalized);
-                    genreWeights.merge(genre.id, normalized, Double::sum);
                 }
             }
         }
-        return topArtists.items().size();
+        return topArtists.size();
     }
 
-    private void persistSpotifyTrackPreferences(User user, SpotifyTopTracksResponse topTracks, Map<Long, Double> genreWeights) {
-        if (topTracks == null || topTracks.items() == null) {
+    private void persistAppleTrackPreferences(User user, List<MusicService.MusicTrackItem> topTracks, Map<Long, Double> genreWeights) {
+        if (topTracks == null || topTracks.isEmpty()) {
             return;
         }
-        int total = topTracks.items().size();
-        for (int index = 0; index < topTracks.items().size(); index++) {
-            SpotifyTopTracksResponse.SpotifyTrackItem item = topTracks.items().get(index);
+        int total = topTracks.size();
+        for (int index = 0; index < topTracks.size(); index++) {
+            MusicService.MusicTrackItem item = topTracks.get(index);
             Track track = resolveTrack(item);
             double normalized = DiscoveryScoreUtil.normalizedRankScore(index + 1, total);
 
             UserTrackPreference trackPreference = new UserTrackPreference();
             trackPreference.user = user;
             trackPreference.track = track;
-            trackPreference.source = SOURCE_SPOTIFY_TOP_TRACKS;
-            trackPreference.sourceWindow = "MEDIUM_TERM";
+            trackPreference.source = SOURCE_APPLE_TOP_TRACKS;
+            trackPreference.sourceWindow = "LATEST";
             trackPreference.rankPosition = index + 1;
             trackPreference.rawScore = (double) (total - index);
             trackPreference.normalizedScore = normalized;
@@ -849,13 +848,13 @@ public class DiscoveryService {
             if (item.artists() == null) {
                 continue;
             }
-            for (SpotifyTopTracksResponse.SpotifyArtistRef artistRef : item.artists()) {
+            for (MusicService.MusicArtistRef artistRef : item.artists()) {
                 Artist artist = resolveArtist(artistRef);
                 UserArtistPreference pref = new UserArtistPreference();
                 pref.user = user;
                 pref.artist = artist;
-                pref.source = SOURCE_SPOTIFY_TOP_TRACKS;
-                pref.sourceWindow = "MEDIUM_TERM";
+                pref.source = SOURCE_APPLE_TOP_TRACKS;
+                pref.sourceWindow = "LATEST";
                 pref.rankPosition = index + 1;
                 pref.rawScore = Math.max(1d, total - index - 0.5d);
                 pref.normalizedScore = normalized * 0.7d;
@@ -895,17 +894,6 @@ public class DiscoveryService {
     private User getUserByClerkId(String clerkId) {
         return userRepository.findByClerkId(clerkId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
-    }
-
-    private String fetchSpotifyPayload(SpotifyRequest request) {
-        try (Response response = request.execute()) {
-            if (response.getStatus() != 200) {
-                throw new BadRequestException("Spotify returned " + response.getStatus());
-            }
-            return response.readEntity(String.class);
-        } catch (Exception e) {
-            throw new BadRequestException("Failed to read Spotify data: " + e.getMessage(), e);
-        }
     }
 
     MusicSourceSnapshot persistSnapshot(User user, String source, String snapshotType, String payload, String status, String error) {
@@ -986,17 +974,9 @@ public class DiscoveryService {
         return true;
     }
 
-    private <T> T readValue(String payload, Class<T> clazz) {
-        try {
-            return objectMapper.readValue(payload, clazz);
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException("Failed to parse Spotify payload", e);
-        }
-    }
-
-    private Artist resolveArtist(SpotifyTopArtistsResponse.SpotifyArtistItem item) {
+    private Artist resolveArtist(MusicService.MusicArtistItem item) {
         Artist artist = item.id() != null
-                ? artistRepository.findBySpotifyId(item.id()).orElse(null)
+                ? artistRepository.findByAppleMusicId(item.id()).orElse(null)
                 : null;
         if (artist == null && item.name() != null) {
             artist = artistRepository.findByNameIgnoreCase(item.name()).orElse(null);
@@ -1007,17 +987,17 @@ public class DiscoveryService {
             artist.setName(item.name());
             artistRepository.persist(artist);
         }
-        artist.setSpotifyId(firstNonBlank(item.id(), artist.getSpotifyId()));
-        if (item.images() != null && !item.images().isEmpty()) {
-            artist.setImages(item.images().stream().map(image -> image.url()).filter(Objects::nonNull).toList());
+        artist.setAppleMusicId(firstNonBlank(item.id(), artist.getAppleMusicId()));
+        if (item.imageUrl() != null && !item.imageUrl().isBlank()) {
+            artist.setImages(List.of(item.imageUrl()));
         }
         artist.setPopularityScore(item.popularity() != null ? item.popularity() / 100d : artist.getPopularityScore());
         return artist;
     }
 
-    private Artist resolveArtist(SpotifyTopTracksResponse.SpotifyArtistRef item) {
+    private Artist resolveArtist(MusicService.MusicArtistRef item) {
         Artist artist = item.id() != null
-                ? artistRepository.findBySpotifyId(item.id()).orElse(null)
+                ? artistRepository.findByAppleMusicId(item.id()).orElse(null)
                 : null;
         if (artist == null && item.name() != null) {
             artist = artistRepository.findByNameIgnoreCase(item.name()).orElse(null);
@@ -1028,13 +1008,13 @@ public class DiscoveryService {
             artist.setName(item.name());
             artistRepository.persist(artist);
         }
-        artist.setSpotifyId(firstNonBlank(item.id(), artist.getSpotifyId()));
+        artist.setAppleMusicId(firstNonBlank(item.id(), artist.getAppleMusicId()));
         return artist;
     }
 
-    private Track resolveTrack(SpotifyTopTracksResponse.SpotifyTrackItem item) {
+    private Track resolveTrack(MusicService.MusicTrackItem item) {
         Track track = item.id() != null
-                ? trackRepository.findBySpotifyId(item.id()).orElse(null)
+                ? trackRepository.findByAppleMusicId(item.id()).orElse(null)
                 : null;
         String primaryArtist = item.artists() != null && !item.artists().isEmpty() ? item.artists().getFirst().name() : "unknown";
         if (track == null) {
@@ -1043,13 +1023,47 @@ public class DiscoveryService {
             track.setTitle(item.name());
             trackRepository.persist(track);
         }
-        track.setSpotifyId(firstNonBlank(item.id(), track.getSpotifyId()));
-        track.setExternalIsrc(item.externalIds() != null ? item.externalIds().isrc() : track.getExternalIsrc());
+        track.setAppleMusicId(firstNonBlank(item.id(), track.getAppleMusicId()));
+        track.setExternalIsrc(item.isrc() != null ? item.isrc() : track.getExternalIsrc());
         track.setPopularityScore(item.popularity() != null ? item.popularity() / 100d : track.getPopularityScore());
         if (item.artists() != null && !item.artists().isEmpty()) {
             track.setArtist(resolveArtist(item.artists().getFirst()));
         }
         return track;
+    }
+
+    private List<String> resolveArtistGenres(MusicService.MusicArtistItem item) {
+        if (item.genres() != null && !item.genres().isEmpty()) {
+            return item.genres().stream().filter(Objects::nonNull).map(String::trim).filter(s -> !s.isBlank()).toList();
+        }
+        return fetchLastFmGenres(item.name());
+    }
+
+    private List<String> fetchLastFmGenres(String artistName) {
+        if (artistName == null || artistName.isBlank()) {
+            return List.of();
+        }
+        try {
+            LastFmArtistInfoResponse response = lastFmClient.getArtistInfo(
+                    "artist.getinfo",
+                    artistName,
+                    lastfmApiKey,
+                    "json"
+            );
+            if (response == null || response.artist() == null || response.artist().tags() == null || response.artist().tags().tags() == null) {
+                return List.of();
+            }
+            return response.artist().tags().tags().stream()
+                    .map(LastFmArtistInfoResponse.LastFmTag::name)
+                    .filter(Objects::nonNull)
+                    .map(String::trim)
+                    .filter(s -> !s.isBlank())
+                    .limit(5)
+                    .toList();
+        } catch (Exception e) {
+            Log.debugf("Failed to enrich artist genres from Last.fm for '%s': %s", artistName, e.getMessage());
+            return List.of();
+        }
     }
 
     private Genre resolveGenre(String genreName) {
@@ -1066,11 +1080,11 @@ public class DiscoveryService {
     }
 
     private void upsertArtistGenre(Artist artist, Genre genre, boolean primary, double confidence) {
-        ArtistGenre mapping = artistGenreRepository.findByArtistGenreSource(artist.getId(), genre.id, "SPOTIFY")
+        ArtistGenre mapping = artistGenreRepository.findByArtistGenreSource(artist.getId(), genre.id, "APPLE_MUSIC")
                 .orElseGet(ArtistGenre::new);
         mapping.artist = artist;
         mapping.genre = genre;
-        mapping.source = "SPOTIFY";
+        mapping.source = "APPLE_MUSIC";
         mapping.confidence = confidence;
         mapping.primary = primary;
         if (mapping.id == null) {
@@ -1328,7 +1342,9 @@ public class DiscoveryService {
                 readMatchList(explanation, "matchedGenres"),
                 explanation.path("sharedCommunityCount").asInt(0),
                 explanation.path("countryMatch").asBoolean(false),
-                explanation.path("mutualFollowCount").asInt(0)
+                explanation.path("mutualFollowCount").asInt(0),
+                cache.candidateUser.bio,
+                cache.candidateUser.widgets
         );
     }
 
@@ -1349,7 +1365,9 @@ public class DiscoveryService {
                 readMatchList(explanation, "matchedGenres"),
                 explanation.path("sharedCommunityCount").asInt(0),
                 explanation.path("countryMatch").asBoolean(false),
-                explanation.path("mutualFollowCount").asInt(0)
+                explanation.path("mutualFollowCount").asInt(0),
+                candidateUser.bio,
+                candidateUser.widgets
         );
     }
 
@@ -1379,6 +1397,7 @@ public class DiscoveryService {
                 .map(value -> new DiscoveryMatchDto(value, value))
                 .toList();
     }
+
 
     private <K, T> Map<K, Double> toScoreMap(Map<K, T> input, ScoreExtractor<T> extractor) {
         return input.entrySet().stream()
@@ -1501,11 +1520,6 @@ public class DiscoveryService {
 
     private boolean legacyRecommendationPostgresWriteEnabled() {
         return flags == null || flags.redisRecommendationLegacyPostgresWriteEnabled();
-    }
-
-    @FunctionalInterface
-    private interface SpotifyRequest {
-        Response execute();
     }
 
     @FunctionalInterface

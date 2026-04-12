@@ -9,12 +9,12 @@ public final class MusicIdentityUtil {
     private MusicIdentityUtil() {
     }
 
-    public static long syntheticArtistId(String spotifyId, String artistName) {
-        return stableNegativeLong("artist", spotifyId != null ? spotifyId : artistName);
+    public static long syntheticArtistId(String appleMusicId, String artistName) {
+        return stableNegativeLong("artist", appleMusicId != null ? appleMusicId : artistName);
     }
 
-    public static long syntheticTrackId(String spotifyId, String trackName, String primaryArtist) {
-        String key = spotifyId != null ? spotifyId : trackName + "::" + primaryArtist;
+    public static long syntheticTrackId(String appleMusicId, String trackName, String primaryArtist) {
+        String key = appleMusicId != null ? appleMusicId : trackName + "::" + primaryArtist;
         return stableNegativeLong("track", key);
     }
 
