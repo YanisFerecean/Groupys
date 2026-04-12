@@ -43,6 +43,8 @@ interface CommunityRes {
   imageUrl: string | null;
   memberCount: number;
   tags: string[];
+  joinedAt: string;
+  postCount: number;
 }
 
 function timeAgo(iso: string) {
@@ -51,6 +53,11 @@ function timeAgo(iso: string) {
   if (s < 3600) return `${Math.floor(s / 60)}m ago`;
   if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
   return `${Math.floor(s / 86400)}d ago`;
+}
+
+function memberSince(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleDateString(undefined, { month: "short", year: "numeric" });
 }
 
 function PostCard({ post, onClickPost }: { post: PostRes; onClickPost: (id: string) => void }) {
@@ -216,9 +223,9 @@ function CommunityList({ communities, loading, onClickCommunity }: {
 }) {
   if (loading) {
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="aspect-[3/4] rounded-2xl bg-surface-container-high animate-pulse" />
+          <div key={i} className="aspect-[16/9] rounded-2xl bg-surface-container-high animate-pulse" />
         ))}
       </div>
     );
@@ -232,7 +239,7 @@ function CommunityList({ communities, loading, onClickCommunity }: {
     );
   }
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 gap-4">
       {communities.map((c) => {
         const imgSrc = c.imageUrl
           ? `${API_URL}${c.imageUrl.replace(/^\/api/, "")}`
@@ -241,32 +248,54 @@ function CommunityList({ communities, loading, onClickCommunity }: {
           <div
             key={c.id}
             onClick={() => onClickCommunity(c.id)}
-            className="relative aspect-[3/4] rounded-2xl overflow-hidden cursor-pointer shadow-lg hover:scale-[1.02] transition-transform"
+            className="relative aspect-[16/9] rounded-2xl overflow-hidden cursor-pointer shadow-lg hover:scale-[1.02] transition-transform"
           >
             {imgSrc ? (
-              <Image src={imgSrc} alt={c.name} fill className="object-cover" sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw" />
+              <Image src={imgSrc} alt={c.name} fill className="object-cover" sizes="50vw" />
             ) : (
-              <div className={`absolute inset-0 bg-gradient-to-br ${cardColorFromId(c.id)}`} />
+              <div className={`absolute inset-0 bg-gradient-to-br ${cardColorFromId(c.id)}`}>
+                <span
+                  className="material-symbols-outlined absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white/10 select-none"
+                  style={{ fontSize: 80, fontVariationSettings: "'FILL' 1" }}
+                >
+                  group
+                </span>
+              </div>
             )}
             <div
               className="absolute inset-0"
-              style={{ background: "linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.82) 100%)" }}
+              style={{ background: "linear-gradient(180deg, rgba(0,0,0,0) 35%, rgba(0,0,0,0.88) 100%)" }}
             />
-            <div className="absolute bottom-0 left-0 right-0 p-4 space-y-1.5">
+            <div className="absolute bottom-0 left-0 right-0 p-4 space-y-2">
               <div className="flex flex-wrap gap-1">
                 {c.tags?.slice(0, 2).map((tag) => (
                   <span key={tag} className="bg-white/25 text-white px-2 py-0.5 rounded-full text-[9px] font-bold tracking-widest uppercase">
                     {tag}
                   </span>
                 ))}
-                {c.genre && (
+                {c.genre && !c.tags?.length && (
                   <span className="bg-white/25 text-white px-2 py-0.5 rounded-full text-[9px] font-bold tracking-widest uppercase">
                     {c.genre}
                   </span>
                 )}
               </div>
               <h3 className="text-white font-extrabold text-base leading-tight">{c.name}</h3>
-              <p className="text-white/70 text-xs font-semibold">{c.memberCount} members</p>
+              <div className="flex gap-4">
+                <div className="flex flex-col">
+                  <span className="text-white font-bold text-xs leading-tight">{c.memberCount}</span>
+                  <span className="text-white/60 text-[9px] uppercase tracking-widest font-semibold">Members</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-white font-bold text-xs leading-tight">{c.postCount}</span>
+                  <span className="text-white/60 text-[9px] uppercase tracking-widest font-semibold">My Posts</span>
+                </div>
+                {c.joinedAt && (
+                  <div className="flex flex-col">
+                    <span className="text-white font-bold text-xs leading-tight">{memberSince(c.joinedAt)}</span>
+                    <span className="text-white/60 text-[9px] uppercase tracking-widest font-semibold">Joined</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         );
@@ -431,7 +460,7 @@ export default function ProfileView() {
           }}
         />
       )}
-      {activeTab !== "overview" && (
+      {(activeTab === "posts" || activeTab === "likes") && (
         <div className="px-4 py-8 max-w-2xl mx-auto">
           {activeTab === "posts" && (
             <PostList
@@ -447,6 +476,10 @@ export default function ProfileView() {
               onClickPost={(id) => router.push(`/discover/post/${id}`)}
             />
           )}
+        </div>
+      )}
+      {activeTab === "communities" && (
+        <div className="px-4 py-8">
           {activeTab === "communities" && (
             <CommunityList
               communities={communities}
