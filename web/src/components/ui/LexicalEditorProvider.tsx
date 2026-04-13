@@ -24,10 +24,12 @@ export default function LexicalEditorProvider({
   onChange,
   editorRef,
   initialMarkdown,
+  bottomBarExtra,
 }: {
   onChange: (markdown: string) => void;
   editorRef?: React.RefObject<LexicalEditorRef | null>;
   initialMarkdown?: string;
+  bottomBarExtra?: React.ReactNode;
 }) {
   const initialConfig = {
     namespace: "GroupysPostEditor",
@@ -95,6 +97,7 @@ export default function LexicalEditorProvider({
         onChange={onChange}
         editorRef={editorRef}
         initialMarkdown={initialMarkdown}
+        bottomBarExtra={bottomBarExtra}
       />
     </LexicalComposer>
   );

@@ -106,7 +106,7 @@ function InitialValuePlugin({ markdown }: { markdown?: string }) {
 
 // ── Toolbar ────────────────────────────────────────────────────────────────
 
-function Toolbar() {
+function Toolbar({ extra }: { extra?: React.ReactNode }) {
   const [editor] = useLexicalComposerContext();
   const [isBold, setIsBold] = useState(false);
   const [isItalic, setIsItalic] = useState(false);
@@ -146,9 +146,10 @@ function Toolbar() {
   );
 
   return (
-    <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-surface-container-high">
+    <div className="flex items-center gap-0.5 px-2 py-1 border-t border-surface-container-high">
       {btn(isBold, () => formatText("bold"), "Bold (Ctrl+B)", "B", "font-extrabold")}
       {btn(isItalic, () => formatText("italic"), "Italic (Ctrl+I)", "I", "font-bold italic")}
+      {extra}
     </div>
   );
 }
@@ -165,10 +166,12 @@ export default function LexicalEditor({
   onChange,
   editorRef,
   initialMarkdown,
+  bottomBarExtra,
 }: {
   onChange: (markdown: string) => void;
   editorRef?: React.RefObject<LexicalEditorRef | null>;
   initialMarkdown?: string;
+  bottomBarExtra?: React.ReactNode;
 }) {
   const [editor] = useLexicalComposerContext();
   const [markdown, setMarkdown] = useState("");
@@ -220,7 +223,6 @@ export default function LexicalEditor({
   return (
     <>
       <InitialValuePlugin markdown={initialMarkdown} />
-      <Toolbar />
 
       <div className="relative py-3">
         <RichTextPlugin
@@ -231,6 +233,8 @@ export default function LexicalEditor({
           ErrorBoundary={LexicalErrorBoundary}
         />
       </div>
+
+      <Toolbar extra={bottomBarExtra} />
 
       <HistoryPlugin />
       <ListPlugin />
