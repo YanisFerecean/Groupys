@@ -67,7 +67,13 @@ export default function HotTakeWidget({ username, containerColor, size = "normal
     : "Hot Take";
 
   const picks = answer?.answers ?? [];
-  const multiPick = picks.length > 1;
+
+  function iconForType(type: string) {
+    if (type === "SONG" || type === "track") return "music_note";
+    if (type === "ALBUM" || type === "album") return "album";
+    if (type === "COMMUNITY") return "group";
+    return "person";
+  }
 
   return (
     <>
@@ -91,16 +97,16 @@ export default function HotTakeWidget({ username, containerColor, size = "normal
         )}
         <WidgetCard
           title={title}
-          className="overflow-hidden"
+          className="h-[260px] flex flex-col overflow-hidden"
           style={containerColor ? { backgroundColor: containerColor } : undefined}
           textColor={textColor}
         >
           {loading ? (
-            <div className="h-16 flex items-center justify-center">
+            <div className="flex-1 flex items-center justify-center">
               <div className="w-5 h-5 rounded-full border-2 border-outline border-t-primary animate-spin" />
             </div>
           ) : !hotTake ? (
-            <div className="flex flex-col items-center justify-center gap-2 py-4 text-center">
+            <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center">
               <span
                 className="material-symbols-outlined"
                 style={{ fontSize: 28, color: textColor ?? "var(--color-on-surface-variant)", opacity: 0.35, fontVariationSettings: "'FILL' 1" }}
@@ -112,10 +118,10 @@ export default function HotTakeWidget({ username, containerColor, size = "normal
               </p>
             </div>
           ) : !answer ? (
-            <div className="flex flex-col gap-2">
+            <div className="flex-1 flex flex-col gap-3">
               <p
-                className="text-xs font-semibold leading-snug line-clamp-2"
-                style={textColor ? { color: textColor, opacity: 0.7 } : { color: "var(--color-on-surface-variant)" }}
+                className="text-sm font-bold leading-snug"
+                style={textColor ? { color: textColor } : { color: "var(--color-on-surface)" }}
               >
                 {hotTake.question}
               </p>
@@ -125,73 +131,72 @@ export default function HotTakeWidget({ username, containerColor, size = "normal
             </div>
           ) : size === "small" ? (
             /* ── Small: first pick image + answer text ── */
-            <div className="flex flex-col items-center gap-3 w-full">
-              {answer!.imageUrls[0] ? (
-                <div className="relative w-full aspect-square rounded-xl overflow-hidden shadow-md">
+            <div className="flex-1 flex flex-col items-center gap-3 min-h-0">
+              <div className="relative flex-1 w-full min-h-0 rounded-xl overflow-hidden shadow-md">
+                {answer!.imageUrls[0] ? (
                   <Image
                     src={answer!.imageUrls[0]!}
                     alt={picks[0]}
                     fill
+                    sizes="(min-width: 1024px) 16vw, (min-width: 768px) 25vw, 50vw"
                     className="object-cover"
                   />
-                </div>
-              ) : (
-                <div className="w-full aspect-square rounded-xl bg-surface-container-high flex items-center justify-center">
-                  <span
-                    className="material-symbols-outlined text-on-surface-variant/40"
-                    style={{ fontSize: 48, fontVariationSettings: "'FILL' 1" }}
-                  >
-                    local_fire_department
-                  </span>
-                </div>
-              )}
-              <p
-                className="text-xs font-bold truncate w-full text-center"
-                style={{ color: textColor ?? "inherit" }}
-              >
-                {picks[0]}{multiPick ? ` +${picks.length - 1}` : ""}
+                ) : (
+                  <div className="w-full h-full bg-surface-container-high flex items-center justify-center">
+                    <span className="material-symbols-outlined text-on-surface-variant/40" style={{ fontSize: 48, fontVariationSettings: "'FILL' 1" }}>
+                      local_fire_department
+                    </span>
+                  </div>
+                )}
+              </div>
+              <p className="text-xs font-bold truncate w-full text-center shrink-0" style={{ color: textColor ?? "inherit" }}>
+                {picks[0]}{picks.length > 1 ? ` +${picks.length - 1}` : ""}
               </p>
             </div>
           ) : (
-            /* ── Normal: question + all picks ── */
-            <div className="space-y-3">
+            /* ── Normal: bigger question + adaptive picks layout ── */
+            <div className="flex-1 flex flex-col gap-3 min-h-0">
               <p
-                className="text-xs font-semibold leading-snug line-clamp-2"
-                style={textColor ? { color: textColor, opacity: 0.7 } : { color: "var(--color-on-surface-variant)" }}
+                className="text-sm font-bold leading-snug shrink-0"
+                style={textColor ? { color: textColor } : { color: "var(--color-on-surface)" }}
               >
                 {hotTake!.question}
               </p>
-              <div className="space-y-2">
-                {picks.map((pick, i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    {answer!.imageUrls[i] ? (
-                      <div className="relative w-10 h-10 rounded-xl overflow-hidden shrink-0 shadow-md">
-                        <Image
-                          src={answer!.imageUrls[i]!}
-                          alt={pick}
-                          fill
-                          className="object-cover"
-                        />
+
+              {/* All answer counts: square image left, text right */}
+              {(() => {
+                const imgSize = picks.length === 1 ? "w-14 h-14" : picks.length <= 3 ? "w-11 h-11" : "w-9 h-9";
+                const imgPx = picks.length === 1 ? 56 : picks.length <= 3 ? 44 : 36;
+                const textSize = picks.length === 1 ? "text-sm font-bold" : picks.length <= 3 ? "text-xs font-bold" : "text-[11px] font-semibold";
+                return (
+                  <div className="flex-1 flex flex-col justify-between min-h-0">
+                    {picks.map((pick, i) => (
+                      <div key={i} className="flex items-center gap-3">
+                        <div className={`relative ${imgSize} rounded-xl overflow-hidden shrink-0 shadow-sm`}>
+                          {answer!.imageUrls[i] ? (
+                            <Image
+                              src={answer!.imageUrls[i]!}
+                              alt={pick}
+                              fill
+                              sizes={`${imgPx}px`}
+                              className="object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-surface-container-high flex items-center justify-center">
+                              <span className="material-symbols-outlined text-on-surface-variant/40" style={{ fontSize: imgPx * 0.45, fontVariationSettings: "'FILL' 1" }}>
+                                {iconForType(answer!.musicTypes[i])}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        <p className={`${textSize} leading-snug line-clamp-2 min-w-0`} style={{ color: textColor ?? "inherit" }}>
+                          {pick}
+                        </p>
                       </div>
-                    ) : (
-                      <div className="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center shrink-0">
-                        <span
-                          className="material-symbols-outlined text-on-surface-variant/40"
-                          style={{ fontSize: 20, fontVariationSettings: "'FILL' 1" }}
-                        >
-                          {answer!.musicTypes[i] === "SONG" || answer!.musicTypes[i] === "track" ? "music_note" : answer!.musicTypes[i] === "ALBUM" || answer!.musicTypes[i] === "album" ? "album" : answer!.musicTypes[i] === "COMMUNITY" ? "group" : "person"}
-                        </span>
-                      </div>
-                    )}
-                    <p
-                      className="font-bold text-sm leading-snug line-clamp-1"
-                      style={{ color: textColor ?? "inherit" }}
-                    >
-                      {pick}
-                    </p>
+                    ))}
                   </div>
-                ))}
-              </div>
+                );
+              })()}
             </div>
           )}
         </WidgetCard>

@@ -91,7 +91,7 @@ function mapResults(type: string, data: unknown[]) {
       return (data as BackendArtist[]).map((a) => ({
         id: String(a.id),
         name: a.name,
-        imageUrl: a.images?.[0] ?? "",
+        imageUrl: a.images?.[a.images.length - 1] ?? a.images?.[0] ?? "",
       }));
     case "album":
       return (data as BackendAlbum[]).map((a) => ({
