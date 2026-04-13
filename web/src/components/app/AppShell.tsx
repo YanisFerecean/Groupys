@@ -88,8 +88,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     });
   }, [isAuthLoaded, isSignedIn]);
 
-  const handleSpotifyDisconnected = useCallback(() => {
-    setSpotifyConnected(false);
   const handleMusicConnected = useCallback(() => {
     setMusicConnected(true);
   }, []);
