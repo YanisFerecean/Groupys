@@ -8,6 +8,7 @@ import MarkdownContent from "@/components/ui/MarkdownContent";
 import AuthMedia from "@/components/ui/AuthMedia";
 import MediaLightbox, { LightboxItem } from "@/components/ui/MediaLightbox";
 import { resizeImage } from "@/lib/imageResize";
+import { toast } from "sonner";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
 
@@ -603,6 +604,7 @@ export default function CommunityDetail({ id }: { id: string }) {
         );
       } catch (err) {
         console.error("React error:", err);
+        toast.error("Failed to react");
       }
     },
     [getToken],
@@ -618,8 +620,10 @@ export default function CommunityDetail({ id }: { id: string }) {
         });
         if (!res.ok) throw new Error("Failed to delete post");
         setPosts((prev) => prev.filter((p) => p.id !== postId));
+        toast.success("Post deleted");
       } catch (err) {
         console.error("Delete error:", err);
+        toast.error("Failed to delete post");
       }
     },
     [getToken],
@@ -675,7 +679,7 @@ export default function CommunityDetail({ id }: { id: string }) {
     <div className="max-w-6xl mx-auto">
       {/* Hero */}
       <div
-        className={`relative h-64 sm:h-80 lg:h-96 -mx-px overflow-hidden rounded-b-3xl lg:rounded-3xl lg:mt-6 lg:mx-6 bg-gradient-to-br ${heroGradient}`}
+        className={`relative h-52 sm:h-64 lg:h-72 -mx-px overflow-hidden rounded-b-3xl lg:rounded-3xl lg:mt-6 lg:mx-6 bg-gradient-to-br ${heroGradient}`}
       >
         {community.bannerUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -687,12 +691,13 @@ export default function CommunityDetail({ id }: { id: string }) {
         ) : (
           <span
             className="material-symbols-outlined absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white/5 select-none pointer-events-none"
-            style={{ fontSize: 240, fontVariationSettings: "'FILL' 1" }}
+            style={{ fontSize: 200, fontVariationSettings: "'FILL' 1" }}
           >
             group
           </span>
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
+
         {currentMember?.role === "owner" && (
           <>
             <input
@@ -714,215 +719,262 @@ export default function CommunityDetail({ id }: { id: string }) {
             </button>
           </>
         )}
-        <div className="absolute bottom-0 left-0 right-0 px-6 lg:px-8 pb-6">
+
+        <div className="absolute bottom-0 left-0 right-0 px-5 lg:px-8 pb-5">
           <button
             onClick={() => router.back()}
-            className="mb-4 w-9 h-9 rounded-full bg-black/30 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/50 transition-colors"
+            className="mb-3 w-8 h-8 rounded-full bg-black/30 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/50 transition-colors"
           >
-            <span className="material-symbols-outlined text-xl">
+            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
               arrow_back
             </span>
           </button>
-          <h1 className="text-white text-3xl lg:text-4xl font-extrabold tracking-tight">
-            {community.name}
-          </h1>
-          {community.country && (
-            <p className="text-white/70 text-sm font-medium mt-1">
-              {community.country}
-            </p>
-          )}
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <h1 className="text-white text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight drop-shadow-sm">
+                {community.name}
+              </h1>
+              <div className="flex items-center gap-3 mt-1.5">
+                {community.genre && (
+                  <span className="text-white/80 text-xs font-semibold bg-white/15 backdrop-blur-sm px-2.5 py-0.5 rounded-full">
+                    {community.genre}
+                  </span>
+                )}
+                {community.country && (
+                  <span className="text-white/70 text-xs font-medium">
+                    {community.country}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="px-6 lg:px-8">
-        {/* Stats + Join */}
-        <div className="flex items-center justify-between pt-6">
-          <div className="flex gap-8">
-            <div>
-              <p className="text-primary font-extrabold text-xl">
-                {formatCount(community.memberCount)}
-              </p>
-              <p className="text-on-surface-variant text-xs mt-0.5">members</p>
+      {/* Main content */}
+      <div className="px-4 sm:px-6 lg:px-8 pt-5 pb-16">
+        <div className="flex flex-col lg:flex-row gap-5 items-start">
+
+          {/* Left: Posts feed */}
+          <div className="flex-1 min-w-0 order-2 lg:order-1">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-on-surface font-bold text-base flex items-center gap-2">
+                Posts
+                {posts.length > 0 && (
+                  <span className="text-xs font-semibold text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-full">
+                    {posts.length}
+                  </span>
+                )}
+              </h3>
+              {posts.length > 1 && (
+                <SortDropdown value={sortOrder} onChange={setSortOrder} />
+              )}
             </div>
-            <div className="w-px bg-surface-container-highest" />
-            <div>
-              <p className="text-primary font-extrabold text-xl">
-                {posts.length}
-              </p>
-              <p className="text-on-surface-variant text-xs mt-0.5">posts</p>
-            </div>
-          </div>
-          <button
-            onClick={handleToggleJoin}
-            disabled={joining}
-            className={`px-6 py-2.5 rounded-full text-sm font-bold transition-colors ${
-              joined
-                ? "bg-surface-container-high text-on-surface hover:bg-surface-container"
-                : "bg-primary text-on-primary hover:opacity-90"
-            } disabled:opacity-50`}
-          >
-            {joining ? "..." : joined ? "Joined" : "Join Community"}
-          </button>
-        </div>
 
-        {/* Tags */}
-        {community.tags.length > 0 && (
-          <div className="flex flex-wrap gap-2 pt-5">
-            {community.tags.map((tag) => (
-              <span
-                key={tag}
-                className="text-xs font-semibold text-primary bg-primary/10 px-3 py-1 rounded-full"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {/* About */}
-        {community.description && (
-          <section className="pt-8">
-            <h3 className="text-on-surface font-bold text-base mb-2">About</h3>
-            <p className="text-on-surface-variant text-sm leading-relaxed">
-              {community.description}
-            </p>
-          </section>
-        )}
-
-        {/* Artist link */}
-        {community.artistId && community.genre && (
-          <section className="pt-6">
-            <button
-              onClick={() =>
-                router.push(`/discover/artist/${community.artistId}`)
-              }
-              className="flex items-center gap-3 bg-surface-container-low rounded-2xl px-4 py-3 w-full text-left hover:bg-surface-container transition-colors"
-            >
-              <span
-                className="material-symbols-outlined text-primary"
-                style={{ fontSize: 20 }}
-              >
-                person
-              </span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-on-surface truncate">
-                  {community.genre}
+            {posts.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-on-surface-variant gap-3">
+                <span
+                  className="material-symbols-outlined opacity-20"
+                  style={{ fontSize: 48, fontVariationSettings: "'FILL' 1" }}
+                >
+                  article
+                </span>
+                <p className="text-sm font-medium">
+                  {joined ? "Be the first to share something!" : "No posts yet."}
                 </p>
-                <p className="text-xs text-on-surface-variant">View artist</p>
               </div>
-              <span className="material-symbols-outlined text-on-surface/25 text-base">
-                chevron_right
-              </span>
-            </button>
-          </section>
-        )}
+            ) : (
+              <div className="space-y-3">
+                {sortedPosts.map((post) => (
+                  <PostCard
+                    key={post.id}
+                    post={post}
+                    onReact={handleReact}
+                    communityOwnerId={owner?.userId}
+                    currentUserId={currentMember?.userId}
+                    onDelete={handleDeletePost}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
 
-        {/* Created by */}
-        {owner && (
-          <section className="pt-6">
-            <p className="text-xs text-on-surface-variant">
-              Created by{" "}
-              <span className="font-semibold text-on-surface">
-                {owner.displayName || owner.username}
-              </span>
-            </p>
-          </section>
-        )}
+          {/* Right: Sidebar */}
+          <aside className="w-full lg:w-72 xl:w-80 shrink-0 order-1 lg:order-2">
+            <div className="lg:sticky lg:top-24 space-y-4">
 
-        {/* Two-column layout: Posts + Sidebar */}
-        <div className="flex gap-8 pt-8">
-          {/* Left: Posts + Members */}
-          <div className="flex-1 min-w-0">
-            <section>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-on-surface font-bold text-base">Posts</h3>
-                {posts.length > 1 && (
-                  <SortDropdown value={sortOrder} onChange={setSortOrder} />
+              {/* Community info card */}
+              <div className="bg-surface-container-lowest/65 border border-white/80 rounded-2xl shadow-sm overflow-hidden">
+                {/* Stats row */}
+                <div className="flex items-center gap-6 px-4 pt-4 pb-3">
+                  <div>
+                    <p className="text-primary font-extrabold text-xl leading-none">
+                      {formatCount(community.memberCount)}
+                    </p>
+                    <p className="text-on-surface-variant text-xs mt-0.5">members</p>
+                  </div>
+                  <div className="w-px h-8 bg-surface-container-highest" />
+                  <div>
+                    <p className="text-primary font-extrabold text-xl leading-none">
+                      {posts.length}
+                    </p>
+                    <p className="text-on-surface-variant text-xs mt-0.5">posts</p>
+                  </div>
+                  <div className="ml-auto">
+                    <button
+                      onClick={handleToggleJoin}
+                      disabled={joining}
+                      className={`px-4 py-2 rounded-full text-xs font-bold transition-colors whitespace-nowrap ${
+                        joined
+                          ? "bg-surface-container-high text-on-surface hover:bg-surface-container"
+                          : "bg-primary text-on-primary hover:opacity-90"
+                      } disabled:opacity-50`}
+                    >
+                      {joining ? "…" : joined ? "Joined ✓" : "Join"}
+                    </button>
+                  </div>
+                </div>
+
+                {(community.description || community.tags.length > 0 || community.artistId || owner) && (
+                  <div className="h-px bg-surface-container-highest mx-4" />
+                )}
+
+                <div className="px-4 py-3 space-y-3">
+                  {/* About */}
+                  {community.description && (
+                    <div>
+                      <p className="text-[0.65rem] font-bold text-on-surface-variant uppercase tracking-wider mb-1">
+                        About
+                      </p>
+                      <p className="text-sm text-on-surface leading-relaxed">
+                        {community.description}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Tags */}
+                  {community.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {community.tags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="text-xs font-semibold text-primary bg-primary/10 px-2.5 py-0.5 rounded-full"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Artist link */}
+                  {community.artistId && community.genre && (
+                    <button
+                      onClick={() => router.push(`/discover/artist/${community.artistId}`)}
+                      className="flex items-center gap-2.5 bg-surface-container-low rounded-xl px-3 py-2.5 w-full text-left hover:bg-surface-container transition-colors"
+                    >
+                      <span
+                        className="material-symbols-outlined text-primary shrink-0"
+                        style={{ fontSize: 18, fontVariationSettings: "'FILL' 1" }}
+                      >
+                        person
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-on-surface truncate">
+                          {community.genre}
+                        </p>
+                        <p className="text-[0.65rem] text-on-surface-variant">View artist</p>
+                      </div>
+                      <span
+                        className="material-symbols-outlined text-on-surface/30 shrink-0"
+                        style={{ fontSize: 16 }}
+                      >
+                        chevron_right
+                      </span>
+                    </button>
+                  )}
+
+                  {/* Created by */}
+                  {owner && (
+                    <p className="text-xs text-on-surface-variant">
+                      Created by{" "}
+                      <span className="font-semibold text-on-surface">
+                        {owner.displayName || owner.username}
+                      </span>
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Members card */}
+              <div className="bg-surface-container-lowest/65 border border-white/80 rounded-2xl shadow-sm overflow-hidden">
+                <div className="flex items-center justify-between px-4 pt-3.5 pb-1">
+                  <h3 className="text-on-surface font-bold text-sm flex items-center gap-1.5">
+                    <span
+                      className="material-symbols-outlined text-on-surface-variant"
+                      style={{ fontSize: 16, fontVariationSettings: "'FILL' 1" }}
+                    >
+                      group
+                    </span>
+                    Members
+                    <span className="text-xs font-semibold text-on-surface-variant bg-surface-container-high px-1.5 py-0.5 rounded-full">
+                      {members.length}
+                    </span>
+                  </h3>
+                  {members.length > 5 && (
+                    <button
+                      onClick={() => setMembersExpanded((e) => !e)}
+                      className="text-primary text-xs font-semibold hover:opacity-80 transition-opacity"
+                    >
+                      {membersExpanded ? "Show less" : `+${members.length - 5} more`}
+                    </button>
+                  )}
+                </div>
+                {members.length === 0 ? (
+                  <p className="text-on-surface-variant text-sm px-4 pb-4">No members yet.</p>
+                ) : (
+                  <div className="px-2 pb-2">
+                    {visibleMembers.map((m) => (
+                      <MemberRow key={m.id} member={m} />
+                    ))}
+                  </div>
                 )}
               </div>
 
-              {posts.length === 0 ? (
-                <p className="text-on-surface-variant text-sm">
-                  No posts yet{joined ? " — be the first to share!" : "."}
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {sortedPosts.map((post) => (
-                    <PostCard
-                      key={post.id}
-                      post={post}
-                      onReact={handleReact}
-                      communityOwnerId={owner?.userId}
-                      currentUserId={currentMember?.userId}
-                      onDelete={handleDeletePost}
-                    />
-                  ))}
-                </div>
-              )}
-            </section>
-
-            {/* Members */}
-            <section className="pt-8 pb-12">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-on-surface font-bold text-base">Members</h3>
-                {members.length > 5 && (
-                  <button
-                    onClick={() => setMembersExpanded((e) => !e)}
-                    className="text-primary text-sm font-semibold hover:opacity-80 transition-opacity"
-                  >
-                    {membersExpanded ? "Show less" : `Show all ${members.length}`}
-                  </button>
-                )}
-              </div>
-              {members.length === 0 ? (
-                <p className="text-on-surface-variant text-sm">No members yet.</p>
-              ) : (
-                <div>
-                  {visibleMembers.map((m) => (
-                    <MemberRow key={m.id} member={m} />
-                  ))}
-                </div>
-              )}
-            </section>
-          </div>
-
-          {/* Right sidebar: Top Contributors */}
-          {topContributors.length > 0 && (
-            <aside className="hidden lg:block w-72 shrink-0">
-              <div className="sticky top-24">
-                <div className="bg-surface-container-lowest/65 border border-white/80 rounded-2xl overflow-hidden shadow-sm p-4">
-                  <h3 className="text-on-surface font-bold text-sm mb-3 flex items-center gap-2">
+              {/* Top contributors card */}
+              {topContributors.length > 0 && (
+                <div className="bg-surface-container-lowest/65 border border-white/80 rounded-2xl shadow-sm p-4">
+                  <h3 className="text-on-surface font-bold text-sm mb-3 flex items-center gap-1.5">
                     <span
                       className="material-symbols-outlined text-primary"
-                      style={{ fontSize: 18, fontVariationSettings: "'FILL' 1" }}
+                      style={{ fontSize: 16, fontVariationSettings: "'FILL' 1" }}
                     >
                       trophy
                     </span>
                     Top Contributors
                   </h3>
-                  <div className="space-y-1">
+                  <div className="space-y-0.5">
                     {topContributors.map((user, i) => (
                       <button
                         key={user.authorId}
                         onClick={() => router.push(`/profile/${user.username}`)}
-                        className="flex items-center gap-3 w-full px-2 py-2 rounded-xl hover:bg-surface-container-high transition-colors text-left"
+                        className="flex items-center gap-2.5 w-full px-2 py-2 rounded-xl hover:bg-surface-container-high transition-colors text-left"
                       >
-                        <span className="text-xs font-bold text-on-surface-variant w-5 text-center shrink-0">
+                        <span className="text-xs font-bold text-on-surface-variant w-4 text-center shrink-0">
                           {i + 1}
                         </span>
                         {user.profileImage ? (
-                          <div className="w-8 h-8 shrink-0 rounded-full overflow-hidden">
+                          <div className="w-7 h-7 shrink-0 rounded-full overflow-hidden">
                             <Image
                               src={user.profileImage}
                               alt={user.displayName || user.username}
-                              width={32}
-                              height={32}
+                              width={28}
+                              height={28}
                               className="w-full h-full object-cover"
                             />
                           </div>
                         ) : (
-                          <div className="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center shrink-0">
-                            <span className="material-symbols-outlined text-on-surface-variant/40 text-sm">
+                          <div className="w-7 h-7 rounded-full bg-surface-container-high flex items-center justify-center shrink-0">
+                            <span className="material-symbols-outlined text-on-surface-variant/40" style={{ fontSize: 14 }}>
                               person
                             </span>
                           </div>
@@ -939,9 +991,10 @@ export default function CommunityDetail({ id }: { id: string }) {
                     ))}
                   </div>
                 </div>
-              </div>
-            </aside>
-          )}
+              )}
+
+            </div>
+          </aside>
         </div>
       </div>
     </div>

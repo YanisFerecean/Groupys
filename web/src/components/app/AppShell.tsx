@@ -5,10 +5,13 @@ import { useAuth, useUser } from "@clerk/nextjs";
 import { useRouter, usePathname } from "next/navigation";
 import SideNav from "@/components/app/SideNav";
 import TopBar from "@/components/app/TopBar";
+import ProfileRightSidebar from "@/components/profile/ProfileRightSidebar";
 import SearchOverlay from "@/components/discover/SearchOverlay";
 import SettingsDialog from "@/components/app/SettingsDialog";
 import CreatePostModal from "@/components/ui/CreatePostModal";
 import { fetchUserByClerkId } from "@/lib/api";
+import { fetchConversations } from "@/lib/chat-api";
+import { useConversationStore } from "@/store/conversationStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -74,6 +77,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     });
   }, [isLoaded, isAuthLoaded, isSignedIn, user, pathname, router]);
 
+  // Load conversations once on auth so the sidebar badge is always populated
+  useEffect(() => {
+    if (!isAuthLoaded || !isSignedIn) return;
+    getTokenRef.current().then(async (token) => {
+      try {
+        const convos = await fetchConversations(token, undefined, 50);
+        useConversationStore.getState().setConversations(convos);
+      } catch { /* non-critical */ }
+    });
+  }, [isAuthLoaded, isSignedIn]);
+
+  const handleSpotifyDisconnected = useCallback(() => {
+    setSpotifyConnected(false);
   const handleMusicConnected = useCallback(() => {
     setMusicConnected(true);
   }, []);
@@ -86,26 +102,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="bg-surface text-on-surface min-h-screen">
-      <SideNav open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <SideNav open={sidebarOpen} onClose={() => setSidebarOpen(false)} onSettingsClick={() => setSettingsOpen(true)} onCreatePost={() => setCreatePostOpen(true)} />
       <TopBar
         onMenuClick={() => setSidebarOpen(true)}
         onSearchClick={() => setSearchOpen(true)}
-        onSettingsClick={() => setSettingsOpen(true)}
       />
-      <main className="lg:ml-64 pt-16 lg:pt-20 min-h-screen">{children}</main>
+      <ProfileRightSidebar />
+      <main className={`lg:ml-64 pt-16 lg:pt-20 min-h-screen${pathname === "/profile" ? " lg:mr-52" : ""}`}>{children}</main>
 
-      {/* Floating action button — hidden in DMs */}
-      {!pathname.startsWith("/chat") && (
-        <button
-          onClick={() => setCreatePostOpen(true)}
-          className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-primary text-on-primary shadow-lg hover:opacity-90 active:scale-95 transition-all flex items-center justify-center"
-          aria-label="Create post"
-        >
-          <span className="material-symbols-outlined text-2xl">add</span>
-        </button>
-      )}
-
-      {searchOpen && <SearchOverlay onClose={() => setSearchOpen(false)} />}
+{searchOpen && <SearchOverlay onClose={() => setSearchOpen(false)} />}
       <SettingsDialog
         open={settingsOpen}
         onOpenChange={setSettingsOpen}

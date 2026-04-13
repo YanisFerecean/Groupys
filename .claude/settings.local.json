@@ -56,7 +56,8 @@
       "Bash(find /c/Uni/Projects/groupys-web-app/web/src/components/feed -name *.tsx)",
       "Bash(\"/c/Uni/Projects/groupys-web-app/backend/quarkus-groupys/src/main/resources/application.properties\")",
       "Bash(JAVA_HOME=\"\" ./mvnw compile -q)",
-      "Bash(find C:UniProjectsgroupys-web-app -type f -name *Match* -o -name *Friend* -o -name *Follow* -o -name *Connection*)"
+      "Bash(find C:UniProjectsgroupys-web-app -type f -name *Match* -o -name *Friend* -o -name *Follow* -o -name *Connection*)",
+      "Bash(curl:*)"
     ]
   }
 }

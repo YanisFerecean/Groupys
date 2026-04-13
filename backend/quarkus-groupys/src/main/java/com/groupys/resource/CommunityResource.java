@@ -4,6 +4,7 @@ import com.groupys.dto.CommunityCreateDto;
 import com.groupys.dto.CommunityMemberResDto;
 import com.groupys.dto.CommunityResDto;
 import com.groupys.dto.CommunityUpdateDto;
+import com.groupys.dto.MyCommunityResDto;
 import com.groupys.model.User;
 import com.groupys.repository.UserRepository;
 import com.groupys.service.CommunityService;
@@ -66,7 +67,7 @@ public class CommunityResource {
 
     @GET
     @Path("/mine")
-    public List<CommunityResDto> getMine() {
+    public List<MyCommunityResDto> getMine() {
         return communityService.getJoinedCommunities(jwt.getSubject());
     }
 

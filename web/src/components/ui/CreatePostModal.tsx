@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { resizeImage } from "@/lib/imageResize";
+import { toast } from "sonner";
 import LexicalEditorProvider from "@/components/ui/LexicalEditorProvider";
 import type { LexicalEditorRef } from "@/components/ui/LexicalEditor";
 
@@ -266,6 +267,7 @@ export default function CreatePostModal({
           // ignore
         }
         setPostError(message);
+        toast.error(message);
         return;
       }
 
@@ -276,9 +278,11 @@ export default function CreatePostModal({
       justSubmittedRef.current = true;
       setEntries([]);
       if (fileRef.current) fileRef.current.value = "";
+      toast.success("Post created");
       onClose();
     } catch {
       setPostError("Failed to create post");
+      toast.error("Failed to create post");
     } finally {
       setPosting(false);
     }
@@ -395,6 +399,27 @@ export default function CreatePostModal({
             <LexicalEditorProvider
               onChange={setEditorMarkdown}
               editorRef={editorRef}
+              bottomBarExtra={
+                <>
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept="image/*,video/*,audio/*"
+                    multiple
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                  <div className="w-px h-5 bg-surface-container-highest mx-1" />
+                  <button
+                    onClick={() => fileRef.current?.click()}
+                    disabled={entries.length >= 4 || posting}
+                    className="p-2 rounded-full text-on-surface-variant hover:bg-surface-container-high transition-colors disabled:opacity-40"
+                    title="Add media"
+                  >
+                    <span className="material-symbols-outlined text-xl">image</span>
+                  </button>
+                </>
+              }
             />
           </div>
 
@@ -466,34 +491,6 @@ export default function CreatePostModal({
           })()}
 
           {postError && <p className="text-xs text-error mt-2 px-4">{postError}</p>}
-        </div>
-
-        {/* Bottom toolbar (matching mobile) */}
-        <div className="border-t border-surface-container-high shrink-0">
-          <div className="flex items-center px-2 py-1">
-            {/* Left: media buttons */}
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*,video/*,audio/*"
-              multiple
-              onChange={handleFileChange}
-              className="hidden"
-            />
-            <button
-              onClick={() => fileRef.current?.click()}
-              disabled={entries.length >= 4 || posting}
-              className="p-2.5 rounded-full text-on-surface-variant hover:bg-surface-container-high transition-colors disabled:opacity-40"
-              title="Add media"
-            >
-              <span className="material-symbols-outlined text-xl">image</span>
-            </button>
-
-            <div className="flex-1" />
-
-            {/* Divider */}
-            <div className="w-px h-5 bg-surface-container-high mx-1" />
-          </div>
         </div>
       </div>
     </div>

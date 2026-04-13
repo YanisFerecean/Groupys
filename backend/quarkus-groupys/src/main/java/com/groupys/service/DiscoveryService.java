@@ -364,6 +364,35 @@ public class DiscoveryService {
         refreshForUser(userId);
     }
 
+    @Transactional
+    public void saveOnboardingArtistPreferences(String clerkId, List<Long> artistIds) {
+        User user = userRepository.findByClerkId(clerkId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+
+        userArtistPreferenceRepository.delete("user.id = ?1 and source = ?2", user.id, "ONBOARDING");
+
+        int total = artistIds.size();
+        for (int index = 0; index < total; index++) {
+            Long artistId = artistIds.get(index);
+            Artist artist = artistRepository.findByIdOptional(artistId).orElse(null);
+            if (artist == null) continue;
+
+            double normalized = DiscoveryScoreUtil.normalizedRankScore(index + 1, total);
+
+            UserArtistPreference pref = new UserArtistPreference();
+            pref.user = user;
+            pref.artist = artist;
+            pref.source = "ONBOARDING";
+            pref.sourceWindow = null;
+            pref.rankPosition = index + 1;
+            pref.rawScore = (double) (total - index);
+            pref.normalizedScore = normalized;
+            pref.confidence = 1.0;
+            pref.explicitPreference = true;
+            userArtistPreferenceRepository.persist(pref);
+        }
+    }
+
     private Set<UUID> buildExcludedSuggestedUserIds(UUID userId) {
         Set<UUID> excluded = new HashSet<>();
         userFollowRepository.findActiveByFollower(userId).stream()

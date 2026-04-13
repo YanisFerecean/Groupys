@@ -40,6 +40,18 @@ public class PostRepository implements PanacheRepositoryBase<Post, UUID> {
                 .page(page, size).list();
     }
 
+    public List<Post> findLikedByUserPaged(UUID userId, int page, int size) {
+        return getEntityManager().createQuery(
+                "SELECT p FROM Post p JOIN PostReaction r ON r.post.id = p.id " +
+                "WHERE r.user.id = :uid AND r.reactionType = 'like' " +
+                "ORDER BY r.createdAt DESC",
+                Post.class
+        ).setParameter("uid", userId)
+                .setFirstResult(page * size)
+                .setMaxResults(size)
+                .getResultList();
+    }
+  
     public List<Post> findByCommunitiesRecentLimited(List<UUID> communityIds, int limit) {
         if (communityIds.isEmpty()) return List.of();
         return find("community.id in ?1 order by createdAt desc", communityIds)
@@ -52,5 +64,9 @@ public class PostRepository implements PanacheRepositoryBase<Post, UUID> {
 
     public long countByCommunity(UUID communityId) {
         return count("community.id", communityId);
+    }
+
+    public long countByAuthorAndCommunity(UUID authorId, UUID communityId) {
+        return count("author.id = ?1 and community.id = ?2", authorId, communityId);
     }
 }

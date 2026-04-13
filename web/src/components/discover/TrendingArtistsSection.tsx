@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import SectionHeader from "@/components/discover/SectionHeader";
 
@@ -23,13 +24,13 @@ function formatCount(n: number): string {
   return String(n);
 }
 
-function ArtistBubble({ artist }: { artist: ChartArtist }) {
+function ArtistBubble({ artist, onClick }: { artist: ChartArtist; onClick: () => void }) {
   const imageUrl =
     artist.images.find((img) => img.includes("300x300")) ||
     artist.images[artist.images.length - 1];
 
   return (
-    <button className="flex flex-col items-center gap-2 group">
+    <button onClick={onClick} className="flex flex-col items-center gap-2 group">
       <div className="relative w-24 h-24 lg:w-28 lg:h-28 rounded-full overflow-hidden bg-surface-container-high group-hover:ring-2 group-hover:ring-primary/30 transition-all">
         {imageUrl ? (
           <Image
@@ -63,10 +64,10 @@ function ArtistSkeleton() {
 }
 
 export default function TrendingArtistsSection() {
+  const router = useRouter();
   const { getToken } = useAuth();
   const [artists, setArtists] = useState<ChartArtist[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -76,9 +77,10 @@ export default function TrendingArtistsSection() {
         const res = await fetch(`${API_URL}/charts/artists/global`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (!res.ok) throw new Error("Failed to fetch");
-        const data: ChartArtist[] = await res.json();
-        if (!cancelled) setArtists(data.slice(0, 6));
+        if (res.ok) {
+          const data: ChartArtist[] = await res.json();
+          if (!cancelled) setArtists(data.slice(0, 7));
+        }
       } catch (err) {
         console.error("Failed to fetch top artists:", err);
       } finally {
@@ -90,29 +92,15 @@ export default function TrendingArtistsSection() {
     };
   }, [getToken]);
 
-  const toggleExpand = useCallback(() => setExpanded((p) => !p), []);
-
-  const visible = expanded ? artists : artists.slice(0, 3);
-
   return (
     <section className="mb-12 lg:mb-16">
-      <SectionHeader
-        title="Trending Now"
-        actionText={
-          !loading && artists.length > 3
-            ? expanded
-              ? "Show Less"
-              : "View All"
-            : undefined
-        }
-        onAction={toggleExpand}
-      />
+      <SectionHeader title="Trending Now" />
 
-      <div className="flex flex-wrap gap-6 lg:gap-8">
+      <div className="flex justify-between">
         {loading
-          ? Array.from({ length: 3 }).map((_, i) => <ArtistSkeleton key={i} />)
-          : visible.map((artist) => (
-              <ArtistBubble key={artist.id} artist={artist} />
+          ? Array.from({ length: 7 }).map((_, i) => <ArtistSkeleton key={i} />)
+          : artists.map((artist) => (
+              <ArtistBubble key={artist.id} artist={artist} onClick={() => router.push(`/discover/artist/${artist.id}`)} />
             ))}
       </div>
     </section>

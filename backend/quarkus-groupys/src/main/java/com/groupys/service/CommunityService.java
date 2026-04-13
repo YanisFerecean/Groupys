@@ -4,6 +4,7 @@ import com.groupys.dto.CommunityCreateDto;
 import com.groupys.dto.CommunityMemberResDto;
 import com.groupys.dto.CommunityResDto;
 import com.groupys.dto.CommunityUpdateDto;
+import com.groupys.dto.MyCommunityResDto;
 import com.groupys.model.Artist;
 import com.groupys.model.Community;
 import com.groupys.model.CommunityMember;
@@ -45,11 +46,24 @@ public class CommunityService {
     @Inject
     DiscoveryService discoveryService;
 
-    public List<CommunityResDto> getJoinedCommunities(String clerkId) {
+    @Inject
+    com.groupys.repository.PostRepository postRepository;
+
+    public List<MyCommunityResDto> getJoinedCommunities(String clerkId) {
         User user = userRepository.findByClerkId(clerkId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
         return communityMemberRepository.findByUser(user.id).stream()
-                .map(m -> CommunityUtil.toDto(m.community))
+                .map(m -> new MyCommunityResDto(
+                        m.community.id,
+                        m.community.name,
+                        m.community.genre,
+                        m.community.imageUrl,
+                        m.community.bannerUrl,
+                        m.community.tags != null ? m.community.tags : java.util.List.of(),
+                        m.community.memberCount,
+                        m.joinedAt,
+                        postRepository.countByAuthorAndCommunity(user.id, m.community.id)
+                ))
                 .toList();
     }
 

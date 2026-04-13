@@ -501,7 +501,7 @@ const setListeningFromSearch = (result: TrackResult) => {
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-h-[85vh] flex flex-col rounded-3xl max-w-3xl overflow-hidden p-0 gap-0">
+      <DialogContent className="max-h-[85vh] flex flex-col rounded-3xl max-w-3xl overflow-hidden p-0 gap-0" showCloseButton={false}>
         {/* Accent bar */}
         <div className="h-1 bg-gradient-to-r from-primary via-primary-container to-secondary shrink-0" />
 
@@ -875,7 +875,7 @@ const setListeningFromSearch = (result: TrackResult) => {
                 </div>
                 <button
                   type="button"
-                  onClick={() => set("showHotTake", form.showHotTake === false ? true : false)}
+                  onClick={() => set("showHotTake", form.showHotTake === false)}
                   className={`relative w-12 h-7 rounded-full transition-colors duration-200 ${
                     form.showHotTake !== false ? "bg-primary" : "bg-surface-container-highest"
                   }`}

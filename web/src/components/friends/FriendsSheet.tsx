@@ -141,7 +141,7 @@ function SectionLabel({ title, count }: { title: string; count: number }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function FriendsSheet() {
+export default function FriendsSheet({ children }: { children?: ((pendingCount: number) => React.ReactNode) | React.ReactNode }) {
   const { getToken } = useAuth();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -149,7 +149,20 @@ export default function FriendsSheet() {
   const [received, setReceived] = useState<FriendRes[]>([]);
   const [sent, setSent] = useState<FriendRes[]>([]);
 
-  // Load when opened
+  // Fetch pending count on mount so the trigger badge is visible before opening
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getToken();
+        const r = await fetchReceivedRequests(token);
+        if (!cancelled) setReceived(r);
+      } catch { /* silent */ }
+    })();
+    return () => { cancelled = true; };
+  }, [getToken]);
+
+  // Load full data when opened
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
@@ -200,17 +213,19 @@ export default function FriendsSheet() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-      <button
-        className="relative w-10 h-10 flex items-center justify-center rounded-full text-slate-500 hover:text-slate-800 transition-colors"
-        aria-label="Friends"
-      >
-        <Users className="w-5 h-5" />
-          {received.length > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 w-4 h-4 text-[10px] font-bold bg-primary text-white rounded-full flex items-center justify-center">
-              {received.length > 9 ? "9+" : received.length}
-            </span>
-          )}
-        </button>
+        {typeof children === "function" ? children(received.length) : (children ?? (
+          <button
+            className="relative w-10 h-10 flex items-center justify-center rounded-full text-slate-500 hover:text-slate-800 transition-colors"
+            aria-label="Friends"
+          >
+            <Users className="w-5 h-5" />
+            {received.length > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 w-4 h-4 text-[10px] font-bold bg-primary text-white rounded-full flex items-center justify-center">
+                {received.length > 9 ? "9+" : received.length}
+              </span>
+            )}
+          </button>
+        ))}
       </DialogTrigger>
 
       <DialogContent className="max-w-md bg-surface border-surface-container p-0 gap-0 overflow-hidden">

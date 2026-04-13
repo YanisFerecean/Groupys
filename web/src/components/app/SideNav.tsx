@@ -4,6 +4,9 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useHotTakeStore } from "@/store/hotTakeStore";
+import FriendsSheet from "@/components/friends/FriendsSheet";
+import { MessageCircle, Settings } from "lucide-react";
+import { useConversationStore } from "@/store/conversationStore";
 
 const navItems = [
   { label: "Feed", icon: "rss_feed", href: "/feed" },
@@ -15,11 +18,16 @@ const navItems = [
 interface SideNavProps {
   open?: boolean;
   onClose?: () => void;
+  onSettingsClick?: () => void;
+  onCreatePost?: () => void;
 }
 
-export default function SideNav({ open, onClose }: SideNavProps) {
+export default function SideNav({ open, onClose, onSettingsClick, onCreatePost }: SideNavProps) {
   const pathname = usePathname();
   const hasUnansweredHotTake = useHotTakeStore((s) => s.hasUnanswered);
+  const hasMessageNotification = useConversationStore((s) =>
+    s.conversations.some((c) => c.unreadCount > 0 || c.requestStatus === "PENDING_INCOMING")
+  );
 
   return (
     <>
@@ -75,10 +83,63 @@ export default function SideNav({ open, onClose }: SideNavProps) {
                 </Link>
               );
             })}
+            <button
+              onClick={() => { onClose?.(); onCreatePost?.(); }}
+              className="flex items-center gap-3 px-6 py-3 mt-1 w-full text-on-primary font-bold bg-primary hover:opacity-90 active:scale-95 rounded-xl transition-all"
+            >
+              <span className="material-symbols-outlined">add</span>
+              <span>Create Post</span>
+            </button>
           </nav>
 
           <div className="mt-auto pt-8">
-            <div className="bg-surface-container h-px mb-6" />
+            <div className="flex flex-col gap-1">
+              <FriendsSheet>
+                {(pendingCount) => (
+                  <button className="flex items-center gap-3 px-6 py-3 w-full text-slate-500 font-medium hover:bg-surface-container rounded-xl transition-colors">
+                    <span className="relative">
+                      <span className="material-symbols-outlined">group</span>
+                      {pendingCount > 0 && (
+                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-primary border-2 border-surface" />
+                      )}
+                    </span>
+                    <span>Friends</span>
+                  </button>
+                )}
+              </FriendsSheet>
+              <Link
+                href="/chat"
+                onClick={onClose}
+                className="flex items-center gap-3 px-6 py-3 text-slate-500 font-medium hover:bg-surface-container rounded-xl transition-colors"
+              >
+                <span className="relative">
+                  <MessageCircle className="w-6 h-6" />
+                  {hasMessageNotification && (
+                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-primary border-2 border-surface" />
+                  )}
+                </span>
+                <span>Messages</span>
+              </Link>
+              <button
+                onClick={() => { onClose?.(); onSettingsClick?.(); }}
+                className="flex items-center gap-3 px-6 py-3 w-full text-slate-500 font-medium hover:bg-surface-container rounded-xl transition-colors"
+              >
+                <Settings className="w-6 h-6" />
+                <span>Settings</span>
+              </button>
+            </div>
+            <div className="bg-surface-container h-px mb-6 mt-2" />
+            <div className="flex flex-col gap-1 mb-6">
+              <Link href="/privacy" onClick={onClose} className="px-6 py-1.5 text-xs text-on-surface-variant/60 hover:text-on-surface-variant transition-colors rounded-lg hover:bg-surface-container">
+                Privacy Policy
+              </Link>
+              <Link href="/terms" onClick={onClose} className="px-6 py-1.5 text-xs text-on-surface-variant/60 hover:text-on-surface-variant transition-colors rounded-lg hover:bg-surface-container">
+                Terms of Use
+              </Link>
+              <Link href="/impressum" onClick={onClose} className="px-6 py-1.5 text-xs text-on-surface-variant/60 hover:text-on-surface-variant transition-colors rounded-lg hover:bg-surface-container">
+                Legal Notice
+              </Link>
+            </div>
             <p className="px-6 text-[0.6875rem] font-semibold uppercase tracking-widest text-on-surface-variant opacity-40">
               High-Fidelity
             </p>

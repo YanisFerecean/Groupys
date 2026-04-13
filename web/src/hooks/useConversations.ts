@@ -1,5 +1,4 @@
 import { useEffect, useCallback, useRef, useState } from "react";
-import { Message } from "@/types/chat";
 import { fetchConversations, markRead, acceptConversationRequest, denyConversationRequest } from "@/lib/chat-api";
 import { chatWs } from "@/lib/ws";
 import { useAuth } from "@clerk/nextjs";
@@ -12,7 +11,7 @@ export function useConversations() {
   const getTokenRef = useRef(getToken);
   useEffect(() => { getTokenRef.current = getToken; }, [getToken]);
   const store = useConversationStore();
-  const { conversations, setConversations, appendConversations, updateConversation, removeConversation, bubbleConversation } = store;
+  const { conversations, setConversations, appendConversations, updateConversation, removeConversation } = store;
 
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -46,18 +45,6 @@ export function useConversations() {
     return () => { isMounted = false; };
   }, [getToken, setConversations]);
 
-  useEffect(() => {
-    const unsubs = [
-      chatWs.on("MESSAGE_NEW", (payload: Message) => {
-        bubbleConversation(payload.conversationId, {
-          lastMessage: payload.content,
-          lastMessageAt: payload.createdAt,
-          unreadCount: (useConversationStore.getState().conversations.find(c => c.id === payload.conversationId)?.unreadCount ?? 0) + 1,
-        });
-      }),
-    ];
-    return () => unsubs.forEach((u) => u());
-  }, [bubbleConversation]);
 
   const loadMore = useCallback(async () => {
     if (isLoadingMore || !hasMore) return;

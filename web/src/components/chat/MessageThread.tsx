@@ -43,10 +43,11 @@ interface MessageThreadProps {
   isDecrypting?: boolean;
   onLoadMore: () => void;
   otherLastReadAt?: string | null;
+  myLastReadAt?: string | null;
   onRetry?: (msg: Message) => void;
 }
 
-export function MessageThread({ messages, conversationId, hasMore, isLoading, isLoadingMore, isDecrypting, onLoadMore, otherLastReadAt, onRetry }: MessageThreadProps) {
+export function MessageThread({ messages, conversationId, hasMore, isLoading, isLoadingMore, isDecrypting, onLoadMore, otherLastReadAt, myLastReadAt, onRetry }: MessageThreadProps) {
   const { user } = useUser();
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -104,6 +105,28 @@ export function MessageThread({ messages, conversationId, hasMore, isLoading, is
 
   // Oldest first (top → bottom); memoized so reverse() doesn't run on every render
   const displayMessages = useMemo(() => [...messages].reverse(), [messages]);
+
+  // Index of the first unread message (from another sender, after myLastReadAt)
+  const newMessagesStartIdx = useMemo(() => {
+    if (!myLastReadAt) return -1;
+    const cutoff = new Date(myLastReadAt).getTime();
+    return displayMessages.findIndex(
+      (msg) => msg.senderUsername !== user?.username && new Date(msg.createdAt).getTime() > cutoff
+    );
+  }, [displayMessages, myLastReadAt, user?.username]);
+
+  const newMessagesSeparatorRef = useRef<HTMLDivElement>(null);
+  const hasScrolledToNewRef = useRef(false);
+
+  // Scroll to the "new messages" separator once on initial load if there are unread messages
+  useEffect(() => {
+    if (hasScrolledToNewRef.current || newMessagesStartIdx === -1 || !newMessagesSeparatorRef.current) return;
+    hasScrolledToNewRef.current = true;
+    const id = requestAnimationFrame(() => {
+      newMessagesSeparatorRef.current?.scrollIntoView({ behavior: "auto", block: "center" });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [newMessagesStartIdx]);
 
   // Index of the last message sent by the current user that the other participant has seen
   const lastSeenIdx = useMemo(() => {
@@ -185,6 +208,13 @@ export function MessageThread({ messages, conversationId, hasMore, isLoading, is
 
           return (
             <div key={msg.id || msg.tempId}>
+              {idx === newMessagesStartIdx && (
+                <div ref={newMessagesSeparatorRef} className="flex items-center gap-3 my-4">
+                  <div className="flex-1 h-px bg-primary/25" />
+                  <span className="text-[11px] font-semibold text-primary shrink-0">New messages</span>
+                  <div className="flex-1 h-px bg-primary/25" />
+                </div>
+              )}
               {showDateSeparator && (
                 <div className="flex justify-center my-4">
                   <span className="text-[11px] text-on-surface-variant font-medium bg-surface-container px-3 py-1 rounded-full">

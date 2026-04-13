@@ -2,21 +2,16 @@
 
 import { UserButton } from "@clerk/nextjs";
 import { usePathname, useRouter } from "next/navigation";
-import { History, MessageCircle } from "lucide-react";
-import DmButton from "./DmButton";
-import FriendsSheet from "@/components/friends/FriendsSheet";
+import { History } from "lucide-react";
 
 interface TopBarProps {
   onMenuClick?: () => void;
   onSearchClick?: () => void;
-  onSettingsClick?: () => void;
 }
 
-export default function TopBar({ onMenuClick, onSearchClick, onSettingsClick }: TopBarProps) {
+export default function TopBar({ onMenuClick, onSearchClick }: TopBarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const isProfile = pathname === "/profile" || pathname.startsWith("/profile/");
-  const isFeed = pathname === "/feed" || pathname.startsWith("/feed/");
   const isMutuals = pathname === "/match" || pathname.startsWith("/match/");
 
   return (
@@ -60,35 +55,16 @@ export default function TopBar({ onMenuClick, onSearchClick, onSettingsClick }: 
 
         {/* Actions */}
         <div className="flex items-center gap-4 lg:gap-6 ml-auto">
-          {isProfile && (
+          {isMutuals && (
             <button
-              onClick={onSettingsClick}
-              className="text-slate-500 hover:text-slate-800 transition-colors"
+              onClick={() => router.push("/match/history")}
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container hover:bg-surface-container-high transition-colors"
+              aria-label="Match history"
             >
-              <span className="material-symbols-outlined">settings</span>
+              <History className="w-5 h-5 text-primary" />
             </button>
           )}
-          {isFeed && <DmButton />}
-          {isMutuals && (
-            <>
-              <button
-                onClick={() => router.push("/match/history")}
-                className="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container hover:bg-surface-container-high transition-colors"
-                aria-label="Match history"
-              >
-                <History className="w-5 h-5 text-primary" />
-              </button>
-              <button
-                onClick={() => router.push("/chat")}
-                className="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container hover:bg-surface-container-high transition-colors"
-                aria-label="Messages"
-              >
-                <MessageCircle className="w-5 h-5 text-primary" />
-              </button>
-            </>
-          )}
-          {isProfile && <FriendsSheet />}
-          <UserButton />
+          <UserButton appearance={{ elements: { avatarBox: { width: 40, height: 40 } } }} />
         </div>
       </div>
     </header>

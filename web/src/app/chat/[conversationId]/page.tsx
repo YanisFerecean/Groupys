@@ -84,6 +84,17 @@ export default function ConversationPage() {
     seed();
   }, [conversation?.id, user?.username]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Current user's last read timestamp — captured once on open, before markAsRead clears it
+  const [myLastReadAt, setMyLastReadAt] = useState<string | null>(null);
+  const myLastReadAtSeededRef = useRef(false);
+
+  useEffect(() => {
+    if (myLastReadAtSeededRef.current || !conversation || !user) return;
+    const me = conversation.participants.find(p => p.username === user.username);
+    setMyLastReadAt(me?.lastReadAt ?? null);
+    myLastReadAtSeededRef.current = true;
+  }, [conversation, user]);
+
   useEffect(() => {
     if (!conversationId) return;
     return chatWs.on("READ", (payload: { conversationId: string; readAt: string }) => {
@@ -249,6 +260,7 @@ export default function ConversationPage() {
         isLoadingMore={isLoading && !isInitialLoadRef.current}
         isDecrypting={isDecrypting}
         otherLastReadAt={otherLastReadAt}
+        myLastReadAt={myLastReadAt}
         onLoadMore={handleLoadMore}
         onRetry={handleRetry}
       />

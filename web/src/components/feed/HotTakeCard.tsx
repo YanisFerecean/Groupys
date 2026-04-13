@@ -221,14 +221,17 @@ export default function HotTakeCard() {
     return () => { cancelled = true; };
   }, [loadFriends]);
 
-  // Listen for answer events from the sidebar modal
+  // Listen for answer events from the sidebar modal or profile widget
   useEffect(() => {
     const handler = async () => {
       const token = await getTokenRef.current();
       const answer = await fetchMyHotTakeAnswer(token);
       setMyAnswer(answer);
       setEditing(false);
-      if (answer) loadFriends();
+      if (answer) {
+        loadFriends();
+        setFriendsExpanded(true);
+      }
     };
     window.addEventListener("hot-take-answered", handler);
     return () => window.removeEventListener("hot-take-answered", handler);
@@ -253,6 +256,7 @@ export default function HotTakeCard() {
       setEditing(false);
       window.dispatchEvent(new Event("hot-take-answered"));
       loadFriends();
+      setFriendsExpanded(true);
     } catch {
       // silently fail
     } finally {

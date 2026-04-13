@@ -5,7 +5,7 @@ import { useAuth, useUser } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import type { ArtistSearchResult } from "@/lib/api";
-import { fetchUserByClerkId, updateBackendUser, joinCommunity } from "@/lib/api";
+import { fetchUserByClerkId, saveOnboardingArtists, joinCommunity } from "@/lib/api";
 import StepIndicator from "./StepIndicator";
 import GenreStep from "./GenreStep";
 import ArtistStep from "./ArtistStep";
@@ -123,31 +123,20 @@ export default function OnboardingFlow() {
     try {
       const token = await getTokenRef.current();
 
-      const saveArtists = backendUserIdRef.current
-        ? updateBackendUser(
-            backendUserIdRef.current,
-            {
-              topArtists: selectedArtists.map((a) => ({
-                id: a.id,
-                name: a.name,
-                genre: a.primaryGenre?.name,
-                imageUrl: a.images[0],
-              })),
-            },
-            token,
-          )
-        : Promise.resolve(null);
+      // Save artist preferences via dedicated endpoint (no profile refresh triggered).
+      if (selectedArtists.length > 0) {
+        await saveOnboardingArtists(selectedArtists.map((a) => a.id), token);
+      }
 
-      const joinAll = Promise.allSettled(
-        [...selectedCommunityIds].map((id) => joinCommunity(id, token)),
-      );
-
-      const [artistsResult] = await Promise.allSettled([saveArtists, joinAll]);
-
-      if (artistsResult.status === "rejected") {
-        setCompletionError("Couldn't save your artists. Please try again.");
-        setIsCompleting(false);
-        return;
+      // Join communities sequentially — each join triggers a taste-profile
+      // refresh for all community members. Parallel joins cause deadlocks on
+      // the shared UserTasteProfile rows.
+      for (const communityId of selectedCommunityIds) {
+        try {
+          await joinCommunity(communityId, token);
+        } catch {
+          // Non-critical — continue joining remaining communities
+        }
       }
 
       localStorage.setItem(`onboarding_done_${user.id}`, "true");
@@ -189,7 +178,7 @@ export default function OnboardingFlow() {
         {/* Wordmark */}
         <div className="text-center mb-6">
           <span className="text-2xl font-black tracking-tight text-primary">
-            groupys
+            Groupys
           </span>
         </div>
 
@@ -215,6 +204,7 @@ export default function OnboardingFlow() {
               <motion.div key="step-3" {...variants}>
                 <CommunityStep
                   selectedGenres={selectedGenres}
+                  selectedArtists={selectedArtists}
                   selectedCommunityIds={selectedCommunityIds}
                   onToggle={handleToggleCommunity}
                   token={step3Token}

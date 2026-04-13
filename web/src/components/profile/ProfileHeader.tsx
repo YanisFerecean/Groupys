@@ -135,9 +135,6 @@ export default function ProfileHeader({
             >
               Edit Profile
             </button>
-            <button className="p-3 bg-surface-container-high rounded-full hover:bg-surface-container-highest transition-colors">
-              <span className="material-symbols-outlined text-xl">share</span>
-            </button>
           </div>
         </div>
       </div>

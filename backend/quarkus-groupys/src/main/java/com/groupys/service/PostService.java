@@ -131,6 +131,13 @@ public class PostService {
         return toDtoList(posts, user);
     }
 
+    public List<PostResDto> getLikedPosts(String clerkId, int page, int size) {
+        User user = userRepository.findByClerkId(clerkId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        List<Post> posts = postRepository.findLikedByUserPaged(user.id, page, size);
+        return toDtoList(posts, user);
+    }
+
     public List<PostResDto> getByAuthor(UUID authorId, String clerkId) {
         User currentUser = userRepository.findByClerkId(clerkId).orElse(null);
         return postRepository.findByAuthor(authorId).stream()

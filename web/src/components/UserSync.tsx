@@ -9,24 +9,27 @@ import {
   updateBackendUser,
 } from "@/lib/api";
 
+// Module-level flag — survives React Strict Mode double-mounts and layout
+// re-renders, so we never sync more than once per browser session.
+let hasSynced = false;
+
 export default function UserSync() {
   const { getToken, isLoaded: isAuthLoaded, isSignedIn } = useAuth();
   const { user, isLoaded } = useUser();
   const pathname = usePathname();
   const router = useRouter();
-  const syncedRef = useRef(false);
+  const runningRef = useRef(false);
 
-  // Start false so it doesn't try to render/logic on the server
-  const [redirecting, setRedirecting] = useState(false);
-
-  // REMOVED: The useEffect that was causing the "cascading renders" error.
-  // Instead, we handle the state reset inside the main logic or via the path change.
+  // True only while the async sync operation is in flight
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
-    // 1. Safety check for SSR and Auth
-    if (!isLoaded || !isAuthLoaded || !isSignedIn || !user || syncedRef.current) return;
+    if (!isLoaded || !isAuthLoaded || !isSignedIn || !user) return;
+    if (hasSynced || runningRef.current) return;
 
-    syncedRef.current = true;
+    runningRef.current = true;
+    hasSynced = true;
+    setSyncing(true);
 
     (async () => {
       try {
@@ -40,11 +43,8 @@ export default function UserSync() {
             displayName: user.fullName ?? undefined,
             profileImage: user.imageUrl ?? undefined,
           }, token);
-
-          setRedirecting(true);
           router.replace("/onboarding");
         } else {
-          // Sync profile image if it changed
           if (user.imageUrl && existing.profileImage !== user.imageUrl) {
             await updateBackendUser(existing.id, {
               displayName: existing.displayName ?? undefined,
@@ -56,26 +56,27 @@ export default function UserSync() {
               profileImage: user.imageUrl,
             }, token);
           }
-
-          setRedirecting(true);
           router.replace("/feed");
         }
       } catch (err) {
         console.error("Failed to sync user to backend:", err);
-        syncedRef.current = false; // Allow retry on error
+        hasSynced = false;
+        runningRef.current = false;
+      } finally {
+        setSyncing(false);
       }
     })();
   }, [getToken, isAuthLoaded, isSignedIn, isLoaded, user, router]);
 
-  // If we aren't on "/", we shouldn't show the redirecting overlay anyway
-  if (!redirecting || pathname !== "/") return null;
+  // Only block the UI while actively syncing AND the user is on "/"
+  if (!syncing || pathname !== "/") return null;
 
   return (
-      <div className="fixed inset-0 z-[200] bg-surface flex items-center justify-center">
-        <svg className="animate-spin h-10 w-10 text-primary" viewBox="0 0 24 24" fill="none">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-        </svg>
-      </div>
+    <div className="fixed inset-0 z-[200] bg-surface flex items-center justify-center">
+      <svg className="animate-spin h-10 w-10 text-primary" viewBox="0 0 24 24" fill="none">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+      </svg>
+    </div>
   );
 }

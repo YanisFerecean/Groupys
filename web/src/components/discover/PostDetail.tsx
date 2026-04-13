@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
@@ -320,8 +321,10 @@ export default function PostDetail({ id }: { id: string }) {
           body: JSON.stringify({ type }),
         });
         if (res.ok) setPost(await res.json());
+        else toast.error("Failed to react");
       } catch (err) {
         console.error("React error:", err);
+        toast.error("Failed to react");
       }
     },
     [id, getToken],
@@ -376,9 +379,13 @@ export default function PostDetail({ id }: { id: string }) {
           setPost((prev) =>
             prev ? { ...prev, commentCount: prev.commentCount + 1 } : prev,
           );
+          toast.success("Comment posted");
+        } else {
+          toast.error("Failed to post comment");
         }
       } catch (err) {
         console.error("Comment error:", err);
+        toast.error("Failed to post comment");
       } finally {
         setSubmittingComment(false);
       }

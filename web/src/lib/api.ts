@@ -443,6 +443,16 @@ export async function fetchArtistsByGenre(
 
 // ── Community by genre ────────────────────────────────────────────────────
 
+export async function fetchCommunitiesByArtist(
+  artistId: string,
+  token: string | null,
+): Promise<CommunityRes[]> {
+  if (!artistId) return [];
+  const res = await apiRequest(`/communities/artist/${encodeURIComponent(artistId)}`, token);
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to fetch communities by artist"));
+  return res.json();
+}
+
 export async function fetchCommunitiesByGenre(
   genre: string,
   token: string | null,
@@ -451,6 +461,20 @@ export async function fetchCommunitiesByGenre(
   const res = await apiRequest(`/communities/genre/${encodeURIComponent(genre)}`, token);
   if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to fetch communities by genre"));
   return res.json();
+}
+
+// ── Onboarding artist preferences ─────────────────────────────────────────
+
+export async function saveOnboardingArtists(
+  artistIds: string[],
+  token: string | null,
+): Promise<void> {
+  if (!artistIds.length) return;
+  const res = await apiRequest("/discovery/onboarding/artists", token, {
+    method: "POST",
+    body: artistIds.map(Number),
+  });
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to save artist preferences"));
 }
 
 // ── Community join ────────────────────────────────────────────────────────
