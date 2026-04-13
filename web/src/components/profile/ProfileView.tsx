@@ -41,6 +41,7 @@ interface CommunityRes {
   name: string;
   genre: string;
   imageUrl: string | null;
+  bannerUrl: string | null;
   memberCount: number;
   tags: string[];
   joinedAt: string;
@@ -241,8 +242,8 @@ function CommunityList({ communities, loading, onClickCommunity }: {
   return (
     <div className="grid grid-cols-2 gap-4">
       {communities.map((c) => {
-        const imgSrc = c.imageUrl
-          ? `${API_URL}${c.imageUrl.replace(/^\/api/, "")}`
+        const imgSrc = (c.bannerUrl || c.imageUrl)
+          ? `${API_URL}${(c.bannerUrl ?? c.imageUrl)!.replace(/^\/api/, "")}`
           : null;
         return (
           <div
@@ -251,7 +252,8 @@ function CommunityList({ communities, loading, onClickCommunity }: {
             className="relative aspect-[16/9] rounded-2xl overflow-hidden cursor-pointer shadow-lg hover:scale-[1.02] transition-transform"
           >
             {imgSrc ? (
-              <Image src={imgSrc} alt={c.name} fill className="object-cover" sizes="50vw" />
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={imgSrc} alt={c.name} className="absolute inset-0 w-full h-full object-cover" />
             ) : (
               <div className={`absolute inset-0 bg-gradient-to-br ${cardColorFromId(c.id)}`}>
                 <span

@@ -59,4 +59,8 @@ public class PostRepository implements PanacheRepositoryBase<Post, UUID> {
     public long countByCommunity(UUID communityId) {
         return count("community.id", communityId);
     }
+
+    public long countByAuthorAndCommunity(UUID authorId, UUID communityId) {
+        return count("author.id = ?1 and community.id = ?2", authorId, communityId);
+    }
 }

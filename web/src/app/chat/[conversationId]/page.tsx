@@ -93,7 +93,7 @@ export default function ConversationPage() {
     const me = conversation.participants.find(p => p.username === user.username);
     setMyLastReadAt(me?.lastReadAt ?? null);
     myLastReadAtSeededRef.current = true;
-  }, [conversation, user]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [conversation, user]);
 
   useEffect(() => {
     if (!conversationId) return;
