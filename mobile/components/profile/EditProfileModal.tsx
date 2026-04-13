@@ -1,6 +1,5 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import {
-  Modal,
   View,
   Text,
   TextInput,
@@ -13,17 +12,23 @@ import {
   LayoutAnimation,
 } from 'react-native'
 import { Image } from 'expo-image'
+import * as ImagePicker from 'expo-image-picker'
+import { BlurView } from 'expo-blur'
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
 import ColorWheel from 'react-native-wheel-color-picker'
 import DraggableFlatList, { type RenderItemParams } from 'react-native-draggable-flatlist'
-import { useAuth } from '@clerk/expo'
+import { useAuth, useUser } from '@clerk/expo'
+import { router, Stack } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Colors } from '@/constants/colors'
 import type { ProfileCustomization } from '@/models/ProfileCustomization'
 import { searchTracks, searchArtists, searchAlbums } from '@/lib/musicSearch'
+import { APPLE_MUSIC_CONNECT_ENABLED } from '@/lib/appleMusicAuth'
+import { useProfileCustomization } from '@/hooks/useProfileCustomization'
 import { CountryPicker } from './CountryPicker'
 import { GenrePicker } from './GenrePicker'
-import { SpotifyConnectButton } from './SpotifyConnectButton'
+import { MusicConnectButton } from './MusicConnectButton'
 import type { TrackSearchResult } from '@/models/TrackSearchResult'
 import type { ArtistSearchResult } from '@/models/ArtistSearchResult'
 import type { AlbumSearchResult } from '@/models/AlbumSearchResult'
@@ -341,27 +346,27 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   )
 }
 
-interface SectionHeaderWithSpotifySyncProps {
+interface SectionHeaderWithMusicSyncProps {
   title: string
   synced: boolean
   canSync: boolean
   onToggle: (value: boolean) => void
 }
 
-function SectionHeaderWithSpotifySync({
+function SectionHeaderWithMusicSync({
   title,
   synced,
   canSync,
   onToggle,
-}: SectionHeaderWithSpotifySyncProps) {
+}: SectionHeaderWithMusicSyncProps) {
   return (
     <View className="flex-row items-center justify-between">
       <SectionLabel>{title}</SectionLabel>
       <View className="flex-row items-center gap-2">
         <MaterialCommunityIcons
-          name="spotify"
+          name="apple"
           size={16}
-          color={canSync ? '#1DB954' : Colors.onSurfaceVariant}
+          color={canSync ? '#FA243C' : Colors.onSurfaceVariant}
         />
         <Text className="text-xs font-semibold" style={{ color: canSync ? Colors.onSurface : Colors.onSurfaceVariant }}>
           Sync
@@ -370,8 +375,8 @@ function SectionHeaderWithSpotifySync({
           value={synced}
           onValueChange={onToggle}
           disabled={!canSync}
-          trackColor={{ false: Colors.outlineVariant, true: '#1DB95466' }}
-          thumbColor={synced ? '#1DB954' : '#f4f3f4'}
+          trackColor={{ false: Colors.outlineVariant, true: '#FA243C66' }}
+          thumbColor={synced ? '#FA243C' : '#f4f3f4'}
         />
       </View>
     </View>
@@ -381,61 +386,80 @@ function SectionHeaderWithSpotifySync({
 // ── Tabs ─────────────────────────────────────────────────────────────────────
 
 type Tab = 'profile' | 'appearance' | 'music' | 'widgets'
+type ProfileStep = 'basics' | 'details'
 
-const TABS: { key: Tab; label: string; icon: string }[] = [
+const TABS: { key: Tab; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { key: 'profile', label: 'Profile', icon: 'person-outline' },
   { key: 'appearance', label: 'Appearance', icon: 'color-palette-outline' },
   { key: 'music', label: 'Music', icon: 'musical-notes-outline' },
   { key: 'widgets', label: 'Widgets', icon: 'apps-outline' },
 ]
 
-// ── Main component ───────────────────────────────────────────────────────────
+const PROFILE_STEPS: { key: ProfileStep; label: string; subtitle: string }[] = [
+  { key: 'basics', label: 'Basics', subtitle: 'Photo, name, and bio' },
+  { key: 'details', label: 'Details', subtitle: 'Location, tags, and integration' },
+]
 
-interface EditProfileModalProps {
-  visible: boolean
-  onClose: () => void
-  profile: ProfileCustomization
-  isSaving: boolean
-  onSave: (data: Partial<ProfileCustomization>) => Promise<void>
-  onAvatarPress?: () => void
-  isUploadingAvatar?: boolean
-  avatarUrl?: string | null
+function toProviderNeutralProfile(profile: ProfileCustomization): ProfileCustomization {
+  const musicConnected = profile.musicConnected ?? profile.spotifyConnected ?? false
+  const syncTopSongsWithMusic = profile.syncTopSongsWithMusic ?? profile.syncTopSongsWithSpotify ?? false
+  const syncTopArtistsWithMusic = profile.syncTopArtistsWithMusic ?? profile.syncTopArtistsWithSpotify ?? false
+  const syncTopAlbumsWithMusic = profile.syncTopAlbumsWithMusic ?? profile.syncTopAlbumsWithSpotify ?? false
+
+  return {
+    ...profile,
+    musicConnected,
+    spotifyConnected: musicConnected,
+    syncTopSongsWithMusic,
+    syncTopArtistsWithMusic,
+    syncTopAlbumsWithMusic,
+    syncTopSongsWithSpotify: syncTopSongsWithMusic,
+    syncTopArtistsWithSpotify: syncTopArtistsWithMusic,
+    syncTopAlbumsWithSpotify: syncTopAlbumsWithMusic,
+  }
 }
 
-export default function EditProfileModal({
-  visible,
-  onClose,
-  profile,
-  isSaving,
-  onSave,
-  onAvatarPress,
-  isUploadingAvatar = false,
-  avatarUrl,
-}: EditProfileModalProps) {
+// ── Main component ───────────────────────────────────────────────────────────
+
+export default function EditProfileModal() {
   const insets = useSafeAreaInsets()
   const { getToken } = useAuth()
+  const { user } = useUser()
+  const { profile, updateProfile, isLoaded, isSaving } = useProfileCustomization()
+  const canUseNativeMusicSync = Platform.OS === 'ios' && APPLE_MUSIC_CONNECT_ENABLED
+  const useGlass = isLiquidGlassAvailable()
+  const onClose = useCallback(() => {
+    router.back()
+  }, [])
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
+  const avatarUrl = user?.imageUrl ?? null
   const [tab, setTab] = useState<Tab>('profile')
+  const [profileStep, setProfileStep] = useState<ProfileStep>('basics')
   const [form, setForm] = useState<ProfileCustomization>({
-    ...profile,
+    ...toProviderNeutralProfile(profile),
     widgetOrder: normalizeWidgetOrder(profile.widgetOrder),
-    hiddenWidgets: profile.hiddenWidgets ?? [],
+    hiddenWidgets: toProviderNeutralProfile(profile).hiddenWidgets ?? [],
   })
   const [error, setError] = useState<string | null>(null)
+  const hasInitializedRef = useRef(false)
 
   // Reset form when modal opens
   const handleOpen = useCallback(() => {
+    const normalizedProfile = toProviderNeutralProfile(profile)
     setForm({
-      ...profile,
-      widgetOrder: normalizeWidgetOrder(profile.widgetOrder),
-      hiddenWidgets: profile.hiddenWidgets ?? [],
+      ...normalizedProfile,
+      widgetOrder: normalizeWidgetOrder(normalizedProfile.widgetOrder),
+      hiddenWidgets: normalizedProfile.hiddenWidgets ?? [],
     })
+    setTab('profile')
+    setProfileStep('basics')
     setError(null)
 
     // Auto-repair missing IDs for better navigation
     ;(async () => {
       try {
         const token = await getToken()
-        const newForm = { ...profile }
+        const newForm = { ...normalizedProfile }
         let changed = false
 
         // Repair Top Artists
@@ -550,15 +574,83 @@ export default function EditProfileModal({
   const set = <K extends keyof ProfileCustomization>(key: K, value: ProfileCustomization[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }))
 
+  const setMusicConnected = (value: boolean) => {
+    setForm((prev) => ({
+      ...prev,
+      musicConnected: value,
+      spotifyConnected: value,
+    }))
+  }
+
+  const setMusicSync = (
+    key: 'syncTopAlbumsWithMusic' | 'syncTopSongsWithMusic' | 'syncTopArtistsWithMusic',
+    value: boolean,
+  ) => {
+    setForm((prev) => {
+      if (key === 'syncTopAlbumsWithMusic') {
+        return {
+          ...prev,
+          syncTopAlbumsWithMusic: value,
+          syncTopAlbumsWithSpotify: value,
+        }
+      }
+      if (key === 'syncTopSongsWithMusic') {
+        return {
+          ...prev,
+          syncTopSongsWithMusic: value,
+          syncTopSongsWithSpotify: value,
+        }
+      }
+      return {
+        ...prev,
+        syncTopArtistsWithMusic: value,
+        syncTopArtistsWithSpotify: value,
+      }
+    })
+  }
+
   const handleSave = async () => {
     setError(null)
     try {
-      await onSave(form)
+      await updateProfile(form)
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save profile.')
     }
   }
+
+  const handleAvatarPress = useCallback(async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (status !== 'granted') return
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.9,
+    })
+
+    if (result.canceled || !result.assets?.[0]?.uri) return
+
+    setIsUploadingAvatar(true)
+    try {
+      const asset = result.assets[0]
+      const filename = asset.uri.split('/').pop() ?? 'avatar.jpg'
+      const ext = filename.split('.').pop()?.toLowerCase() ?? 'jpg'
+      const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg'
+      const file = {
+        uri: asset.uri,
+        type: mimeType,
+        name: filename,
+      } as unknown as Blob
+
+      await user?.setProfileImage({ file })
+    } catch (e) {
+      console.error('Avatar upload failed:', e)
+    } finally {
+      setIsUploadingAvatar(false)
+    }
+  }, [user])
 
   // Tags helpers
   const toggleTag = (tag: string) => {
@@ -613,19 +705,19 @@ export default function EditProfileModal({
   const hasWidgetContent = useCallback((type: WidgetType) => {
     switch (type) {
       case 'topAlbums':
-        return Boolean((form.topAlbums?.length ?? 0) > 0 || form.syncTopAlbumsWithSpotify)
+        return Boolean((form.topAlbums?.length ?? 0) > 0 || form.syncTopAlbumsWithMusic)
       case 'currentlyListening':
         return Boolean(form.currentlyListening?.title)
       case 'topSongs':
-        return Boolean((form.topSongs?.length ?? 0) > 0 || form.syncTopSongsWithSpotify)
+        return Boolean((form.topSongs?.length ?? 0) > 0 || form.syncTopSongsWithMusic)
       case 'topArtists':
-        return Boolean((form.topArtists?.length ?? 0) > 0 || form.syncTopArtistsWithSpotify)
+        return Boolean((form.topArtists?.length ?? 0) > 0 || form.syncTopArtistsWithMusic)
     }
   }, [
     form.currentlyListening?.title,
-    form.syncTopAlbumsWithSpotify,
-    form.syncTopArtistsWithSpotify,
-    form.syncTopSongsWithSpotify,
+    form.syncTopAlbumsWithMusic,
+    form.syncTopArtistsWithMusic,
+    form.syncTopSongsWithMusic,
     form.topAlbums?.length,
     form.topArtists?.length,
     form.topSongs?.length,
@@ -713,305 +805,447 @@ export default function EditProfileModal({
     )
   }, [form.hiddenWidgets, hasWidgetContent, toggleWidgetHidden])
 
-  return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onShow={handleOpen}
-      onRequestClose={onClose}
+  useEffect(() => {
+    if (!isLoaded || hasInitializedRef.current) return
+    hasInitializedRef.current = true
+    handleOpen()
+  }, [handleOpen, isLoaded])
+
+  const profileStepIndex = PROFILE_STEPS.findIndex((item) => item.key === profileStep)
+  const currentProfileStep = PROFILE_STEPS[profileStepIndex] ?? PROFILE_STEPS[0]
+  const isFirstProfileStep = profileStepIndex <= 0
+  const isLastProfileStep = profileStepIndex >= PROFILE_STEPS.length - 1
+
+  const goToPrevProfileStep = () => {
+    if (isFirstProfileStep) return
+    setProfileStep(PROFILE_STEPS[profileStepIndex - 1].key)
+  }
+
+  const goToNextProfileStep = () => {
+    if (isLastProfileStep) {
+      setTab('appearance')
+      return
+    }
+    setProfileStep(PROFILE_STEPS[profileStepIndex + 1].key)
+  }
+
+  const sectionCardStyle = {
+    borderRadius: 20,
+    overflow: 'hidden' as const,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+  }
+
+  const renderSectionSurface = (children: React.ReactNode, style?: object) => {
+    if (useGlass) {
+      return <GlassView style={[sectionCardStyle, style]}>{children}</GlassView>
+    }
+    return (
+      <BlurView tint="systemMaterial" intensity={100} style={[sectionCardStyle, style]}>
+        {children}
+      </BlurView>
+    )
+  }
+
+  const formContent = (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      className="flex-1 bg-surface"
+      style={{ paddingTop: Platform.OS === 'ios' ? 0 : insets.top }}
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        className="flex-1 bg-surface"
-        style={{ paddingTop: insets.top }}
-      >
-        {/* Header */}
-        <View className="flex-row items-center justify-between px-5 py-4 border-b border-outline-variant">
-          <TouchableOpacity onPress={onClose}>
-            <Text className="text-base font-semibold text-on-surface-variant">Cancel</Text>
-          </TouchableOpacity>
-          <Text className="text-xl font-extrabold text-on-surface">Edit Profile</Text>
-          <TouchableOpacity onPress={handleSave} disabled={isSaving}>
-            {isSaving ? (
-              <ActivityIndicator size="small" color={Colors.primary} />
-            ) : (
-              <Text className="text-base font-bold text-primary">Save</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {/* Tab bar */}
-        <View className="flex-row border-b border-outline-variant">
-          {TABS.map(({ key, label, icon }) => (
-            <TouchableOpacity
-              key={key}
-              onPress={() => setTab(key)}
-              className="flex-1 items-center py-3 gap-1"
-              style={{
-                borderBottomWidth: tab === key ? 2 : 0,
-                borderBottomColor: Colors.primary,
-              }}
+      {/* Header */}
+      <View className="flex-row items-center justify-between px-5 py-4 border-b border-outline-variant">
+        <TouchableOpacity onPress={onClose}>
+          <Text className="text-base font-semibold text-on-surface-variant">Cancel</Text>
+        </TouchableOpacity>
+        <Text className="text-xl font-extrabold text-on-surface">Edit Profile</Text>
+        <TouchableOpacity onPress={handleSave} disabled={isSaving || !isLoaded}>
+          {isSaving ? (
+            <ActivityIndicator size="small" color={Colors.primary} />
+          ) : (
+            <Text
+              className="text-base font-bold"
+              style={{ color: !isLoaded ? Colors.onSurfaceVariant : Colors.primary }}
             >
-              <Ionicons
-                name={icon as any}
-                size={22}
-                color={tab === key ? Colors.primary : Colors.onSurfaceVariant}
-              />
-              <Text
-                className="text-sm font-bold"
-                style={{ color: tab === key ? Colors.primary : Colors.onSurfaceVariant }}
-              >
-                {label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+              Save
+            </Text>
+          )}
+        </TouchableOpacity>
+      </View>
 
-        {/* Error banner */}
-        {error && (
-          <View className="mx-5 mt-3 p-3 bg-red-50 rounded-xl">
-            <Text className="text-base text-primary font-medium">{error}</Text>
+      {/* Top-level tabs */}
+      <View className="px-5 pt-3">
+        {useGlass ? (
+          <GlassView style={{ borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: Colors.outlineVariant }}>
+            <View className="flex-row h-14 p-1.5 gap-1.5">
+              {TABS.map((item) => {
+                const active = tab === item.key
+                return (
+                  <View key={item.key} className="flex-1">
+                    <TouchableOpacity
+                      onPress={() => setTab(item.key)}
+                      className="h-full w-full flex-row items-center justify-center gap-1.5 rounded-xl px-2"
+                      style={{ backgroundColor: active ? `${Colors.primary}22` : 'transparent' }}
+                    >
+                      <Ionicons
+                        name={item.icon}
+                        size={16}
+                        color={active ? Colors.primary : Colors.onSurfaceVariant}
+                      />
+                      <Text
+                        className="text-xs font-semibold"
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.85}
+                        style={{ color: active ? Colors.primary : Colors.onSurfaceVariant }}
+                      >
+                        {item.label}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )
+              })}
+            </View>
+          </GlassView>
+        ) : (
+          <BlurView tint="systemMaterial" intensity={100} style={{ borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: Colors.outlineVariant }}>
+            <View className="flex-row h-14 p-1.5 gap-1.5">
+              {TABS.map((item) => {
+                const active = tab === item.key
+                return (
+                  <View key={item.key} className="flex-1">
+                    <TouchableOpacity
+                      onPress={() => setTab(item.key)}
+                      className="h-full w-full flex-row items-center justify-center gap-1.5 rounded-xl px-2"
+                      style={{ backgroundColor: active ? `${Colors.primary}22` : 'transparent' }}
+                    >
+                      <Ionicons
+                        name={item.icon}
+                        size={16}
+                        color={active ? Colors.primary : Colors.onSurfaceVariant}
+                      />
+                      <Text
+                        className="text-xs font-semibold"
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.85}
+                        style={{ color: active ? Colors.primary : Colors.onSurfaceVariant }}
+                      >
+                        {item.label}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )
+              })}
+            </View>
+          </BlurView>
+        )}
+      </View>
+
+      {/* Profile-only wizard progress */}
+      {tab === 'profile' && (
+        <View className="px-5 pt-3">
+          {renderSectionSurface(
+            <View className="px-4 py-3">
+              <Text className="text-xs font-semibold text-on-surface-variant">
+                Profile step {profileStepIndex + 1} of {PROFILE_STEPS.length}
+              </Text>
+              <Text className="text-base font-bold text-on-surface mt-1">{currentProfileStep.label}</Text>
+              <Text className="text-xs text-on-surface-variant mt-0.5">{currentProfileStep.subtitle}</Text>
+              <View className="flex-row gap-2 mt-3">
+                {PROFILE_STEPS.map((item, index) => (
+                  <TouchableOpacity
+                    key={item.key}
+                    onPress={() => setProfileStep(item.key)}
+                    className="flex-1 h-2 rounded-full"
+                    style={{
+                      backgroundColor: index <= profileStepIndex ? Colors.primary : Colors.surfaceContainerHighest,
+                    }}
+                  />
+                ))}
+              </View>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Error banner */}
+      {error && (
+        <View className="mx-5 mt-3 p-3 bg-red-50 rounded-xl">
+          <Text className="text-base text-primary font-medium">{error}</Text>
+        </View>
+      )}
+
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{ padding: 20, paddingTop: 28, paddingBottom: insets.bottom + 40 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ── Profile Basics ── */}
+        {tab === 'profile' && profileStep === 'basics' && (
+          <View className="gap-5">
+            {renderSectionSurface(
+              <View className="p-5 gap-5">
+                <View className="items-center gap-3">
+                  <TouchableOpacity
+                    onPress={handleAvatarPress}
+                    activeOpacity={0.8}
+                    disabled={isUploadingAvatar}
+                  >
+                    <View
+                      className="w-24 h-24 rounded-2xl overflow-hidden bg-surface-container-high"
+                      style={{ borderWidth: 2, borderColor: Colors.outlineVariant }}
+                    >
+                      {avatarUrl ? (
+                        <Image
+                          source={{ uri: avatarUrl }}
+                          style={{ width: '100%', height: '100%' }}
+                          contentFit="cover"
+                        />
+                      ) : (
+                        <View className="w-full h-full items-center justify-center">
+                          <Ionicons name="person" size={40} color={Colors.onSurfaceVariant} />
+                        </View>
+                      )}
+                    </View>
+                    <View
+                      className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full items-center justify-center"
+                      style={{ backgroundColor: Colors.primary }}
+                    >
+                      {isUploadingAvatar ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Ionicons name="camera" size={16} color="#fff" />
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={handleAvatarPress}
+                    disabled={isUploadingAvatar}
+                    className="rounded-full px-5 py-2"
+                    style={{ backgroundColor: Colors.surfaceContainerHigh }}
+                  >
+                    {isUploadingAvatar ? (
+                      <View className="flex-row items-center gap-2">
+                        <ActivityIndicator size="small" color={Colors.primary} />
+                        <Text className="text-sm font-semibold text-on-surface">Uploading…</Text>
+                      </View>
+                    ) : (
+                      <Text className="text-sm font-bold text-primary">Change Photo</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+
+                <View className="gap-2">
+                  <SectionLabel>Display Name</SectionLabel>
+                  <TextInput
+                    value={form.displayName ?? ''}
+                    onChangeText={(v) => set('displayName', v)}
+                    placeholder="Your display name"
+                    placeholderTextColor={Colors.onSurfaceVariant}
+                    className="bg-surface-container rounded-xl px-4 py-3.5 text-base text-on-surface"
+                    style={{ color: Colors.onSurface }}
+                    maxLength={50}
+                  />
+                </View>
+
+                <View className="gap-2">
+                  <SectionLabel>Bio</SectionLabel>
+                  <TextInput
+                    value={form.bio ?? ''}
+                    onChangeText={(v) => set('bio', v)}
+                    placeholder="Tell people about yourself..."
+                    placeholderTextColor={Colors.onSurfaceVariant}
+                    className="bg-surface-container rounded-xl px-4 py-3.5 text-base text-on-surface"
+                    style={{ color: Colors.onSurface }}
+                    multiline
+                    numberOfLines={4}
+                    textAlignVertical="top"
+                    maxLength={300}
+                  />
+                  <Text className="text-sm text-on-surface-variant text-right">
+                    {(form.bio ?? '').length}/300
+                  </Text>
+                </View>
+              </View>
+            )}
           </View>
         )}
 
-        <ScrollView
-          className="flex-1"
-          contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 40 }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          {/* ── Profile Tab ── */}
-          {tab === 'profile' && (
-            <View className="gap-6">
-              {/* Avatar editor */}
-              <View className="items-center gap-3 py-2">
-                <TouchableOpacity
-                  onPress={onAvatarPress}
-                  activeOpacity={0.8}
-                  disabled={!onAvatarPress || isUploadingAvatar}
-                >
-                  <View
-                    className="w-24 h-24 rounded-2xl overflow-hidden bg-surface-container-high"
-                    style={{ borderWidth: 2, borderColor: Colors.outlineVariant }}
-                  >
-                    {avatarUrl ? (
-                      <Image
-                        source={{ uri: avatarUrl }}
-                        style={{ width: '100%', height: '100%' }}
-                        contentFit="cover"
-                      />
-                    ) : (
-                      <View className="w-full h-full items-center justify-center">
-                        <Ionicons name="person" size={40} color={Colors.onSurfaceVariant} />
-                      </View>
-                    )}
-                  </View>
-                  {/* Camera badge */}
-                  <View
-                    className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full items-center justify-center"
-                    style={{ backgroundColor: Colors.primary }}
-                  >
-                    {isUploadingAvatar ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <Ionicons name="camera" size={16} color="#fff" />
-                    )}
-                  </View>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={onAvatarPress}
-                  disabled={!onAvatarPress || isUploadingAvatar}
-                  className="rounded-full px-5 py-2"
-                  style={{ backgroundColor: Colors.surfaceContainerHigh }}
-                >
-                  {isUploadingAvatar ? (
-                    <View className="flex-row items-center gap-2">
-                      <ActivityIndicator size="small" color={Colors.primary} />
-                      <Text className="text-sm font-semibold text-on-surface">Uploading…</Text>
+        {/* ── Profile Details ── */}
+        {tab === 'profile' && profileStep === 'details' && (
+          <View className="gap-5">
+            {renderSectionSurface(
+              <View className="p-5 gap-4">
+                <View className="gap-2 z-50">
+                  <SectionLabel>Country</SectionLabel>
+                  <CountryPicker
+                    value={form.country ?? ''}
+                    onChange={(v) => set('country', v)}
+                  />
+                </View>
+
+                <View className="gap-2 z-40">
+                  <SectionLabel>Tags ({form.tags?.length || 0}/5)</SectionLabel>
+                  <GenrePicker onSelect={toggleTag} />
+
+                  {form.tags && form.tags.length > 0 && (
+                    <View className="flex-row flex-wrap gap-2 mt-2">
+                      {form.tags.map((tag) => (
+                        <TouchableOpacity
+                          key={tag}
+                          onPress={() => toggleTag(tag)}
+                          className="flex-row items-center gap-1 bg-primary/15 px-3 py-1.5 rounded-full"
+                        >
+                          <Text className="text-xs font-semibold text-primary">{tag}</Text>
+                          <Ionicons name="close" size={12} color={Colors.primary} />
+                        </TouchableOpacity>
+                      ))}
                     </View>
-                  ) : (
-                    <Text className="text-sm font-bold text-primary">Change Photo</Text>
                   )}
-                </TouchableOpacity>
-              </View>
-              <View className="gap-2">
-                <SectionLabel>Display Name</SectionLabel>
-                <TextInput
-                  value={form.displayName ?? ''}
-                  onChangeText={(v) => set('displayName', v)}
-                  placeholder="Your display name"
-                  placeholderTextColor={Colors.onSurfaceVariant}
-                  className="bg-surface-container rounded-xl px-4 py-3.5 text-base text-on-surface"
-                  style={{ color: Colors.onSurface }}
-                  maxLength={50}
-                />
-              </View>
+                </View>
 
-              <View className="gap-2">
-                <SectionLabel>Bio</SectionLabel>
-                <TextInput
-                  value={form.bio ?? ''}
-                  onChangeText={(v) => set('bio', v)}
-                  placeholder="Tell people about yourself..."
-                  placeholderTextColor={Colors.onSurfaceVariant}
-                  className="bg-surface-container rounded-xl px-4 py-3.5 text-base text-on-surface"
-                  style={{ color: Colors.onSurface }}
-                  multiline
-                  numberOfLines={4}
-                  textAlignVertical="top"
-                  maxLength={300}
-                />
-                <Text className="text-sm text-on-surface-variant text-right">
-                  {(form.bio ?? '').length}/300
-                </Text>
+                <View className="gap-2 mt-2">
+                  <SectionLabel>Integrations</SectionLabel>
+                  <MusicConnectButton
+                    connected={form.musicConnected ?? false}
+                    onConnect={() => setMusicConnected(true)}
+                    onDisconnect={() => setMusicConnected(false)}
+                  />
+                </View>
               </View>
+            )}
+          </View>
+        )}
 
-              <View className="gap-2 z-50">
-                <SectionLabel>Country</SectionLabel>
-                <CountryPicker
-                  value={form.country ?? ''}
-                  onChange={(v) => set('country', v)}
-                />
-              </View>
+        {/* ── Appearance Tab ── */}
+        {tab === 'appearance' && (
+          <View className="gap-5">
+            {renderSectionSurface(
+              <View className="p-5 gap-8">
+                <View className="gap-3">
+                  <SectionLabel>Banner</SectionLabel>
 
-              <View className="gap-2 z-40">
-                <SectionLabel>Tags ({form.tags?.length || 0}/5)</SectionLabel>
-                <GenrePicker onSelect={toggleTag} />
-                
-                {form.tags && form.tags.length > 0 && (
-                  <View className="flex-row flex-wrap gap-2 mt-2">
-                    {form.tags.map((tag) => (
+                  <ColorPicker
+                    label="Custom Banner Color"
+                    value={form.bannerUrl?.startsWith('#') ? form.bannerUrl : ''}
+                    presets={ACCENT_PRESETS}
+                    onChange={(v) => set('bannerUrl', v || BANNER_PRESETS[0])}
+                  />
+
+                  <Text className="text-sm font-semibold text-on-surface-variant mt-2">
+                    Or select a preset image:
+                  </Text>
+                  <View className="flex-row flex-wrap gap-3">
+                    {BANNER_PRESETS.map((url, i) => (
                       <TouchableOpacity
-                        key={tag}
-                        onPress={() => toggleTag(tag)}
-                        className="flex-row items-center gap-1 bg-primary/15 px-3 py-1.5 rounded-full"
+                        key={i}
+                        onPress={() => set('bannerUrl', url)}
+                        style={{
+                          width: 80,
+                          height: 50,
+                          borderRadius: 10,
+                          borderWidth: form.bannerUrl === url ? 3 : 1.5,
+                          borderColor:
+                            form.bannerUrl === url ? Colors.primary : Colors.outlineVariant,
+                          overflow: 'hidden',
+                        }}
                       >
-                        <Text className="text-xs font-semibold text-primary">{tag}</Text>
-                        <Ionicons name="close" size={12} color={Colors.primary} />
+                        <Image
+                          source={{ uri: url }}
+                          style={{ width: '100%', height: '100%' }}
+                          contentFit="cover"
+                        />
                       </TouchableOpacity>
                     ))}
                   </View>
-                )}
-              </View>
-
-              <View className="gap-2 mt-4">
-                <SectionLabel>Integrations</SectionLabel>
-                <SpotifyConnectButton
-                  connected={form.spotifyConnected ?? false}
-                  onConnect={() => set('spotifyConnected', true)}
-                />
-              </View>
-            </View>
-          )}
-
-          {/* ── Appearance Tab ── */}
-          {tab === 'appearance' && (
-            <View className="gap-8">
-              <View className="gap-3">
-                <SectionLabel>Banner</SectionLabel>
-                
-                <ColorPicker
-                  label="Custom Banner Color"
-                  value={form.bannerUrl?.startsWith('#') ? form.bannerUrl : ''}
-                  presets={ACCENT_PRESETS}
-                  onChange={(v) => set('bannerUrl', v || BANNER_PRESETS[0])}
-                />
-
-                <Text className="text-sm font-semibold text-on-surface-variant mt-2">
-                  Or select a preset image:
-                </Text>
-                <View className="flex-row flex-wrap gap-3">
-                  {BANNER_PRESETS.map((url, i) => (
-                    <TouchableOpacity
-                      key={i}
-                      onPress={() => set('bannerUrl', url)}
-                      style={{
-                        width: 80,
-                        height: 50,
-                        borderRadius: 10,
-                        borderWidth: form.bannerUrl === url ? 3 : 1.5,
-                        borderColor:
-                          form.bannerUrl === url ? Colors.primary : Colors.outlineVariant,
-                        overflow: 'hidden',
-                      }}
-                    >
-                      <Image
-                        source={{ uri: url }}
-                        style={{ width: '100%', height: '100%' }}
-                        contentFit="cover"
-                      />
-                    </TouchableOpacity>
-                  ))}
+                  <Text className="text-sm font-semibold text-on-surface-variant mt-1">
+                    Or enter an image URL:
+                  </Text>
+                  <TextInput
+                    value={
+                      form.bannerUrl?.startsWith('linear-gradient') ||
+                      form.bannerUrl?.startsWith('radial-gradient')
+                        ? ''
+                        : form.bannerUrl ?? ''
+                    }
+                    onChangeText={(v) => set('bannerUrl', v)}
+                    placeholder="https://example.com/banner.jpg"
+                    placeholderTextColor={Colors.onSurfaceVariant}
+                    className="bg-surface-container rounded-xl px-4 py-3.5 text-base text-on-surface"
+                    style={{ color: Colors.onSurface }}
+                    autoCapitalize="none"
+                    keyboardType="url"
+                  />
                 </View>
-                <Text className="text-sm font-semibold text-on-surface-variant mt-1">
-                  Or enter an image URL:
+
+                <ColorPicker
+                  label="Accent Color"
+                  value={form.accentColor ?? ''}
+                  presets={ACCENT_PRESETS}
+                  onChange={(v) => set('accentColor', v || undefined)}
+                />
+
+                <ColorPicker
+                  label="Name Color"
+                  value={form.nameColor ?? ''}
+                  presets={NAME_COLOR_PRESETS}
+                  onChange={(v) => set('nameColor', v || undefined)}
+                />
+
+                <View className="gap-4">
+                  <SectionLabel>Widget Colors</SectionLabel>
+                  <ColorPicker
+                    label="Albums widget"
+                    value={form.albumsContainerColor ?? ''}
+                    presets={ACCENT_PRESETS}
+                    onChange={(v) => set('albumsContainerColor', v || undefined)}
+                  />
+                  <ColorPicker
+                    label="Songs widget"
+                    value={form.songsContainerColor ?? ''}
+                    presets={ACCENT_PRESETS}
+                    onChange={(v) => set('songsContainerColor', v || undefined)}
+                  />
+                  <ColorPicker
+                    label="Artists widget"
+                    value={form.artistsContainerColor ?? ''}
+                    presets={ACCENT_PRESETS}
+                    onChange={(v) => set('artistsContainerColor', v || undefined)}
+                  />
+                </View>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* ── Music Tab ── */}
+        {tab === 'music' && (
+          <View className="gap-6">
+            {/* Integrations */}
+            {renderSectionSurface(
+              <View className="gap-3 p-5">
+                <SectionLabel>Integrations</SectionLabel>
+                <MusicConnectButton
+                  connected={form.musicConnected ?? false}
+                  onConnect={() => setMusicConnected(true)}
+                  onDisconnect={() => setMusicConnected(false)}
+                />
+                <Text className="text-xs text-on-surface-variant">
+                  Connect Apple Music to sync your top albums, songs, and artists automatically.
                 </Text>
-                <TextInput
-                  value={
-                    form.bannerUrl?.startsWith('linear-gradient') ||
-                    form.bannerUrl?.startsWith('radial-gradient')
-                      ? ''
-                      : form.bannerUrl ?? ''
-                  }
-                  onChangeText={(v) => set('bannerUrl', v)}
-                  placeholder="https://example.com/banner.jpg"
-                  placeholderTextColor={Colors.onSurfaceVariant}
-                  className="bg-surface-container rounded-xl px-4 py-3.5 text-base text-on-surface"
-                  style={{ color: Colors.onSurface }}
-                  autoCapitalize="none"
-                  keyboardType="url"
-                />
               </View>
+            )}
 
-              <ColorPicker
-                label="Accent Color"
-                value={form.accentColor ?? ''}
-                presets={ACCENT_PRESETS}
-                onChange={(v) => set('accentColor', v || undefined)}
-              />
-
-              <ColorPicker
-                label="Name Color"
-                value={form.nameColor ?? ''}
-                presets={NAME_COLOR_PRESETS}
-                onChange={(v) => set('nameColor', v || undefined)}
-              />
-
-              <View className="gap-4">
-                <SectionLabel>Widget Colors</SectionLabel>
-                <ColorPicker
-                  label="Albums widget"
-                  value={form.albumsContainerColor ?? ''}
-                  presets={ACCENT_PRESETS}
-                  onChange={(v) => set('albumsContainerColor', v || undefined)}
-                />
-                <ColorPicker
-                  label="Songs widget"
-                  value={form.songsContainerColor ?? ''}
-                  presets={ACCENT_PRESETS}
-                  onChange={(v) => set('songsContainerColor', v || undefined)}
-                />
-                <ColorPicker
-                  label="Artists widget"
-                  value={form.artistsContainerColor ?? ''}
-                  presets={ACCENT_PRESETS}
-                  onChange={(v) => set('artistsContainerColor', v || undefined)}
-                />
-              </View>
-            </View>
-          )}
-
-          {/* ── Music Tab ── */}
-          {tab === 'music' && (
-            <View className="gap-6">
-              {/* Top Albums */}
-              <View className="gap-3 p-5 bg-surface-container-low rounded-2xl">
-                <SectionHeaderWithSpotifySync
+            {/* Top Albums */}
+            {renderSectionSurface(
+              <View className="gap-3 p-5">
+                <SectionHeaderWithMusicSync
                   title="Top Albums"
-                  synced={form.syncTopAlbumsWithSpotify === true}
-                  canSync={form.spotifyConnected === true}
-                  onToggle={(value) => set('syncTopAlbumsWithSpotify', value)}
+                  synced={form.syncTopAlbumsWithMusic === true}
+                  canSync={canUseNativeMusicSync && form.musicConnected === true}
+                  onToggle={(value) => setMusicSync('syncTopAlbumsWithMusic', value)}
                 />
                 {(form.topAlbums ?? []).map((album, i) => (
                   <MusicItem
@@ -1023,27 +1257,34 @@ export default function EditProfileModal({
                     onRemove={() => removeAlbum(i)}
                   />
                 ))}
-                {!(form.syncTopAlbumsWithSpotify && form.spotifyConnected) && (form.topAlbums ?? []).length < 3 && (
+                {!(form.syncTopAlbumsWithMusic && form.musicConnected) && (form.topAlbums ?? []).length < 3 && (
                   <MusicSearch
                     type="album"
                     placeholder="Search for an album..."
                     onSelect={(r) => addAlbum(r as AlbumSearchResult)}
                   />
                 )}
-                {form.syncTopAlbumsWithSpotify && form.spotifyConnected && (
+                {form.syncTopAlbumsWithMusic && form.musicConnected && (
                   <Text className="text-xs text-on-surface-variant">
-                    Synced from Spotify. Toggle off to curate this section manually.
+                    Synced from Apple Music. Toggle off to curate this section manually.
+                  </Text>
+                )}
+                {!canUseNativeMusicSync && (
+                  <Text className="text-xs text-on-surface-variant">
+                    Auto-sync is currently iOS development-build only. Manual curation stays available.
                   </Text>
                 )}
               </View>
+            )}
 
-              {/* Top Songs */}
-              <View className="gap-3 p-5 bg-surface-container-low rounded-2xl">
-                <SectionHeaderWithSpotifySync
+            {/* Top Songs */}
+            {renderSectionSurface(
+              <View className="gap-3 p-5">
+                <SectionHeaderWithMusicSync
                   title="Top Songs"
-                  synced={form.syncTopSongsWithSpotify === true}
-                  canSync={form.spotifyConnected === true}
-                  onToggle={(value) => set('syncTopSongsWithSpotify', value)}
+                  synced={form.syncTopSongsWithMusic === true}
+                  canSync={canUseNativeMusicSync && form.musicConnected === true}
+                  onToggle={(value) => setMusicSync('syncTopSongsWithMusic', value)}
                 />
                 {(form.topSongs ?? []).map((song, i) => (
                   <MusicItem
@@ -1056,27 +1297,34 @@ export default function EditProfileModal({
                     onRemove={() => removeSong(i)}
                   />
                 ))}
-                {!(form.syncTopSongsWithSpotify && form.spotifyConnected) && (form.topSongs ?? []).length < 3 && (
+                {!(form.syncTopSongsWithMusic && form.musicConnected) && (form.topSongs ?? []).length < 3 && (
                   <MusicSearch
                     type="track"
                     placeholder="Search for a song..."
                     onSelect={(r) => addSong(r as TrackSearchResult)}
                   />
                 )}
-                {form.syncTopSongsWithSpotify && form.spotifyConnected && (
+                {form.syncTopSongsWithMusic && form.musicConnected && (
                   <Text className="text-xs text-on-surface-variant">
-                    Synced from Spotify. Toggle off to curate this section manually.
+                    Synced from Apple Music. Toggle off to curate this section manually.
+                  </Text>
+                )}
+                {!canUseNativeMusicSync && (
+                  <Text className="text-xs text-on-surface-variant">
+                    Auto-sync is currently iOS development-build only. Manual curation stays available.
                   </Text>
                 )}
               </View>
+            )}
 
-              {/* Top Artists */}
-              <View className="gap-3 p-5 bg-surface-container-low rounded-2xl">
-                <SectionHeaderWithSpotifySync
+            {/* Top Artists */}
+            {renderSectionSurface(
+              <View className="gap-3 p-5">
+                <SectionHeaderWithMusicSync
                   title="Top Artists"
-                  synced={form.syncTopArtistsWithSpotify === true}
-                  canSync={form.spotifyConnected === true}
-                  onToggle={(value) => set('syncTopArtistsWithSpotify', value)}
+                  synced={form.syncTopArtistsWithMusic === true}
+                  canSync={canUseNativeMusicSync && form.musicConnected === true}
+                  onToggle={(value) => setMusicSync('syncTopArtistsWithMusic', value)}
                 />
                 {(form.topArtists ?? []).map((artist, i) => (
                   <MusicItem
@@ -1087,49 +1335,134 @@ export default function EditProfileModal({
                     onRemove={() => removeArtist(i)}
                   />
                 ))}
-                {!(form.syncTopArtistsWithSpotify && form.spotifyConnected) && (form.topArtists ?? []).length < 3 && (
+                {!(form.syncTopArtistsWithMusic && form.musicConnected) && (form.topArtists ?? []).length < 3 && (
                   <MusicSearch
                     type="artist"
                     placeholder="Search for an artist..."
                     onSelect={(r) => addArtist(r as ArtistSearchResult)}
                   />
                 )}
-                {form.syncTopArtistsWithSpotify && form.spotifyConnected && (
+                {form.syncTopArtistsWithMusic && form.musicConnected && (
                   <Text className="text-xs text-on-surface-variant">
-                    Synced from Spotify. Toggle off to curate this section manually.
+                    Synced from Apple Music. Toggle off to curate this section manually.
+                  </Text>
+                )}
+                {!canUseNativeMusicSync && (
+                  <Text className="text-xs text-on-surface-variant">
+                    Auto-sync is currently iOS development-build only. Manual curation stays available.
                   </Text>
                 )}
               </View>
-            </View>
-          )}
+            )}
+          </View>
+        )}
 
-          {tab === 'widgets' && (
-            <View className="gap-5">
-              <View className="rounded-2xl bg-surface-container-low p-5">
+        {tab === 'widgets' && (
+          <View className="gap-5">
+            {renderSectionSurface(
+              <View className="p-5">
                 <Text className="text-base font-bold text-on-surface">Arrange your profile widgets</Text>
                 <Text className="mt-2 text-sm leading-6 text-on-surface-variant">
                   Long-press and drag a row to reorder it. Use the switch to hide a widget without removing its content.
                 </Text>
               </View>
+            )}
 
-              <DraggableFlatList
-                data={normalizeWidgetOrder(form.widgetOrder).map(type =>
-                  WIDGET_ITEMS.find(item => item.type === type)!
-                )}
-                keyExtractor={(item) => item.type}
-                onDragEnd={({ data }) => {
-                  set('widgetOrder', data.map(item => item.type))
+            <DraggableFlatList
+              data={normalizeWidgetOrder(form.widgetOrder).map(type =>
+                WIDGET_ITEMS.find(item => item.type === type)!
+              )}
+              keyExtractor={(item) => item.type}
+              onDragEnd={({ data }) => {
+                set('widgetOrder', data.map(item => item.type))
+              }}
+              renderItem={renderWidgetListItem}
+              scrollEnabled={false}
+              activationDistance={8}
+              containerStyle={{ flexGrow: 0 }}
+            />
+          </View>
+        )}
+
+        {/* Profile wizard controls */}
+        {tab === 'profile' &&
+          renderSectionSurface(
+            <View className="mx-1 px-4 py-4 flex-row items-center gap-4">
+              <TouchableOpacity
+                onPress={goToPrevProfileStep}
+                disabled={isFirstProfileStep}
+                className="flex-1 rounded-xl py-3.5 items-center"
+                style={{
+                  backgroundColor: isFirstProfileStep ? Colors.surfaceContainerHigh : Colors.surfaceContainer,
                 }}
-                renderItem={renderWidgetListItem}
-                scrollEnabled={false}
-                activationDistance={8}
-                containerStyle={{ flexGrow: 0 }}
-              />
+              >
+                <Text
+                  className="text-sm font-semibold"
+                  style={{ color: isFirstProfileStep ? Colors.onSurfaceVariant : Colors.onSurface }}
+                >
+                  Back
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={goToNextProfileStep}
+                className="flex-1 rounded-xl py-3.5 items-center"
+                style={{ backgroundColor: Colors.primary }}
+              >
+                <Text className="text-sm font-semibold" style={{ color: Colors.onPrimary }}>
+                  {isLastProfileStep ? 'Done' : 'Next'}
+                </Text>
+              </TouchableOpacity>
             </View>
           )}
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </Modal>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  )
+
+  if (Platform.OS === 'android') {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Host, ModalBottomSheet, RNHostView } = require('@expo/ui/jetpack-compose')
+
+    return (
+      <Host matchContents>
+        <ModalBottomSheet
+          containerColor={Colors.surface}
+          showDragHandle
+          onDismissRequest={() => router.back()}
+        >
+          <RNHostView matchContents>
+            {formContent}
+          </RNHostView>
+        </ModalBottomSheet>
+      </Host>
+    )
+  }
+
+  return (
+    <>
+      <Stack.Screen
+        options={{
+          presentation: 'formSheet',
+          sheetGrabberVisible: true,
+          sheetAllowedDetents: [0.75, 0.95],
+          headerShown: false,
+          contentStyle: { backgroundColor: 'transparent' },
+          animation: 'slide_from_bottom',
+        }}
+      />
+      {useGlass ? (
+        <GlassView style={{ flex: 1, borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden' }}>
+          {formContent}
+        </GlassView>
+      ) : (
+        <BlurView
+          tint="systemMaterial"
+          intensity={100}
+          style={{ flex: 1, borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden' }}
+        >
+          {formContent}
+        </BlurView>
+      )}
+    </>
   )
 }
 

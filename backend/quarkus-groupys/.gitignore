@@ -45,3 +45,4 @@ nb-configuration.xml
 .certs/
 
 .mvn
+/auth-key.p8

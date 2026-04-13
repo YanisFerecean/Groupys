@@ -85,7 +85,7 @@ class DiscoveryServiceResilienceTest {
 
         User user = user("snapshot-failure", "clerk-snapshot-failure", "alex");
         String payload = "{\"tracks\":[1,2,3]}";
-        MusicSourceSnapshot persisted = service.persistSnapshot(user, "SPOTIFY_TOP_TRACKS", "TOP_TRACKS", payload, "PROCESSED", null);
+        MusicSourceSnapshot persisted = service.persistSnapshot(user, "APPLE_TOP_TRACKS", "TOP_TRACKS", payload, "PROCESSED", null);
 
         assertEquals(payload, persisted.payloadJson);
         assertEquals(payload, repository.persisted.payloadJson);

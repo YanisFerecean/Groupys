@@ -44,6 +44,20 @@ public final class DiscoveryScoreUtil {
         return clamp01((posts * 1.0 + comments * 0.7 + reactions * 0.4) / 20.0);
     }
 
+    public static double userMatchScore(double artistScore,
+                                        double genreScore,
+                                        double sharedCommunityScore,
+                                        double activityScore,
+                                        double countryScore,
+                                        double followGraphScore) {
+        return 0.30 * artistScore
+                + 0.20 * genreScore
+                + 0.20 * sharedCommunityScore
+                + 0.15 * activityScore
+                + 0.05 * countryScore
+                + 0.05 * followGraphScore;
+    }
+
     public static double countryMatchScore(String left, String right) {
         String normalizedLeft = normalizeCountryValue(left);
         String normalizedRight = normalizeCountryValue(right);

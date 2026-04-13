@@ -21,6 +21,7 @@ interface TopSongsWidgetProps {
   containerColor?: string
   textColor?: string
   size?: 'small' | 'normal'
+  title?: string
 }
 
 function isPreviewTimeoutError(error: unknown) {
@@ -32,6 +33,7 @@ export default function TopSongsWidget({
   containerColor,
   textColor,
   size = 'normal',
+  title,
 }: TopSongsWidgetProps) {
   const { getToken } = useAuth()
   const isFocused = useIsFocused()
@@ -312,7 +314,7 @@ export default function TopSongsWidget({
         className="text-sm font-extrabold uppercase tracking-widest mb-1 ml-1"
         style={{ color: textColor ?? undefined }}
       >
-        {size === 'small' ? 'Top Song' : 'Top Songs'}
+        {title ?? (size === 'small' ? 'Top Song' : 'Top Songs')}
       </Text>
       {size === 'small' ? (
         <TouchableOpacity

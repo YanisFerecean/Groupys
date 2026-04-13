@@ -38,6 +38,16 @@ public class SchemaBootstrapService {
             run(statement, "ALTER TABLE music_source_snapshot ADD COLUMN IF NOT EXISTS payload_size_bytes bigint");
             run(statement, "ALTER TABLE music_source_snapshot ADD COLUMN IF NOT EXISTS checksum varchar(64)");
 
+            // Apple Music hard-cutover
+            run(statement, "ALTER TABLE users ADD COLUMN IF NOT EXISTS apple_music_user_token varchar(1024)");
+            run(statement, "ALTER TABLE users ADD COLUMN IF NOT EXISTS apple_music_connected_at timestamptz");
+
+            run(statement, "ALTER TABLE artists ADD COLUMN IF NOT EXISTS apple_music_id varchar(64)");
+            run(statement, "CREATE UNIQUE INDEX IF NOT EXISTS idx_artists_apple_music_id ON artists (apple_music_id)");
+
+            run(statement, "ALTER TABLE tracks ADD COLUMN IF NOT EXISTS apple_music_id varchar(64)");
+            run(statement, "CREATE UNIQUE INDEX IF NOT EXISTS idx_tracks_apple_music_id ON tracks (apple_music_id)");
+
             // Hot takes
             run(statement, """
                     CREATE TABLE IF NOT EXISTS hot_takes (

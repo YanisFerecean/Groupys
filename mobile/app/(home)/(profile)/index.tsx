@@ -1,5 +1,4 @@
 import FeedPostCard from '@/components/feed/FeedPostCard'
-import EditProfileModal from '@/components/profile/EditProfileModal'
 import ProfileHeader from '@/components/profile/ProfileHeader'
 import CurrentlyListeningWidget from '@/components/profile/widgets/CurrentlyListeningWidget'
 import TopAlbumsWidget from '@/components/profile/widgets/TopAlbumsWidget'
@@ -9,11 +8,11 @@ import AlbumRatingModal from '@/components/album/AlbumRatingModal'
 import SwipeableTabScreen from '@/components/navigation/SwipeableTabScreen'
 import { Colors } from '@/constants/colors'
 import { useProfileCustomization } from '@/hooks/useProfileCustomization'
-import { useSpotifyTopMusic } from '@/hooks/useSpotifyTopMusic'
+import { useTopMusic } from '@/hooks/useTopMusic'
 import { apiFetch, fetchMyPosts, fetchMyAlbumRatings } from '@/lib/api'
 import type { CommunityResDto } from '@/models/CommunityRes'
 import type { PostResDto } from '@/models/PostRes'
-import type { ProfileCustomization, TopAlbum } from '@/models/ProfileCustomization'
+import type { TopAlbum } from '@/models/ProfileCustomization'
 import { useAuth, useUser } from '@clerk/expo'
 import { Ionicons } from '@expo/vector-icons'
 import * as ImagePicker from 'expo-image-picker'
@@ -160,14 +159,13 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets()
   const router = useRouter()
   const { user } = useUser()
-  const { profile, backendUser, updateProfile, isLoaded, isSaving } = useProfileCustomization()
-  const { spotifyTopMusic } = useSpotifyTopMusic({
-    spotifyConnected: profile.spotifyConnected,
-    syncTopAlbumsWithSpotify: profile.syncTopAlbumsWithSpotify,
-    syncTopSongsWithSpotify: profile.syncTopSongsWithSpotify,
-    syncTopArtistsWithSpotify: profile.syncTopArtistsWithSpotify,
+  const { profile, backendUser, updateProfile, refreshProfile, isLoaded } = useProfileCustomization()
+  const { topMusic } = useTopMusic({
+    musicConnected: profile.musicConnected ?? profile.spotifyConnected,
+    syncTopAlbumsWithMusic: profile.syncTopAlbumsWithMusic ?? profile.syncTopAlbumsWithSpotify,
+    syncTopSongsWithMusic: profile.syncTopSongsWithMusic ?? profile.syncTopSongsWithSpotify,
+    syncTopArtistsWithMusic: profile.syncTopArtistsWithMusic ?? profile.syncTopArtistsWithSpotify,
   })
-  const [editOpen, setEditOpen] = useState(false)
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
   const [ratingAlbum, setRatingAlbum] = useState<TopAlbum | null>(null)
   const [myRatingScores, setMyRatingScores] = useState<Record<number, number>>({})
@@ -212,26 +210,29 @@ export default function ProfileScreen() {
     fetchPosts()
   }, [isLoaded])
 
-useFocusEffect(
-  useCallback(() => {
-    if (!isLoaded) return
-    const loadRatingScores = async () => {
-      try {
-        const token = await getTokenRef.current()
-        if (!token) return
-        const ratings = await fetchMyAlbumRatings(token)
-        const scoreMap: Record<number, number> = {}
-        for (const r of ratings) {
-          scoreMap[r.albumId] = r.score
+  useFocusEffect(
+    useCallback(() => {
+      if (!isLoaded) return
+
+      void refreshProfile()
+
+      const loadRatingScores = async () => {
+        try {
+          const token = await getTokenRef.current()
+          if (!token) return
+          const ratings = await fetchMyAlbumRatings(token)
+          const scoreMap: Record<number, number> = {}
+          for (const r of ratings) {
+            scoreMap[r.albumId] = r.score
+          }
+          setMyRatingScores(scoreMap)
+        } catch {
+          // non-critical
         }
-        setMyRatingScores(scoreMap)
-      } catch {
-        // non-critical
       }
-    }
-    void loadRatingScores()
-  }, [isLoaded])
-)
+      void loadRatingScores()
+    }, [isLoaded, refreshProfile])
+  )
 
   const filteredPosts = useMemo(() => {
     let posts = myPosts
@@ -261,9 +262,9 @@ useFocusEffect(
     })
   }, [myPosts, postSearch, postMediaFilter, postSort])
 
-  const handleSaveProfile = async (data: Partial<ProfileCustomization>) => {
-    await updateProfile(data)
-  }
+  const openEditProfileSheet = useCallback(() => {
+    router.push('/(home)/(profile)/edit-profile')
+  }, [router])
   const handleWidgetSizeChange = useCallback(
     async (type: ResizableWidgetType, size: WidgetSize) => {
       await updateProfile({
@@ -286,14 +287,19 @@ useFocusEffect(
       ? user.createdAt.toISOString()
       : undefined
 
-  const topAlbums = profile.syncTopAlbumsWithSpotify && profile.spotifyConnected
-    ? spotifyTopMusic.topAlbums
+  const isMusicConnected = profile.musicConnected ?? profile.spotifyConnected
+  const syncTopAlbumsWithMusic = profile.syncTopAlbumsWithMusic ?? profile.syncTopAlbumsWithSpotify
+  const syncTopSongsWithMusic = profile.syncTopSongsWithMusic ?? profile.syncTopSongsWithSpotify
+  const syncTopArtistsWithMusic = profile.syncTopArtistsWithMusic ?? profile.syncTopArtistsWithSpotify
+
+  const topAlbums = syncTopAlbumsWithMusic && isMusicConnected
+    ? topMusic.topAlbums
     : profile.topAlbums
-  const topSongs = profile.syncTopSongsWithSpotify && profile.spotifyConnected
-    ? spotifyTopMusic.topSongs
+  const topSongs = syncTopSongsWithMusic && isMusicConnected
+    ? topMusic.topSongs
     : profile.topSongs
-  const topArtists = profile.syncTopArtistsWithSpotify && profile.spotifyConnected
-    ? spotifyTopMusic.topArtists
+  const topArtists = syncTopArtistsWithMusic && isMusicConnected
+    ? topMusic.topArtists
     : profile.topArtists
   const orderedWidgets = useMemo(() => {
     const widgetOrder = profile.widgetOrder?.length
@@ -308,12 +314,12 @@ useFocusEffect(
 
       switch (type) {
         case 'currentlyListening':
-          return profile.currentlyListening?.title
+          return profile.currentlyListening?.title || isMusicConnected
             ? [
                 <CurrentlyListeningWidget
                   key={type}
                   track={profile.currentlyListening}
-                  spotifyConnected={profile.spotifyConnected}
+                  musicConnected={isMusicConnected}
                 />,
               ]
             : []
@@ -497,9 +503,9 @@ useFocusEffect(
     profile.currentlyListening,
     profile.hiddenWidgets,
     profile.songsContainerColor,
-    profile.spotifyConnected,
     profile.widgetOrder,
     profile.widgetSizes,
+    isMusicConnected,
     topAlbums,
     topArtists,
     topSongs,
@@ -594,7 +600,7 @@ useFocusEffect(
               <>
                 <GlassView isInteractive style={{ borderRadius: 50 }}>
                   <TouchableOpacity
-                    onPress={() => setEditOpen(true)}
+                    onPress={openEditProfileSheet}
                     style={{ padding: 12 }}
                     activeOpacity={0.7}
                   >
@@ -614,7 +620,7 @@ useFocusEffect(
             ) : (
               <>
                 <TouchableOpacity
-                  onPress={() => setEditOpen(true)}
+                  onPress={openEditProfileSheet}
                   className="w-11 h-11 rounded-full bg-surface-container items-center justify-center"
                 >
                   <SymbolView name="pencil" size={20} tintColor={Colors.primary} />
@@ -654,7 +660,7 @@ useFocusEffect(
                   postsCount={myPosts.length}
                   ratedAlbumsCount={Object.keys(myRatingScores).length}
                   onRatedAlbumsPress={() => router.push('/(home)/(profile)/rated-albums')}
-                  onEditPress={() => setEditOpen(true)}
+                  onEditPress={openEditProfileSheet}
                   onAvatarPress={handleAvatarPress}
                   isUploadingAvatar={isUploadingAvatar}
                 />
@@ -809,7 +815,7 @@ useFocusEffect(
                             Build your sonic identity. Add your top albums, songs, and artists to your profile.
                           </Text>
                           <TouchableOpacity
-                            onPress={() => setEditOpen(true)}
+                            onPress={openEditProfileSheet}
                             className="mt-6 rounded-full px-6 py-3 bg-surface-container border border-outlineVariant/20"
                           >
                             <Text className="text-on-surface font-semibold text-[15px]">Add Music</Text>
@@ -990,17 +996,6 @@ useFocusEffect(
             </>
           )}
         </ScrollView>
-
-        <EditProfileModal
-          visible={editOpen}
-          onClose={() => setEditOpen(false)}
-          profile={profile}
-          isSaving={isSaving}
-          onSave={handleSaveProfile}
-          onAvatarPress={handleAvatarPress}
-          isUploadingAvatar={isUploadingAvatar}
-          avatarUrl={user?.imageUrl ?? null}
-        />
 
         <AlbumRatingModal
           visible={ratingAlbum !== null}

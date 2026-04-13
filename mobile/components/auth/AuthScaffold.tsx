@@ -1,4 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient'
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import { type PropsWithChildren, type ReactNode } from 'react'
 import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -17,6 +18,7 @@ export default function AuthScaffold({
   children,
 }: PropsWithChildren<AuthScaffoldProps>) {
   const insets = useSafeAreaInsets()
+  const useGlass = isLiquidGlassAvailable()
 
   return (
     <KeyboardAvoidingView
@@ -47,18 +49,26 @@ export default function AuthScaffold({
           showsVerticalScrollIndicator={false}
         >
           <View className="px-6">
-            <Text className="text-5xl font-extrabold tracking-tighter text-primary">Groupys</Text>
+            <Text className="text-3xl font-extrabold tracking-tighter text-primary">Groupys</Text>
 
-            <Text className="mt-7 max-w-[280px] text-5xl font-black tracking-tighter text-on-surface">
+            <Text className="mt-6 max-w-[280px] text-4xl font-black tracking-tighter text-on-surface">
               {title}
             </Text>
-            <Text className="mt-3 max-w-[320px] text-base leading-6 text-on-surface-variant">
+            <Text className="mt-2 max-w-[320px] text-sm leading-5 text-on-surface-variant">
               {subtitle}
             </Text>
 
-            <View className="mt-8 rounded-[32px] border border-white/80 bg-surface-container-lowest p-6 shadow-sm">
-              {children}
-            </View>
+            {useGlass ? (
+              <GlassView style={{ borderRadius: 32, overflow: 'hidden', marginTop: 28 }}>
+                <View style={{ padding: 24 }}>
+                  {children}
+                </View>
+              </GlassView>
+            ) : (
+              <View className="mt-7 rounded-[32px] border border-white/80 bg-surface-container-lowest p-6 shadow-sm">
+                {children}
+              </View>
+            )}
 
             {footer ? <View className="mt-6">{footer}</View> : null}
           </View>

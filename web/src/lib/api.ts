@@ -25,7 +25,8 @@ export interface BackendUser {
   widgets: string | null;
   tags: string[];
   dateJoined: string;
-  spotifyConnected: boolean;
+  musicConnected?: boolean;
+  spotifyConnected?: boolean;
 }
 
 // ── Widget ↔ ProfileCustomization conversion ───────────────────────────────

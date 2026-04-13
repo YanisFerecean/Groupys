@@ -12,7 +12,7 @@ import jakarta.persistence.Table;
 @Table(name = "tracks", indexes = {
         @jakarta.persistence.Index(name = "idx_tracks_artist", columnList = "artist_id"),
         @jakarta.persistence.Index(name = "idx_tracks_album", columnList = "album_id"),
-        @jakarta.persistence.Index(name = "idx_tracks_spotify_id", columnList = "spotify_id")
+        @jakarta.persistence.Index(name = "idx_tracks_apple_music_id", columnList = "apple_music_id")
 })
 public class Track {
 
@@ -22,8 +22,8 @@ public class Track {
     @Column(nullable = false)
     private String title;
 
-    @Column(name = "spotify_id", length = 64, unique = true)
-    private String spotifyId;
+    @Column(name = "apple_music_id", length = 64, unique = true)
+    private String appleMusicId;
 
     @Column(name = "external_isrc", length = 32)
     private String externalIsrc;
@@ -62,12 +62,12 @@ public class Track {
         this.title = title;
     }
 
-    public String getSpotifyId() {
-        return spotifyId;
+    public String getAppleMusicId() {
+        return appleMusicId;
     }
 
-    public void setSpotifyId(String spotifyId) {
-        this.spotifyId = spotifyId;
+    public void setAppleMusicId(String appleMusicId) {
+        this.appleMusicId = appleMusicId;
     }
 
     public String getExternalIsrc() {

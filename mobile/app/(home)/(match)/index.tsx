@@ -1,20 +1,21 @@
 import { Ionicons } from '@expo/vector-icons'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { SymbolView } from 'expo-symbols'
-import { useCallback, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Platform, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native'
+import { useCallback, useMemo, useRef } from 'react'
+import { ActivityIndicator, Platform, ScrollView, Text, TouchableOpacity, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '@clerk/expo'
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
-import UserRecommendationCard, { type CardHandle } from '@/components/match/UserRecommendationCard'
 import ActionButtons from '@/components/match/ActionButtons'
 import MatchCelebrationModal from '@/components/match/MatchCelebrationModal'
+import UserHingeProfile from '@/components/match/UserHingeProfile'
 import SwipeableTabScreen from '@/components/navigation/SwipeableTabScreen'
 import { Colors } from '@/constants/colors'
 import { useChat } from '@/hooks/useChat'
 import { useDiscovery } from '@/hooks/useDiscovery'
 import { publicProfilePath } from '@/lib/profileRoutes'
 import { useMatches } from '@/hooks/useMatches'
+import * as Haptics from 'expo-haptics'
 
 const TAB_BAR_HEIGHT = 80
 
@@ -24,12 +25,8 @@ export default function MatchScreen() {
   const router = useRouter()
   const { isLoaded } = useAuth()
   const { conversations, totalUnread } = useChat()
-  const { width, height } = useWindowDimensions()
   const useGlass = isLiquidGlassAvailable()
-
-  const cardRef = useRef<CardHandle>(null)
-  const [headerHeight, setHeaderHeight] = useState(88)
-  const [actionsHeight, setActionsHeight] = useState(140)
+  const scrollRef = useRef<ScrollView>(null)
 
   const {
     users,
@@ -71,41 +68,29 @@ export default function MatchScreen() {
     }, [isLoaded, loadMatches, loadUsers]),
   )
 
-  // Card dimensions: full width minus horizontal padding, 3:4 aspect ratio
-  const cardAspectRatio = 3 / 4
-  const footerHeight = !usersLoading && filteredUsers.length > 0
-    ? actionsHeight
-    : tabBarHeight + 24
-  const availableCardHeight = Math.max(
-    0,
-    height - headerHeight - footerHeight - 32,
-  )
-  const CARD_WIDTH = Math.max(
-    0,
-    Math.min(width - 40, availableCardHeight * cardAspectRatio),
-  )
-  const CARD_HEIGHT = CARD_WIDTH / cardAspectRatio
+  const currentUser = filteredUsers[0]
 
   const handleLike = () => {
-    if (filteredUsers.length === 0) return
-    cardRef.current?.swipeRight()
+    if (!currentUser) return
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+    scrollRef.current?.scrollTo({ y: 0, animated: false })
+    like(currentUser)
   }
 
   const handlePass = () => {
-    if (filteredUsers.length === 0) return
-    cardRef.current?.swipeLeft()
+    if (!currentUser) return
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    scrollRef.current?.scrollTo({ y: 0, animated: false })
+    dismiss('user', currentUser.userId)
   }
-
-  const visibleUsers = filteredUsers.slice(0, 3)
 
   return (
     <SwipeableTabScreen tab="(match)">
       <View className="flex-1 bg-surface">
         {/* Header */}
         <View
-          onLayout={(event) => setHeaderHeight(event.nativeEvent.layout.height)}
           className="flex-row items-center justify-between px-5"
-          style={{ paddingTop: insets.top + 8 }}
+          style={{ paddingTop: insets.top + 8, paddingBottom: 12 }}
         >
           <Text className="text-4xl font-extrabold tracking-tighter text-primary">Mutuals</Text>
           <View className="flex-row items-center gap-3">
@@ -179,70 +164,57 @@ export default function MatchScreen() {
           </View>
         </View>
 
-        {/* Card stack area */}
-        <View className="flex-1 items-center justify-center px-5 py-4" style={{ minHeight: 0 }}>
-          {usersLoading ? (
-            <View className="items-center gap-3">
-              <ActivityIndicator size="large" color={Colors.primary} />
-              <Text className="text-on-surface-variant font-medium">Finding mutuals...</Text>
-            </View>
-          ) : filteredUsers.length === 0 ? (
-            <View className="items-center gap-3">
-              {Platform.OS === 'ios' ? (
-                <SymbolView name="person.3.fill" size={52} tintColor={Colors.onSurfaceVariant} />
-              ) : (
-                <Ionicons name="people-outline" size={52} color={Colors.onSurfaceVariant} />
-              )}
-              <Text className="text-on-surface-variant text-base font-medium text-center">
-                No one new to show right now
-              </Text>
-              {useGlass ? (
-                <View className="mt-2">
-                  <GlassView isInteractive style={{ borderRadius: 999, overflow: 'hidden' }}>
-                    <TouchableOpacity
-                      onPress={() => loadUsers(true)}
-                      className="h-11 items-center justify-center rounded-full px-6"
-                      activeOpacity={0.75}
-                    >
-                      <Text className="font-bold" style={{ color: Colors.primary }}>Refresh</Text>
-                    </TouchableOpacity>
-                  </GlassView>
-                </View>
-              ) : (
+        {/* Content area */}
+        {usersLoading ? (
+          <View className="flex-1 items-center justify-center gap-3">
+            <ActivityIndicator size="large" color={Colors.primary} />
+            <Text className="text-on-surface-variant font-medium">Finding mutuals...</Text>
+          </View>
+        ) : !currentUser ? (
+          <View className="flex-1 items-center justify-center gap-3 px-10">
+            {Platform.OS === 'ios' ? (
+              <SymbolView name="person.3.fill" size={52} tintColor={Colors.onSurfaceVariant} />
+            ) : (
+              <Ionicons name="people-outline" size={52} color={Colors.onSurfaceVariant} />
+            )}
+            <Text className="text-on-surface-variant text-base font-medium text-center">
+              No one new to show right now
+            </Text>
+            {useGlass ? (
+              <GlassView isInteractive style={{ borderRadius: 999, overflow: 'hidden', marginTop: 8 }}>
                 <TouchableOpacity
                   onPress={() => loadUsers(true)}
-                  className="mt-2 rounded-full bg-primary px-6 py-3"
+                  className="h-11 items-center justify-center rounded-full px-6"
+                  activeOpacity={0.75}
                 >
-                  <Text className="font-bold text-on-primary">Refresh</Text>
+                  <Text className="font-bold" style={{ color: Colors.primary }}>Refresh</Text>
                 </TouchableOpacity>
-              )}
-            </View>
-          ) : (
-            <View style={{ width: CARD_WIDTH, height: CARD_HEIGHT, position: 'relative' }}>
-              {visibleUsers.slice().reverse().map((user, reverseIdx) => {
-                const stackIndex = visibleUsers.length - 1 - reverseIdx
-                return (
-                  <UserRecommendationCard
-                    key={user.userId}
-                    ref={stackIndex === 0 ? cardRef : undefined}
-                    user={user}
-                    stackIndex={stackIndex}
-                    onLike={() => like(user)}
-                    onDismiss={() => dismiss('user', user.userId)}
-                    onViewProfile={() => router.push(publicProfilePath(user.userId, '(match)') as any)}
-                  />
-                )
-              })}
-            </View>
-          )}
-        </View>
+              </GlassView>
+            ) : (
+              <TouchableOpacity
+                onPress={() => loadUsers(true)}
+                className="mt-2 rounded-full bg-primary px-6 py-3"
+              >
+                <Text className="font-bold text-on-primary">Refresh</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          <UserHingeProfile
+            key={currentUser.userId}
+            user={currentUser}
+            scrollRef={scrollRef}
+            onViewProfile={() => router.push(publicProfilePath(currentUser.userId, '(match)') as any)}
+            bottomPadding={tabBarHeight + 120}
+          />
+        )}
 
-        {/* Action buttons */}
-        {!usersLoading && filteredUsers.length > 0 && (
+        {/* Action buttons — floating above tab bar */}
+        {!usersLoading && !!currentUser && (
           <View
-            onLayout={(event) => setActionsHeight(event.nativeEvent.layout.height)}
-            className="items-center pt-4"
-            style={{ paddingBottom: tabBarHeight + 12 }}
+            pointerEvents="box-none"
+            className="absolute left-0 right-0 items-center"
+            style={{ bottom: tabBarHeight + 20 }}
           >
             <ActionButtons
               onPass={handlePass}

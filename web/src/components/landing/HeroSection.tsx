@@ -1,4 +1,5 @@
 import CommunitiesPreview from "./CommunitiesPreview";
+import WaitlistForm from "./WaitlistForm";
 
 export default function HeroSection() {
   return (
@@ -8,16 +9,45 @@ export default function HeroSection() {
           Music is better<br />together.
         </h1>
         <p className="text-lg md:text-xl text-on-surface-variant max-w-lg leading-relaxed">
-          Join communities built around artists and genres. Connect with people who share your taste. Build a profile that stands out — showcase what makes you different.
+          Discover communities built around artists and genres. Connect with people who truly share your taste — and build a profile that shows who you are as a listener.
         </p>
-        <div className="flex flex-wrap gap-3 md:gap-4 pt-2 md:pt-4">
-          <a href="#cta" className="px-6 py-3 md:px-8 md:py-4 bg-primary text-on-primary rounded-full font-bold text-base md:text-lg hover:shadow-xl hover:shadow-primary/20 transition-all">
-            Join Waitlist
-          </a>
-          <a href="#features" className="px-6 py-3 md:px-8 md:py-4 bg-surface-container-high text-on-surface rounded-full font-bold text-base md:text-lg hover:bg-surface-container-highest transition-all">
-            See Features
-          </a>
+        <div className="flex items-center gap-3">
+          <div className="flex -space-x-2">
+            {[
+              { type: "img", src: "https://i.pravatar.cc/56?img=11" },
+              { type: "initial", initial: "A", bg: "#6366f1" },
+              { type: "img", src: "https://i.pravatar.cc/56?img=32" },
+              { type: "initial", initial: "J", bg: "#10b981" },
+              { type: "img", src: "https://i.pravatar.cc/56?img=47" },
+            ].map((avatar, i) =>
+              avatar.type === "img" ? (
+                <img
+                  key={i}
+                  src={avatar.src}
+                  alt="Waitlist member"
+                  width={28}
+                  height={28}
+                  className="w-7 h-7 rounded-full border-2 border-white object-cover"
+                />
+              ) : (
+                <div
+                  key={i}
+                  className="w-7 h-7 rounded-full border-2 border-white flex items-center justify-center text-white text-xs font-bold"
+                  style={{ backgroundColor: avatar.bg }}
+                >
+                  {avatar.initial}
+                </div>
+              )
+            )}
+          </div>
+          <p className="text-sm font-semibold text-on-surface">
+            Join <span className="text-primary">2,400+</span> music lovers already on the waitlist
+          </p>
         </div>
+        <WaitlistForm variant="light" />
+        <a href="#features" className="text-sm font-semibold text-primary hover:underline">
+          See Features →
+        </a>
       </div>
 
       <div className="lg:col-span-6 relative">

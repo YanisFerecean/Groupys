@@ -31,14 +31,11 @@ export default function ActionButtons({ onPass, onLike, disabled }: ActionButton
         ) : (
           <Pressable
             onPress={onPass}
-            className="h-16 w-16 items-center justify-center rounded-full bg-surface-container-high"
+            className="h-16 w-16 items-center justify-center rounded-full"
           >
-            <Ionicons name="close" size={28} color={Colors.onSurface} />
+            <Ionicons name="close-circle" size={56} color={Colors.onSurfaceVariant} />
           </Pressable>
         )}
-        <Text className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
-          PASS
-        </Text>
       </View>
 
       <View className="items-center gap-2">
@@ -54,14 +51,11 @@ export default function ActionButtons({ onPass, onLike, disabled }: ActionButton
         ) : (
           <Pressable
             onPress={onLike}
-            className="h-16 w-16 items-center justify-center rounded-full bg-primary"
+            className="h-16 w-16 items-center justify-center rounded-full"
           >
-            <Ionicons name="heart-outline" size={26} color="#ffffff" />
+            <Ionicons name="heart-circle" size={56} color={Colors.primary} />
           </Pressable>
         )}
-        <Text className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
-          LIKE
-        </Text>
       </View>
     </View>
   )

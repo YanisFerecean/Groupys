@@ -3,6 +3,7 @@ package com.groupys.service;
 import com.groupys.config.PerformanceFeatureFlags;
 import com.groupys.dto.PostResDto;
 import com.groupys.model.Community;
+import com.groupys.model.CommunityRecommendationCache;
 import com.groupys.model.Post;
 import com.groupys.model.PostMedia;
 import com.groupys.model.PostReaction;
@@ -14,10 +15,16 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.NotFoundException;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @ApplicationScoped
 public class PostService {
@@ -41,6 +48,9 @@ public class PostService {
     CommunityMemberRepository communityMemberRepository;
 
     @Inject
+    CommunityRecommendationCacheRepository communityRecommendationCacheRepository;
+
+    @Inject
     CommentService commentService;
 
     @Inject
@@ -55,11 +65,57 @@ public class PostService {
     public List<PostResDto> getFeed(String clerkId, int page, int size) {
         User user = userRepository.findByClerkId(clerkId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
-        List<UUID> communityIds = communityMemberRepository.findByUserLimited(user.id, 200).stream()
+
+        // Joined community posts
+        List<UUID> joinedIds = communityMemberRepository.findByUserLimited(user.id, 200).stream()
                 .map(m -> m.community.id)
                 .toList();
-        List<Post> posts = postRepository.findByCommunitiesPaged(communityIds, page, size);
-        return toDtoList(posts, user);
+
+        // Recommended communities the user hasn't joined yet (score >= 0.35)
+        Set<UUID> joinedSet = new HashSet<>(joinedIds);
+        List<CommunityRecommendationCache> recCaches = communityRecommendationCacheRepository
+                .findFreshByUser(user.id, 30).stream()
+                .filter(c -> !joinedSet.contains(c.community.id) && c.score >= 0.35)
+                .toList();
+        List<UUID> recIds = recCaches.stream().map(c -> c.community.id).toList();
+        Map<UUID, Double> recScoreMap = recCaches.stream()
+                .collect(Collectors.toMap(c -> c.community.id, c -> c.score));
+
+        // Fetch recent posts from both sources (3x pool for accurate pagination)
+        int poolSize = (page + 1) * size * 3;
+        List<Post> joinedPosts = joinedIds.isEmpty() ? List.of()
+                : postRepository.findByCommunitiesRecentLimited(joinedIds, poolSize);
+        List<Post> recPosts = recIds.isEmpty() ? List.of()
+                : postRepository.findByCommunitiesRecentLimited(recIds, poolSize / 2);
+
+        // Score: recency decay * community weight
+        // Joined communities = weight 1.0; recommended = weight (score * 0.65)
+        record ScoredPost(Post post, double score) {}
+        Instant now = Instant.now();
+        List<ScoredPost> scored = new ArrayList<>(joinedPosts.size() + recPosts.size());
+        for (Post p : joinedPosts) {
+            double hoursAgo = Duration.between(p.createdAt, now).toHours();
+            double recency = 1.0 / (1.0 + hoursAgo / 24.0);
+            scored.add(new ScoredPost(p, recency));
+        }
+        for (Post p : recPosts) {
+            double communityScore = recScoreMap.getOrDefault(p.community.id, 0.35);
+            double hoursAgo = Duration.between(p.createdAt, now).toHours();
+            double recency = 1.0 / (1.0 + hoursAgo / 24.0);
+            scored.add(new ScoredPost(p, recency * communityScore * 0.65));
+        }
+
+        // Sort, deduplicate, paginate
+        Set<UUID> seen = new HashSet<>();
+        List<Post> result = scored.stream()
+                .sorted(Comparator.comparingDouble(ScoredPost::score).reversed())
+                .filter(sp -> seen.add(sp.post.id))
+                .map(ScoredPost::post)
+                .skip((long) page * size)
+                .limit(size)
+                .toList();
+
+        return toDtoList(result, user);
     }
 
     public List<PostResDto> getByCommunity(UUID communityId, String clerkId, int page, int size) {

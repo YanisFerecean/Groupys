@@ -26,7 +26,7 @@ public final class UserUtil {
                 user.website,
                 user.jobTitle,
                 user.location,
-                user.spotifyRefreshToken != null,
+                user.appleMusicUserToken != null,
                 user.lastMusicSyncAt,
                 user.tasteSummaryText,
                 user.recommendationOptOut,

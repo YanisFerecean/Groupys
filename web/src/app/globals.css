@@ -192,6 +192,26 @@
 }
 
 
+@keyframes logo-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+/* Moves exactly one copy out of four — loop reset is visually identical */
+@keyframes logo-scroll-quad {
+  0% { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(-25%, 0, 0); }
+}
+
+/* Carousel speed: faster on mobile (items are smaller so fewer px to cover) */
+:root { --carousel-duration: 18s; }
+@media (min-width: 640px) { :root { --carousel-duration: 24s; } }
+
+/* Respect reduced-motion preference */
+@media (prefers-reduced-motion: reduce) {
+  :root { --carousel-duration: 60s; }
+}
+
 @keyframes equalize {
   0% {
     height: 4px;

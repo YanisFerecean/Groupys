@@ -20,6 +20,26 @@ class DiscoveryScoreUtilTest {
     }
 
     @Test
+    void userMatchScoreUsesMatchingFactorWeights() {
+        double score = DiscoveryScoreUtil.userMatchScore(
+                0.8d,
+                0.4d,
+                0.5d,
+                0.9d,
+                1.0d,
+                0.2d
+        );
+
+        assertEquals(0.615d, score, 0.0001d);
+    }
+
+    @Test
+    void userMatchScoreHonorsIndividualFactorContribution() {
+        assertEquals(0.2d, DiscoveryScoreUtil.userMatchScore(0d, 1d, 0d, 0d, 0d, 0d), 0.0001d);
+        assertEquals(0.05d, DiscoveryScoreUtil.userMatchScore(0d, 0d, 0d, 0d, 1d, 0d), 0.0001d);
+    }
+
+    @Test
     void countryMatchIsCaseInsensitive() {
         assertEquals(1d, DiscoveryScoreUtil.countryMatchScore("at", "AT"), 0.0001d);
         assertEquals(0d, DiscoveryScoreUtil.countryMatchScore("AT", "DE"), 0.0001d);

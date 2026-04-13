@@ -14,15 +14,12 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import { ConversationListItem } from '@/components/chat/ConversationListItem'
-import { buildMockRequestConversations } from '@/constants/chatRequestMockData'
 import { Colors } from '@/constants/colors'
 import { useChat } from '@/hooks/useChat'
 import { isEncrypted } from '@/lib/chat-crypto'
 import { publicProfilePath } from '@/lib/profileRoutes'
-import type { Conversation } from '@/models/Chat'
 
 const CONVERSATION_RENDER_BATCH = 12
-const MOCK_REQUEST_COUNT = 8
 
 export default function ChatInboxScreen() {
   const insets = useSafeAreaInsets()
@@ -42,7 +39,6 @@ export default function ChatInboxScreen() {
   const [decryptedPreviews, setDecryptedPreviews] = useState<Record<string, string>>({})
   const [visibleConversationCount, setVisibleConversationCount] = useState(CONVERSATION_RENDER_BATCH)
   const decryptedKeysRef = useRef(new Set<string>())
-  const mockRequestConversationsRef = useRef<Conversation[]>(buildMockRequestConversations(MOCK_REQUEST_COUNT))
 
   const requestConversations = conversations.filter(
     conversation => conversation.requestStatus !== 'ACCEPTED',
@@ -52,11 +48,7 @@ export default function ChatInboxScreen() {
   )
   const visibleActiveConversations = activeConversations.slice(0, visibleConversationCount)
   const hasHiddenConversations = visibleConversationCount < activeConversations.length
-
-  const usingMockRequests = requestConversations.length === 0 && !isLoading
-  const hasChatRequests = usingMockRequests
-    ? mockRequestConversationsRef.current.length > 0
-    : requestConversations.length > 0
+  const hasChatRequests = requestConversations.length > 0
 
   useEffect(() => {
     setVisibleConversationCount(previous => {
