@@ -184,7 +184,7 @@ export default function HotTakeWidget({ username, containerColor, size = "normal
                           ) : (
                             <div className="w-full h-full bg-surface-container-high flex items-center justify-center">
                               <span className="material-symbols-outlined text-on-surface-variant/40" style={{ fontSize: imgPx * 0.45, fontVariationSettings: "'FILL' 1" }}>
-                                {iconForType(answer!.musicTypes[i])}
+                                {iconForType(answer!.musicTypes[i] ?? "")}
                               </span>
                             </div>
                           )}
