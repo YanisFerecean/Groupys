@@ -77,7 +77,7 @@ export default function TrendingArtistsSection() {
         });
         if (res.ok) {
           const data: ChartArtist[] = await res.json();
-          if (!cancelled) setArtists(data.slice(0, 6));
+          if (!cancelled) setArtists(data.slice(0, 7));
         }
       } catch (err) {
         console.error("Failed to fetch top artists:", err);
@@ -94,9 +94,9 @@ export default function TrendingArtistsSection() {
     <section className="mb-12 lg:mb-16">
       <SectionHeader title="Trending Now" />
 
-      <div className="flex flex-nowrap gap-6 lg:gap-8 overflow-hidden">
+      <div className="flex justify-between">
         {loading
-          ? Array.from({ length: 6 }).map((_, i) => <ArtistSkeleton key={i} />)
+          ? Array.from({ length: 7 }).map((_, i) => <ArtistSkeleton key={i} />)
           : artists.map((artist) => (
               <ArtistBubble key={artist.id} artist={artist} />
             ))}
