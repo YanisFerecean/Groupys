@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import SectionHeader from "@/components/discover/SectionHeader";
@@ -22,54 +23,53 @@ function formatMembers(count: number): string {
   return String(count);
 }
 
-function reasonLabel(community: SuggestedCommunity): string | null {
-  if (community.matchedArtists.length > 0) {
-    return community.matchedArtists.length === 1
-      ? community.matchedArtists[0].name
-      : `${community.matchedArtists.length} shared artists`;
-  }
-  if (community.matchedGenres.length > 0) {
-    return community.matchedGenres[0].name;
-  }
-  if (community.countryMatch) return "Same country";
-  if (community.sharedCommunityCount > 0)
-    return `${community.sharedCommunityCount} shared ${community.sharedCommunityCount === 1 ? "community" : "communities"}`;
-  return null;
-}
+// ── Friend avatars strip ───────────────────────────────────────────────────
 
-function CommunityCardIcon({ community }: { community: SuggestedCommunity }) {
-  if (community.iconType === "EMOJI" && community.iconEmoji) {
-    return (
-      <span
-        className="absolute -top-2 -right-2 select-none pointer-events-none text-white/10"
-        style={{ fontSize: 80, lineHeight: 1 }}
-        aria-hidden
-      >
-        {community.iconEmoji}
-      </span>
-    );
-  }
-  if (community.iconType === "IMAGE" && community.iconUrl) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={community.iconUrl}
-        alt=""
-        className="absolute -top-2 -right-2 w-20 h-20 object-cover opacity-10 pointer-events-none select-none"
-        aria-hidden
-      />
-    );
-  }
+function FriendAvatars({
+  friends,
+}: {
+  friends: SuggestedCommunity["friendsInCommunity"];
+}) {
+  if (!friends || friends.length === 0) return null;
+
   return (
-    <span
-      className="material-symbols-outlined absolute -top-2 -right-2 text-white/10 select-none pointer-events-none"
-      style={{ fontSize: 80, fontVariationSettings: "'FILL' 1" }}
-      aria-hidden
-    >
-      music_note
-    </span>
+    <div className="flex items-center gap-1.5">
+      <div className="flex -space-x-2">
+        {friends.slice(0, 3).map((f) =>
+          f.profileImage ? (
+            <Image
+              key={f.userId}
+              src={f.profileImage}
+              alt={f.displayName ?? f.username}
+              width={20}
+              height={20}
+              className="w-5 h-5 rounded-full object-cover ring-1 ring-black/30"
+            />
+          ) : (
+            <div
+              key={f.userId}
+              className="w-5 h-5 rounded-full bg-white/20 ring-1 ring-black/30 flex items-center justify-center"
+            >
+              <span
+                className="material-symbols-outlined text-white"
+                style={{ fontSize: 11 }}
+              >
+                person
+              </span>
+            </div>
+          )
+        )}
+      </div>
+      <span className="text-[10px] font-semibold text-white/75 leading-none">
+        {friends.length === 1
+          ? (friends[0].displayName ?? friends[0].username) + " joined"
+          : `${friends.length} friends joined`}
+      </span>
+    </div>
   );
 }
+
+// ── Community card ─────────────────────────────────────────────────────────
 
 function CommunityCard({
   community,
@@ -80,56 +80,100 @@ function CommunityCard({
   color: string;
   onClick: () => void;
 }) {
-  const hint = reasonLabel(community);
+  const hasBanner = !!community.bannerUrl;
+  const artists = community.matchedArtists.slice(0, 2);
 
   return (
     <button
       onClick={onClick}
-      className="relative overflow-hidden rounded-2xl text-left transition-transform hover:scale-[0.98] active:scale-95"
-      style={{ backgroundColor: color, minHeight: 120 }}
+      className="relative overflow-hidden rounded-2xl text-left transition-transform hover:scale-[0.98] active:scale-95 w-full"
+      style={{
+        minHeight: 160,
+        backgroundColor: color,
+        ...(hasBanner
+          ? {
+              backgroundImage: `url(${community.bannerUrl})`,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+            }
+          : {}),
+      }}
     >
-      <CommunityCardIcon community={community} />
+      {/* Dark gradient overlay — always present so text is readable */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
 
-      <div className="relative p-5 flex flex-col justify-end h-full">
-        <h4 className="text-xl font-extrabold text-white mb-1 truncate">
+      {/* Decorative icon — only when no banner */}
+      {!hasBanner && (
+        <span
+          className="absolute -top-2 -right-2 select-none pointer-events-none text-white/10"
+          style={{ fontSize: 80, lineHeight: 1 }}
+          aria-hidden
+        >
+          {community.iconType === "EMOJI" && community.iconEmoji
+            ? community.iconEmoji
+            : "♪"}
+        </span>
+      )}
+
+      {/* Content */}
+      <div className="relative p-4 flex flex-col justify-end h-full" style={{ minHeight: 160 }}>
+        {/* Name */}
+        <h4 className="text-lg font-extrabold text-white mb-0.5 truncate leading-tight">
           {community.name}
         </h4>
-        {community.description && (
-          <p className="text-xs text-white/70 font-medium mb-2 line-clamp-1">
-            {community.description}
-          </p>
+
+        {/* Matched artists pills */}
+        {artists.length > 0 && (
+          <div className="flex gap-1.5 flex-wrap mb-2">
+            {artists.map((a) => (
+              <span
+                key={a.id}
+                className="flex items-center gap-1 text-[10px] font-bold text-white/90 bg-white/15 backdrop-blur-sm px-2 py-0.5 rounded-full"
+              >
+                <span
+                  className="material-symbols-outlined"
+                  style={{ fontSize: 10 }}
+                >
+                  library_music
+                </span>
+                {a.name}
+              </span>
+            ))}
+          </div>
         )}
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-1.5">
+
+        {/* Bottom row: members + friends */}
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-1">
             <span
-              className="material-symbols-outlined text-white/70"
-              style={{ fontSize: 14 }}
+              className="material-symbols-outlined text-white/60"
+              style={{ fontSize: 13 }}
             >
               group
             </span>
-            <span className="text-xs font-semibold text-white/70">
-              {formatMembers(community.memberCount)} members
+            <span className="text-[11px] font-semibold text-white/60">
+              {formatMembers(community.memberCount)}
             </span>
           </div>
-          {hint && (
-            <span className="text-[10px] font-bold text-white/80 bg-white/15 backdrop-blur-sm px-2 py-0.5 rounded-full truncate max-w-[120px]">
-              {hint}
-            </span>
-          )}
+          <FriendAvatars friends={community.friendsInCommunity ?? []} />
         </div>
       </div>
     </button>
   );
 }
 
+// ── Skeleton ───────────────────────────────────────────────────────────────
+
 function CommunityCardSkeleton() {
   return (
     <div
       className="rounded-2xl animate-pulse bg-surface-container-highest"
-      style={{ minHeight: 120 }}
+      style={{ minHeight: 160 }}
     />
   );
 }
+
+// ── Section ────────────────────────────────────────────────────────────────
 
 export default function CommunitiesSection() {
   const router = useRouter();

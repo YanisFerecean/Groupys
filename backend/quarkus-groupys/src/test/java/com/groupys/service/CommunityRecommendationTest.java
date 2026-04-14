@@ -21,6 +21,7 @@ import com.groupys.repository.CommunityRecommendationCacheRepository;
 import com.groupys.repository.CommunityRepository;
 import com.groupys.repository.CommunityTasteProfileRepository;
 import com.groupys.repository.GenreRepository;
+import com.groupys.repository.FriendshipRepository;
 import com.groupys.repository.UserArtistPreferenceRepository;
 import com.groupys.repository.UserDiscoveryActionRepository;
 import com.groupys.repository.UserGenrePreferenceRepository;
@@ -483,6 +484,7 @@ class CommunityRecommendationTest {
         service.communityTasteProfileRepository = new AutoCreatingTasteProfileRepository();
         service.artistRepository = new StubArtistRepository(Map.of());
         service.genreRepository = new EmptyGenreRepository();
+        service.friendshipRepository = new EmptyFriendshipRepository();
         return service;
     }
 
@@ -511,6 +513,7 @@ class CommunityRecommendationTest {
             artistRepository = new StubArtistRepository(Map.of());
             genreRepository = new EmptyGenreRepository();
             communityRecommendationCacheRepository = new EmptyCommunityRecommendationCacheRepository();
+            friendshipRepository = new EmptyFriendshipRepository();
         }
 
         @Override
@@ -628,6 +631,18 @@ class CommunityRecommendationTest {
         @Override
         public long countSharedMembers(UUID communityId, List<UUID> joinedCommunityIds) {
             return sharedMemberCounts.getOrDefault(communityId, 0L);
+        }
+
+        @Override
+        public java.util.List<com.groupys.model.User> findFriendsInCommunity(UUID communityId, java.util.Set<UUID> friendIds, int limit) {
+            return List.of();
+        }
+    }
+
+    private static final class EmptyFriendshipRepository extends FriendshipRepository {
+        @Override
+        public java.util.Set<UUID> findAcceptedFriendIds(UUID userId) {
+            return Set.of();
         }
     }
 

@@ -200,8 +200,9 @@ public class DiscoveryService {
         if (refresh) {
             refreshForUser(user.id);
         }
+        Set<UUID> friendIds = friendshipRepository.findAcceptedFriendIds(user.id);
         if (flags.redisEnabled() && flags.redisRecommendationReadEnabled()) {
-            List<SuggestedCommunityResDto> redisResult = loadCommunitySuggestionsFromRedis(user.id, pageSize);
+            List<SuggestedCommunityResDto> redisResult = loadCommunitySuggestionsFromRedis(user.id, pageSize, friendIds);
             if (!redisResult.isEmpty()) {
                 return redisResult;
             }
@@ -214,14 +215,14 @@ public class DiscoveryService {
             }
             if (!postgresCaches.isEmpty()) {
                 return postgresCaches.stream()
-                        .map(this::toSuggestedCommunity)
+                        .map(cache -> toSuggestedCommunity(cache, friendIds))
                         .toList();
             }
         }
 
         return computeCommunityRecommendationCaches(user.id).stream()
                 .limit(pageSize)
-                .map(this::toSuggestedCommunity)
+                .map(cache -> toSuggestedCommunity(cache, friendIds))
                 .toList();
     }
 
@@ -1309,7 +1310,7 @@ public class DiscoveryService {
                 .toList();
     }
 
-    private List<SuggestedCommunityResDto> loadCommunitySuggestionsFromRedis(UUID userId, int pageSize) {
+    private List<SuggestedCommunityResDto> loadCommunitySuggestionsFromRedis(UUID userId, int pageSize, Set<UUID> friendIds) {
         List<DiscoveryRedisCacheService.RankedRecommendation> ranked = redisCacheService.readCommunityRecommendations(userId, pageSize);
         if (ranked.isEmpty()) {
             return List.of();
@@ -1317,13 +1318,17 @@ public class DiscoveryService {
         List<UUID> ids = ranked.stream().map(DiscoveryRedisCacheService.RankedRecommendation::id).toList();
         Map<UUID, Community> communitiesById = communityRepository.findByIdsMap(ids);
         return ranked.stream()
-                .map(item -> toSuggestedCommunity(communitiesById.get(item.id()), item.score(), item.explanationJson()))
+                .map(item -> toSuggestedCommunity(communitiesById.get(item.id()), item.score(), item.explanationJson(), friendIds))
                 .filter(Objects::nonNull)
                 .toList();
     }
 
-    private SuggestedCommunityResDto toSuggestedCommunity(CommunityRecommendationCache cache) {
+    private SuggestedCommunityResDto toSuggestedCommunity(CommunityRecommendationCache cache, Set<UUID> friendIds) {
         JsonNode explanation = readJson(cache.explanationJson);
+        List<UserSnippetDto> friends = communityMemberRepository
+                .findFriendsInCommunity(cache.community.id, friendIds, 3).stream()
+                .map(u -> new UserSnippetDto(u.id, u.username, u.displayName, u.profileImage))
+                .toList();
         return new SuggestedCommunityResDto(
                 cache.community.id,
                 cache.community.name,
@@ -1343,15 +1348,20 @@ public class DiscoveryService {
                 explanation.path("countryMatch").asBoolean(false),
                 cache.community.createdBy != null ? cache.community.createdBy.username : null,
                 cache.community.createdBy != null ? cache.community.createdBy.displayName : null,
-                cache.community.createdBy != null ? cache.community.createdBy.profileImage : null
+                cache.community.createdBy != null ? cache.community.createdBy.profileImage : null,
+                friends
         );
     }
 
-    private SuggestedCommunityResDto toSuggestedCommunity(Community community, double score, String explanationJson) {
+    private SuggestedCommunityResDto toSuggestedCommunity(Community community, double score, String explanationJson, Set<UUID> friendIds) {
         if (community == null) {
             return null;
         }
         JsonNode explanation = readJson(explanationJson);
+        List<UserSnippetDto> friends = communityMemberRepository
+                .findFriendsInCommunity(community.id, friendIds, 3).stream()
+                .map(u -> new UserSnippetDto(u.id, u.username, u.displayName, u.profileImage))
+                .toList();
         return new SuggestedCommunityResDto(
                 community.id,
                 community.name,
@@ -1371,7 +1381,8 @@ public class DiscoveryService {
                 explanation.path("countryMatch").asBoolean(false),
                 community.createdBy != null ? community.createdBy.username : null,
                 community.createdBy != null ? community.createdBy.displayName : null,
-                community.createdBy != null ? community.createdBy.profileImage : null
+                community.createdBy != null ? community.createdBy.profileImage : null,
+                friends
         );
     }
 

@@ -22,6 +22,7 @@ public record SuggestedCommunityResDto(
         boolean countryMatch,
         String creatorUsername,
         String creatorDisplayName,
-        String creatorProfileImage
+        String creatorProfileImage,
+        List<UserSnippetDto> friendsInCommunity
 ) {
 }

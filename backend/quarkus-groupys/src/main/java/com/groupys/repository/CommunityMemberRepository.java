@@ -1,12 +1,15 @@
 package com.groupys.repository;
 
 import com.groupys.model.CommunityMember;
+import com.groupys.model.User;
 import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @ApplicationScoped
@@ -48,6 +51,21 @@ public class CommunityMemberRepository implements PanacheRepositoryBase<Communit
                 .setParameter("candidateCommunityId", candidateCommunityId)
                 .setParameter("joinedCommunityIds", joinedCommunityIds)
                 .getSingleResult();
+    }
+
+    public List<User> findFriendsInCommunity(UUID communityId, Set<UUID> friendIds, int limit) {
+        if (friendIds == null || friendIds.isEmpty()) return List.of();
+        return getEntityManager().createQuery("""
+                select cm.user
+                from CommunityMember cm
+                where cm.community.id = :communityId
+                  and cm.user.id in :friendIds
+                order by cm.joinedAt desc
+                """, User.class)
+                .setParameter("communityId", communityId)
+                .setParameter("friendIds", new ArrayList<>(friendIds))
+                .setMaxResults(limit)
+                .getResultList();
     }
 
     public List<UUID> findTrendingCommunityIds(Instant since, int limit) {

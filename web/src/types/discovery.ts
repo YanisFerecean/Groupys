@@ -18,4 +18,10 @@ export interface SuggestedCommunity {
   creatorUsername: string | null;
   creatorDisplayName: string | null;
   creatorProfileImage: string | null;
+  friendsInCommunity: {
+    userId: string;
+    username: string;
+    displayName: string | null;
+    profileImage: string | null;
+  }[];
 }
