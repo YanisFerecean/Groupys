@@ -27,7 +27,7 @@ export interface ProfileCustomization {
   currentlyListeningContainerColor?: string;
   widgetSizes?: Partial<Record<string, "small" | "normal">>;
   hiddenWidgets?: string[];
-  spotifySynced?: Partial<Record<string, boolean>>;
+  musicSynced?: Partial<Record<string, boolean>>;
   tags?: string[];
   showLastRatedAlbum?: boolean;
   showHotTake?: boolean;

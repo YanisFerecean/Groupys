@@ -17,7 +17,7 @@ export function useProfileCustomization() {
   const [profile, setProfile] = useState<ProfileCustomization>({});
   const [backendUserId, setBackendUserId] = useState<string | null>(null);
   const [isProfileLoaded, setIsProfileLoaded] = useState(false);
-  const [spotifyConnected, setSpotifyConnected] = useState(false);
+  const [musicConnected, setMusicConnected] = useState(false);
   const fetchedRef = useRef(false);
 
   // Fetch or create backend user when Clerk user is available
@@ -47,7 +47,7 @@ export function useProfileCustomization() {
         }
 
         setBackendUserId(backendUser.id);
-        setSpotifyConnected((backendUser.musicConnected ?? backendUser.spotifyConnected) === true);
+        setMusicConnected(backendUser.musicConnected === true);
         setProfile(backendUserToProfile(backendUser));
       } catch (err) {
         console.error("Failed to load profile from backend:", err);
@@ -124,7 +124,7 @@ export function useProfileCustomization() {
     removeProfileImage,
     isLoaded: isLoaded && isProfileLoaded,
     isSaving,
-    spotifyConnected,
-    setSpotifyConnected,
+    musicConnected,
+    setMusicConnected,
   };
 }

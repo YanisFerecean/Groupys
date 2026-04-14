@@ -306,12 +306,12 @@ function CommunityList({ communities, loading, onClickCommunity }: {
   );
 }
 
-function useSpotifyCallback() {
+function useMusicCallback() {
   const searchParams = useSearchParams();
-  const spotifyParam = searchParams.get("spotify");
-  return spotifyParam === "connected"
+  const musicParam = searchParams.get("music");
+  return musicParam === "connected"
     ? "connected"
-    : spotifyParam === "error"
+    : musicParam === "error"
       ? "error"
       : null;
 }
@@ -325,13 +325,13 @@ export default function ProfileView() {
     removeProfileImage,
     isLoaded,
     isSaving,
-    spotifyConnected,
-    setSpotifyConnected,
+    musicConnected,
+    setMusicConnected,
   } = useProfileCustomization();
   const { user } = useUser();
   const { getToken } = useAuth();
   const router = useRouter();
-  const spotifyCallback = useSpotifyCallback();
+  const musicCallback = useMusicCallback();
   const [albumsRatedCount, setAlbumsRatedCount] = useState<number | null>(null);
   const searchParams = useSearchParams();
   const activeTab = (searchParams.get("tab") as Tab) ?? "overview";
@@ -408,13 +408,13 @@ export default function ProfileView() {
   }, [activeTab, fetchPosts, fetchLikes, fetchCommunities]);
 
   // Open the editor drawer when arriving from Spotify OAuth callback
-  const [isEditing, setIsEditing] = useState(spotifyCallback === "connected");
+  const [isEditing, setIsEditing] = useState(musicCallback === "connected");
 
   // Mark spotify as connected & clean up URL param
   useEffect(() => {
-    if (!spotifyCallback) return;
-    if (spotifyCallback === "connected") {
-      setSpotifyConnected(true);
+    if (!musicCallback) return;
+    if (musicCallback === "connected") {
+      setMusicConnected(true);
     }
     router.replace("/profile", { scroll: false });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -445,7 +445,7 @@ export default function ProfileView() {
         <ProfileWidgetGrid
           profile={profile}
           username={user.username ?? ""}
-          spotifyConnected={spotifyConnected}
+          musicConnected={musicConnected}
           isEditing={true}
           onReorder={(newOrder) => updateProfile({ ...profile, widgetOrder: newOrder })}
           onSettingsChange={(type, color, size) => {
@@ -507,8 +507,8 @@ export default function ProfileView() {
         onUpdateProfileImage={updateProfileImage}
         onRemoveProfileImage={removeProfileImage}
         isSaving={isSaving}
-        spotifyConnected={spotifyConnected}
-        initialTab={spotifyCallback === "connected" ? "widgets" : "profile"}
+        musicConnected={musicConnected}
+        initialTab={musicCallback === "connected" ? "widgets" : "profile"}
       />
     </div>
   );

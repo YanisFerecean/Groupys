@@ -26,7 +26,6 @@ export interface BackendUser {
   tags: string[];
   dateJoined: string;
   musicConnected?: boolean;
-  spotifyConnected?: boolean;
 }
 
 // ── Widget ↔ ProfileCustomization conversion ───────────────────────────────
@@ -52,7 +51,7 @@ function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCustomizatio
       }));
         result.songsContainerColor = w.color ?? undefined;
         if (widgetSize) result.widgetSizes = { ...result.widgetSizes, topSongs: widgetSize as "small" | "normal" };
-        if (w.data?.synced) result.spotifySynced = { ...result.spotifySynced, topSongs: true };
+        if (w.data?.synced) result.musicSynced = { ...result.musicSynced, topSongs: true };
         if (w.data?.hidden) result.hiddenWidgets = [...(result.hiddenWidgets ?? []), "topSongs"];
         break;
       case "topArtists":
@@ -64,7 +63,7 @@ function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCustomizatio
         }));
         result.artistsContainerColor = w.color ?? undefined;
         if (widgetSize) result.widgetSizes = { ...result.widgetSizes, topArtists: widgetSize as "small" | "normal" };
-        if (w.data?.synced) result.spotifySynced = { ...result.spotifySynced, topArtists: true };
+        if (w.data?.synced) result.musicSynced = { ...result.musicSynced, topArtists: true };
         if (w.data?.hidden) result.hiddenWidgets = [...(result.hiddenWidgets ?? []), "topArtists"];
         break;
       case "topAlbums":
@@ -76,7 +75,7 @@ function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCustomizatio
         }));
         result.albumsContainerColor = w.color ?? undefined;
         if (widgetSize) result.widgetSizes = { ...result.widgetSizes, topAlbums: widgetSize as "small" | "normal" };
-        if (w.data?.synced) result.spotifySynced = { ...result.spotifySynced, topAlbums: true };
+        if (w.data?.synced) result.musicSynced = { ...result.musicSynced, topAlbums: true };
         if (w.data?.hidden) result.hiddenWidgets = [...(result.hiddenWidgets ?? []), "topAlbums"];
         break;
       case "lastRatedAlbum":
@@ -103,7 +102,7 @@ function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCustomizatio
       }
         result.currentlyListeningContainerColor = w.color ?? undefined;
         if (widgetSize) result.widgetSizes = { ...result.widgetSizes, currentlyListening: widgetSize as "small" | "normal" };
-        if (w.data?.synced) result.spotifySynced = { ...result.spotifySynced, currentlyListening: true };
+        if (w.data?.synced) result.musicSynced = { ...result.musicSynced, currentlyListening: true };
         if (w.data?.hidden) result.hiddenWidgets = [...(result.hiddenWidgets ?? []), "currentlyListening"];
         break;
       }
@@ -117,7 +116,7 @@ function profileToWidgets(profile: Partial<ProfileCustomization>): BackendWidget
   type W = Omit<BackendWidget, "pos">;
   const widgetData: Partial<Record<string, W>> = {};
 
-  const synced = profile.spotifySynced ?? {};
+  const synced = profile.musicSynced ?? {};
   const hidden = profile.hiddenWidgets ?? [];
   if (profile.topAlbums?.length) {
     widgetData.topAlbums = { type: "topAlbums", color: profile.albumsContainerColor ?? null, data: { items: profile.topAlbums, size: profile.widgetSizes?.topAlbums ?? null, synced: synced.topAlbums ?? false, hidden: hidden.includes("topAlbums") } };

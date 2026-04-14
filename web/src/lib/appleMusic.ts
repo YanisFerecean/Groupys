@@ -43,8 +43,8 @@ interface MusicKitGlobal {
       name: string;
       build: string;
     };
-  }): void;
-  getInstance(): MusicKitInstance;
+  }): Promise<MusicKitInstance>;
+  getInstance(): MusicKitInstance | undefined;
 }
 
 declare global {
@@ -79,7 +79,7 @@ async function loadMusicKitScript(): Promise<void> {
   if (window.MusicKit) return;
   if (scriptLoadPromise) return scriptLoadPromise;
 
-  scriptLoadPromise = new Promise((resolve, reject) => {
+  scriptLoadPromise = new Promise<void>((resolve, reject) => {
     const existing = document.querySelector<HTMLScriptElement>('script[data-music-kit="true"]');
     const onLoaded = () => {
       if (!window.MusicKit) {
@@ -158,15 +158,13 @@ export async function connectAppleMusicWeb(token: string): Promise<void> {
     throw new Error("MusicKit is unavailable in this browser session.");
   }
 
-  window.MusicKit.configure({
+  const instance = await window.MusicKit.configure({
     developerToken: developerToken.token,
     app: {
       name: APPLE_MUSIC_APP_NAME,
       build: APPLE_MUSIC_APP_BUILD,
     },
   });
-
-  const instance = window.MusicKit.getInstance();
   const musicUserToken = instance.musicUserToken ?? (await instance.authorize());
 
   if (!musicUserToken) {
@@ -217,14 +215,3 @@ export async function disconnectMusic(token: string): Promise<void> {
     throw new Error(await readError(res, "Failed to disconnect Apple Music"));
   }
 }
-
-// Backward-compatible aliases used throughout the existing web UI.
-export type SpotifyArtist = MusicArtist;
-export type SpotifyTrack = MusicTrack;
-export type SpotifyAlbum = MusicAlbum;
-
-export const fetchSpotifyTopArtists = fetchMusicTopArtists;
-export const fetchSpotifyTopTracks = fetchMusicTopTracks;
-export const fetchSpotifySavedAlbums = fetchMusicTopAlbums;
-export const fetchSpotifyCurrentlyPlaying = fetchMusicCurrentlyPlaying;
-export const disconnectSpotify = disconnectMusic;

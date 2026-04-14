@@ -47,7 +47,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     if (!isLoaded || !isAuthLoaded || !isSignedIn || !user) return;
     getTokenRef.current().then((token) => {
       fetchUserByClerkId(user.id, token).then((bu) => {
-        if (bu) setMusicConnected((bu.musicConnected ?? bu.spotifyConnected) === true);
+        if (bu) setMusicConnected(bu.musicConnected === true);
       });
     });
   }, [isLoaded, isAuthLoaded, isSignedIn, user]);
