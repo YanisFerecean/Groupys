@@ -48,6 +48,31 @@ public class PostReactionRepository implements PanacheRepositoryBase<PostReactio
         return map;
     }
 
+    /**
+     * Returns likes and dislikes for all given posts in a single query.
+     * The returned long[] has length 2: [0] = like count, [1] = dislike count.
+     * Replaces two separate calls to {@link #countsByPostIdsAndType}.
+     */
+    public Map<UUID, long[]> countAllReactionsByPostIds(List<UUID> postIds) {
+        if (postIds.isEmpty()) return Map.of();
+        List<Object[]> rows = getEntityManager().createQuery(
+                "SELECT r.post.id, r.reactionType, COUNT(r) FROM PostReaction r " +
+                "WHERE r.post.id IN :ids GROUP BY r.post.id, r.reactionType",
+                Object[].class)
+                .setParameter("ids", postIds)
+                .getResultList();
+        Map<UUID, long[]> result = new HashMap<>();
+        for (Object[] row : rows) {
+            UUID id = (UUID) row[0];
+            String type = (String) row[1];
+            long count = (Long) row[2];
+            long[] counts = result.computeIfAbsent(id, k -> new long[2]);
+            if ("like".equals(type)) counts[0] = count;
+            else if ("dislike".equals(type)) counts[1] = count;
+        }
+        return result;
+    }
+
     public long countByUser(UUID userId) {
         return count("user.id", userId);
     }

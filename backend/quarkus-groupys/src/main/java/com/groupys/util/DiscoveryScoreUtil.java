@@ -49,13 +49,15 @@ public final class DiscoveryScoreUtil {
                                         double sharedCommunityScore,
                                         double activityScore,
                                         double countryScore,
-                                        double followGraphScore) {
-        return 0.30 * artistScore
-                + 0.20 * genreScore
-                + 0.20 * sharedCommunityScore
-                + 0.15 * activityScore
+                                        double followGraphScore,
+                                        double friendsOfFriendsScore) {
+        return 0.28 * artistScore
+                + 0.18 * genreScore
+                + 0.18 * sharedCommunityScore
+                + 0.13 * activityScore
                 + 0.05 * countryScore
-                + 0.05 * followGraphScore;
+                + 0.03 * followGraphScore
+                + 0.10 * friendsOfFriendsScore;
     }
 
     public static double countryMatchScore(String left, String right) {

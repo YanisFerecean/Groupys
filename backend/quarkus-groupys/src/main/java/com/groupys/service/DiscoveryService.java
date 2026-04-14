@@ -14,8 +14,10 @@ import com.groupys.util.DiscoveryScoreUtil;
 import com.groupys.util.MusicIdentityUtil;
 import io.quarkus.logging.Log;
 import io.quarkus.runtime.ShutdownEvent;
+import com.groupys.event.CommunityActivityEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
+import jakarta.enterprise.event.ObservesAsync;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.BadRequestException;
@@ -95,6 +97,9 @@ public class DiscoveryService {
     UserFollowRepository userFollowRepository;
 
     @Inject
+    FriendshipRepository friendshipRepository;
+
+    @Inject
     ConversationRepository conversationRepository;
 
     @Inject
@@ -153,6 +158,14 @@ public class DiscoveryService {
         shuttingDown = true;
     }
 
+    void onCommunityActivity(@ObservesAsync CommunityActivityEvent event) {
+        try {
+            self.refreshAfterCommunityActivity(event.communityId());
+        } catch (Exception e) {
+            Log.warnf(e, "Async discovery refresh failed for community %s", event.communityId());
+        }
+    }
+
     @Transactional
     public DiscoverySyncResDto syncMusic(String clerkId) {
         User user = getUserByClerkId(clerkId);
@@ -197,8 +210,9 @@ public class DiscoveryService {
         if (refresh) {
             refreshForUser(user.id);
         }
+        Set<UUID> friendIds = friendshipRepository.findAcceptedFriendIds(user.id);
         if (flags.redisEnabled() && flags.redisRecommendationReadEnabled()) {
-            List<SuggestedCommunityResDto> redisResult = loadCommunitySuggestionsFromRedis(user.id, pageSize);
+            List<SuggestedCommunityResDto> redisResult = loadCommunitySuggestionsFromRedis(user.id, pageSize, friendIds);
             if (!redisResult.isEmpty()) {
                 return redisResult;
             }
@@ -211,14 +225,14 @@ public class DiscoveryService {
             }
             if (!postgresCaches.isEmpty()) {
                 return postgresCaches.stream()
-                        .map(this::toSuggestedCommunity)
+                        .map(cache -> toSuggestedCommunity(cache, friendIds))
                         .toList();
             }
         }
 
         return computeCommunityRecommendationCaches(user.id).stream()
                 .limit(pageSize)
-                .map(this::toSuggestedCommunity)
+                .map(cache -> toSuggestedCommunity(cache, friendIds))
                 .toList();
     }
 
@@ -404,6 +418,8 @@ public class DiscoveryService {
                 .forEach(excluded::add);
         userLikeRepository.findLikedUserIds(userId)
                 .forEach(excluded::add);
+        friendshipRepository.findAcceptedFriendIds(userId)
+                .forEach(excluded::add);
         return excluded;
     }
 
@@ -463,8 +479,17 @@ public class DiscoveryService {
                 .toList();
         Set<UUID> suppressedCommunityIds = userDiscoveryActionRepository.findSuppressedCommunityIds(userId);
 
+        List<Community> allDiscoverable = communityRepository.listDiscoverable();
+        List<UUID> candidateCommunityIds = allDiscoverable.stream()
+                .map(c -> c.id)
+                .filter(id -> !joinedCommunityIds.contains(id) && !suppressedCommunityIds.contains(id))
+                .toList();
+        // Pre-load shared member counts for all candidates in one query (eliminates N+1)
+        Map<UUID, Long> sharedMembersMap = communityMemberRepository.batchCountSharedMembers(
+                candidateCommunityIds, joinedCommunityIds);
+
         List<CommunityRecommendationCache> caches = new ArrayList<>();
-        for (Community community : communityRepository.listDiscoverable()) {
+        for (Community community : allDiscoverable) {
             if (joinedCommunityIds.contains(community.id) || suppressedCommunityIds.contains(community.id)) {
                 continue;
             }
@@ -483,7 +508,7 @@ public class DiscoveryService {
                     toScoreMap(userGenres, preference -> preference.normalizedScore),
                     toScoreMap(communityGenres, preference -> preference.normalizedScore)
             );
-            long sharedMembers = communityMemberRepository.countSharedMembers(community.id, joinedCommunityIds);
+            long sharedMembers = sharedMembersMap.getOrDefault(community.id, 0L);
             double socialFit = DiscoveryScoreUtil.normalizedCount(sharedMembers, Math.max(1, community.memberCount));
             double activityFit = DiscoveryScoreUtil.clamp01(profile.activityScore != null ? profile.activityScore : 0d);
             if (community.memberCount > 0) {
@@ -553,13 +578,23 @@ public class DiscoveryService {
         Map<Long, UserGenrePreference> userGenres = userGenrePreferenceRepository.findByUser(userId).stream()
                 .collect(Collectors.toMap(pref -> pref.genre.id, pref -> pref, (left, right) -> left, LinkedHashMap::new));
         Set<UUID> excludedUserIds = buildExcludedSuggestedUserIds(userId);
+        // Pre-fetch once — the requester's friend set is constant across all candidates
+        Set<UUID> userFriendIds = friendshipRepository.findAcceptedFriendIds(userId);
 
         List<UserSimilarityCache> caches = new ArrayList<>();
         List<User> candidatePool = resolveDiscoveryCandidates(userId);
-        for (User candidate : candidatePool) {
-            if (excludedUserIds.contains(candidate.id)) {
-                continue;
-            }
+        List<User> filteredCandidates = candidatePool.stream()
+                .filter(c -> !excludedUserIds.contains(c.id))
+                .toList();
+        List<UUID> candidateIds = filteredCandidates.stream().map(c -> c.id).toList();
+
+        // Batch-load all per-candidate counts before the loop — eliminates N+1 queries
+        long userCommunityCount = communityMemberRepository.countByUser(user.id);
+        Map<UUID, Long> candidateCommunityCounts = communityMemberRepository.batchCountByUsers(candidateIds);
+        Map<UUID, Long> sharedCommunitiesMap = communityMemberRepository.batchCountSharedCommunities(user.id, candidateIds);
+        Map<UUID, Set<UUID>> candidateFriendIdsMap = friendshipRepository.batchFriendIdsByCandidates(candidateIds);
+
+        for (User candidate : filteredCandidates) {
             rebuildCommunityDerivedPreferences(candidate);
             refreshUserTasteProfile(candidate);
 
@@ -576,10 +611,10 @@ public class DiscoveryService {
                     toScoreMap(userGenres, preference -> preference.normalizedScore),
                     toScoreMap(candidateGenres, preference -> preference.normalizedScore)
             );
-            long sharedCommunities = communityMemberRepository.countSharedCommunities(user.id, candidate.id);
-            double sharedCommunityScore = DiscoveryScoreUtil.normalizedCount(sharedCommunities,
-                    Math.max(1, Math.max(communityMemberRepository.findByUser(user.id).size(),
-                            communityMemberRepository.findByUser(candidate.id).size())));
+            long sharedCommunities = sharedCommunitiesMap.getOrDefault(candidate.id, 0L);
+            long maxCommunityCount = Math.max(1, Math.max(userCommunityCount,
+                    candidateCommunityCounts.getOrDefault(candidate.id, 0L)));
+            double sharedCommunityScore = DiscoveryScoreUtil.normalizedCount(sharedCommunities, maxCommunityCount);
             UserTasteProfile userProfile = ensureUserProfile(user.id);
             UserTasteProfile candidateProfile = ensureUserProfile(candidate.id);
             double activityScore = 1d - Math.abs(
@@ -588,6 +623,9 @@ public class DiscoveryService {
             double countryScore = countryMatchScore(user, candidate);
             long mutualFollows = userFollowRepository.countMutualFollowers(user.id, candidate.id);
             double followGraphScore = DiscoveryScoreUtil.normalizedCount(mutualFollows, 5);
+            Set<UUID> candidateFriendIds = candidateFriendIdsMap.getOrDefault(candidate.id, Set.of());
+            long sharedFriends = userFriendIds.stream().filter(candidateFriendIds::contains).count();
+            double friendsOfFriendsScore = DiscoveryScoreUtil.normalizedCount(sharedFriends, 5);
 
             double finalScore = DiscoveryScoreUtil.userMatchScore(
                     artistScore,
@@ -595,7 +633,8 @@ public class DiscoveryService {
                     sharedCommunityScore,
                     activityScore,
                     countryScore,
-                    followGraphScore
+                    followGraphScore,
+                    friendsOfFriendsScore
             );
             if (finalScore <= 0.05d) {
                 continue;
@@ -611,10 +650,11 @@ public class DiscoveryService {
             cache.activityOverlapScore = activityScore;
             cache.countryScore = countryScore;
             cache.followGraphScore = followGraphScore;
+            cache.friendsOfFriendsScore = friendsOfFriendsScore;
             cache.embeddingScore = 0d;
 
             Explanation explanation = buildUserExplanation(userArtists, userGenres, candidateArtists, candidateGenres,
-                    (int) sharedCommunities, countryScore > 0d, (int) mutualFollows);
+                    (int) sharedCommunities, countryScore > 0d, (int) mutualFollows, (int) sharedFriends);
             cache.primaryReasonCode = explanation.reasonCodes().isEmpty() ? null : explanation.reasonCodes().getFirst();
             cache.explanationJson = explanation.json();
             cache.expiresAt = Instant.now().plus(CACHE_TTL_HOURS, ChronoUnit.HOURS);
@@ -736,7 +776,7 @@ public class DiscoveryService {
         community.tasteSummaryText = profile.tasteSummaryText;
     }
 
-    private void rebuildCommunityDerivedPreferences(User user) {
+    void rebuildCommunityDerivedPreferences(User user) {
         userArtistPreferenceRepository.delete("user.id = ?1 and source = ?2", user.id, SOURCE_COMMUNITY_MEMBERSHIP);
         userGenrePreferenceRepository.delete("user.id = ?1 and source = ?2", user.id, SOURCE_COMMUNITY_MEMBERSHIP);
 
@@ -781,7 +821,7 @@ public class DiscoveryService {
         });
     }
 
-    private void refreshUserTasteProfile(User user) {
+    void refreshUserTasteProfile(User user) {
         UserTasteProfile profile = userTasteProfileRepository.findByUserId(user.id)
                 .orElseGet(UserTasteProfile::new);
         List<UserArtistPreference> artists = userArtistPreferenceRepository.findByUser(user.id);
@@ -1182,7 +1222,7 @@ public class DiscoveryService {
             reasonCodes.add("SAME_COUNTRY");
         }
         String explanation = buildExplanationText(artistNames, genreNames, sharedCommunityCount, countryMatch);
-        return serializeExplanation(explanation, reasonCodes, artistNames, genreNames, sharedCommunityCount, countryMatch, 0);
+        return serializeExplanation(explanation, reasonCodes, artistNames, genreNames, sharedCommunityCount, countryMatch, 0, 0);
     }
 
     private Explanation buildUserExplanation(
@@ -1192,7 +1232,8 @@ public class DiscoveryService {
             Map<Long, UserGenrePreference> candidateGenres,
             int sharedCommunityCount,
             boolean countryMatch,
-            int mutualFollowCount
+            int mutualFollowCount,
+            int sharedFriendsCount
     ) {
         List<String> reasonCodes = new ArrayList<>();
         List<String> artistNames = intersectArtistNames(userArtists.keySet(), candidateArtists.keySet());
@@ -1212,8 +1253,11 @@ public class DiscoveryService {
         if (mutualFollowCount > 0) {
             reasonCodes.add("FOLLOW_GRAPH_PROXIMITY");
         }
+        if (sharedFriendsCount > 0) {
+            reasonCodes.add("FRIENDS_OF_FRIENDS");
+        }
         String explanation = buildExplanationText(artistNames, genreNames, sharedCommunityCount, countryMatch);
-        return serializeExplanation(explanation, reasonCodes, artistNames, genreNames, sharedCommunityCount, countryMatch, mutualFollowCount);
+        return serializeExplanation(explanation, reasonCodes, artistNames, genreNames, sharedCommunityCount, countryMatch, mutualFollowCount, sharedFriendsCount);
     }
 
     private Explanation serializeExplanation(String explanation,
@@ -1222,7 +1266,8 @@ public class DiscoveryService {
                                              List<String> genreNames,
                                              int sharedCommunityCount,
                                              boolean countryMatch,
-                                             int mutualFollowCount) {
+                                             int mutualFollowCount,
+                                             int sharedFriendsCount) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("explanation", explanation);
         payload.put("reasonCodes", reasonCodes);
@@ -1231,6 +1276,7 @@ public class DiscoveryService {
         payload.put("sharedCommunityCount", sharedCommunityCount);
         payload.put("countryMatch", countryMatch);
         payload.put("mutualFollowCount", mutualFollowCount);
+        payload.put("sharedFriendsCount", sharedFriendsCount);
         try {
             return new Explanation(reasonCodes, objectMapper.writeValueAsString(payload));
         } catch (JsonProcessingException e) {
@@ -1291,7 +1337,7 @@ public class DiscoveryService {
                 .toList();
     }
 
-    private List<SuggestedCommunityResDto> loadCommunitySuggestionsFromRedis(UUID userId, int pageSize) {
+    private List<SuggestedCommunityResDto> loadCommunitySuggestionsFromRedis(UUID userId, int pageSize, Set<UUID> friendIds) {
         List<DiscoveryRedisCacheService.RankedRecommendation> ranked = redisCacheService.readCommunityRecommendations(userId, pageSize);
         if (ranked.isEmpty()) {
             return List.of();
@@ -1299,13 +1345,22 @@ public class DiscoveryService {
         List<UUID> ids = ranked.stream().map(DiscoveryRedisCacheService.RankedRecommendation::id).toList();
         Map<UUID, Community> communitiesById = communityRepository.findByIdsMap(ids);
         return ranked.stream()
-                .map(item -> toSuggestedCommunity(communitiesById.get(item.id()), item.score(), item.explanationJson()))
+                .map(item -> toSuggestedCommunity(communitiesById.get(item.id()), item.score(), item.explanationJson(), friendIds))
                 .filter(Objects::nonNull)
                 .toList();
     }
 
-    private SuggestedCommunityResDto toSuggestedCommunity(CommunityRecommendationCache cache) {
+    private SuggestedCommunityResDto toSuggestedCommunity(CommunityRecommendationCache cache, Set<UUID> friendIds) {
         JsonNode explanation = readJson(cache.explanationJson);
+        List<UserSnippetDto> friends = communityMemberRepository
+                .findFriendsInCommunity(cache.community.id, friendIds, 3).stream()
+                .map(u -> new UserSnippetDto(u.id, u.username, u.displayName, u.profileImage))
+                .toList();
+        List<DiscoveryMatchDto> topArtists = communityArtistRepository
+                .findByCommunity(cache.community.id).stream()
+                .limit(3)
+                .map(ca -> new DiscoveryMatchDto(String.valueOf(ca.artist.getId()), ca.artist.getName()))
+                .toList();
         return new SuggestedCommunityResDto(
                 cache.community.id,
                 cache.community.name,
@@ -1325,15 +1380,26 @@ public class DiscoveryService {
                 explanation.path("countryMatch").asBoolean(false),
                 cache.community.createdBy != null ? cache.community.createdBy.username : null,
                 cache.community.createdBy != null ? cache.community.createdBy.displayName : null,
-                cache.community.createdBy != null ? cache.community.createdBy.profileImage : null
+                cache.community.createdBy != null ? cache.community.createdBy.profileImage : null,
+                friends,
+                topArtists
         );
     }
 
-    private SuggestedCommunityResDto toSuggestedCommunity(Community community, double score, String explanationJson) {
+    private SuggestedCommunityResDto toSuggestedCommunity(Community community, double score, String explanationJson, Set<UUID> friendIds) {
         if (community == null) {
             return null;
         }
         JsonNode explanation = readJson(explanationJson);
+        List<UserSnippetDto> friends = communityMemberRepository
+                .findFriendsInCommunity(community.id, friendIds, 3).stream()
+                .map(u -> new UserSnippetDto(u.id, u.username, u.displayName, u.profileImage))
+                .toList();
+        List<DiscoveryMatchDto> topArtists = communityArtistRepository
+                .findByCommunity(community.id).stream()
+                .limit(3)
+                .map(ca -> new DiscoveryMatchDto(String.valueOf(ca.artist.getId()), ca.artist.getName()))
+                .toList();
         return new SuggestedCommunityResDto(
                 community.id,
                 community.name,
@@ -1353,7 +1419,9 @@ public class DiscoveryService {
                 explanation.path("countryMatch").asBoolean(false),
                 community.createdBy != null ? community.createdBy.username : null,
                 community.createdBy != null ? community.createdBy.displayName : null,
-                community.createdBy != null ? community.createdBy.profileImage : null
+                community.createdBy != null ? community.createdBy.profileImage : null,
+                friends,
+                topArtists
         );
     }
 

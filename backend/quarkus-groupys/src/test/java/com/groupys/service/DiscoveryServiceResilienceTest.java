@@ -6,6 +6,7 @@ import com.groupys.model.MusicSourceSnapshot;
 import com.groupys.model.User;
 import com.groupys.model.UserSimilarityCache;
 import com.groupys.repository.ConversationRepository;
+import com.groupys.repository.FriendshipRepository;
 import com.groupys.repository.MusicSourceSnapshotRepository;
 import com.groupys.repository.UserDiscoveryActionRepository;
 import com.groupys.repository.UserFollowRepository;
@@ -42,6 +43,7 @@ class DiscoveryServiceResilienceTest {
         service.conversationRepository = new EmptyConversationRepository();
         service.userDiscoveryActionRepository = new EmptyUserDiscoveryActionRepository();
         service.userLikeRepository = new EmptyUserLikeRepository();
+        service.friendshipRepository = new EmptyFriendshipRepository();
         service.computedUserCaches = List.of(userCache(requester, candidate, 0.83d));
 
         List<SuggestedUserResDto> result = service.getSuggestedUsers(requester.clerkId, 10, false);
@@ -66,6 +68,7 @@ class DiscoveryServiceResilienceTest {
         service.conversationRepository = new EmptyConversationRepository();
         service.userDiscoveryActionRepository = new EmptyUserDiscoveryActionRepository();
         service.userLikeRepository = new EmptyUserLikeRepository();
+        service.friendshipRepository = new EmptyFriendshipRepository();
         service.computedUserCaches = List.of(userCache(requester, candidate, 0.50d));
 
         List<SuggestedUserResDto> result = service.getSuggestedUsers(requester.clerkId, 10, false);
@@ -315,6 +318,13 @@ class DiscoveryServiceResilienceTest {
     private static final class EmptyUserLikeRepository extends UserLikeRepository {
         @Override
         public Set<UUID> findLikedUserIds(UUID fromUserId) {
+            return Set.of();
+        }
+    }
+
+    private static final class EmptyFriendshipRepository extends FriendshipRepository {
+        @Override
+        public Set<UUID> findAcceptedFriendIds(UUID userId) {
             return Set.of();
         }
     }

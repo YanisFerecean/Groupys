@@ -50,6 +50,9 @@ public class UserSimilarityCache {
     @Column(name = "follow_graph_score", nullable = false)
     public Double followGraphScore = 0d;
 
+    @Column(name = "friends_of_friends_score")   // nullable — prod compat for existing rows
+    public Double friendsOfFriendsScore = 0d;
+
     @Column(name = "embedding_score", nullable = false)
     public Double embeddingScore = 0d;
 
