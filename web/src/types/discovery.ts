@@ -24,4 +24,5 @@ export interface SuggestedCommunity {
     displayName: string | null;
     profileImage: string | null;
   }[];
+  communityArtists: { id: string; name: string }[];
 }

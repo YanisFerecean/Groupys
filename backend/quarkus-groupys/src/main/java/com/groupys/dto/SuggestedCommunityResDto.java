@@ -23,6 +23,7 @@ public record SuggestedCommunityResDto(
         String creatorUsername,
         String creatorDisplayName,
         String creatorProfileImage,
-        List<UserSnippetDto> friendsInCommunity
+        List<UserSnippetDto> friendsInCommunity,
+        List<DiscoveryMatchDto> communityArtists
 ) {
 }

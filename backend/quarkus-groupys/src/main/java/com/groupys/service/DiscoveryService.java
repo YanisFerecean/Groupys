@@ -1329,6 +1329,11 @@ public class DiscoveryService {
                 .findFriendsInCommunity(cache.community.id, friendIds, 3).stream()
                 .map(u -> new UserSnippetDto(u.id, u.username, u.displayName, u.profileImage))
                 .toList();
+        List<DiscoveryMatchDto> topArtists = communityArtistRepository
+                .findByCommunity(cache.community.id).stream()
+                .limit(3)
+                .map(ca -> new DiscoveryMatchDto(String.valueOf(ca.artist.getId()), ca.artist.getName()))
+                .toList();
         return new SuggestedCommunityResDto(
                 cache.community.id,
                 cache.community.name,
@@ -1349,7 +1354,8 @@ public class DiscoveryService {
                 cache.community.createdBy != null ? cache.community.createdBy.username : null,
                 cache.community.createdBy != null ? cache.community.createdBy.displayName : null,
                 cache.community.createdBy != null ? cache.community.createdBy.profileImage : null,
-                friends
+                friends,
+                topArtists
         );
     }
 
@@ -1361,6 +1367,11 @@ public class DiscoveryService {
         List<UserSnippetDto> friends = communityMemberRepository
                 .findFriendsInCommunity(community.id, friendIds, 3).stream()
                 .map(u -> new UserSnippetDto(u.id, u.username, u.displayName, u.profileImage))
+                .toList();
+        List<DiscoveryMatchDto> topArtists = communityArtistRepository
+                .findByCommunity(community.id).stream()
+                .limit(3)
+                .map(ca -> new DiscoveryMatchDto(String.valueOf(ca.artist.getId()), ca.artist.getName()))
                 .toList();
         return new SuggestedCommunityResDto(
                 community.id,
@@ -1382,7 +1393,8 @@ public class DiscoveryService {
                 community.createdBy != null ? community.createdBy.username : null,
                 community.createdBy != null ? community.createdBy.displayName : null,
                 community.createdBy != null ? community.createdBy.profileImage : null,
-                friends
+                friends,
+                topArtists
         );
     }
 

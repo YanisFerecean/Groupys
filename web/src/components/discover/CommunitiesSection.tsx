@@ -8,6 +8,14 @@ import SectionHeader from "@/components/discover/SectionHeader";
 import { fetchSuggestedCommunities } from "@/lib/discovery-api";
 import type { SuggestedCommunity } from "@/types/discovery";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
+
+function resolveImageUrl(url: string | null): string | null {
+  if (!url) return null;
+  // Stored paths are relative (e.g. /api/files/...) — prepend the API host
+  return `${API_URL}${url.replace(/^\/api/, "")}`;
+}
+
 const COMMUNITY_COLORS = [
   "#7c3aed",
   "#be185d",
@@ -80,8 +88,9 @@ function CommunityCard({
   color: string;
   onClick: () => void;
 }) {
-  const hasBanner = !!community.bannerUrl;
-  const artists = community.matchedArtists.slice(0, 2);
+  const backgroundUrl = resolveImageUrl(community.bannerUrl ?? community.imageUrl);
+  const hasBanner = !!backgroundUrl;
+  const topArtist = (community.communityArtists ?? [])[0]?.name ?? null;
 
   return (
     <button
@@ -92,7 +101,7 @@ function CommunityCard({
         backgroundColor: color,
         ...(hasBanner
           ? {
-              backgroundImage: `url(${community.bannerUrl})`,
+              backgroundImage: `url(${backgroundUrl})`,
               backgroundSize: "cover",
               backgroundPosition: "center",
             }
@@ -122,24 +131,11 @@ function CommunityCard({
           {community.name}
         </h4>
 
-        {/* Matched artists pills */}
-        {artists.length > 0 && (
-          <div className="flex gap-1.5 flex-wrap mb-2">
-            {artists.map((a) => (
-              <span
-                key={a.id}
-                className="flex items-center gap-1 text-[10px] font-bold text-white/90 bg-white/15 backdrop-blur-sm px-2 py-0.5 rounded-full"
-              >
-                <span
-                  className="material-symbols-outlined"
-                  style={{ fontSize: 10 }}
-                >
-                  library_music
-                </span>
-                {a.name}
-              </span>
-            ))}
-          </div>
+        {/* Top artist */}
+        {topArtist && (
+          <p className="text-xs font-semibold text-white/60 mb-1 truncate">
+            {topArtist}
+          </p>
         )}
 
         {/* Bottom row: members + friends */}
