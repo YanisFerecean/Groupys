@@ -51,6 +51,9 @@ public class PostService {
     CommunityRecommendationCacheRepository communityRecommendationCacheRepository;
 
     @Inject
+    FriendshipRepository friendshipRepository;
+
+    @Inject
     CommentService commentService;
 
     @Inject
@@ -81,18 +84,32 @@ public class PostService {
         Map<UUID, Double> recScoreMap = recCaches.stream()
                 .collect(Collectors.toMap(c -> c.community.id, c -> c.score));
 
-        // Fetch recent posts from both sources (3x pool for accurate pagination)
+        // Friend signals: posts authored by friends / liked by friends in non-joined communities
+        Set<UUID> friendIds = friendshipRepository.findAcceptedFriendIds(user.id);
+
+        // Fetch recent posts from all sources (3x pool for accurate pagination)
         int poolSize = (page + 1) * size * 3;
         List<Post> joinedPosts = joinedIds.isEmpty() ? List.of()
                 : postRepository.findByCommunitiesRecentLimited(joinedIds, poolSize);
         List<Post> recPosts = recIds.isEmpty() ? List.of()
                 : postRepository.findByCommunitiesRecentLimited(recIds, poolSize / 2);
+        List<Post> friendAuthoredPosts = friendIds.isEmpty() ? List.of()
+                : postRepository.findByAuthorsInNonJoinedCommunities(friendIds, joinedSet, poolSize / 2);
+        List<Object[]> friendLikedRows = friendIds.isEmpty() ? List.of()
+                : postRepository.findLikedByFriendsInNonJoinedCommunities(friendIds, joinedSet, poolSize / 2);
+        List<Post> friendLikedPosts = friendLikedRows.stream().map(row -> (Post) row[0]).toList();
+        // Map post ID → first friend who liked it (for the "liked by @..." label)
+        Map<UUID, User> friendLikerMap = new java.util.HashMap<>();
+        for (Object[] row : friendLikedRows) {
+            friendLikerMap.putIfAbsent(((Post) row[0]).id, (User) row[1]);
+        }
 
         // Score: recency decay * community weight
-        // Joined communities = weight 1.0; recommended = weight (score * 0.65)
+        // Joined = 1.0 | friend authored = 0.80 | friend liked = 0.60 | recommended = score * 0.65
         record ScoredPost(Post post, double score) {}
         Instant now = Instant.now();
-        List<ScoredPost> scored = new ArrayList<>(joinedPosts.size() + recPosts.size());
+        List<ScoredPost> scored = new ArrayList<>(
+                joinedPosts.size() + recPosts.size() + friendAuthoredPosts.size() + friendLikedPosts.size());
         for (Post p : joinedPosts) {
             double hoursAgo = Duration.between(p.createdAt, now).toHours();
             double recency = 1.0 / (1.0 + hoursAgo / 24.0);
@@ -104,6 +121,24 @@ public class PostService {
             double recency = 1.0 / (1.0 + hoursAgo / 24.0);
             scored.add(new ScoredPost(p, recency * communityScore * 0.65));
         }
+        for (Post p : friendAuthoredPosts) {
+            double hoursAgo = Duration.between(p.createdAt, now).toHours();
+            double recency = 1.0 / (1.0 + hoursAgo / 24.0);
+            scored.add(new ScoredPost(p, recency * 0.80));
+        }
+        for (Post p : friendLikedPosts) {
+            double hoursAgo = Duration.between(p.createdAt, now).toHours();
+            double recency = 1.0 / (1.0 + hoursAgo / 24.0);
+            scored.add(new ScoredPost(p, recency * 0.60));
+        }
+
+        // Reason map: priority FRIEND_POSTED > FRIEND_LIKED > RECOMMENDED_COMMUNITY
+        Map<UUID, String> reasonMap = new java.util.HashMap<>();
+        for (Post p : recPosts) reasonMap.putIfAbsent(p.id, "RECOMMENDED_COMMUNITY");
+        for (Post p : friendLikedPosts) {
+            if (!"FRIEND_POSTED".equals(reasonMap.get(p.id))) reasonMap.put(p.id, "FRIEND_LIKED");
+        }
+        for (Post p : friendAuthoredPosts) reasonMap.put(p.id, "FRIEND_POSTED");
 
         // Sort, deduplicate, paginate
         Set<UUID> seen = new HashSet<>();
@@ -115,7 +150,7 @@ public class PostService {
                 .limit(size)
                 .toList();
 
-        return toDtoList(result, user);
+        return toDtoList(result, user, reasonMap, friendLikerMap);
     }
 
     public List<PostResDto> getByCommunity(UUID communityId, String clerkId, int page, int size) {
@@ -247,6 +282,15 @@ public class PostService {
      * eliminating the previous N×4 query pattern.
      */
     private List<PostResDto> toDtoList(List<Post> posts, User currentUser) {
+        return toDtoList(posts, currentUser, Map.of(), Map.of());
+    }
+
+    private List<PostResDto> toDtoList(List<Post> posts, User currentUser, Map<UUID, String> reasonMap) {
+        return toDtoList(posts, currentUser, reasonMap, Map.of());
+    }
+
+    private List<PostResDto> toDtoList(List<Post> posts, User currentUser, Map<UUID, String> reasonMap,
+                                        Map<UUID, User> friendLikerMap) {
         if (posts.isEmpty()) return List.of();
 
         List<UUID> postIds = posts.stream().map(p -> p.id).toList();
@@ -276,6 +320,8 @@ public class PostService {
                     mediaDtos.add(new PostResDto.PostMediaDto(m.url, m.type, i));
                 }
             }
+            String reason = reasonMap.get(post.id);
+            User liker = "FRIEND_LIKED".equals(reason) ? friendLikerMap.get(post.id) : null;
             return new PostResDto(
                     post.id,
                     post.content,
@@ -292,7 +338,10 @@ public class PostService {
                     readModelEnabled ? Math.max(0L, post.dislikeCount) : dislikesMap.getOrDefault(post.id, 0L),
                     userReactionMap.get(post.id),
                     readModelEnabled ? Math.max(0L, post.commentCount) : commentMap.getOrDefault(post.id, 0L),
-                    post.title
+                    post.title,
+                    reason,
+                    liker != null ? liker.username : null,
+                    liker != null ? liker.profileImage : null
             );
         }).toList();
     }

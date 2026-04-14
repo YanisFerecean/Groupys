@@ -1,4 +1,4 @@
-import type { SuggestedCommunity } from "@/types/discovery";
+import type { DiscoveredPost, SuggestedCommunity } from "@/types/discovery";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
 
@@ -11,6 +11,18 @@ export async function followUser(
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!res.ok) throw new Error("Failed to follow user");
+}
+
+export async function fetchDiscoveredPosts(
+  token: string | null,
+  limit = 10
+): Promise<DiscoveredPost[]> {
+  const res = await fetch(
+    `${API_URL}/discovery/posts/suggested?limit=${limit}`,
+    { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+  );
+  if (!res.ok) return [];
+  return res.json();
 }
 
 export async function fetchSuggestedCommunities(

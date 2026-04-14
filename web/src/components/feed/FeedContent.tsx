@@ -36,6 +36,9 @@ interface PostRes {
   dislikeCount: number;
   userReaction: "like" | "dislike" | null;
   commentCount: number;
+  feedReasonCode: "FRIEND_POSTED" | "FRIEND_LIKED" | "RECOMMENDED_COMMUNITY" | null;
+  triggerFriendUsername: string | null;
+  triggerFriendProfileImage: string | null;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -78,22 +81,37 @@ const FeedPostCard = memo(function FeedPostCard({
   ) ?? [];
 
   return (
-    <div className="bg-surface-container-lowest/65 border border-white/80 rounded-2xl overflow-hidden shadow-sm">
-      {/* Community badge */}
-      <button
-        onClick={() => router.push(`/discover/community/${post.communityId}`)}
-        className="flex items-center gap-2 px-4 pt-3 pb-1 group"
-      >
-        <span
-          className="material-symbols-outlined text-primary"
-          style={{ fontSize: 16, fontVariationSettings: "'FILL' 1" }}
+    <div className="relative bg-surface-container-lowest/65 border border-white/80 rounded-2xl overflow-hidden shadow-sm">
+
+      {/* FRIEND_POSTED — author name chip */}
+      {post.feedReasonCode === "FRIEND_POSTED" && (
+        <div className="px-4 pt-3 pb-0">
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-primary text-on-primary text-xs font-semibold">
+            Friend
+          </span>
+        </div>
+      )}
+
+      {/* Community badge row — includes "Recommended" label on the right for RECOMMENDED_COMMUNITY */}
+      <div className="flex items-center justify-between pr-4">
+        <button
+          onClick={() => router.push(`/discover/community/${post.communityId}`)}
+          className="flex items-center gap-2 px-4 pt-3 pb-1 group"
         >
-          group
-        </span>
-        <span className="text-xs font-semibold text-primary group-hover:underline">
-          {post.communityName}
-        </span>
-      </button>
+          <span
+            className="material-symbols-outlined text-primary"
+            style={{ fontSize: 16, fontVariationSettings: "'FILL' 1" }}
+          >
+            group
+          </span>
+          <span className="text-xs font-semibold text-primary group-hover:underline">
+            {post.communityName}
+          </span>
+        </button>
+        {post.feedReasonCode === "RECOMMENDED_COMMUNITY" && (
+          <span className="text-xs text-on-surface-variant/60 pt-3 pb-1">Recommended</span>
+        )}
+      </div>
 
       {/* Author header */}
       <div
@@ -191,6 +209,30 @@ const FeedPostCard = memo(function FeedPostCard({
           onClose={() => setLightboxIndex(null)}
           onNav={setLightboxIndex}
         />
+      )}
+
+      {/* FRIEND_LIKED — "liked by @..." row */}
+      {post.feedReasonCode === "FRIEND_LIKED" && post.triggerFriendUsername && (
+        <div className="flex items-center gap-2 px-4 py-2 border-t border-surface-container-high/30">
+          {post.triggerFriendProfileImage ? (
+            <div className="w-5 h-5 rounded-full overflow-hidden shrink-0">
+              <Image
+                src={post.triggerFriendProfileImage}
+                alt={post.triggerFriendUsername}
+                width={20}
+                height={20}
+                className="w-full h-full object-cover"
+              />
+            </div>
+          ) : (
+            <div className="w-5 h-5 rounded-full bg-surface-container-high flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-on-surface-variant/40" style={{ fontSize: 12 }}>person</span>
+            </div>
+          )}
+          <span className="text-xs text-on-surface-variant">
+            liked by <span className="font-semibold">@{post.triggerFriendUsername}</span>
+          </span>
+        </div>
       )}
 
       {/* Reaction bar */}

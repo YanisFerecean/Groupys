@@ -20,7 +20,10 @@ public record PostResDto(
         long dislikeCount,
         String userReaction,
         long commentCount,
-        String title
+        String title,
+        String feedReasonCode,
+        String triggerFriendUsername,
+        String triggerFriendProfileImage
 ) {
     public record PostMediaDto(String url, String type, int order) {}
 }
