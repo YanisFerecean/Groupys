@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useAuth } from "@clerk/nextjs";
+import Image from "next/image";
 import {
   Dialog,
   DialogContent,
@@ -18,11 +19,16 @@ interface SettingsDialogProps {
   onMusicDisconnected: () => void;
 }
 
-function AppleMusicIcon({ size = 20 }: { size?: number }) {
+function AppleMusicIcon({ size = 20, monochrome = false }: { size?: number; monochrome?: boolean }) {
   return (
-    <span className="material-symbols-outlined" style={{ fontSize: size }}>
-      music_note
-    </span>
+    <Image
+      src="/logos/applemusic.svg"
+      alt=""
+      aria-hidden
+      width={size}
+      height={size}
+      className={monochrome ? "brightness-0 invert" : ""}
+    />
   );
 }
 
@@ -100,7 +106,7 @@ export default function SettingsDialog({
                   {/* Apple Music icon */}
                   <div
                     className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
-                    style={{ background: "#FA243C" }}
+                    style={{ background: "rgba(255,255,255,0.95)" }}
                   >
                     <AppleMusicIcon size={24} />
                   </div>
@@ -155,7 +161,7 @@ export default function SettingsDialog({
                         </span>
                       ) : (
                         <span className="flex items-center justify-center gap-2">
-                          <AppleMusicIcon size={16} />
+                          <AppleMusicIcon size={16} monochrome />
                           Connect Apple Music
                         </span>
                       )}

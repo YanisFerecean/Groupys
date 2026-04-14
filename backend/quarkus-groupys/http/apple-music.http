@@ -1,0 +1,48 @@
+@baseUrl = http://localhost:8080/api
+@bearerToken = eyJhbGciOiJSUzI1NiIsImNhdCI6ImNsX0I3ZDRQRDExMUFBQSIsImtpZCI6Imluc18zQkFySE9NMzZmTEVoTllidEhwcjI3TDd2SVMiLCJ0eXAiOiJKV1QifQ.eyJhenAiOiJodHRwOi8vbG9jYWxob3N0OjMwMDAiLCJleHAiOjE3NzYyMDEyNjgsImZ2YSI6WzEwMSwtMV0sImlhdCI6MTc3NjIwMTIwOCwiaXNzIjoiaHR0cHM6Ly9yZWxheGluZy1uYXJ3aGFsLTQxLmNsZXJrLmFjY291bnRzLmRldiIsIm5iZiI6MTc3NjIwMTE5OCwic2lkIjoic2Vzc18zQ01Vc0dhSVNzMWo0WkdoYlhCVzBYdkl3WngiLCJzdHMiOiJhY3RpdmUiLCJzdWIiOiJ1c2VyXzNCeHl0OENlNUdrMTRrRW1FaE0yVEM5VnRycSIsInYiOjJ9.UNpXuwn4_pmoUC51sGkXgCnNwiX8QtO2UXe9bF-gZHwCSCJ11ScWpF4LDXgSe6HSDV9oC7JQd_DKdxnt7kjLtmZKgS4JbH18XBrcdBzz3056VDeK8F63bUY913PvMRm46YIKNtP5OPkCoFoOhuqxNDrGtyx3rsZnP344PdGb3ubksvgREdVnCTzG8Kf7EZmDR_Psb8GZ7vMWHtb_fv9oYZdGIkYOiILgz5eZbprRZLkNAIhD77Qj5RB_lY9EFfNE61X9wPFKUQi-mxA4e0QpSewziHzgyfUFtmo399iDWd0i4owOrh1-NlXEMbIk9SURUcizkvC4-1csxbCBv8UUIQ
+@musicUserToken = eyJhbGciOiJFUzI1NiIsImtpZCI6IjJIWjk0SzVEOFQiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiI0RE5MSExYM1JVIiwiaWF0IjoxNzc2MjAxMTk0LCJleHAiOjE3NzYyMDE0OTQsInN1YiI6Im1lZGlhLmFwcC5ncm91cHlzLm11c2ljIn0.QbgN-oFUpOxqDRrnH5Tp-ZzkwtOMra9Jmw_0-RGJjknbAxxjfhT_bxtTRDrKmo379bE_OexNiM3oeWFPSJQs0Q
+
+### 1) Get Apple developer token (backend generated)
+GET {{baseUrl}}/music/developer-token
+Authorization: Bearer {{bearerToken}}
+Accept: application/json
+
+### 2) Connect Apple Music account (save musicUserToken for current user)
+POST {{baseUrl}}/music/connect
+Authorization: Bearer {{bearerToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "musicUserToken": "{{musicUserToken}}"
+}
+
+### 3) Trigger discovery sync from Apple Music data
+POST {{baseUrl}}/discovery/music/sync
+Authorization: Bearer {{bearerToken}}
+Accept: application/json
+
+### 4) Fetch top artists (profile)
+GET {{baseUrl}}/music/top-artists
+Authorization: Bearer {{bearerToken}}
+Accept: application/json
+
+### 5) Fetch top tracks / songs (profile)
+GET {{baseUrl}}/music/top-tracks
+Authorization: Bearer {{bearerToken}}
+Accept: application/json
+
+### 6) Fetch top albums (profile)
+GET {{baseUrl}}/music/top-albums
+Authorization: Bearer {{bearerToken}}
+Accept: application/json
+
+### 7) Fetch currently playing (returns 204 when none)
+GET {{baseUrl}}/music/currently-playing
+Authorization: Bearer {{bearerToken}}
+Accept: application/json
+
+### 8) Disconnect Apple Music account
+DELETE {{baseUrl}}/music/disconnect
+Authorization: Bearer {{bearerToken}}
+Accept: application/json

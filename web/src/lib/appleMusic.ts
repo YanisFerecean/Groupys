@@ -3,6 +3,16 @@ const MUSIC_KIT_SCRIPT_URL = "https://js-cdn.music.apple.com/musickit/v3/musicki
 const APPLE_MUSIC_APP_NAME = process.env.NEXT_PUBLIC_APPLE_MUSIC_APP_NAME ?? "Groupys Web";
 const APPLE_MUSIC_APP_BUILD = process.env.NEXT_PUBLIC_APPLE_MUSIC_APP_BUILD ?? "1.0.0";
 const APPLE_MUSIC_WEB_MOCK_ENABLED = process.env.NEXT_PUBLIC_ENABLE_APPLE_MUSIC_SIMULATOR_MOCK === "true";
+const MUSIC_ENDPOINTS = {
+  developerToken: "/music/developer-token",
+  connect: "/music/connect",
+  disconnect: "/music/disconnect",
+  topArtists: "/music/top-artists",
+  topTracks: "/music/top-tracks",
+  topAlbums: "/music/top-albums",
+  currentlyPlaying: "/music/currently-playing",
+  syncDiscovery: "/discovery/music/sync",
+} as const;
 
 type ErrorBody = {
   message?: string;
@@ -71,6 +81,12 @@ async function authFetch(path: string, token: string, init?: RequestInit): Promi
   });
 }
 
+async function parseJsonOrFallback<T>(res: Response, fallback: T): Promise<T> {
+  const text = await res.text();
+  if (!text) return fallback;
+  return JSON.parse(text) as T;
+}
+
 async function loadMusicKitScript(): Promise<void> {
   if (typeof window === "undefined") {
     throw new Error("Apple Music web authorization is only available in the browser.");
@@ -123,7 +139,7 @@ async function loadMusicKitScript(): Promise<void> {
 }
 
 async function fetchMusicDeveloperToken(token: string): Promise<MusicDeveloperTokenResponse> {
-  const res = await authFetch("/music/developer-token", token);
+  const res = await authFetch(MUSIC_ENDPOINTS.developerToken, token);
   if (!res.ok) {
     throw new Error(await readError(res, "Failed to get Apple Music developer token"));
   }
@@ -131,7 +147,7 @@ async function fetchMusicDeveloperToken(token: string): Promise<MusicDeveloperTo
 }
 
 async function connectMusicUserToken(token: string, musicUserToken: string): Promise<void> {
-  const res = await authFetch("/music/connect", token, {
+  const res = await authFetch(MUSIC_ENDPOINTS.connect, token, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ musicUserToken }),
@@ -175,39 +191,44 @@ export async function connectAppleMusicWeb(token: string): Promise<void> {
 }
 
 export async function fetchMusicTopArtists(token: string): Promise<MusicArtist[]> {
-  const res = await authFetch("/music/top-artists", token);
+  const res = await authFetch(MUSIC_ENDPOINTS.topArtists, token);
   if (!res.ok) {
     throw new Error(await readError(res, "Failed to fetch top artists"));
   }
-  return res.json();
+  return parseJsonOrFallback<MusicArtist[]>(res, []);
 }
 
 export async function fetchMusicTopTracks(token: string): Promise<MusicTrack[]> {
-  const res = await authFetch("/music/top-tracks", token);
+  const res = await authFetch(MUSIC_ENDPOINTS.topTracks, token);
   if (!res.ok) {
     throw new Error(await readError(res, "Failed to fetch top tracks"));
   }
-  return res.json();
+  return parseJsonOrFallback<MusicTrack[]>(res, []);
 }
 
 export async function fetchMusicTopAlbums(token: string): Promise<MusicAlbum[]> {
-  const res = await authFetch("/music/top-albums", token);
+  const res = await authFetch(MUSIC_ENDPOINTS.topAlbums, token);
   if (!res.ok) {
     throw new Error(await readError(res, "Failed to fetch top albums"));
   }
-  return res.json();
+  return parseJsonOrFallback<MusicAlbum[]>(res, []);
+}
+
+export async function syncMusicDiscovery(token: string): Promise<void> {
+  const res = await authFetch(MUSIC_ENDPOINTS.syncDiscovery, token, { method: "POST" });
+  if (!res.ok) {
+    throw new Error(await readError(res, "Failed to sync Apple Music"));
+  }
 }
 
 export async function fetchMusicCurrentlyPlaying(token: string): Promise<MusicTrack | null> {
-  const res = await authFetch("/music/currently-playing", token);
+  const res = await authFetch(MUSIC_ENDPOINTS.currentlyPlaying, token);
   if (!res.ok || res.status === 204) return null;
-  const text = await res.text();
-  if (!text) return null;
-  return JSON.parse(text) as MusicTrack;
+  return parseJsonOrFallback<MusicTrack | null>(res, null);
 }
 
 export async function disconnectMusic(token: string): Promise<void> {
-  const res = await fetch(`${API_URL}/music/disconnect`, {
+  const res = await fetch(`${API_URL}${MUSIC_ENDPOINTS.disconnect}`, {
     method: "DELETE",
     headers: { Authorization: `Bearer ${token}` },
   });
