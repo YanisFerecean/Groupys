@@ -6,7 +6,9 @@ import jakarta.enterprise.context.ApplicationScoped;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @ApplicationScoped
 public class FriendshipRepository implements PanacheRepositoryBase<Friendship, UUID> {
@@ -39,5 +41,12 @@ public class FriendshipRepository implements PanacheRepositoryBase<Friendship, U
             "(requester.id = ?1 OR recipient.id = ?1) AND status = ?2",
             userId, Friendship.Status.ACCEPTED
         );
+    }
+
+    /** Returns the IDs of all accepted friends for a user (both directions). */
+    public Set<UUID> findAcceptedFriendIds(UUID userId) {
+        return findAcceptedByUser(userId).stream()
+                .map(f -> f.requester.id.equals(userId) ? f.recipient.id : f.requester.id)
+                .collect(Collectors.toSet());
     }
 }

@@ -95,6 +95,9 @@ public class DiscoveryService {
     UserFollowRepository userFollowRepository;
 
     @Inject
+    FriendshipRepository friendshipRepository;
+
+    @Inject
     ConversationRepository conversationRepository;
 
     @Inject
@@ -404,6 +407,8 @@ public class DiscoveryService {
                 .forEach(excluded::add);
         userLikeRepository.findLikedUserIds(userId)
                 .forEach(excluded::add);
+        friendshipRepository.findAcceptedFriendIds(userId)
+                .forEach(excluded::add);
         return excluded;
     }
 
@@ -553,6 +558,8 @@ public class DiscoveryService {
         Map<Long, UserGenrePreference> userGenres = userGenrePreferenceRepository.findByUser(userId).stream()
                 .collect(Collectors.toMap(pref -> pref.genre.id, pref -> pref, (left, right) -> left, LinkedHashMap::new));
         Set<UUID> excludedUserIds = buildExcludedSuggestedUserIds(userId);
+        // Pre-fetch once — the requester's friend set is constant across all candidates
+        Set<UUID> userFriendIds = friendshipRepository.findAcceptedFriendIds(userId);
 
         List<UserSimilarityCache> caches = new ArrayList<>();
         List<User> candidatePool = resolveDiscoveryCandidates(userId);
@@ -588,6 +595,9 @@ public class DiscoveryService {
             double countryScore = countryMatchScore(user, candidate);
             long mutualFollows = userFollowRepository.countMutualFollowers(user.id, candidate.id);
             double followGraphScore = DiscoveryScoreUtil.normalizedCount(mutualFollows, 5);
+            Set<UUID> candidateFriendIds = friendshipRepository.findAcceptedFriendIds(candidate.id);
+            long sharedFriends = userFriendIds.stream().filter(candidateFriendIds::contains).count();
+            double friendsOfFriendsScore = DiscoveryScoreUtil.normalizedCount(sharedFriends, 5);
 
             double finalScore = DiscoveryScoreUtil.userMatchScore(
                     artistScore,
@@ -595,7 +605,8 @@ public class DiscoveryService {
                     sharedCommunityScore,
                     activityScore,
                     countryScore,
-                    followGraphScore
+                    followGraphScore,
+                    friendsOfFriendsScore
             );
             if (finalScore <= 0.05d) {
                 continue;
@@ -611,10 +622,11 @@ public class DiscoveryService {
             cache.activityOverlapScore = activityScore;
             cache.countryScore = countryScore;
             cache.followGraphScore = followGraphScore;
+            cache.friendsOfFriendsScore = friendsOfFriendsScore;
             cache.embeddingScore = 0d;
 
             Explanation explanation = buildUserExplanation(userArtists, userGenres, candidateArtists, candidateGenres,
-                    (int) sharedCommunities, countryScore > 0d, (int) mutualFollows);
+                    (int) sharedCommunities, countryScore > 0d, (int) mutualFollows, (int) sharedFriends);
             cache.primaryReasonCode = explanation.reasonCodes().isEmpty() ? null : explanation.reasonCodes().getFirst();
             cache.explanationJson = explanation.json();
             cache.expiresAt = Instant.now().plus(CACHE_TTL_HOURS, ChronoUnit.HOURS);
@@ -736,7 +748,7 @@ public class DiscoveryService {
         community.tasteSummaryText = profile.tasteSummaryText;
     }
 
-    private void rebuildCommunityDerivedPreferences(User user) {
+    void rebuildCommunityDerivedPreferences(User user) {
         userArtistPreferenceRepository.delete("user.id = ?1 and source = ?2", user.id, SOURCE_COMMUNITY_MEMBERSHIP);
         userGenrePreferenceRepository.delete("user.id = ?1 and source = ?2", user.id, SOURCE_COMMUNITY_MEMBERSHIP);
 
@@ -781,7 +793,7 @@ public class DiscoveryService {
         });
     }
 
-    private void refreshUserTasteProfile(User user) {
+    void refreshUserTasteProfile(User user) {
         UserTasteProfile profile = userTasteProfileRepository.findByUserId(user.id)
                 .orElseGet(UserTasteProfile::new);
         List<UserArtistPreference> artists = userArtistPreferenceRepository.findByUser(user.id);
@@ -1182,7 +1194,7 @@ public class DiscoveryService {
             reasonCodes.add("SAME_COUNTRY");
         }
         String explanation = buildExplanationText(artistNames, genreNames, sharedCommunityCount, countryMatch);
-        return serializeExplanation(explanation, reasonCodes, artistNames, genreNames, sharedCommunityCount, countryMatch, 0);
+        return serializeExplanation(explanation, reasonCodes, artistNames, genreNames, sharedCommunityCount, countryMatch, 0, 0);
     }
 
     private Explanation buildUserExplanation(
@@ -1192,7 +1204,8 @@ public class DiscoveryService {
             Map<Long, UserGenrePreference> candidateGenres,
             int sharedCommunityCount,
             boolean countryMatch,
-            int mutualFollowCount
+            int mutualFollowCount,
+            int sharedFriendsCount
     ) {
         List<String> reasonCodes = new ArrayList<>();
         List<String> artistNames = intersectArtistNames(userArtists.keySet(), candidateArtists.keySet());
@@ -1212,8 +1225,11 @@ public class DiscoveryService {
         if (mutualFollowCount > 0) {
             reasonCodes.add("FOLLOW_GRAPH_PROXIMITY");
         }
+        if (sharedFriendsCount > 0) {
+            reasonCodes.add("FRIENDS_OF_FRIENDS");
+        }
         String explanation = buildExplanationText(artistNames, genreNames, sharedCommunityCount, countryMatch);
-        return serializeExplanation(explanation, reasonCodes, artistNames, genreNames, sharedCommunityCount, countryMatch, mutualFollowCount);
+        return serializeExplanation(explanation, reasonCodes, artistNames, genreNames, sharedCommunityCount, countryMatch, mutualFollowCount, sharedFriendsCount);
     }
 
     private Explanation serializeExplanation(String explanation,
@@ -1222,7 +1238,8 @@ public class DiscoveryService {
                                              List<String> genreNames,
                                              int sharedCommunityCount,
                                              boolean countryMatch,
-                                             int mutualFollowCount) {
+                                             int mutualFollowCount,
+                                             int sharedFriendsCount) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("explanation", explanation);
         payload.put("reasonCodes", reasonCodes);
@@ -1231,6 +1248,7 @@ public class DiscoveryService {
         payload.put("sharedCommunityCount", sharedCommunityCount);
         payload.put("countryMatch", countryMatch);
         payload.put("mutualFollowCount", mutualFollowCount);
+        payload.put("sharedFriendsCount", sharedFriendsCount);
         try {
             return new Explanation(reasonCodes, objectMapper.writeValueAsString(payload));
         } catch (JsonProcessingException e) {

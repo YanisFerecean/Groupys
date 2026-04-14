@@ -21,22 +21,25 @@ class DiscoveryScoreUtilTest {
 
     @Test
     void userMatchScoreUsesMatchingFactorWeights() {
+        // 0.28*0.8 + 0.18*0.4 + 0.18*0.5 + 0.13*0.9 + 0.05*1.0 + 0.03*0.2 + 0.10*0.0 = 0.559
         double score = DiscoveryScoreUtil.userMatchScore(
                 0.8d,
                 0.4d,
                 0.5d,
                 0.9d,
                 1.0d,
-                0.2d
+                0.2d,
+                0.0d
         );
 
-        assertEquals(0.615d, score, 0.0001d);
+        assertEquals(0.559d, score, 0.0001d);
     }
 
     @Test
     void userMatchScoreHonorsIndividualFactorContribution() {
-        assertEquals(0.2d, DiscoveryScoreUtil.userMatchScore(0d, 1d, 0d, 0d, 0d, 0d), 0.0001d);
-        assertEquals(0.05d, DiscoveryScoreUtil.userMatchScore(0d, 0d, 0d, 0d, 1d, 0d), 0.0001d);
+        assertEquals(0.18d, DiscoveryScoreUtil.userMatchScore(0d, 1d, 0d, 0d, 0d, 0d, 0d), 0.0001d);
+        assertEquals(0.05d, DiscoveryScoreUtil.userMatchScore(0d, 0d, 0d, 0d, 1d, 0d, 0d), 0.0001d);
+        assertEquals(0.10d, DiscoveryScoreUtil.userMatchScore(0d, 0d, 0d, 0d, 0d, 0d, 1d), 0.0001d);
     }
 
     @Test

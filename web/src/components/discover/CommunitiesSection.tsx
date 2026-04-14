@@ -1,22 +1,19 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@clerk/nextjs";
 import SectionHeader from "@/components/discover/SectionHeader";
+import { fetchSuggestedCommunities } from "@/lib/discovery-api";
+import type { SuggestedCommunity } from "@/types/discovery";
 
-interface Community {
-  id: string;
-  name: string;
-  tagline: string;
-  members: number;
-  color: string;
-  icon: string;
-  isLive: boolean;
-}
-
-const communities: Community[] = [
-  { id: "1", name: "Vinyl Heads", tagline: "Crate diggers & analog lovers", members: 12400, color: "#7c3aed", icon: "album", isLive: true },
-  { id: "2", name: "Late Night Beats", tagline: "After-hours producers & DJs", members: 8700, color: "#be185d", icon: "dark_mode", isLive: false },
-  { id: "3", name: "Synth Collective", tagline: "Modular jams & sound design", members: 5200, color: "#0891b2", icon: "graphic_eq", isLive: true },
-  { id: "4", name: "Acoustic Sessions", tagline: "Stripped-back & soulful", members: 9100, color: "#b45309", icon: "local_cafe", isLive: false },
+const COMMUNITY_COLORS = [
+  "#7c3aed",
+  "#be185d",
+  "#0891b2",
+  "#b45309",
+  "#059669",
+  "#6366f1",
 ];
 
 function formatMembers(count: number): string {
@@ -25,61 +22,159 @@ function formatMembers(count: number): string {
   return String(count);
 }
 
-function CommunityCard({ community }: { community: Community }) {
+function reasonLabel(community: SuggestedCommunity): string | null {
+  if (community.matchedArtists.length > 0) {
+    return community.matchedArtists.length === 1
+      ? community.matchedArtists[0].name
+      : `${community.matchedArtists.length} shared artists`;
+  }
+  if (community.matchedGenres.length > 0) {
+    return community.matchedGenres[0].name;
+  }
+  if (community.countryMatch) return "Same country";
+  if (community.sharedCommunityCount > 0)
+    return `${community.sharedCommunityCount} shared ${community.sharedCommunityCount === 1 ? "community" : "communities"}`;
+  return null;
+}
+
+function CommunityCardIcon({ community }: { community: SuggestedCommunity }) {
+  if (community.iconType === "EMOJI" && community.iconEmoji) {
+    return (
+      <span
+        className="absolute -top-2 -right-2 select-none pointer-events-none text-white/10"
+        style={{ fontSize: 80, lineHeight: 1 }}
+        aria-hidden
+      >
+        {community.iconEmoji}
+      </span>
+    );
+  }
+  if (community.iconType === "IMAGE" && community.iconUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={community.iconUrl}
+        alt=""
+        className="absolute -top-2 -right-2 w-20 h-20 object-cover opacity-10 pointer-events-none select-none"
+        aria-hidden
+      />
+    );
+  }
+  return (
+    <span
+      className="material-symbols-outlined absolute -top-2 -right-2 text-white/10 select-none pointer-events-none"
+      style={{ fontSize: 80, fontVariationSettings: "'FILL' 1" }}
+      aria-hidden
+    >
+      music_note
+    </span>
+  );
+}
+
+function CommunityCard({
+  community,
+  color,
+  onClick,
+}: {
+  community: SuggestedCommunity;
+  color: string;
+  onClick: () => void;
+}) {
+  const hint = reasonLabel(community);
+
   return (
     <button
+      onClick={onClick}
       className="relative overflow-hidden rounded-2xl text-left transition-transform hover:scale-[0.98] active:scale-95"
-      style={{ backgroundColor: community.color, minHeight: 120 }}
+      style={{ backgroundColor: color, minHeight: 120 }}
     >
-      {/* Decorative icon */}
-      <span
-        className="material-symbols-outlined absolute -top-2 -right-2 text-white/10 select-none pointer-events-none"
-        style={{ fontSize: 80, fontVariationSettings: "'FILL' 1" }}
-      >
-        {community.icon}
-      </span>
-
-      {/* Live badge */}
-      {community.isLive && (
-        <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-white/20 backdrop-blur-md px-2 py-0.5 rounded-full">
-          <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-          <span className="text-[10px] font-bold text-white uppercase tracking-wider">
-            Live
-          </span>
-        </div>
-      )}
+      <CommunityCardIcon community={community} />
 
       <div className="relative p-5 flex flex-col justify-end h-full">
-        <h4 className="text-xl font-extrabold text-white mb-1">
+        <h4 className="text-xl font-extrabold text-white mb-1 truncate">
           {community.name}
         </h4>
-        <p className="text-xs text-white/70 font-medium mb-2">
-          {community.tagline}
-        </p>
-        <div className="flex items-center gap-1.5">
-          <span
-            className="material-symbols-outlined text-white/70"
-            style={{ fontSize: 14 }}
-          >
-            group
-          </span>
-          <span className="text-xs font-semibold text-white/70">
-            {formatMembers(community.members)} members
-          </span>
+        {community.description && (
+          <p className="text-xs text-white/70 font-medium mb-2 line-clamp-1">
+            {community.description}
+          </p>
+        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5">
+            <span
+              className="material-symbols-outlined text-white/70"
+              style={{ fontSize: 14 }}
+            >
+              group
+            </span>
+            <span className="text-xs font-semibold text-white/70">
+              {formatMembers(community.memberCount)} members
+            </span>
+          </div>
+          {hint && (
+            <span className="text-[10px] font-bold text-white/80 bg-white/15 backdrop-blur-sm px-2 py-0.5 rounded-full truncate max-w-[120px]">
+              {hint}
+            </span>
+          )}
         </div>
       </div>
     </button>
   );
 }
 
+function CommunityCardSkeleton() {
+  return (
+    <div
+      className="rounded-2xl animate-pulse bg-surface-container-highest"
+      style={{ minHeight: 120 }}
+    />
+  );
+}
+
 export default function CommunitiesSection() {
+  const router = useRouter();
+  const { getToken } = useAuth();
+  const [communities, setCommunities] = useState<SuggestedCommunity[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getToken();
+        const data = await fetchSuggestedCommunities(token, 4, false);
+        if (!cancelled) setCommunities(data);
+      } catch (err) {
+        console.error("Failed to fetch suggested communities:", err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [getToken]);
+
+  if (!loading && communities.length === 0) return null;
+
   return (
     <section className="mb-12 lg:mb-16">
       <SectionHeader title="Explore Communities" actionText="See All" />
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {communities.map((community) => (
-          <CommunityCard key={community.id} community={community} />
-        ))}
+        {loading
+          ? Array.from({ length: 4 }).map((_, i) => (
+              <CommunityCardSkeleton key={i} />
+            ))
+          : communities.map((community, index) => (
+              <CommunityCard
+                key={community.communityId}
+                community={community}
+                color={COMMUNITY_COLORS[index % COMMUNITY_COLORS.length]}
+                onClick={() =>
+                  router.push(`/discover/community/${community.communityId}`)
+                }
+              />
+            ))}
       </div>
     </section>
   );
