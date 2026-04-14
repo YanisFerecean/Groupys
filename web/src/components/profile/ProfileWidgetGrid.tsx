@@ -28,7 +28,7 @@ interface DragState {
 interface ProfileWidgetGridProps {
   profile: ProfileCustomization;
   username: string;
-  spotifyConnected?: boolean;
+  musicConnected?: boolean;
   isEditing?: boolean;
   onReorder?: (newOrder: string[]) => void;
   onSettingsChange?: (widgetType: WidgetType, color: string, size: WidgetSize) => void;
@@ -196,14 +196,14 @@ function renderWidget(
   type: WidgetType,
   profile: ProfileCustomization,
   username: string,
-  spotifyConnected?: boolean,
+  musicConnected?: boolean,
 ) {
   const size = getWidgetSize(profile, type);
   switch (type) {
     case "topAlbums":
       return <TopAlbumsWidget albums={profile.topAlbums} containerColor={profile.albumsContainerColor} size={size} />;
     case "currentlyListening":
-      return <CurrentlyListeningWidget track={profile.currentlyListening} spotifyConnected={spotifyConnected} containerColor={profile.currentlyListeningContainerColor} size={size} />;
+      return <CurrentlyListeningWidget track={profile.currentlyListening} musicConnected={musicConnected} containerColor={profile.currentlyListeningContainerColor} size={size} />;
     case "topSongs":
       return <TopSongsWidget songs={profile.topSongs} containerColor={profile.songsContainerColor} size={size} />;
     case "topArtists":
@@ -218,7 +218,7 @@ function renderWidget(
 // Luminance of Apple Music red #FA243C using the same formula as getContrastColor
 const APPLE_MUSIC_RED_LUM = (0.299 * 250 + 0.587 * 36 + 0.114 * 60) / 255; // ≈ 0.402
 
-function spotifyBadgeNeedsBg(containerColor?: string): boolean {
+function musicBadgeNeedsBg(containerColor?: string): boolean {
   if (!containerColor || !containerColor.startsWith("#") || containerColor.length < 7) return false;
   const r = parseInt(containerColor.slice(1, 3), 16);
   const g = parseInt(containerColor.slice(3, 5), 16);
@@ -228,8 +228,8 @@ function spotifyBadgeNeedsBg(containerColor?: string): boolean {
   return Math.abs(lum - APPLE_MUSIC_RED_LUM) < 0.3;
 }
 
-function SpotifySyncBadge({ containerColor }: { containerColor?: string }) {
-  const hasBg = spotifyBadgeNeedsBg(containerColor);
+function MusicSyncBadge({ containerColor }: { containerColor?: string }) {
+  const hasBg = musicBadgeNeedsBg(containerColor);
   return (
     <div
       className="absolute bottom-3 right-3 z-10 flex items-center gap-1 px-2 py-1 rounded-full pointer-events-none"
@@ -344,7 +344,7 @@ function DraggableWidget({
 export default function ProfileWidgetGrid({
   profile,
   username,
-  spotifyConnected,
+  musicConnected,
   isEditing,
   onReorder,
   onSettingsChange,
@@ -438,13 +438,13 @@ export default function ProfileWidgetGrid({
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6 px-6 md:px-12 py-10">
         {items.map((type) => {
           const size = getWidgetSize(profile, type);
-          const isSynced = !!profile.spotifySynced?.[type];
+          const isSynced = !!profile.musicSynced?.[type];
           const colorKey = WIDGET_COLOR_KEY[type];
           const containerColor = colorKey ? (profile[colorKey] as string | undefined) : undefined;
           return (
             <div key={type} className={cn("relative", getWidgetColSpan(type, size))}>
-              {renderWidget(type, profile, username, spotifyConnected)}
-              {isSynced && <SpotifySyncBadge containerColor={containerColor} />}
+              {renderWidget(type, profile, username, musicConnected)}
+              {isSynced && <MusicSyncBadge containerColor={containerColor} />}
             </div>
           );
         })}
@@ -462,7 +462,7 @@ export default function ProfileWidgetGrid({
           const active = overIndex === i && dragSourceIndex !== i;
           const size = getWidgetSize(profile, type);
           const hasSettings = !!WIDGET_COLOR_KEY[type];
-          const isSynced = !!profile.spotifySynced?.[type];
+          const isSynced = !!profile.musicSynced?.[type];
           const colorKey = WIDGET_COLOR_KEY[type];
           const containerColor = colorKey ? (profile[colorKey] as string | undefined) : undefined;
           return (
@@ -482,8 +482,8 @@ export default function ProfileWidgetGrid({
               onSettingsChange={isEditing && hasSettings && onSettingsChange ? (color, sz) => onSettingsChange(type, color, sz) : undefined}
               containerColor={containerColor}
             >
-              {renderWidget(type, profile, username, spotifyConnected)}
-              {isSynced && <SpotifySyncBadge containerColor={containerColor} />}
+              {renderWidget(type, profile, username, musicConnected)}
+              {isSynced && <MusicSyncBadge containerColor={containerColor} />}
             </DraggableWidget>
           );
         })}
@@ -499,7 +499,7 @@ export default function ProfileWidgetGrid({
             transform: `translate(${dragState.x - dragState.offsetX}px, ${dragState.y - dragState.offsetY}px)`,
           }}
         >
-          {renderWidget(dragState.type, profile, username, spotifyConnected)}
+          {renderWidget(dragState.type, profile, username, musicConnected)}
         </div>
       )}
     </>

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { useAuth } from "@clerk/nextjs";
 import type { ProfileCustomization } from "@/types/profile";
-import { fetchSpotifyCurrentlyPlaying } from "@/lib/spotify";
+import { fetchMusicCurrentlyPlaying } from "@/lib/appleMusic";
 import { getContrastColor } from "@/lib/utils";
 import WidgetCard from "./WidgetCard";
 
@@ -12,14 +12,14 @@ const POLL_INTERVAL = 30_000;
 
 interface CurrentlyListeningWidgetProps {
   track?: ProfileCustomization["currentlyListening"];
-  spotifyConnected?: boolean;
+  musicConnected?: boolean;
   containerColor?: string;
   size?: "small" | "normal";
 }
 
 export default function CurrentlyListeningWidget({
   track: savedTrack,
-  spotifyConnected,
+  musicConnected,
   containerColor,
   size = "normal",
 }: CurrentlyListeningWidgetProps) {
@@ -29,13 +29,13 @@ export default function CurrentlyListeningWidget({
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    if (!spotifyConnected) return;
+    if (!musicConnected) return;
 
     async function poll() {
       const token = await getToken();
       if (!token) return;
       try {
-        const data = await fetchSpotifyCurrentlyPlaying(token);
+        const data = await fetchMusicCurrentlyPlaying(token);
         setLiveTrack(data ?? savedTrack);
       } catch {
         // keep showing last known track
@@ -45,7 +45,7 @@ export default function CurrentlyListeningWidget({
     poll();
     const id = setInterval(poll, POLL_INTERVAL);
     return () => clearInterval(id);
-  }, [spotifyConnected, getToken, savedTrack]);
+  }, [musicConnected, getToken, savedTrack]);
 
   // Cleanup audio on unmount
   useEffect(() => {
@@ -57,7 +57,7 @@ export default function CurrentlyListeningWidget({
     };
   }, []);
 
-  const track = spotifyConnected ? liveTrack : savedTrack;
+  const track = musicConnected ? liveTrack : savedTrack;
   const textColor = containerColor ? getContrastColor(containerColor) : undefined;
 
   const handleTrackClick = () => {
@@ -155,8 +155,8 @@ export default function CurrentlyListeningWidget({
                   {track.artist}
                 </p>
               </div>
-              {/* Animated equalizer bars (only when actually playing from Spotify) */}
-              {spotifyConnected && (
+              {/* Animated equalizer bars (only when actually playing from Apple Music) */}
+              {musicConnected && (
                 <div className="flex items-end gap-0.5 h-5 shrink-0">
                   {[1, 2, 3, 4].map((i) => (
                     <span

@@ -22,11 +22,11 @@ import MusicSearchInput from "./MusicSearchInput";
 import type { TrackResult, ArtistResult, AlbumResult } from "./MusicSearchInput";
 import CountrySelect from "./CountrySelect";
 import {
-  fetchSpotifyTopArtists,
-  fetchSpotifyTopTracks,
-  fetchSpotifySavedAlbums,
-  fetchSpotifyCurrentlyPlaying,
-} from "@/lib/spotify";
+  fetchMusicTopArtists,
+  fetchMusicTopTracks,
+  fetchMusicTopAlbums,
+  fetchMusicCurrentlyPlaying,
+} from "@/lib/appleMusic";
 
 // ── Error parsers ───────────────────────────────────────────────────────────
 
@@ -69,7 +69,7 @@ interface ProfileEditDrawerProps {
   onUpdateProfileImage: (file: File) => Promise<void>;
   onRemoveProfileImage: () => Promise<void>;
   isSaving: boolean;
-  spotifyConnected?: boolean;
+  musicConnected?: boolean;
   initialTab?: "profile" | "customization" | "widgets";
 }
 
@@ -84,7 +84,7 @@ export default function ProfileEditDrawer({
   onUpdateProfileImage,
   onRemoveProfileImage,
   isSaving,
-  spotifyConnected,
+  musicConnected,
   initialTab = "profile",
 }: ProfileEditDrawerProps) {
   const [activeTab, setActiveTab] = useState<string>(initialTab);
@@ -333,7 +333,7 @@ export default function ProfileEditDrawer({
   // ── Music helpers ─────────────────────────────────────────────────────────
 
   const clearSynced = (key: string) =>
-    setForm((prev) => ({ ...prev, spotifySynced: { ...prev.spotifySynced, [key]: false } }));
+    setForm((prev) => ({ ...prev, musicSynced: { ...prev.musicSynced, [key]: false } }));
 
   const isWidgetHidden = (key: string) => (form.hiddenWidgets ?? []).includes(key);
   const toggleWidgetHidden = (key: string) =>
@@ -419,17 +419,17 @@ const setListeningFromSearch = (result: TrackResult) => {
   clearSynced("currentlyListening");
 };
 
-  // ── Spotify sync handlers ──────────────────────────────────────────────────
+  // ── Apple Music sync handlers ──────────────────────────────────────────────
 
   const setSynced = (key: string) =>
-    setForm((prev) => ({ ...prev, spotifySynced: { ...prev.spotifySynced, [key]: true } }));
+    setForm((prev) => ({ ...prev, musicSynced: { ...prev.musicSynced, [key]: true } }));
 
   const syncTopArtists = async () => {
     const token = await getToken();
     if (!token) return;
     setSyncing("artists");
     try {
-      const artists = await fetchSpotifyTopArtists(token);
+      const artists = await fetchMusicTopArtists(token);
       set(
         "topArtists",
         artists.map((a) => ({ name: a.name, imageUrl: a.imageUrl })),
@@ -447,7 +447,7 @@ const setListeningFromSearch = (result: TrackResult) => {
     if (!token) return;
     setSyncing("tracks");
     try {
-      const tracks = await fetchSpotifyTopTracks(token);
+      const tracks = await fetchMusicTopTracks(token);
       set(
         "topSongs",
         tracks.map((t) => ({ title: t.title, artist: t.artist, coverUrl: t.coverUrl })),
@@ -465,7 +465,7 @@ const setListeningFromSearch = (result: TrackResult) => {
     if (!token) return;
     setSyncing("albums");
     try {
-      const albums = await fetchSpotifySavedAlbums(token);
+      const albums = await fetchMusicTopAlbums(token);
       set(
         "topAlbums",
         albums.map((a) => ({ title: a.title, artist: a.artist, coverUrl: a.coverUrl })),
@@ -483,7 +483,7 @@ const setListeningFromSearch = (result: TrackResult) => {
     if (!token) return;
     setSyncing("listening");
     try {
-      const track = await fetchSpotifyCurrentlyPlaying(token);
+      const track = await fetchMusicCurrentlyPlaying(token);
       if (track) {
         set("currentlyListening", {
           title: track.title,
@@ -791,7 +791,7 @@ const setListeningFromSearch = (result: TrackResult) => {
 
             {/* ── Widgets Tab ── */}
             <TabsContent value="widgets" className="space-y-5">
-              {spotifyConnected && (
+              {musicConnected && (
                 <button
                   type="button"
                   onClick={async () => {
@@ -800,10 +800,10 @@ const setListeningFromSearch = (result: TrackResult) => {
                     setSyncing("all");
                     try {
                       const [artists, tracks, albums, playing] = await Promise.all([
-                        fetchSpotifyTopArtists(token),
-                        fetchSpotifyTopTracks(token),
-                        fetchSpotifySavedAlbums(token),
-                        fetchSpotifyCurrentlyPlaying(token),
+                        fetchMusicTopArtists(token),
+                        fetchMusicTopTracks(token),
+                        fetchMusicTopAlbums(token),
+                        fetchMusicCurrentlyPlaying(token),
                       ]);
                       setForm((prev) => ({
                         ...prev,
@@ -811,8 +811,8 @@ const setListeningFromSearch = (result: TrackResult) => {
                         topSongs: tracks.map((t) => ({ title: t.title, artist: t.artist, coverUrl: t.coverUrl })),
                         topAlbums: albums.map((a) => ({ title: a.title, artist: a.artist, coverUrl: a.coverUrl })),
                         ...(playing ? { currentlyListening: { title: playing.title, artist: playing.artist, coverUrl: playing.coverUrl } } : {}),
-                        spotifySynced: {
-                          ...prev.spotifySynced,
+                        musicSynced: {
+                          ...prev.musicSynced,
                           topArtists: true,
                           topSongs: true,
                           topAlbums: true,
@@ -911,7 +911,7 @@ const setListeningFromSearch = (result: TrackResult) => {
                       </button>
                     </div>
                   </div>
-                  {spotifyConnected && (
+                  {musicConnected && (
                     <Button
                       type="button"
                       variant="ghost"
@@ -989,7 +989,7 @@ const setListeningFromSearch = (result: TrackResult) => {
                       </button>
                     </div>
                   </div>
-                  {spotifyConnected && (
+                  {musicConnected && (
                     <Button
                       type="button"
                       variant="ghost"
@@ -1063,7 +1063,7 @@ const setListeningFromSearch = (result: TrackResult) => {
                       </button>
                     </div>
                   </div>
-                  {spotifyConnected && (
+                  {musicConnected && (
                     <Button
                       type="button"
                       variant="ghost"
@@ -1142,7 +1142,7 @@ const setListeningFromSearch = (result: TrackResult) => {
                       </button>
                     </div>
                   </div>
-                  {spotifyConnected && (
+                  {musicConnected && (
                     <Button
                       type="button"
                       variant="ghost"

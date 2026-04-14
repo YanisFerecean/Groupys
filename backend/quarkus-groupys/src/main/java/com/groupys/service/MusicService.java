@@ -386,10 +386,14 @@ public class MusicService {
         try (Response response = executeWithRetry(() ->
                 appleMusicApi.getRecentlyPlayedTracks(bearer, musicUserToken, Math.max(1, limit)),
                 "fetch recently played tracks")) {
-            if (response.getStatus() == 200) {
+            int status = response.getStatus();
+            if (status == 200) {
                 return response.readEntity(String.class);
             }
-            throwForAppleStatus("fetch recently played tracks", response.getStatus(), true);
+            if (status == 204 || status == 404) {
+                return null;
+            }
+            throwForAppleStatus("fetch recently played tracks", status, false);
             return null;
         }
     }
