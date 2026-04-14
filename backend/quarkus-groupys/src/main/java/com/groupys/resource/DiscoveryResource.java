@@ -1,12 +1,10 @@
 package com.groupys.resource;
 
-import com.groupys.dto.DiscoveredPostResDto;
 import com.groupys.dto.DiscoveryActionDto;
 import com.groupys.dto.DiscoverySyncResDto;
 import com.groupys.dto.LikeResponseDto;
 import com.groupys.dto.SuggestedCommunityResDto;
 import com.groupys.dto.SuggestedUserResDto;
-import com.groupys.service.DiscoveryPostService;
 import com.groupys.service.DiscoveryService;
 import com.groupys.service.MatchService;
 import io.quarkus.security.Authenticated;
@@ -32,19 +30,10 @@ public class DiscoveryResource {
     DiscoveryService discoveryService;
 
     @Inject
-    DiscoveryPostService discoveryPostService;
-
-    @Inject
     MatchService matchService;
 
     @Inject
     JsonWebToken jwt;
-
-    @GET
-    @Path("/posts/suggested")
-    public List<DiscoveredPostResDto> suggestedPosts(@DefaultValue("10") @QueryParam("limit") int limit) {
-        return discoveryPostService.getSuggestedPosts(jwt.getSubject(), limit);
-    }
 
     @GET
     @Path("/communities/suggested")
