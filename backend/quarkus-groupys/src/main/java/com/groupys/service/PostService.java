@@ -2,6 +2,7 @@ package com.groupys.service;
 
 import com.groupys.config.PerformanceFeatureFlags;
 import com.groupys.dto.PostResDto;
+import com.groupys.event.CommunityActivityEvent;
 import com.groupys.model.Community;
 import com.groupys.model.CommunityRecommendationCache;
 import com.groupys.model.Post;
@@ -9,8 +10,11 @@ import com.groupys.model.PostMedia;
 import com.groupys.model.PostReaction;
 import com.groupys.model.User;
 import com.groupys.repository.*;
+import io.quarkus.cache.CacheInvalidateAll;
+import io.quarkus.cache.CacheResult;
 import io.quarkus.logging.Log;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.NotFoundException;
@@ -60,11 +64,12 @@ public class PostService {
     StorageService storageService;
 
     @Inject
-    DiscoveryService discoveryService;
+    Event<CommunityActivityEvent> communityActivityEvent;
 
     @Inject
     PerformanceFeatureFlags flags;
 
+    @CacheResult(cacheName = "feed")
     public List<PostResDto> getFeed(String clerkId, int page, int size) {
         User user = userRepository.findByClerkId(clerkId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
@@ -87,8 +92,8 @@ public class PostService {
         // Friend signals: posts authored by friends / liked by friends in non-joined communities
         Set<UUID> friendIds = friendshipRepository.findAcceptedFriendIds(user.id);
 
-        // Fetch recent posts from all sources (3x pool for accurate pagination)
-        int poolSize = (page + 1) * size * 3;
+        // Fetch recent posts from all sources (3x pool for accurate pagination, capped at 300)
+        int poolSize = Math.min((page + 1) * size * 3, 300);
         List<Post> joinedPosts = joinedIds.isEmpty() ? List.of()
                 : postRepository.findByCommunitiesRecentLimited(joinedIds, poolSize);
         List<Post> recPosts = recIds.isEmpty() ? List.of()
@@ -188,6 +193,7 @@ public class PostService {
     }
 
     @Transactional
+    @CacheInvalidateAll(cacheName = "feed")
     public PostResDto create(UUID communityId, String title, String content, List<PostMedia> mediaList, String clerkId) {
         User author = userRepository.findByClerkId(clerkId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
@@ -206,16 +212,14 @@ public class PostService {
         post.dislikeCount = 0L;
         post.commentCount = 0L;
         postRepository.persist(post);
-        try {
-            discoveryService.refreshAfterCommunityActivity(communityId);
-        } catch (Exception e) {
-            Log.warnf(e, "Discovery refresh failed after post in community %s; post was saved", communityId);
-        }
+        communityActivityEvent.fireAsync(new CommunityActivityEvent(communityId))
+                .exceptionally(e -> { Log.warnf(e, "Async discovery refresh failed after post in community %s", communityId); return null; });
 
         return toDtoList(List.of(post), author).get(0);
     }
 
     @Transactional
+    @CacheInvalidateAll(cacheName = "feed")
     public PostResDto react(UUID postId, String reactionType, String clerkId) {
         User user = userRepository.findByClerkId(clerkId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
@@ -248,7 +252,8 @@ public class PostService {
             applyPostReactionDelta(post, normalizedReaction, 1);
         }
 
-        discoveryService.refreshAfterCommunityActivity(post.community.id);
+        communityActivityEvent.fireAsync(new CommunityActivityEvent(post.community.id))
+                .exceptionally(e -> { Log.warnf(e, "Async discovery refresh failed after reaction on post %s", postId); return null; });
 
         return toDtoList(List.of(post), user).get(0);
     }
@@ -274,7 +279,8 @@ public class PostService {
             }
         }
         postRepository.delete(post);
-        discoveryService.refreshAfterCommunityActivity(communityId);
+        communityActivityEvent.fireAsync(new CommunityActivityEvent(communityId))
+                .exceptionally(e -> { Log.warnf(e, "Async discovery refresh failed after delete of post %s in community %s", postId, communityId); return null; });
     }
 
     /**
@@ -298,17 +304,14 @@ public class PostService {
                 ? postReactionRepository.findUserReactionsByPostIds(postIds, currentUser.id)
                 : Map.of();
 
-        Map<UUID, Long> likesMapTmp = Map.of();
-        Map<UUID, Long> dislikesMapTmp = Map.of();
+        Map<UUID, long[]> reactionCountsTmp = Map.of();
         Map<UUID, Long> commentMapTmp = Map.of();
         boolean readModelRead = readModelReadEnabled();
         if (!readModelRead) {
-            likesMapTmp = postReactionRepository.countsByPostIdsAndType(postIds, "like");
-            dislikesMapTmp = postReactionRepository.countsByPostIdsAndType(postIds, "dislike");
+            reactionCountsTmp = postReactionRepository.countAllReactionsByPostIds(postIds);
             commentMapTmp = commentRepository.countsByPostIds(postIds);
         }
-        final Map<UUID, Long> likesMap = likesMapTmp;
-        final Map<UUID, Long> dislikesMap = dislikesMapTmp;
+        final Map<UUID, long[]> reactionCounts = reactionCountsTmp;
         final Map<UUID, Long> commentMap = commentMapTmp;
         final boolean readModelEnabled = readModelRead;
 
@@ -322,6 +325,7 @@ public class PostService {
             }
             String reason = reasonMap.get(post.id);
             User liker = "FRIEND_LIKED".equals(reason) ? friendLikerMap.get(post.id) : null;
+            long[] rc = reactionCounts.get(post.id);
             return new PostResDto(
                     post.id,
                     post.content,
@@ -334,8 +338,8 @@ public class PostService {
                     post.author.profileImage,
                     post.author.clerkId,
                     post.createdAt,
-                    readModelEnabled ? Math.max(0L, post.likeCount) : likesMap.getOrDefault(post.id, 0L),
-                    readModelEnabled ? Math.max(0L, post.dislikeCount) : dislikesMap.getOrDefault(post.id, 0L),
+                    readModelEnabled ? Math.max(0L, post.likeCount) : (rc != null ? rc[0] : 0L),
+                    readModelEnabled ? Math.max(0L, post.dislikeCount) : (rc != null ? rc[1] : 0L),
                     userReactionMap.get(post.id),
                     readModelEnabled ? Math.max(0L, post.commentCount) : commentMap.getOrDefault(post.id, 0L),
                     post.title,

@@ -7,7 +7,9 @@ import jakarta.enterprise.context.ApplicationScoped;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -79,6 +81,64 @@ public class CommunityMemberRepository implements PanacheRepositoryBase<Communit
                 .setParameter("since", since)
                 .setMaxResults(limit)
                 .getResultList();
+    }
+
+    /** Count of members the user has in common with each community — single batch query. */
+    public Map<UUID, Long> batchCountSharedMembers(List<UUID> communityIds, List<UUID> joinedCommunityIds) {
+        if (communityIds.isEmpty() || joinedCommunityIds.isEmpty()) return Map.of();
+        List<Object[]> rows = getEntityManager().createQuery("""
+                select cm.community.id, count(distinct cm.user.id)
+                from CommunityMember cm
+                where cm.community.id in :communityIds
+                  and exists (
+                    select 1 from CommunityMember joined
+                    where joined.user.id = cm.user.id
+                      and joined.community.id in :joinedCommunityIds
+                  )
+                group by cm.community.id
+                """, Object[].class)
+                .setParameter("communityIds", communityIds)
+                .setParameter("joinedCommunityIds", joinedCommunityIds)
+                .getResultList();
+        Map<UUID, Long> result = new HashMap<>();
+        for (Object[] row : rows) result.put((UUID) row[0], (Long) row[1]);
+        return result;
+    }
+
+    /** Number of communities a single user belongs to. */
+    public long countByUser(UUID userId) {
+        return count("user.id", userId);
+    }
+
+    /** Number of communities each user belongs to — single batch query. */
+    public Map<UUID, Long> batchCountByUsers(List<UUID> userIds) {
+        if (userIds.isEmpty()) return Map.of();
+        List<Object[]> rows = getEntityManager().createQuery(
+                "select m.user.id, count(m) from CommunityMember m where m.user.id in :ids group by m.user.id",
+                Object[].class)
+                .setParameter("ids", userIds)
+                .getResultList();
+        Map<UUID, Long> result = new HashMap<>();
+        for (Object[] row : rows) result.put((UUID) row[0], (Long) row[1]);
+        return result;
+    }
+
+    /** Shared community count between the base user and each candidate — single batch query. */
+    public Map<UUID, Long> batchCountSharedCommunities(UUID userId, List<UUID> candidateUserIds) {
+        if (candidateUserIds.isEmpty()) return Map.of();
+        List<Object[]> rows = getEntityManager().createQuery("""
+                select theirs.user.id, count(distinct mine.community.id)
+                from CommunityMember mine
+                join CommunityMember theirs on theirs.community.id = mine.community.id
+                where mine.user.id = :userId and theirs.user.id in :candidateIds
+                group by theirs.user.id
+                """, Object[].class)
+                .setParameter("userId", userId)
+                .setParameter("candidateIds", candidateUserIds)
+                .getResultList();
+        Map<UUID, Long> result = new HashMap<>();
+        for (Object[] row : rows) result.put((UUID) row[0], (Long) row[1]);
+        return result;
     }
 
     public long countSharedCommunities(UUID userId, UUID candidateUserId) {

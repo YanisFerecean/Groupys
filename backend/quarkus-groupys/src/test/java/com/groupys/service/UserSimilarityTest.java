@@ -376,6 +376,15 @@ class UserSimilarityTest {
         public Set<UUID> findAcceptedFriendIds(UUID userId) {
             return friendsByUser.getOrDefault(userId, Set.of());
         }
+
+        @Override
+        public Map<UUID, Set<UUID>> batchFriendIdsByCandidates(List<UUID> candidateIds) {
+            Map<UUID, Set<UUID>> result = new java.util.HashMap<>();
+            for (UUID id : candidateIds) {
+                result.put(id, friendsByUser.getOrDefault(id, Set.of()));
+            }
+            return result;
+        }
     }
 
     private static final class EmptyUserCommunityMemberRepository extends CommunityMemberRepository {
@@ -384,6 +393,17 @@ class UserSimilarityTest {
 
         @Override
         public long countSharedCommunities(UUID userId, UUID candidateUserId) { return 0L; }
+
+        @Override
+        public long countByUser(UUID userId) { return 0L; }
+
+        @Override
+        public Map<UUID, Long> batchCountByUsers(List<UUID> userIds) { return Map.of(); }
+
+        @Override
+        public Map<UUID, Long> batchCountSharedCommunities(UUID userId, List<UUID> candidateUserIds) {
+            return Map.of();
+        }
     }
 
     /** Returns a pre-built profile with communityActivityScore=0 for any userId. */

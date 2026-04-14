@@ -14,8 +14,10 @@ import com.groupys.util.DiscoveryScoreUtil;
 import com.groupys.util.MusicIdentityUtil;
 import io.quarkus.logging.Log;
 import io.quarkus.runtime.ShutdownEvent;
+import com.groupys.event.CommunityActivityEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
+import jakarta.enterprise.event.ObservesAsync;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.BadRequestException;
@@ -154,6 +156,14 @@ public class DiscoveryService {
 
     void onShutdown(@Observes ShutdownEvent event) {
         shuttingDown = true;
+    }
+
+    void onCommunityActivity(@ObservesAsync CommunityActivityEvent event) {
+        try {
+            self.refreshAfterCommunityActivity(event.communityId());
+        } catch (Exception e) {
+            Log.warnf(e, "Async discovery refresh failed for community %s", event.communityId());
+        }
     }
 
     @Transactional
@@ -469,8 +479,17 @@ public class DiscoveryService {
                 .toList();
         Set<UUID> suppressedCommunityIds = userDiscoveryActionRepository.findSuppressedCommunityIds(userId);
 
+        List<Community> allDiscoverable = communityRepository.listDiscoverable();
+        List<UUID> candidateCommunityIds = allDiscoverable.stream()
+                .map(c -> c.id)
+                .filter(id -> !joinedCommunityIds.contains(id) && !suppressedCommunityIds.contains(id))
+                .toList();
+        // Pre-load shared member counts for all candidates in one query (eliminates N+1)
+        Map<UUID, Long> sharedMembersMap = communityMemberRepository.batchCountSharedMembers(
+                candidateCommunityIds, joinedCommunityIds);
+
         List<CommunityRecommendationCache> caches = new ArrayList<>();
-        for (Community community : communityRepository.listDiscoverable()) {
+        for (Community community : allDiscoverable) {
             if (joinedCommunityIds.contains(community.id) || suppressedCommunityIds.contains(community.id)) {
                 continue;
             }
@@ -489,7 +508,7 @@ public class DiscoveryService {
                     toScoreMap(userGenres, preference -> preference.normalizedScore),
                     toScoreMap(communityGenres, preference -> preference.normalizedScore)
             );
-            long sharedMembers = communityMemberRepository.countSharedMembers(community.id, joinedCommunityIds);
+            long sharedMembers = sharedMembersMap.getOrDefault(community.id, 0L);
             double socialFit = DiscoveryScoreUtil.normalizedCount(sharedMembers, Math.max(1, community.memberCount));
             double activityFit = DiscoveryScoreUtil.clamp01(profile.activityScore != null ? profile.activityScore : 0d);
             if (community.memberCount > 0) {
@@ -564,10 +583,18 @@ public class DiscoveryService {
 
         List<UserSimilarityCache> caches = new ArrayList<>();
         List<User> candidatePool = resolveDiscoveryCandidates(userId);
-        for (User candidate : candidatePool) {
-            if (excludedUserIds.contains(candidate.id)) {
-                continue;
-            }
+        List<User> filteredCandidates = candidatePool.stream()
+                .filter(c -> !excludedUserIds.contains(c.id))
+                .toList();
+        List<UUID> candidateIds = filteredCandidates.stream().map(c -> c.id).toList();
+
+        // Batch-load all per-candidate counts before the loop — eliminates N+1 queries
+        long userCommunityCount = communityMemberRepository.countByUser(user.id);
+        Map<UUID, Long> candidateCommunityCounts = communityMemberRepository.batchCountByUsers(candidateIds);
+        Map<UUID, Long> sharedCommunitiesMap = communityMemberRepository.batchCountSharedCommunities(user.id, candidateIds);
+        Map<UUID, Set<UUID>> candidateFriendIdsMap = friendshipRepository.batchFriendIdsByCandidates(candidateIds);
+
+        for (User candidate : filteredCandidates) {
             rebuildCommunityDerivedPreferences(candidate);
             refreshUserTasteProfile(candidate);
 
@@ -584,10 +611,10 @@ public class DiscoveryService {
                     toScoreMap(userGenres, preference -> preference.normalizedScore),
                     toScoreMap(candidateGenres, preference -> preference.normalizedScore)
             );
-            long sharedCommunities = communityMemberRepository.countSharedCommunities(user.id, candidate.id);
-            double sharedCommunityScore = DiscoveryScoreUtil.normalizedCount(sharedCommunities,
-                    Math.max(1, Math.max(communityMemberRepository.findByUser(user.id).size(),
-                            communityMemberRepository.findByUser(candidate.id).size())));
+            long sharedCommunities = sharedCommunitiesMap.getOrDefault(candidate.id, 0L);
+            long maxCommunityCount = Math.max(1, Math.max(userCommunityCount,
+                    candidateCommunityCounts.getOrDefault(candidate.id, 0L)));
+            double sharedCommunityScore = DiscoveryScoreUtil.normalizedCount(sharedCommunities, maxCommunityCount);
             UserTasteProfile userProfile = ensureUserProfile(user.id);
             UserTasteProfile candidateProfile = ensureUserProfile(candidate.id);
             double activityScore = 1d - Math.abs(
@@ -596,7 +623,7 @@ public class DiscoveryService {
             double countryScore = countryMatchScore(user, candidate);
             long mutualFollows = userFollowRepository.countMutualFollowers(user.id, candidate.id);
             double followGraphScore = DiscoveryScoreUtil.normalizedCount(mutualFollows, 5);
-            Set<UUID> candidateFriendIds = friendshipRepository.findAcceptedFriendIds(candidate.id);
+            Set<UUID> candidateFriendIds = candidateFriendIdsMap.getOrDefault(candidate.id, Set.of());
             long sharedFriends = userFriendIds.stream().filter(candidateFriendIds::contains).count();
             double friendsOfFriendsScore = DiscoveryScoreUtil.normalizedCount(sharedFriends, 5);
 

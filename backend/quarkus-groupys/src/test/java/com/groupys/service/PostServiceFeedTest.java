@@ -492,9 +492,9 @@ class PostServiceFeedTest {
         }
 
         @Override
-        public Map<UUID, Long> countsByPostIdsAndType(List<UUID> postIds, String type) {
-            Map<UUID, Long> result = new HashMap<>();
-            for (UUID id : postIds) result.put(id, 0L);
+        public Map<UUID, long[]> countAllReactionsByPostIds(List<UUID> postIds) {
+            Map<UUID, long[]> result = new HashMap<>();
+            for (UUID id : postIds) result.put(id, new long[]{0L, 0L});
             return result;
         }
     }

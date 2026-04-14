@@ -4,7 +4,10 @@ import com.groupys.model.Friendship;
 import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
 import jakarta.enterprise.context.ApplicationScoped;
 
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -48,5 +51,23 @@ public class FriendshipRepository implements PanacheRepositoryBase<Friendship, U
         return findAcceptedByUser(userId).stream()
                 .map(f -> f.requester.id.equals(userId) ? f.recipient.id : f.requester.id)
                 .collect(Collectors.toSet());
+    }
+
+    /**
+     * Loads the full friend sets for a list of candidate users in a single query.
+     * Returns a map of candidateId → set of their accepted friend IDs.
+     * Used to batch-compute friends-of-friends scores without N+1 queries.
+     */
+    public Map<UUID, Set<UUID>> batchFriendIdsByCandidates(List<UUID> candidateIds) {
+        if (candidateIds.isEmpty()) return Map.of();
+        List<Friendship> friendships = list(
+                "(requester.id in ?1 or recipient.id in ?1) and status = ?2",
+                candidateIds, Friendship.Status.ACCEPTED);
+        Map<UUID, Set<UUID>> result = new HashMap<>();
+        for (Friendship f : friendships) {
+            result.computeIfAbsent(f.requester.id, k -> new HashSet<>()).add(f.recipient.id);
+            result.computeIfAbsent(f.recipient.id, k -> new HashSet<>()).add(f.requester.id);
+        }
+        return result;
     }
 }
