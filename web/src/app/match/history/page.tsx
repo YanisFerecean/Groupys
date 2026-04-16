@@ -151,7 +151,7 @@ export default function MatchHistoryPage() {
     <AppShell>
       <div className="flex flex-col h-[calc(100vh-64px)] lg:h-[calc(100vh-80px)] bg-surface">
         {/* Header */}
-        <div className="px-5 pb-4 pt-4 flex-shrink-0">
+        <div className="max-w-4xl mx-auto w-full px-5 pb-4 pt-4 flex-shrink-0">
           <button
             onClick={() => router.back()}
             className="mb-5 flex items-center gap-1 self-start rounded-full bg-surface-container px-3 py-2 hover:bg-surface-container-high transition-colors"
@@ -168,7 +168,7 @@ export default function MatchHistoryPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-3 px-5 pb-4 flex-shrink-0">
+        <div className="max-w-4xl mx-auto w-full flex gap-3 px-5 pb-4 flex-shrink-0">
           <button
             onClick={() => setActiveTab("matches")}
             className={`flex-1 rounded-full px-4 py-3 text-sm font-bold uppercase tracking-wide transition-colors ${
@@ -193,9 +193,10 @@ export default function MatchHistoryPage() {
 
         {/* List */}
         <div
-          className="flex-1 overflow-y-auto px-5 pb-8"
+          className="flex-1 overflow-y-auto pb-8"
           onScroll={handleScroll}
         >
+          <div className="max-w-4xl mx-auto w-full px-5 min-h-full flex flex-col">
           {isLoading ? (
             <div className="flex justify-center py-8">
               <div className="w-7 h-7 border-4 border-primary border-t-transparent rounded-full animate-spin" />
@@ -243,6 +244,7 @@ export default function MatchHistoryPage() {
               )}
             </div>
           )}
+          </div>
         </div>
       </div>
     </AppShell>
