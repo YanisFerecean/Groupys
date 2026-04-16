@@ -208,7 +208,9 @@ export default function ConversationPage() {
             className="flex items-center gap-3 hover:opacity-80 transition-opacity"
           >
             {avatarUrl && !avatarError ? (
-              <Image src={avatarUrl} alt={headerTitle} width={48} height={48} className="rounded-full object-cover" onError={() => setAvatarError(true)} />
+              <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0">
+                <Image src={avatarUrl} alt={headerTitle} width={48} height={48} className="w-full h-full object-cover" onError={() => setAvatarError(true)} />
+              </div>
             ) : (
               <div className="w-12 h-12 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-lg uppercase">
                 {headerTitle.charAt(0)}

@@ -59,13 +59,15 @@ const ConversationItem = memo(function ConversationItem({
       {/* Avatar */}
       <div className="flex-shrink-0 relative">
         {profileImage ? (
-          <Image
-            src={profileImage}
-            alt={displayName}
-            width={48}
-            height={48}
-            className="rounded-full object-cover bg-surface-container"
-          />
+          <div className="w-12 h-12 rounded-full overflow-hidden bg-surface-container flex-shrink-0">
+            <Image
+              src={profileImage}
+              alt={displayName}
+              width={48}
+              height={48}
+              className="w-full h-full object-cover"
+            />
+          </div>
         ) : (
           <div className="w-12 h-12 rounded-full bg-primary/20 text-primary flex items-center justify-center font-semibold text-lg uppercase">
             {displayName.charAt(0)}
