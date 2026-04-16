@@ -10,9 +10,10 @@ interface TopAlbumsWidgetProps {
   albums?: ProfileCustomization["topAlbums"];
   containerColor?: string;
   size?: "small" | "normal";
+  className?: string;
 }
 
-export default function TopAlbumsWidget({ albums, containerColor, size = "normal" }: TopAlbumsWidgetProps) {
+export default function TopAlbumsWidget({ albums, containerColor, size = "normal", className }: TopAlbumsWidgetProps) {
   const router = useRouter();
   const textColor = containerColor ? getContrastColor(containerColor) : undefined;
   const visibleAlbums = albums?.slice(0, size === "small" ? 1 : 3) ?? [];
@@ -35,7 +36,7 @@ export default function TopAlbumsWidget({ albums, containerColor, size = "normal
   return (
     <WidgetCard
       title={size === "small" ? "Top Album" : "Top Albums"}
-      className="h-[260px] overflow-hidden"
+      className={className ?? "h-[260px] overflow-hidden"}
       style={containerColor ? { backgroundColor: containerColor } : undefined}
       textColor={textColor}
     >

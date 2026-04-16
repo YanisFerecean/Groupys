@@ -30,7 +30,7 @@ export interface BackendUser {
 
 // ── Widget ↔ ProfileCustomization conversion ───────────────────────────────
 
-function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCustomization> {
+export function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCustomization> {
   const sorted = [...widgets].sort((a, b) => a.pos - b.pos);
   const result: Partial<ProfileCustomization> = { showHotTake: false };
 
@@ -47,7 +47,7 @@ function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCustomizatio
         title: i.title,
         artist: i.artist,
         coverUrl: i.coverUrl,
-        preview: i.preview,
+        preview: i.preview ?? i.previewUrl,
       }));
         result.songsContainerColor = w.color ?? undefined;
         if (widgetSize) result.widgetSizes = { ...result.widgetSizes, topSongs: widgetSize as "small" | "normal" };
@@ -162,7 +162,7 @@ function profileToWidgets(profile: Partial<ProfileCustomization>): BackendWidget
 
 // ── JSON parsing helper ───────────────────────────────────────────────────
 
-function parseWidgets(raw: string | null): BackendWidget[] {
+export function parseWidgets(raw: string | null): BackendWidget[] {
   if (!raw) return [];
   try {
     return JSON.parse(raw) as BackendWidget[];

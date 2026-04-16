@@ -1,8 +1,6 @@
 "use client";
 
 import { UserButton } from "@clerk/nextjs";
-import { usePathname, useRouter } from "next/navigation";
-import { History } from "lucide-react";
 
 interface TopBarProps {
   onMenuClick?: () => void;
@@ -10,9 +8,6 @@ interface TopBarProps {
 }
 
 export default function TopBar({ onMenuClick, onSearchClick }: TopBarProps) {
-  const pathname = usePathname();
-  const router = useRouter();
-  const isMutuals = pathname === "/match" || pathname.startsWith("/match/");
 
   return (
     <header className="fixed top-0 right-0 left-0 lg:left-64 h-16 lg:h-20 z-40 bg-surface/80 backdrop-blur-xl border-b border-surface-container">
@@ -55,15 +50,6 @@ export default function TopBar({ onMenuClick, onSearchClick }: TopBarProps) {
 
         {/* Actions */}
         <div className="flex items-center gap-4 lg:gap-6 ml-auto">
-          {isMutuals && (
-            <button
-              onClick={() => router.push("/match/history")}
-              className="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container hover:bg-surface-container-high transition-colors"
-              aria-label="Match history"
-            >
-              <History className="w-5 h-5 text-primary" />
-            </button>
-          )}
           <UserButton appearance={{ elements: { avatarBox: { width: 40, height: 40 } } }} />
         </div>
       </div>
