@@ -46,7 +46,10 @@ export default function UserSync() {
             profileImage: user.imageUrl ?? undefined,
           }, token);
           setBackendUser(created.id, created.username);
-          router.replace("/onboarding");
+          // Only redirect to onboarding if user is on the landing page
+          if (pathname === "/") {
+            router.replace("/onboarding");
+          }
         } else {
           setBackendUser(existing.id, existing.username);
           if (user.imageUrl && existing.profileImage !== user.imageUrl) {
@@ -60,7 +63,10 @@ export default function UserSync() {
               profileImage: user.imageUrl,
             }, token);
           }
-          router.replace("/feed");
+          // Only redirect to feed if user is on the landing page
+          if (pathname === "/") {
+            router.replace("/feed");
+          }
         }
       } catch (err) {
         console.error("Failed to sync user to backend:", err);
@@ -70,7 +76,7 @@ export default function UserSync() {
         setSyncing(false);
       }
     })();
-  }, [getToken, isAuthLoaded, isSignedIn, isLoaded, user, router]);
+  }, [getToken, isAuthLoaded, isSignedIn, isLoaded, user, router, pathname]);
 
   // Only block the UI while actively syncing AND the user is on "/"
   if (!syncing || pathname !== "/") return null;
