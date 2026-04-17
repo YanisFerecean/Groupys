@@ -52,6 +52,7 @@ export default function PublicProfileView({
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [albumsRatedCount, setAlbumsRatedCount] = useState<number | null>(null);
+  const [postsCount, setPostsCount] = useState<number | null>(null);
   const [messagingLoading, setMessagingLoading] = useState(false);
   const [messagingConversationId, setMessagingConversationId] = useState<string | null>(null);
   const [friendStatus, setFriendStatus] = useState<FriendStatus>("NONE");
@@ -136,12 +137,14 @@ export default function PublicProfileView({
           setBackendUser(data);
           setProfile(backendUserToProfile(data));
         }
-        const [ratings, statusRes] = await Promise.all([
+        const [ratings, statusRes, postCountRes] = await Promise.all([
           fetchUserAlbumRatings(username, token).catch(() => []),
           token ? fetchFriendStatus(data.id, token).catch(() => null) : Promise.resolve(null),
+          fetch(`${API_URL}/posts/author/${data.id}/count`).then(r => r.ok ? r.json() : null).catch(() => null),
         ]);
         if (!cancelled) {
           setAlbumsRatedCount(ratings.length);
+          if (postCountRes) setPostsCount(postCountRes.count);
           if (statusRes) {
             setFriendStatus(statusRes.status);
             setFriendshipId(statusRes.friendshipId);
@@ -281,6 +284,17 @@ export default function PublicProfileView({
                   </span>
                   <span className="text-sm uppercase tracking-wide">
                     Albums Rated
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span
+                    className="font-bold text-lg"
+                    style={{ color: "var(--profile-accent, var(--color-primary))" }}
+                  >
+                    {postsCount ?? "—"}
+                  </span>
+                  <span className="text-sm uppercase tracking-wide">
+                    Posts
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
