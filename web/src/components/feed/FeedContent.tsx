@@ -365,7 +365,7 @@ export default function FeedContent() {
   return (
     <section className="w-full max-w-4xl px-6 lg:px-12 py-8 lg:py-12">
       <header className="mb-10">
-        <h2 className="text-display-lg mb-1">Your Feed</h2>
+        <h2 className="text-display-lg mb-1 text-primary">Your Feed</h2>
         <p className="text-on-surface-variant text-sm">
           Latest posts from your communities
         </p>
