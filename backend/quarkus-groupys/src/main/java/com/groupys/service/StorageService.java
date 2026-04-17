@@ -117,7 +117,14 @@ public class StorageService {
         if (queryIndex >= 0) {
             key = key.substring(0, queryIndex);
         }
-        return URLDecoder.decode(key, StandardCharsets.UTF_8);
+        String decoded = URLDecoder.decode(key, StandardCharsets.UTF_8);
+
+        // Validate against path traversal attempts
+        if (decoded.contains("..") || decoded.contains("//") || decoded.startsWith("/")) {
+            throw new SecurityException("Invalid object key: path traversal detected");
+        }
+
+        return decoded;
     }
 
     private String uploadInternal(String bucket,

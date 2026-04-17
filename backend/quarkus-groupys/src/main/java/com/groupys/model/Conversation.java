@@ -9,7 +9,13 @@ import java.util.UUID;
 
 
 @Entity
-@Table(name = "conversations")
+@Table(name = "conversations", indexes = {
+    @Index(name = "idx_conversations_last_message_at", columnList = "last_message_at DESC"),
+    @Index(name = "idx_conversations_updated_at", columnList = "updated_at DESC"),
+    @Index(name = "idx_conversations_request_status", columnList = "request_status"),
+    @Index(name = "idx_conversations_match_id", columnList = "match_id"),
+    @Index(name = "idx_conversations_requested_by_user_id", columnList = "requested_by_user_id")
+})
 public class Conversation {
 
     @Id

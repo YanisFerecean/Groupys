@@ -367,10 +367,22 @@ public class DiscoveryService {
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void refreshAfterCommunityActivity(UUID communityId) {
         refreshCommunityProfile(communityId);
-        communityMemberRepository.findByCommunity(communityId).stream()
+        // Collect user IDs first, then batch process to avoid holding connections too long
+        List<UUID> userIds = communityMemberRepository.findByCommunity(communityId).stream()
                 .map(member -> member.user.id)
                 .distinct()
-                .forEach(this::refreshCommunityRecommendations);
+                .toList();
+        // Process in smaller batches to avoid long-running transactions
+        for (UUID userId : userIds) {
+            if (shuttingDown) {
+                break;
+            }
+            try {
+                refreshCommunityRecommendations(userId);
+            } catch (Exception e) {
+                Log.warnf(e, "Failed to refresh recommendations for user %s", userId);
+            }
+        }
     }
 
     @Transactional
@@ -1516,45 +1528,63 @@ public class DiscoveryService {
     }
 
     private Map<String, Double> resolveArtistNames(Map<Long, Double> weights) {
+        if (weights.isEmpty()) {
+            return Map.of();
+        }
+        // Batch query to eliminate N+1 problem
+        Map<Long, String> artistNames = artistRepository.findNamesByIds(weights.keySet());
         Map<String, Double> names = new LinkedHashMap<>();
-        weights.forEach((artistId, weight) -> artistRepository.findByIdOptional(artistId)
-                .ifPresent(artist -> names.put(artist.getName(), weight)));
+        weights.forEach((artistId, weight) -> {
+            String artistName = artistNames.get(artistId);
+            if (artistName != null) {
+                names.put(artistName, weight);
+            }
+        });
         return names;
     }
 
     private Map<String, Double> resolveGenreNames(Map<Long, Double> weights) {
+        if (weights.isEmpty()) {
+            return Map.of();
+        }
+        // Batch query to eliminate N+1 problem
+        Map<Long, String> genreNames = genreRepository.findNamesByIds(weights.keySet());
         Map<String, Double> names = new LinkedHashMap<>();
-        weights.forEach((genreId, weight) -> genreRepository.findByIdOptional(genreId)
-                .ifPresent(genre -> names.put(genre.name, weight)));
+        weights.forEach((genreId, weight) -> {
+            String name = genreNames.get(genreId);
+            if (name != null) {
+                names.put(name, weight);
+            }
+        });
         return names;
     }
 
     private List<String> intersectArtistNames(Set<Long> left, Set<Long> right) {
-        List<String> names = new ArrayList<>();
-        for (Long key : left) {
-            if (!right.contains(key)) {
-                continue;
-            }
-            artistRepository.findByIdOptional(key).ifPresent(artist -> names.add(artist.getName()));
-            if (names.size() >= 3) {
-                break;
-            }
+        // Find intersection
+        Set<Long> intersection = new HashSet<>(left);
+        intersection.retainAll(right);
+        if (intersection.isEmpty()) {
+            return List.of();
         }
-        return names;
+        // Batch query to eliminate N+1 problem
+        Map<Long, String> artistNames = artistRepository.findNamesByIds(
+            intersection.stream().limit(3).toList()
+        );
+        return new ArrayList<>(artistNames.values());
     }
 
     private List<String> intersectGenreNames(Set<Long> left, Set<Long> right) {
-        List<String> names = new ArrayList<>();
-        for (Long key : left) {
-            if (!right.contains(key)) {
-                continue;
-            }
-            genreRepository.findByIdOptional(key).ifPresent(genre -> names.add(genre.name));
-            if (names.size() >= 3) {
-                break;
-            }
+        // Find intersection
+        Set<Long> intersection = new HashSet<>(left);
+        intersection.retainAll(right);
+        if (intersection.isEmpty()) {
+            return List.of();
         }
-        return names;
+        // Batch query to eliminate N+1 problem
+        Map<Long, String> genreNames = genreRepository.findNamesByIds(
+            intersection.stream().limit(3).toList()
+        );
+        return new ArrayList<>(genreNames.values());
     }
 
     private String firstNonBlank(String primary, String fallback) {

@@ -14,9 +14,12 @@ import java.util.UUID;
 @Entity
 @BatchSize(size = 50)
 @Table(name = "users", indexes = {
-        @Index(name = "idx_users_country_code", columnList = "country_code"),
-        @Index(name = "idx_users_discovery_flags", columnList = "discovery_visible,recommendation_opt_out"),
-        @Index(name = "idx_users_last_music_sync_at", columnList = "last_music_sync_at")
+    @Index(name = "idx_users_clerk_id", columnList = "clerk_id"),
+    @Index(name = "idx_users_country_code", columnList = "country_code"),
+    @Index(name = "idx_users_discovery_flags", columnList = "discovery_visible,recommendation_opt_out"),
+    @Index(name = "idx_users_last_music_sync_at", columnList = "last_music_sync_at"),
+    @Index(name = "idx_users_username", columnList = "username"),
+    @Index(name = "idx_users_last_seen_at", columnList = "last_seen_at DESC")
 })
 public class User {
 

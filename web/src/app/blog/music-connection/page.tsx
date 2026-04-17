@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import Link from "next/link";
 
 export const metadata: Metadata = {
@@ -88,10 +89,13 @@ const articleJsonLd = {
 export default function MusicConnectionPage() {
   return (
     <>
-      <script
+      <Script
+        id="article-json-ld-music-connection"
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }}
-      />
+        strategy="beforeInteractive"
+      >
+        {JSON.stringify(articleJsonLd)}
+      </Script>
     <div className="min-h-screen bg-surface text-on-surface">
       <div className="max-w-2xl mx-auto px-6 py-24">
         <Link

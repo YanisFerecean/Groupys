@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { GoogleAnalytics } from "@next/third-parties/google";
 import NavBar from "@/components/landing/NavBar";
 import HeroSection from "@/components/landing/HeroSection";
@@ -162,10 +163,13 @@ export default function Home() {
         imageSrcSet="/_next/image?url=%2Fdrake.png&w=256&q=75 256w, /_next/image?url=%2Fdrake.png&w=384&q=75 384w"
         imageSizes="280px"
       />
-      <script
+      <Script
+        id="json-ld"
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
+        strategy="beforeInteractive"
+      >
+        {JSON.stringify(jsonLd)}
+      </Script>
       <div className="bg-surface text-on-surface selection:bg-primary-fixed selection:text-on-primary-fixed">
         <NavBar />
         <main className="pt-24 md:pt-32">

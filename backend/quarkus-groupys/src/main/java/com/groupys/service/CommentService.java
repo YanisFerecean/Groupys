@@ -8,6 +8,7 @@ import com.groupys.model.Post;
 import com.groupys.model.User;
 import com.groupys.repository.CommentReactionRepository;
 import com.groupys.repository.CommentRepository;
+import com.groupys.repository.CommunityMemberRepository;
 import com.groupys.repository.PostRepository;
 import com.groupys.repository.UserRepository;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -32,6 +33,9 @@ public class CommentService {
 
     @Inject
     UserRepository userRepository;
+
+    @Inject
+    CommunityMemberRepository communityMemberRepository;
 
     @Inject
     DiscoveryService discoveryService;
@@ -176,11 +180,15 @@ public class CommentService {
     @Transactional
     public void delete(UUID commentId, String clerkId) {
         Comment comment = commentRepository.findByIdOptional(commentId)
-                .orElseThrow(() -> new NotFoundException("Comment not found"));
+            .orElseThrow(() -> new NotFoundException("Comment not found"));
         User user = userRepository.findByClerkId(clerkId)
-                .orElseThrow(() -> new NotFoundException("User not found"));
-        if (!comment.author.id.equals(user.id)) {
-            throw new jakarta.ws.rs.ForbiddenException("Not the author");
+            .orElseThrow(() -> new NotFoundException("User not found"));
+
+        boolean isAuthor = comment.author.id.equals(user.id);
+        boolean isCommunityModerator = communityMemberRepository.isOwnerOrModerator(user.id, comment.post.community.id);
+
+        if (!isAuthor && !isCommunityModerator) {
+            throw new jakarta.ws.rs.ForbiddenException("Not authorized to delete this comment");
         }
         UUID postId = comment.post.id;
         UUID communityId = comment.post.community.id;

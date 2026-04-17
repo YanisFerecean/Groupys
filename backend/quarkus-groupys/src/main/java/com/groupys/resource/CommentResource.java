@@ -5,6 +5,7 @@ import com.groupys.dto.CommentResDto;
 import com.groupys.service.CommentService;
 import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
+import jakarta.validation.Valid;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -35,7 +36,7 @@ public class CommentResource {
 
     @POST
     @Path("/post/{postId}")
-    public Response create(@PathParam("postId") UUID postId, CommentCreateDto dto) {
+    public Response create(@PathParam("postId") UUID postId, @Valid CommentCreateDto dto) {
         CommentResDto created = commentService.create(postId, dto.content(), dto.parentCommentId(), jwt.getSubject());
         return Response.status(Response.Status.CREATED).entity(created).build();
     }

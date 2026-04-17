@@ -323,10 +323,11 @@ public class UserService {
     private void nativeUpdate(EntityManager em, String sql, UUID userId) {
         try {
             em.createNativeQuery(sql)
-                    .setParameter("userId", userId)
-                    .executeUpdate();
+            .setParameter("userId", userId)
+            .executeUpdate();
         } catch (Exception e) {
-            Log.warnf(e, "Account deletion cleanup query failed for user %s: %s", userId, sql);
+            // Log without including the SQL to prevent log injection
+            Log.warnf(e, "Account deletion cleanup query failed for user %s", userId);
             throw e;
         }
     }
@@ -335,7 +336,8 @@ public class UserService {
         try {
             em.createNativeQuery(sql).executeUpdate();
         } catch (Exception e) {
-            Log.warnf(e, "Account deletion cleanup query failed: %s", sql);
+            // Log without including the SQL to prevent log injection
+            Log.warnf(e, "Account deletion cleanup query failed");
             throw e;
         }
     }

@@ -19,6 +19,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.jboss.logging.Logger;
+import org.owasp.encoder.Encode;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -56,7 +57,19 @@ public class ChatWebSocket {
     @Inject
     JWTParser jwtParser;
 
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = createSecureObjectMapper();
+
+    /**
+     * Creates a secure ObjectMapper with safe defaults to prevent deserialization attacks.
+     */
+    private static ObjectMapper createSecureObjectMapper() {
+        ObjectMapper om = new ObjectMapper();
+        // Disable default typing to prevent deserialization attacks
+        om.deactivateDefaultTyping();
+        // Don't fail on unknown properties - safer for forward compatibility
+        om.configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        return om;
+    }
     private volatile boolean shuttingDown;
 
     void onShutdown(@Observes ShutdownEvent event) {
@@ -348,15 +361,28 @@ public class ChatWebSocket {
         data.put("id", m.id().toString());
         data.put("conversationId", m.conversationId().toString());
         data.put("senderId", m.senderId().toString());
-        data.put("senderUsername", m.senderUsername());
-        data.put("senderDisplayName", m.senderDisplayName());
+        data.put("senderUsername", sanitizeForHtml(m.senderUsername()));
+        data.put("senderDisplayName", sanitizeForHtml(m.senderDisplayName()));
         data.put("senderProfileImage", m.senderProfileImage());
-        data.put("content", m.content());
+        // Sanitize message content to prevent XSS
+        data.put("content", sanitizeForHtml(m.content()));
         data.put("messageType", m.messageType());
         data.put("createdAt", m.createdAt().toString());
         if (tempId != null && !tempId.isEmpty()) {
             data.put("tempId", tempId);
         }
         return data;
+    }
+
+    /**
+     * Sanitizes a string for safe HTML output by escaping special characters.
+     * This prevents XSS attacks by encoding HTML entities.
+     */
+    private String sanitizeForHtml(String input) {
+        if (input == null) {
+            return null;
+        }
+        // Use OWASP Encoder to HTML-encode the content
+        return Encode.forHtml(input);
     }
 }

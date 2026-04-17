@@ -10,7 +10,9 @@ import java.util.UUID;
 @Entity
 @Table(name = "posts", indexes = {
     @Index(name = "idx_posts_community_created", columnList = "community_id, created_at DESC"),
-    @Index(name = "idx_posts_author_created", columnList = "author_id, created_at DESC")
+    @Index(name = "idx_posts_author_created", columnList = "author_id, created_at DESC"),
+    @Index(name = "idx_posts_popular", columnList = "like_count DESC, created_at DESC"),
+    @Index(name = "idx_posts_like_count", columnList = "like_count DESC")
 })
 public class Post {
 

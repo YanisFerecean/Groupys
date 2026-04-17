@@ -180,5 +180,29 @@ export class ChatWebSocketClient {
 // but fallback to the backend host
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8080/api/ws/chat";
 
+// Allowed WebSocket origins for security
+const ALLOWED_ORIGINS = [
+  "localhost",
+  "127.0.0.1",
+  "groupys.app",
+  "www.groupys.app",
+];
+
+/**
+ * Validates the WebSocket URL origin against allowed origins.
+ */
+function validateOrigin(url: string): boolean {
+  try {
+    const urlObj = new URL(url);
+    const hostname = urlObj.hostname.toLowerCase();
+    return ALLOWED_ORIGINS.some(origin => hostname === origin || hostname.endsWith(`.${origin}`));
+  } catch {
+    return false;
+  }
+}
+
 // Export a singleton instance
 export const chatWs = new ChatWebSocketClient(WS_URL);
+
+// Re-export validateOrigin for use in connection
+export { validateOrigin };

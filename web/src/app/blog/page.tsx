@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import Link from "next/link";
 
 export const metadata: Metadata = {
@@ -57,10 +58,13 @@ const posts = [
 export default function BlogPage() {
   return (
     <>
-      <script
+      <Script
+        id="blog-json-ld"
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
+        strategy="beforeInteractive"
+      >
+        {JSON.stringify(jsonLd)}
+      </Script>
       <div className="min-h-screen bg-surface text-on-surface">
         <div className="max-w-3xl mx-auto px-6 py-24">
           <Link
