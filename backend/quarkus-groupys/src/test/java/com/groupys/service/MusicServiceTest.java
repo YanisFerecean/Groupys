@@ -122,6 +122,82 @@ class MusicServiceTest {
         assertTrue(payload.artists().stream().anyMatch(artist -> "Recent Artist".equals(artist.name())));
     }
 
+    @Test
+    void topTracksAndAlbumsParseReplayViewsWhenTypesAreSummaryEntries() {
+        User user = user("clerk-replay-views", "replay-views");
+        user.appleMusicUserToken = "music-user-token";
+
+        MusicService service = new MusicService();
+        service.userRepository = new StubUserRepository(Map.of(user.clerkId, user));
+        service.developerTokenService = new StubDeveloperTokenService();
+        service.appleMusicApi = new StubAppleMusicApiClient(
+                ResponseSpec.of(200, "{}"),
+                ResponseSpec.of(200, replayViewsPayload()),
+                ResponseSpec.of(404, "{}"),
+                ResponseSpec.of(404, "{}")
+        );
+
+        assertTrue(service.getTopTracks(user.clerkId).stream().anyMatch(track -> "Song View One".equals(track.title())));
+        assertTrue(service.getTopAlbums(user.clerkId).stream().anyMatch(album -> "Album View One".equals(album.title())));
+    }
+
+    @Test
+    void topTracksParseReplayTopTracksViewUnderAttributes() {
+        User user = user("clerk-replay-top-tracks", "replay-top-tracks");
+        user.appleMusicUserToken = "music-user-token";
+
+        MusicService service = new MusicService();
+        service.userRepository = new StubUserRepository(Map.of(user.clerkId, user));
+        service.developerTokenService = new StubDeveloperTokenService();
+        service.appleMusicApi = new StubAppleMusicApiClient(
+                ResponseSpec.of(200, "{}"),
+                ResponseSpec.of(200, replayTopTracksViewPayload()),
+                ResponseSpec.of(404, "{}"),
+                ResponseSpec.of(404, "{}")
+        );
+
+        assertTrue(service.getTopTracks(user.clerkId).stream().anyMatch(track -> "Song Track One".equals(track.title())));
+    }
+
+    @Test
+    void topTracksParseSparseReplayEntriesViaRelationships() {
+        User user = user("clerk-replay-sparse-track", "replay-sparse-track");
+        user.appleMusicUserToken = "music-user-token";
+
+        MusicService service = new MusicService();
+        service.userRepository = new StubUserRepository(Map.of(user.clerkId, user));
+        service.developerTokenService = new StubDeveloperTokenService();
+        service.appleMusicApi = new StubAppleMusicApiClient(
+                ResponseSpec.of(200, "{}"),
+                ResponseSpec.of(200, replaySparseTrackPayload()),
+                ResponseSpec.of(404, "{}"),
+                ResponseSpec.of(404, "{}")
+        );
+
+        assertTrue(service.getTopTracks(user.clerkId).stream().anyMatch(track -> "Sparse Song One".equals(track.title())));
+    }
+
+    @Test
+    void topTracksReplayRequestIncludesTopSongsRelationship() {
+        User user = user("clerk-replay-include-top-songs", "replay-include-top-songs");
+        user.appleMusicUserToken = "music-user-token";
+
+        MusicService service = new MusicService();
+        service.userRepository = new StubUserRepository(Map.of(user.clerkId, user));
+        service.developerTokenService = new StubDeveloperTokenService();
+        StubAppleMusicApiClient appleMusicApi = new StubAppleMusicApiClient(
+                ResponseSpec.of(200, "{}"),
+                ResponseSpec.of(200, replayPayload()),
+                ResponseSpec.of(404, "{}"),
+                ResponseSpec.of(404, "{}")
+        );
+        service.appleMusicApi = appleMusicApi;
+
+        service.getTopTracks(user.clerkId);
+
+        assertEquals("top-songs", appleMusicApi.lastReplayInclude());
+    }
+
     private static User user(String seed, String suffix) {
         User user = new User();
         user.id = UUID.nameUUIDFromBytes(seed.getBytes(StandardCharsets.UTF_8));
@@ -217,6 +293,142 @@ class MusicServiceTest {
                 """;
     }
 
+    private static String replayViewsPayload() {
+        return """
+                {
+                  "data": [
+                    {
+                      "id": "year-latest",
+                      "type": "music-summaries",
+                      "views": {
+                        "top-songs": {
+                          "data": [
+                            {
+                              "id": "view-song-1",
+                              "type": "summary-entry",
+                              "attributes": {
+                                "name": "Song View One",
+                                "artistName": "Artist View One",
+                                "albumName": "Album View One",
+                                "artwork": {
+                                  "url": "https://song-view.example/{w}x{h}.jpg",
+                                  "width": 300,
+                                  "height": 300
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        "top-albums": {
+                          "data": [
+                            {
+                              "id": "view-album-1",
+                              "type": "summary-entry",
+                              "attributes": {
+                                "name": "Album View One",
+                                "artistName": "Artist View One",
+                                "artwork": {
+                                  "url": "https://album-view.example/{w}x{h}.jpg",
+                                  "width": 500,
+                                  "height": 500
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+                """;
+    }
+
+    private static String replayTopTracksViewPayload() {
+        return """
+                {
+                  "data": [
+                    {
+                      "id": "year-latest",
+                      "type": "music-summaries",
+                      "attributes": {
+                        "views": {
+                          "top-tracks": {
+                            "data": [
+                              {
+                                "id": "track-entry-1",
+                                "type": "summary-entry",
+                                "attributes": {
+                                  "title": "Song Track One",
+                                  "artistName": "Track Artist One",
+                                  "albumName": "Track Album One",
+                                  "artwork": {
+                                    "url": "https://track-view.example/{w}x{h}.jpg",
+                                    "width": 300,
+                                    "height": 300
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+                """;
+    }
+
+    private static String replaySparseTrackPayload() {
+        return """
+                {
+                  "data": [
+                    {
+                      "id": "year-latest",
+                      "type": "music-summaries",
+                      "views": {
+                        "top-songs": {
+                          "data": [
+                            {
+                              "id": "summary-song-entry-1",
+                              "type": "summary-entry",
+                              "relationships": {
+                                "songs": {
+                                  "data": [
+                                    {
+                                      "id": "sparse-song-1",
+                                      "type": "songs"
+                                    }
+                                  ]
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      "resources": {
+                        "songs": [
+                          {
+                            "id": "sparse-song-1",
+                            "type": "audio-item",
+                            "attributes": {
+                              "name": "Sparse Song One",
+                              "artistName": "Sparse Artist One",
+                              "albumName": "Sparse Album One",
+                              "artwork": {
+                                "url": "https://sparse-song.example/{w}x{h}.jpg",
+                                "width": 320,
+                                "height": 320
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+                """;
+    }
+
     private static final class StubDeveloperTokenService extends AppleDeveloperTokenService {
         @Override
         public synchronized String getDeveloperToken() {
@@ -253,6 +465,7 @@ class MusicServiceTest {
         private final ResponseSpec replay;
         private final ResponseSpec recent;
         private final ResponseSpec heavy;
+        private String lastReplayInclude;
 
         private StubAppleMusicApiClient(ResponseSpec storefront, ResponseSpec replay, ResponseSpec recent, ResponseSpec heavy) {
             this.storefront = storefront;
@@ -267,7 +480,8 @@ class MusicServiceTest {
         }
 
         @Override
-        public Response getMusicSummaries(String bearer, String musicUserToken, String year, String types) {
+        public Response getMusicSummaries(String bearer, String musicUserToken, String year, String include, String views) {
+            this.lastReplayInclude = include;
             return Response.status(replay.status()).entity(replay.payload()).build();
         }
 
@@ -279,6 +493,10 @@ class MusicServiceTest {
         @Override
         public Response getHeavyRotation(String bearer, String musicUserToken, int limit) {
             return Response.status(heavy.status()).entity(heavy.payload()).build();
+        }
+
+        private String lastReplayInclude() {
+            return lastReplayInclude;
         }
     }
 }

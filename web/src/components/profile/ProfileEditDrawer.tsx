@@ -438,12 +438,21 @@ const setListeningFromSearch = (result: TrackResult) => {
   const setSynced = (key: string) =>
     setForm((prev) => ({ ...prev, musicSynced: { ...prev.musicSynced, [key]: true } }));
 
+  const syncDiscoveryBestEffort = async (token: string) => {
+    try {
+      await syncMusicDiscovery(token);
+    } catch (err) {
+      // Discovery sync powers recommendations and should not block widget hydration.
+      console.warn("Discovery sync failed during Apple Music widget sync; continuing.", err);
+    }
+  };
+
   const syncTopArtists = async () => {
     const token = await getToken();
     if (!token) return;
     setSyncing("artists");
     try {
-      await syncMusicDiscovery(token);
+      await syncDiscoveryBestEffort(token);
       const artists = await fetchMusicTopArtists(token);
       set(
         "topArtists",
@@ -462,7 +471,7 @@ const setListeningFromSearch = (result: TrackResult) => {
     if (!token) return;
     setSyncing("tracks");
     try {
-      await syncMusicDiscovery(token);
+      await syncDiscoveryBestEffort(token);
       const tracks = await fetchMusicTopTracks(token);
       set(
         "topSongs",
@@ -481,7 +490,7 @@ const setListeningFromSearch = (result: TrackResult) => {
     if (!token) return;
     setSyncing("albums");
     try {
-      await syncMusicDiscovery(token);
+      await syncDiscoveryBestEffort(token);
       const albums = await fetchMusicTopAlbums(token);
       set(
         "topAlbums",
@@ -816,7 +825,7 @@ const setListeningFromSearch = (result: TrackResult) => {
                     if (!token) return;
                     setSyncing("all");
                     try {
-                      await syncMusicDiscovery(token);
+                      await syncDiscoveryBestEffort(token);
                       const [artists, tracks, albums, playing] = await Promise.all([
                         fetchMusicTopArtists(token),
                         fetchMusicTopTracks(token),

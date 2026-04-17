@@ -21,7 +21,8 @@ public interface AppleMusicApiClient {
     Response getMusicSummaries(@HeaderParam("Authorization") String bearer,
                                @HeaderParam("Music-User-Token") String musicUserToken,
                                @QueryParam("filter[year]") String year,
-                               @QueryParam("types") String types);
+                               @QueryParam("include") String include,
+                               @QueryParam("views") String views);
 
     @GET
     @Path("/me/recent/played/tracks")

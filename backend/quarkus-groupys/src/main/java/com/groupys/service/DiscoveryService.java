@@ -1060,7 +1060,7 @@ public class DiscoveryService {
         if (item.imageUrl() != null && !item.imageUrl().isBlank()) {
             artist.setImages(List.of(item.imageUrl()));
         }
-        artist.setPopularityScore(item.popularity() != null ? item.popularity() / 100d : artist.getPopularityScore());
+        artist.setPopularityScore(resolvePopularityScore(item.popularity(), artist.getPopularityScore()));
         return artist;
     }
 
@@ -1094,11 +1094,18 @@ public class DiscoveryService {
         }
         track.setAppleMusicId(firstNonBlank(item.id(), track.getAppleMusicId()));
         track.setExternalIsrc(item.isrc() != null ? item.isrc() : track.getExternalIsrc());
-        track.setPopularityScore(item.popularity() != null ? item.popularity() / 100d : track.getPopularityScore());
+        track.setPopularityScore(resolvePopularityScore(item.popularity(), track.getPopularityScore()));
         if (item.artists() != null && !item.artists().isEmpty()) {
             track.setArtist(resolveArtist(item.artists().getFirst()));
         }
         return track;
+    }
+
+    static Double resolvePopularityScore(Integer popularity, Double currentScore) {
+        if (popularity == null) {
+            return currentScore;
+        }
+        return popularity / 100d;
     }
 
     private List<String> resolveArtistGenres(MusicService.MusicArtistItem item) {

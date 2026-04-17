@@ -311,7 +311,7 @@ public class MusicService {
     }
 
     private TopArtistsData fetchTopArtistsForToken(String musicUserToken, int limit) {
-        String replayPayload = fetchReplayPayload(musicUserToken);
+        String replayPayload = fetchReplayPayload(musicUserToken, "top-artists");
         List<MusicArtistItem> replayArtists = parseArtistsFromPayload(replayPayload, limit);
         if (!replayArtists.isEmpty()) {
             return new TopArtistsData(replayPayload, replayArtists);
@@ -323,7 +323,7 @@ public class MusicService {
     }
 
     private TopTracksData fetchTopTracksForToken(String musicUserToken, int limit) {
-        String replayPayload = fetchReplayPayload(musicUserToken);
+        String replayPayload = fetchReplayPayload(musicUserToken, "top-songs");
         List<MusicTrackItem> replayTracks = parseTracksFromPayload(replayPayload, limit);
         if (!replayTracks.isEmpty()) {
             return new TopTracksData(replayPayload, replayTracks);
@@ -335,7 +335,7 @@ public class MusicService {
     }
 
     private TopAlbumsData fetchTopAlbumsForToken(String musicUserToken, int limit) {
-        String replayPayload = fetchReplayPayload(musicUserToken);
+        String replayPayload = fetchReplayPayload(musicUserToken, "top-albums");
         List<MusicAlbumItem> replayAlbums = parseAlbumsFromPayload(replayPayload, limit);
         if (!replayAlbums.isEmpty()) {
             return new TopAlbumsData(replayPayload, replayAlbums);
@@ -354,10 +354,10 @@ public class MusicService {
         return toTrackDto(fallbackTracks.tracks().getFirst());
     }
 
-    private String fetchReplayPayload(String musicUserToken) {
+    private String fetchReplayPayload(String musicUserToken, String views) {
         String bearer = "Bearer " + developerTokenService.getDeveloperToken();
         try (Response response = executeWithRetry(() ->
-                appleMusicApi.getMusicSummaries(bearer, musicUserToken, "latest", "top-artists,top-songs,top-albums"),
+                appleMusicApi.getMusicSummaries(bearer, musicUserToken, "latest", views, views),
                 "fetch replay summary")) {
             int status = response.getStatus();
             if (status == 200) {
@@ -561,19 +561,25 @@ public class MusicService {
     }
 
     private List<MusicArtistItem> parseArtistsFromPayload(String payload, int limit) {
-        List<JsonNode> artistNodes = extractResourcesByType(payload, Set.of("artist"));
+        List<JsonNode> artistNodes = new ArrayList<>(extractResourcesByType(payload, Set.of("artist")));
+        artistNodes.addAll(extractReplayViewDataNodes(payload, "top-artists"));
         if (artistNodes.isEmpty()) {
             return List.of();
         }
 
+        Map<String, JsonNode> allResources = buildResourceMap(extractAllResourceNodes(payload));
         List<MusicArtistItem> artists = new ArrayList<>();
         LinkedHashSet<String> seen = new LinkedHashSet<>();
-        for (JsonNode node : artistNodes) {
-            String id = text(node, "id");
+        for (JsonNode rawNode : artistNodes) {
+            JsonNode node = resolveResourceNode(rawNode, allResources, "artists");
+            String id = firstNonBlank(text(node, "id"), text(rawNode, "id"));
             JsonNode attributes = node.path("attributes");
+            JsonNode rawAttributes = rawNode.path("attributes");
             String name = firstNonBlank(
                     text(attributes, "name"),
-                    text(attributes, "artistName")
+                    text(attributes, "artistName"),
+                    text(rawAttributes, "name"),
+                    text(rawAttributes, "artistName")
             );
             if (name == null || name.isBlank()) {
                 continue;
@@ -587,7 +593,10 @@ public class MusicService {
                     name,
                     parseStringArray(attributes.path("genreNames")),
                     integer(attributes, "popularity"),
-                    extractArtworkUrl(attributes.path("artwork"))
+                    firstNonBlank(
+                            extractArtworkUrl(attributes.path("artwork")),
+                            extractArtworkUrl(rawAttributes.path("artwork"))
+                    )
             ));
             if (artists.size() >= limit) {
                 break;
@@ -597,18 +606,35 @@ public class MusicService {
     }
 
     private List<MusicTrackItem> parseTracksFromPayload(String payload, int limit) {
-        List<JsonNode> trackNodes = extractResourcesByType(payload, Set.of("song", "track"));
+        List<JsonNode> trackNodes = new ArrayList<>(extractResourcesByType(payload, Set.of("song", "track")));
+        trackNodes.addAll(extractReplayViewDataNodes(payload, "top-songs"));
+        trackNodes.addAll(extractReplayViewDataNodes(payload, "top-tracks"));
         if (trackNodes.isEmpty()) {
             return List.of();
         }
 
-        Map<String, JsonNode> resourceMap = buildResourceMap(trackNodes);
+        Map<String, JsonNode> resourceMap = buildResourceMap(extractAllResourceNodes(payload));
         List<MusicTrackItem> tracks = new ArrayList<>();
         LinkedHashSet<String> seen = new LinkedHashSet<>();
-        for (JsonNode node : trackNodes) {
+        for (JsonNode rawNode : trackNodes) {
+            JsonNode node = resolveResourceNode(rawNode, resourceMap, "songs");
+            JsonNode relatedTrack = resolveRelatedTrackNode(rawNode, resourceMap);
+            if (relatedTrack != null) {
+                node = relatedTrack;
+            }
             JsonNode attributes = node.path("attributes");
-            String id = text(node, "id");
-            String name = firstNonBlank(text(attributes, "name"), text(attributes, "title"));
+            JsonNode rawAttributes = rawNode.path("attributes");
+            String id = firstNonBlank(text(node, "id"), text(rawNode, "id"));
+            String name = firstNonBlank(
+                    text(attributes, "name"),
+                    text(attributes, "title"),
+                    text(attributes, "songName"),
+                    text(attributes, "trackName"),
+                    text(rawAttributes, "name"),
+                    text(rawAttributes, "title"),
+                    text(rawAttributes, "songName"),
+                    text(rawAttributes, "trackName")
+            );
             if (name == null || name.isBlank()) {
                 continue;
             }
@@ -620,6 +646,34 @@ public class MusicService {
 
             List<MusicArtistRef> artists = parseTrackArtists(node, resourceMap, attributes);
             MusicAlbumRef album = parseTrackAlbum(node, resourceMap, attributes);
+            if ((artists == null || artists.isEmpty())) {
+                String fallbackArtist = firstNonBlank(
+                        text(attributes, "artistName"),
+                        text(attributes, "artist"),
+                        text(rawAttributes, "artistName"),
+                        text(rawAttributes, "artist"),
+                        text(rawAttributes, "subtitle"),
+                        ""
+                );
+                if (!fallbackArtist.isBlank()) {
+                    artists = List.of(new MusicArtistRef(null, fallbackArtist));
+                }
+            }
+            if ((album == null || album.name() == null || album.name().isBlank())) {
+                album = new MusicAlbumRef(
+                        null,
+                        firstNonBlank(
+                                text(attributes, "albumName"),
+                                text(attributes, "albumTitle"),
+                                text(rawAttributes, "albumName"),
+                                text(rawAttributes, "albumTitle")
+                        ),
+                        firstNonBlank(
+                                extractArtworkUrl(attributes.path("artwork")),
+                                extractArtworkUrl(rawAttributes.path("artwork"))
+                        )
+                );
+            }
             tracks.add(new MusicTrackItem(
                     id,
                     name,
@@ -636,17 +690,26 @@ public class MusicService {
     }
 
     private List<MusicAlbumItem> parseAlbumsFromPayload(String payload, int limit) {
-        List<JsonNode> albumNodes = extractResourcesByType(payload, Set.of("album"));
+        List<JsonNode> albumNodes = new ArrayList<>(extractResourcesByType(payload, Set.of("album")));
+        albumNodes.addAll(extractReplayViewDataNodes(payload, "top-albums"));
         if (albumNodes.isEmpty()) {
             return List.of();
         }
 
+        Map<String, JsonNode> allResources = buildResourceMap(extractAllResourceNodes(payload));
         List<MusicAlbumItem> albums = new ArrayList<>();
         LinkedHashSet<String> seen = new LinkedHashSet<>();
-        for (JsonNode node : albumNodes) {
-            String id = text(node, "id");
+        for (JsonNode rawNode : albumNodes) {
+            JsonNode node = resolveResourceNode(rawNode, allResources, "albums");
+            String id = firstNonBlank(text(node, "id"), text(rawNode, "id"));
             JsonNode attributes = node.path("attributes");
-            String name = firstNonBlank(text(attributes, "name"), text(attributes, "albumName"));
+            JsonNode rawAttributes = rawNode.path("attributes");
+            String name = firstNonBlank(
+                    text(attributes, "name"),
+                    text(attributes, "albumName"),
+                    text(rawAttributes, "name"),
+                    text(rawAttributes, "albumName")
+            );
             if (name == null || name.isBlank()) {
                 continue;
             }
@@ -654,12 +717,19 @@ public class MusicService {
             if (!seen.add(key)) {
                 continue;
             }
-            String artistName = firstNonBlank(text(attributes, "artistName"), "");
+            String artistName = firstNonBlank(
+                    text(attributes, "artistName"),
+                    text(rawAttributes, "artistName"),
+                    ""
+            );
             albums.add(new MusicAlbumItem(
                     id,
                     name,
                     artistName,
-                    extractArtworkUrl(attributes.path("artwork"))
+                    firstNonBlank(
+                            extractArtworkUrl(attributes.path("artwork")),
+                            extractArtworkUrl(rawAttributes.path("artwork"))
+                    )
             ));
             if (albums.size() >= limit) {
                 break;
@@ -758,6 +828,174 @@ public class MusicService {
         }
     }
 
+    private List<JsonNode> extractReplayViewDataNodes(String payload, String viewName) {
+        if (payload == null || payload.isBlank() || viewName == null || viewName.isBlank()) {
+            return List.of();
+        }
+        try {
+            JsonNode root = objectMapper.readTree(payload);
+            LinkedHashMap<String, JsonNode> out = new LinkedHashMap<>();
+
+            collectReplayViewData(root.path("views"), viewName, out);
+            collectReplayViewData(root.path("attributes").path("views"), viewName, out);
+
+            JsonNode data = root.path("data");
+            if (data.isArray()) {
+                for (JsonNode summary : data) {
+                    collectReplayViewData(summary.path("views"), viewName, out);
+                    collectReplayViewData(summary.path("attributes").path("views"), viewName, out);
+                }
+            }
+
+            if (out.isEmpty() && "top-songs".equals(viewName)) {
+                collectReplayViewData(root.path("views"), "top-tracks", out);
+                collectReplayViewData(root.path("attributes").path("views"), "top-tracks", out);
+                if (data.isArray()) {
+                    for (JsonNode summary : data) {
+                        collectReplayViewData(summary.path("views"), "top-tracks", out);
+                        collectReplayViewData(summary.path("attributes").path("views"), "top-tracks", out);
+                    }
+                }
+            }
+            return new ArrayList<>(out.values());
+        } catch (Exception e) {
+            Log.debugf(e, "Unable to parse Apple Music replay views for %s", viewName);
+            return List.of();
+        }
+    }
+
+    private void collectReplayViewData(JsonNode views, String viewName, LinkedHashMap<String, JsonNode> out) {
+        if (views == null || views.isMissingNode() || views.isNull() || !views.isObject()) {
+            return;
+        }
+        collectReplayViewData(views.path(viewName), out);
+    }
+
+    private void collectReplayViewData(JsonNode viewNode, LinkedHashMap<String, JsonNode> out) {
+        if (viewNode == null || viewNode.isMissingNode() || viewNode.isNull()) {
+            return;
+        }
+        JsonNode data = viewNode.path("data");
+        if (data.isArray()) {
+            for (JsonNode item : data) {
+                addReplayViewItem(item, out);
+            }
+            return;
+        }
+        if (viewNode.isArray()) {
+            for (JsonNode item : viewNode) {
+                addReplayViewItem(item, out);
+            }
+        }
+    }
+
+    private void addReplayViewItem(JsonNode item, LinkedHashMap<String, JsonNode> out) {
+        if (item == null || item.isMissingNode() || item.isNull()) {
+            return;
+        }
+        String id = text(item, "id");
+        String type = normalizeType(text(item, "type"), "summary-entry");
+        String name = firstNonBlank(
+                text(item.path("attributes"), "name"),
+                text(item.path("attributes"), "title")
+        );
+        String key;
+        if (id != null && !id.isBlank()) {
+            key = type + "::" + id;
+        } else if (name != null && !name.isBlank()) {
+            key = type + "::" + normalize(name);
+        } else {
+            key = type + "::idx-" + out.size();
+        }
+        out.putIfAbsent(key, item);
+    }
+
+    private List<JsonNode> extractAllResourceNodes(String payload) {
+        if (payload == null || payload.isBlank()) {
+            return List.of();
+        }
+        try {
+            JsonNode root = objectMapper.readTree(payload);
+            List<JsonNode> all = new ArrayList<>();
+            collectResourceNodes(root, all);
+            return all;
+        } catch (Exception e) {
+            Log.debug("Unable to parse Apple Music payload for full resource extraction", e);
+            return List.of();
+        }
+    }
+
+    private JsonNode resolveResourceNode(JsonNode node, Map<String, JsonNode> resourceMap, String defaultType) {
+        if (node == null || node.isMissingNode() || resourceMap == null || resourceMap.isEmpty()) {
+            return node;
+        }
+        JsonNode attributes = node.path("attributes");
+        if (attributes != null && attributes.isObject() && attributes.size() > 0) {
+            return node;
+        }
+        String id = text(node, "id");
+        if (id == null || id.isBlank()) {
+            return node;
+        }
+        String type = normalizeType(text(node, "type"), defaultType);
+        JsonNode direct = resourceMap.get(type + "::" + id);
+        if (direct != null) {
+            return direct;
+        }
+        String suffix = "::" + id;
+        for (Map.Entry<String, JsonNode> entry : resourceMap.entrySet()) {
+            if (entry.getKey().endsWith(suffix)) {
+                return entry.getValue();
+            }
+        }
+        return node;
+    }
+
+    private JsonNode resolveRelatedTrackNode(JsonNode node, Map<String, JsonNode> resourceMap) {
+        if (node == null || node.isMissingNode() || resourceMap == null || resourceMap.isEmpty()) {
+            return null;
+        }
+        JsonNode relationships = node.path("relationships");
+        if (!relationships.isObject()) {
+            return null;
+        }
+        List<String> keys = List.of("songs", "song", "tracks", "track", "content", "catalog", "items");
+        for (String key : keys) {
+            JsonNode entry = firstRelationshipEntry(relationships.path(key).path("data"));
+            if (entry == null) {
+                continue;
+            }
+            JsonNode resolved = resolveResourceNode(entry, resourceMap, "songs");
+            if (resolved == null || resolved.isMissingNode()) {
+                continue;
+            }
+            JsonNode attributes = resolved.path("attributes");
+            String name = firstNonBlank(
+                    text(attributes, "name"),
+                    text(attributes, "title"),
+                    text(attributes, "songName"),
+                    text(attributes, "trackName")
+            );
+            if (name != null && !name.isBlank()) {
+                return resolved;
+            }
+        }
+        return null;
+    }
+
+    private JsonNode firstRelationshipEntry(JsonNode data) {
+        if (data == null || data.isMissingNode() || data.isNull()) {
+            return null;
+        }
+        if (data.isArray()) {
+            return data.isEmpty() ? null : data.get(0);
+        }
+        if (data.isObject()) {
+            return data;
+        }
+        return null;
+    }
+
     private void collectResourceNodes(JsonNode node, List<JsonNode> out) {
         if (node == null || node.isMissingNode() || node.isNull()) {
             return;
@@ -852,6 +1090,18 @@ public class MusicService {
         }
         if (second != null && !second.isBlank()) {
             return second;
+        }
+        return null;
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
         }
         return null;
     }

@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 class DiscoveryServiceTest {
 
@@ -39,6 +40,13 @@ class DiscoveryServiceTest {
         service.refreshAllActiveUsers();
 
         assertEquals(List.of(), ((RecordingDiscoveryService) service.self).refreshedUserIds);
+    }
+
+    @Test
+    void resolvePopularityScoreHandlesNullWithoutUnboxing() {
+        assertNull(DiscoveryService.resolvePopularityScore(null, null));
+        assertEquals(0.72d, DiscoveryService.resolvePopularityScore(72, null));
+        assertEquals(0.31d, DiscoveryService.resolvePopularityScore(null, 0.31d));
     }
 
     private static final class StubUserRepository extends UserRepository {
