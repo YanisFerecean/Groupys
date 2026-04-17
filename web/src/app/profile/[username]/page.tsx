@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Script from "next/script";
 import PublicProfileView from "@/components/profile/PublicProfileView";
 
 interface PublicProfilePageProps {
@@ -48,13 +47,10 @@ export default async function PublicProfilePage({
 
   return (
     <>
-      <Script
-        id="profile-json-ld"
-        type="application/ld+json"
-        strategy="beforeInteractive"
-      >
-        {JSON.stringify(jsonLd)}
-      </Script>
+<script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+    />
       <PublicProfileView username={username} />
     </>
   );
