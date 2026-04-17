@@ -8,7 +8,7 @@ import LexicalEditorProvider from "@/components/ui/LexicalEditorProvider";
 import type { LexicalEditorRef } from "@/components/ui/LexicalEditor";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
-const MAX_WORDS = 300;
+const MAX_WORDS = 1000;
 const MAX_ATTACHMENTS = 4;
 
 interface CommunityOption {
