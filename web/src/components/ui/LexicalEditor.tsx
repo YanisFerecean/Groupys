@@ -26,6 +26,7 @@ import {
 } from "@lexical/markdown";
 import { registerCodeHighlighting } from "@lexical/code";
 import { mergeRegister } from "@lexical/utils";
+import SlashCommandPlugin from "./SlashCommandPlugin";
 
 const DEFAULT_PLACEHOLDER = "Post text (optional)";
 
@@ -251,6 +252,7 @@ export default function LexicalEditor({
       <ListPlugin />
       <MarkdownShortcutPlugin />
       <CodeHighlightPlugin />
+      <SlashCommandPlugin />
       <ChangeHandler
         onChange={(md) => {
           setMarkdown(md);

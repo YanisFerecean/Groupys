@@ -451,7 +451,7 @@ export default function CreatePostModal({
             <LexicalEditorProvider
               onChange={setEditorMarkdown}
               editorRef={editorRef}
-              placeholder="Type something..."
+              placeholder="Type '/' to use commands"
               showToolbar={false}
               contentEditableClassName="w-full min-h-[20rem] bg-transparent outline-none text-base text-on-surface leading-relaxed"
             />
