@@ -21,6 +21,7 @@ interface PostMedia {
 
 interface PostRes {
   id: string;
+  title: string | null;
   content: string;
   media: PostMedia[];
   communityId: string;
@@ -172,17 +173,24 @@ const FeedPostCard = memo(function FeedPostCard({
         </div>
       </div>
 
-      {/* Content (truncated) */}
-      {post.content && (
+      {/* Title + content (truncated) */}
+      {(post.title || post.content) && (
         <div
-          className="px-4 pb-3 cursor-pointer"
+          className="px-4 pb-3 cursor-pointer space-y-1.5"
           onClick={navigateToPost}
         >
-          <MarkdownContent
-            content={post.content}
-            truncate
-            className="text-on-surface"
-          />
+          {post.title && (
+            <h3 className="text-[17px] font-bold leading-6 tracking-tight text-on-surface line-clamp-2">
+              {post.title}
+            </h3>
+          )}
+          {post.content && (
+            <MarkdownContent
+              content={post.content}
+              truncate
+              className={post.title ? "text-on-surface-variant/80" : "text-on-surface"}
+            />
+          )}
         </div>
       )}
 

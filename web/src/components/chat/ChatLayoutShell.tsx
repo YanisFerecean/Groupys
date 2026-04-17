@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 import { Plus, MessageCircle } from "lucide-react";
-import { useUser } from "@clerk/nextjs";
+import { useUserStore } from "@/store/userStore";
 import { useConversations } from "@/hooks/useConversations";
 import { useCrypto } from "@/hooks/useCrypto";
 import { ConversationList } from "@/components/chat/ConversationList";
@@ -24,7 +24,7 @@ export default function ChatLayoutShell({
 }: {
   children: React.ReactNode;
 }) {
-  const { user } = useUser();
+  const currentUserId = useUserStore((s) => s.backendUserId);
   const { conversations, isLoading, hasMore, isLoadingMore, loadMore } =
     useConversations();
   const { decryptForPartner } = useCrypto();
@@ -48,7 +48,7 @@ export default function ChatLayoutShell({
           .map(async (convo) => {
             if (!convo.lastMessage || convo.isGroup || !isEncrypted(convo.lastMessage))
               return;
-            const other = convo.participants.find((p) => p.username !== user?.username);
+            const other = convo.participants.find((p) => p.userId !== currentUserId);
             if (!other) return;
             const plain = await decryptForPartner(other.username, convo.lastMessage);
             // If the result is still encrypted, the key wasn't ready yet — don't
@@ -63,7 +63,7 @@ export default function ChatLayoutShell({
       }
     }
     decryptPreviews();
-  }, [conversations, decryptForPartner, user?.username]);
+  }, [conversations, decryptForPartner, currentUserId]);
   const params = useParams();
   const activeId = Array.isArray(params.conversationId)
     ? params.conversationId[0]

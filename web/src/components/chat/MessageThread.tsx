@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MessageBubble } from "./MessageBubble";
 import { TypingIndicator } from "./TypingIndicator";
 import { Message } from "@/types/chat";
-import { useUser } from "@clerk/nextjs";
+import { useUserStore } from "@/store/userStore";
 import { chatWs } from "@/lib/ws";
 
 // ── Module-scope helpers (pure, no component state) ───────────────────────────
@@ -48,7 +48,7 @@ interface MessageThreadProps {
 }
 
 export function MessageThread({ messages, conversationId, hasMore, isLoading, isLoadingMore, isDecrypting, onLoadMore, otherLastReadAt, myLastReadAt, onRetry }: MessageThreadProps) {
-  const { user } = useUser();
+  const { backendUserId, backendUsername } = useUserStore();
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const prevScrollHeightRef = useRef(0);
@@ -58,7 +58,7 @@ export function MessageThread({ messages, conversationId, hasMore, isLoading, is
   useEffect(() => {
     const unsubs = [
       chatWs.on("TYPING", (payload: { conversationId: string; userId: string; username: string; isTyping: boolean }) => {
-        if (payload.conversationId === conversationId && payload.username !== user?.username) {
+        if (payload.conversationId === conversationId && payload.username !== backendUsername) {
           setTypists(prev => {
             const next = new Map(prev);
             if (payload.isTyping) {
@@ -72,7 +72,7 @@ export function MessageThread({ messages, conversationId, hasMore, isLoading, is
       })
     ];
     return () => unsubs.forEach(u => u());
-  }, [conversationId, user?.id, user?.username]);
+  }, [conversationId, backendUserId, backendUsername]);
 
   const newestMessageId = messages[0]?.id;
 
@@ -111,9 +111,9 @@ export function MessageThread({ messages, conversationId, hasMore, isLoading, is
     if (!myLastReadAt) return -1;
     const cutoff = new Date(myLastReadAt).getTime();
     return displayMessages.findIndex(
-      (msg) => msg.senderUsername !== user?.username && new Date(msg.createdAt).getTime() > cutoff
+      (msg) => msg.senderId !== backendUserId && new Date(msg.createdAt).getTime() > cutoff
     );
-  }, [displayMessages, myLastReadAt, user?.username]);
+  }, [displayMessages, myLastReadAt, backendUserId]);
 
   const newMessagesSeparatorRef = useRef<HTMLDivElement>(null);
   const hasScrolledToNewRef = useRef(false);
@@ -133,7 +133,7 @@ export function MessageThread({ messages, conversationId, hasMore, isLoading, is
     if (!otherLastReadAt) return -1;
     return displayMessages.reduce((found, msg, idx) => {
       if (
-        msg.senderUsername === user?.username &&
+        msg.senderId === backendUserId &&
         msg.status !== "sending" &&
         new Date(otherLastReadAt) >= new Date(msg.createdAt)
       ) {
@@ -141,7 +141,7 @@ export function MessageThread({ messages, conversationId, hasMore, isLoading, is
       }
       return found;
     }, -1);
-  }, [displayMessages, otherLastReadAt, user?.username]);
+  }, [displayMessages, otherLastReadAt, backendUserId]);
 
   const typistList = useMemo(() => Array.from(typists.values()), [typists]);
 
@@ -195,7 +195,7 @@ export function MessageThread({ messages, conversationId, hasMore, isLoading, is
 
       <div className={`flex flex-col space-y-1 ${(isDecrypting || isLoading) ? "invisible" : ""}`}>
         {displayMessages.map((msg, idx) => {
-          const isMine = msg.senderUsername === user?.username;
+          const isMine = msg.senderId === backendUserId;
 
           const next = displayMessages[idx + 1];
           const isLastInGroup =

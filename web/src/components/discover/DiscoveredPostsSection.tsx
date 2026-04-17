@@ -57,7 +57,7 @@ function ReasonPill({ item }: { item: DiscoveredPost }) {
 function DiscoveredPostCard({ item }: { item: DiscoveredPost }) {
   const router = useRouter();
   const { post } = item;
-  const displayText = post.title || truncate(post.content ?? "", 120);
+  const excerpt = truncate(post.content ?? "", post.title ? 80 : 120);
   const firstImage = post.media?.find((m) => m.type.startsWith("image/"));
 
   return (
@@ -109,9 +109,20 @@ function DiscoveredPostCard({ item }: { item: DiscoveredPost }) {
         <p className="text-xs text-on-surface-variant ml-auto shrink-0">{timeAgo(post.createdAt)}</p>
       </div>
 
-      {/* Content */}
-      {displayText && (
-        <p className="px-3 pb-2 text-sm text-on-surface line-clamp-3 flex-1">{displayText}</p>
+      {/* Title + content */}
+      {(post.title || excerpt) && (
+        <div className="px-3 pb-2 flex-1 space-y-1">
+          {post.title && (
+            <h3 className="text-sm font-bold leading-snug text-on-surface line-clamp-2">
+              {post.title}
+            </h3>
+          )}
+          {excerpt && (
+            <p className={`text-sm line-clamp-3 ${post.title ? "text-on-surface-variant/80" : "text-on-surface"}`}>
+              {excerpt}
+            </p>
+          )}
+        </div>
       )}
 
       {/* First image */}

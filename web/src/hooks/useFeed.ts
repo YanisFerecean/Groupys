@@ -12,6 +12,7 @@ interface PostMedia {
 
 interface PostRes {
   id: string;
+  title: string | null;
   content: string;
   media: PostMedia[];
   communityId: string;

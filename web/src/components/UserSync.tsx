@@ -8,6 +8,7 @@ import {
   createBackendUser,
   updateBackendUser,
 } from "@/lib/api";
+import { useUserStore } from "@/store/userStore";
 
 // Module-level flag — survives React Strict Mode double-mounts and layout
 // re-renders, so we never sync more than once per browser session.
@@ -19,6 +20,7 @@ export default function UserSync() {
   const pathname = usePathname();
   const router = useRouter();
   const runningRef = useRef(false);
+  const setBackendUser = useUserStore((s) => s.setBackendUser);
 
   // True only while the async sync operation is in flight
   const [syncing, setSyncing] = useState(false);
@@ -37,14 +39,16 @@ export default function UserSync() {
         const existing = await fetchUserByClerkId(user.id, token);
 
         if (!existing) {
-          await createBackendUser({
+          const created = await createBackendUser({
             clerkId: user.id,
             username: user.username ?? user.id,
             displayName: user.fullName ?? undefined,
             profileImage: user.imageUrl ?? undefined,
           }, token);
+          setBackendUser(created.id, created.username);
           router.replace("/onboarding");
         } else {
+          setBackendUser(existing.id, existing.username);
           if (user.imageUrl && existing.profileImage !== user.imageUrl) {
             await updateBackendUser(existing.id, {
               displayName: existing.displayName ?? undefined,

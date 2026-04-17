@@ -25,6 +25,7 @@ interface PostMedia {
 
 interface PostRes {
   id: string;
+  title: string | null;
   content: string;
   media: PostMedia[];
   communityName: string;
@@ -101,10 +102,21 @@ function PostCard({ post, onClickPost }: { post: PostRes; onClickPost: (id: stri
         <span className="text-xs text-on-surface-variant/50 ml-auto">{post.communityName}</span>
       </div>
 
-      {/* Content */}
-      {post.content && (
-        <div className="px-4 pb-2">
-          <MarkdownContent content={post.content} truncate className="text-sm text-on-surface" />
+      {/* Title + content */}
+      {(post.title || post.content) && (
+        <div className="px-4 pb-2 space-y-1">
+          {post.title && (
+            <h3 className="text-sm font-bold leading-snug tracking-tight text-on-surface line-clamp-2">
+              {post.title}
+            </h3>
+          )}
+          {post.content && (
+            <MarkdownContent
+              content={post.content}
+              truncate
+              className={`text-sm ${post.title ? "text-on-surface-variant/80" : "text-on-surface"}`}
+            />
+          )}
         </div>
       )}
 

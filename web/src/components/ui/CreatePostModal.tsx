@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { resizeImage } from "@/lib/imageResize";
 import { toast } from "sonner";
@@ -8,10 +8,15 @@ import LexicalEditorProvider from "@/components/ui/LexicalEditorProvider";
 import type { LexicalEditorRef } from "@/components/ui/LexicalEditor";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
+const MAX_WORDS = 300;
+const MAX_ATTACHMENTS = 4;
 
 interface CommunityOption {
   id: string;
   name: string;
+  iconType?: string | null;
+  iconEmoji?: string | null;
+  iconUrl?: string | null;
 }
 
 interface FileEntry {
@@ -23,6 +28,12 @@ interface FileEntry {
   progress: number;
   uploading: boolean;
   error: string | null;
+}
+
+function countWords(text: string): number {
+  const trimmed = text.trim();
+  if (!trimmed) return 0;
+  return trimmed.split(/\s+/).length;
 }
 
 export default function CreatePostModal({
@@ -41,14 +52,20 @@ export default function CreatePostModal({
   const [communities, setCommunities] = useState<CommunityOption[]>([]);
   const [selectedCommunityId, setSelectedCommunityId] = useState<string>(initialCommunityId ?? "");
   const [communityPickerOpen, setCommunityPickerOpen] = useState(false);
+  const [title, setTitle] = useState("");
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [posting, setPosting] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<LexicalEditorRef>(null);
   const [editorMarkdown, setEditorMarkdown] = useState("");
   const justSubmittedRef = useRef(false);
+
+  const wordCount = useMemo(() => countWords(editorMarkdown), [editorMarkdown]);
+  const isOverLimit = wordCount > MAX_WORDS;
 
   // Fetch joined communities when modal opens
   useEffect(() => {
@@ -71,11 +88,9 @@ export default function CreatePostModal({
   // Reset form when modal closes & clean up orphaned uploads from MinIO
   useEffect(() => {
     if (!open) {
-      // Skip cleanup if post was just submitted (files are now associated with the post)
       if (justSubmittedRef.current) {
         justSubmittedRef.current = false;
       } else {
-        // Delete any uploaded files from MinIO so they don't become orphans
         const current = entriesRef.current;
         const uploaded = current.filter((e) => e.url);
         if (uploaded.length > 0) {
@@ -91,6 +106,7 @@ export default function CreatePostModal({
         }
       }
       setEntries([]);
+      setTitle("");
       setPostError(null);
       setPosting(false);
     }
@@ -164,7 +180,7 @@ export default function CreatePostModal({
   entriesRef.current = entries;
 
   const addFiles = useCallback((incoming: File[]) => {
-    const available = 4 - entriesRef.current.length;
+    const available = MAX_ATTACHMENTS - entriesRef.current.length;
     const toAdd = incoming.slice(0, available);
     if (toAdd.length === 0) return;
     const newEntries: FileEntry[] = toAdd.map((file) => ({
@@ -177,9 +193,7 @@ export default function CreatePostModal({
       uploading: true,
       error: null,
     }));
-    // Add to state first (pure updater — no side effects so Strict Mode is safe)
-    setEntries((prev) => [...prev, ...newEntries.slice(0, 4 - prev.length)]);
-    // Start uploads outside the state updater to prevent double-uploads in Strict Mode
+    setEntries((prev) => [...prev, ...newEntries.slice(0, MAX_ATTACHMENTS - prev.length)]);
     newEntries.forEach((entry) => startUpload(entry.id, entry.file));
   }, [startUpload]);
 
@@ -197,12 +211,15 @@ export default function CreatePostModal({
       }
       return prev.filter((_, i) => i !== index);
     });
-    if (fileRef.current) fileRef.current.value = "";
   }, []);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selected = Array.from(e.target.files ?? []).filter((f) => isAllowedMedia(f.type));
+  const handleFilesFromInput = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    accept: (mime: string) => boolean,
+  ) => {
+    const selected = Array.from(e.target.files ?? []).filter((f) => accept(f.type));
     if (selected.length) addFiles(selected);
+    e.target.value = "";
   };
 
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
@@ -231,19 +248,22 @@ export default function CreatePostModal({
 
   const handleSubmit = async () => {
     if (!editorRef.current || !selectedCommunityId) return;
-    const markdown = editorMarkdown;
-    const isEmpty = editorRef.current.isEmpty();
-    if (isEmpty && entries.length === 0) return;
+    if (!title.trim()) return;
+    if (isOverLimit) return;
     if (entries.some((e) => e.uploading)) return;
 
     setPosting(true);
     setPostError(null);
 
-    const media = entries.filter((e) => e.url && e.type).map((e) => ({ url: e.url!, type: e.type! }));
+    const markdown = editorMarkdown;
+    const media = entries
+      .filter((e) => e.url && e.type)
+      .map((e) => ({ url: e.url!, type: e.type! }));
 
     try {
       const token = await getTokenRef.current();
       const formData = new FormData();
+      formData.append("title", title.trim());
       formData.append("content", markdown.trim());
       media.forEach((m) => {
         formData.append("mediaUrls", m.url);
@@ -275,9 +295,9 @@ export default function CreatePostModal({
       window.dispatchEvent(new CustomEvent("post-created", { detail: { post: newPost, communityId: selectedCommunityId } }));
       editorRef.current.clear();
       setEditorMarkdown("");
+      setTitle("");
       justSubmittedRef.current = true;
       setEntries([]);
-      if (fileRef.current) fileRef.current.value = "";
       toast.success("Post created");
       onClose();
     } catch {
@@ -289,6 +309,13 @@ export default function CreatePostModal({
   };
 
   const selectedCommunity = communities.find((c) => c.id === selectedCommunityId);
+  const uploading = entries.some((e) => e.uploading);
+  const submitDisabled =
+    posting ||
+    uploading ||
+    !selectedCommunityId ||
+    !title.trim() ||
+    isOverLimit;
 
   if (!open) return null;
 
@@ -302,54 +329,40 @@ export default function CreatePostModal({
 
       {/* Modal */}
       <div
-        className="relative w-full sm:max-w-2xl max-h-[95dvh] bg-surface border border-white/20 rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden"
+        className="relative w-full sm:max-w-2xl h-[100dvh] sm:h-auto sm:max-h-[95dvh] bg-surface sm:border sm:border-white/20 sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden"
         onPaste={handlePaste}
         onDrop={handleDrop}
         onDragOver={(e) => e.preventDefault()}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 pt-4 pb-3 shrink-0">
+        {/* Header: close | community pill | post button */}
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-surface-container-high shrink-0">
           <button
             onClick={onClose}
-            className="p-1.5 rounded-full text-on-surface-variant hover:bg-surface-container-high transition-colors"
+            className="w-10 h-10 rounded-full bg-surface-container-high hover:bg-surface-container-highest flex items-center justify-center text-on-surface-variant transition-colors"
+            aria-label="Close"
           >
-            <span className="material-symbols-outlined" style={{ fontSize: 24 }}>close</span>
+            <span className="material-symbols-outlined" style={{ fontSize: 22 }}>close</span>
           </button>
-          <button
-            onClick={handleSubmit}
-            disabled={
-              posting ||
-              !selectedCommunityId ||
-              (!editorMarkdown.trim() && entries.length === 0) ||
-              entries.some((e) => e.uploading)
-            }
-            className="px-6 py-2 rounded-full text-sm font-bold text-on-primary bg-primary hover:opacity-90 transition-opacity disabled:opacity-50 disabled:bg-surface-container-high disabled:text-on-surface-variant flex items-center gap-2"
-          >
-            {(posting || entries.some((e) => e.uploading)) && (
-              <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-              </svg>
-            )}
-            {posting ? "Posting..." : entries.some((e) => e.uploading) ? "Uploading..." : "Post"}
-          </button>
-        </div>
 
-        {/* Community picker */}
-        <div className="px-4 py-2 shrink-0">
-          <div ref={pickerRef} className="relative">
+          <div ref={pickerRef} className="relative flex-1 min-w-0 flex justify-center">
             <button
               onClick={() => setCommunityPickerOpen((o) => !o)}
-              className="flex items-center gap-2 text-sm font-semibold rounded-full px-3 py-1.5 bg-surface-container-high hover:bg-surface-container-highest transition-colors max-w-full"
+              className="flex items-center gap-1.5 text-sm font-semibold rounded-full px-4 py-2.5 bg-surface-container-high hover:bg-surface-container-highest transition-colors max-w-full"
             >
-              <span
-                className="material-symbols-outlined text-primary shrink-0"
-                style={{ fontSize: 16, fontVariationSettings: "'FILL' 1" }}
-              >
-                group
-              </span>
+              {selectedCommunity?.iconType === "EMOJI" && selectedCommunity.iconEmoji ? (
+                <span className="text-base shrink-0" aria-hidden>
+                  {selectedCommunity.iconEmoji}
+                </span>
+              ) : (
+                <span
+                  className="material-symbols-outlined text-primary shrink-0"
+                  style={{ fontSize: 16, fontVariationSettings: "'FILL' 1" }}
+                >
+                  group
+                </span>
+              )}
               <span className="truncate text-on-surface">
-                {selectedCommunity ? selectedCommunity.name : "Select a community"}
+                {selectedCommunity ? selectedCommunity.name : "Select"}
               </span>
               <span
                 className={`material-symbols-outlined text-on-surface-variant shrink-0 transition-transform ${communityPickerOpen ? "rotate-180" : ""}`}
@@ -360,7 +373,7 @@ export default function CreatePostModal({
             </button>
 
             {communityPickerOpen && (
-              <div className="absolute left-0 top-full mt-1 z-10 w-64 bg-surface-container-lowest border border-white/80 rounded-xl shadow-lg overflow-hidden py-1 max-h-52 overflow-y-auto">
+              <div className="absolute top-full mt-1 z-10 w-64 bg-surface-container-lowest border border-white/80 rounded-xl shadow-lg overflow-hidden py-1 max-h-52 overflow-y-auto">
                 {communities.length === 0 ? (
                   <p className="px-4 py-3 text-xs text-on-surface-variant">You haven&apos;t joined any communities yet.</p>
                 ) : (
@@ -377,49 +390,70 @@ export default function CreatePostModal({
                           : "text-on-surface hover:bg-surface-container-high"
                       }`}
                     >
-                      <span
-                        className="material-symbols-outlined shrink-0"
-                        style={{ fontSize: 16, fontVariationSettings: c.id === selectedCommunityId ? "'FILL' 1" : "'FILL' 0" }}
-                      >
-                        group
-                      </span>
-                      {c.name}
+                      {c.iconType === "EMOJI" && c.iconEmoji ? (
+                        <span className="text-base shrink-0">{c.iconEmoji}</span>
+                      ) : (
+                        <span
+                          className="material-symbols-outlined shrink-0"
+                          style={{
+                            fontSize: 16,
+                            fontVariationSettings: c.id === selectedCommunityId ? "'FILL' 1" : "'FILL' 0",
+                          }}
+                        >
+                          group
+                        </span>
+                      )}
+                      <span className="truncate">{c.name}</span>
                     </button>
                   ))
                 )}
               </div>
             )}
           </div>
+
+          <button
+            onClick={handleSubmit}
+            disabled={submitDisabled}
+            className="w-10 h-10 rounded-full bg-primary text-on-primary hover:opacity-90 transition-opacity disabled:opacity-40 disabled:bg-surface-container-high disabled:text-on-surface-variant flex items-center justify-center shrink-0"
+            aria-label="Post"
+            title={posting ? "Posting…" : uploading ? "Uploading…" : "Post"}
+          >
+            {posting || uploading ? (
+              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+              </svg>
+            ) : (
+              <span className="material-symbols-outlined" style={{ fontSize: 20, fontVariationSettings: "'FILL' 1" }}>
+                send
+              </span>
+            )}
+          </button>
         </div>
 
-        {/* Scrollable content area */}
+        {/* Scrollable body: title + editor + previews */}
         <div className="flex-1 overflow-y-auto min-h-0">
-          {/* Editor with tabs */}
-          <div className="px-4">
+          {/* Title */}
+          <div className="px-6 pt-6 pb-2">
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Title"
+              disabled={posting}
+              className="w-full bg-transparent outline-none text-3xl font-bold text-on-surface placeholder:text-on-surface-variant/40 py-2"
+            />
+            <div className="h-px bg-surface-container-high mt-3" />
+          </div>
+
+          {/* Lexical editor — full width, no toolbar */}
+          <div className="px-6 pb-2 min-h-[24rem]">
             <LexicalEditorProvider
               onChange={setEditorMarkdown}
               editorRef={editorRef}
-              bottomBarExtra={
-                <>
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    accept="image/*,video/*,audio/*"
-                    multiple
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                  <div className="w-px h-5 bg-surface-container-highest mx-1" />
-                  <button
-                    onClick={() => fileRef.current?.click()}
-                    disabled={entries.length >= 4 || posting}
-                    className="p-2 rounded-full text-on-surface-variant hover:bg-surface-container-high transition-colors disabled:opacity-40"
-                    title="Add media"
-                  >
-                    <span className="material-symbols-outlined text-xl">image</span>
-                  </button>
-                </>
-              }
+              placeholder="Type something..."
+              showToolbar={false}
+              contentEditableClassName="w-full min-h-[20rem] bg-transparent outline-none text-base text-on-surface leading-relaxed"
             />
           </div>
 
@@ -428,16 +462,16 @@ export default function CreatePostModal({
             const count = entries.length;
             const inGrid = count > 1;
             return (
-              <div className={`px-4 mt-2 mb-3${inGrid ? " grid grid-cols-2 gap-1" : ""}`}>
+              <div className={`px-6 mt-2 mb-3${inGrid ? " grid grid-cols-2 gap-2" : ""}`}>
                 {entries.map((entry, index) => {
-                  const { file, preview, progress, uploading, error: uploadError } = entry;
+                  const { file, preview, progress, uploading: itemUploading, error: uploadError } = entry;
                   const isImage = file.type.startsWith("image/");
                   const isVideo = file.type.startsWith("video/");
                   const isAudio = file.type.startsWith("audio/");
                   const spanFull = inGrid && (isAudio || (count === 3 && index === 0));
                   const mediaClass = inGrid && !isAudio
                     ? "w-full h-48 object-cover rounded-xl"
-                    : isImage ? "max-w-full max-h-48 object-cover rounded-xl" : isVideo ? "max-w-full max-h-48 rounded-xl" : undefined;
+                    : isImage ? "max-w-full max-h-72 object-cover rounded-xl" : isVideo ? "max-w-full max-h-72 rounded-xl" : undefined;
                   return (
                     <div key={entry.id} className={`relative${spanFull ? " col-span-2" : ""}`}>
                       {isVideo ? (
@@ -456,7 +490,7 @@ export default function CreatePostModal({
                           <span className="text-xs text-on-surface-variant truncate flex-1">{file.name}</span>
                         </div>
                       )}
-                      {uploading && (
+                      {itemUploading && (
                         <div className="mt-1 px-1">
                           <div className="flex items-center justify-between mb-0.5">
                             <span className="text-[10px] text-on-surface-variant">
@@ -479,7 +513,8 @@ export default function CreatePostModal({
                       )}
                       <button
                         onClick={() => removeFile(index)}
-                        className={`${isAudio ? "absolute -top-1 -right-1" : "absolute top-2 right-2"} w-7 h-7 rounded-full bg-black/50 flex items-center justify-center text-white hover:bg-black/70 transition-colors`}
+                        className={`${isAudio ? "absolute -top-1 -right-1" : "absolute top-2 right-2"} w-7 h-7 rounded-full bg-black/60 flex items-center justify-center text-white hover:bg-black/80 transition-colors`}
+                        aria-label="Remove attachment"
                       >
                         <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
                       </button>
@@ -490,7 +525,68 @@ export default function CreatePostModal({
             );
           })()}
 
-          {postError && <p className="text-xs text-error mt-2 px-4">{postError}</p>}
+          {postError && <p className="text-xs text-error mt-2 px-6">{postError}</p>}
+        </div>
+
+        {/* Bottom toolbar: media buttons + word count */}
+        <div className="flex items-center justify-between px-4 py-3 border-t border-surface-container-high shrink-0">
+          <div className="flex items-center gap-1">
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(e) => handleFilesFromInput(e, (m) => m.startsWith("image/"))}
+              className="hidden"
+            />
+            <input
+              ref={videoInputRef}
+              type="file"
+              accept="video/*"
+              multiple
+              onChange={(e) => handleFilesFromInput(e, (m) => m.startsWith("video/"))}
+              className="hidden"
+            />
+            <input
+              ref={audioInputRef}
+              type="file"
+              accept="audio/*"
+              multiple
+              onChange={(e) => handleFilesFromInput(e, (m) => m.startsWith("audio/"))}
+              className="hidden"
+            />
+            <button
+              onClick={() => imageInputRef.current?.click()}
+              disabled={entries.length >= MAX_ATTACHMENTS || posting}
+              className="p-2 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors disabled:opacity-40"
+              title="Add image"
+              aria-label="Add image"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 24 }}>image</span>
+            </button>
+            <button
+              onClick={() => videoInputRef.current?.click()}
+              disabled={entries.length >= MAX_ATTACHMENTS || posting}
+              className="p-2 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors disabled:opacity-40"
+              title="Add video"
+              aria-label="Add video"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 24 }}>videocam</span>
+            </button>
+            <button
+              onClick={() => audioInputRef.current?.click()}
+              disabled={entries.length >= MAX_ATTACHMENTS || posting}
+              className="p-2 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors disabled:opacity-40"
+              title="Add audio"
+              aria-label="Add audio"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 24 }}>graphic_eq</span>
+            </button>
+          </div>
+
+          <span className={`text-sm tabular-nums ${isOverLimit ? "text-error font-bold" : "text-on-surface-variant"}`}>
+            {wordCount}/{MAX_WORDS}
+          </span>
         </div>
       </div>
     </div>

@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { MessageCircle } from "lucide-react";
 import { Conversation } from "@/types/chat";
-import { useUser } from "@clerk/nextjs";
+import { useUserStore } from "@/store/userStore";
 
 const rtf = new Intl.RelativeTimeFormat("en", { numeric: "always", style: "narrow" });
 
@@ -22,19 +22,19 @@ function formatTimeAgo(date: Date): string {
 
 interface ConversationItemProps {
   convo: Conversation;
-  currentUsername: string | undefined;
+  currentUserId: string | null;
   isActive: boolean;
   decryptedPreviews?: Map<string, string>;
 }
 
 const ConversationItem = memo(function ConversationItem({
   convo,
-  currentUsername,
+  currentUserId,
   isActive,
   decryptedPreviews,
 }: ConversationItemProps) {
   const otherParticipant = convo.participants.find(
-    (p) => p.username !== currentUsername
+    (p) => p.userId !== currentUserId
   );
 
   const displayName = convo.isGroup
@@ -122,7 +122,7 @@ interface ConversationListProps {
 }
 
 export function ConversationList({ conversations, activeId, hasMore, isLoadingMore, onLoadMore, decryptedPreviews }: ConversationListProps) {
-  const { user } = useUser();
+  const currentUserId = useUserStore((s) => s.backendUserId);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const handleScroll = useCallback(() => {
@@ -151,7 +151,7 @@ export function ConversationList({ conversations, activeId, hasMore, isLoadingMo
         <ConversationItem
           key={convo.id}
           convo={convo}
-          currentUsername={user?.username ?? undefined}
+          currentUserId={currentUserId}
           isActive={activeId === convo.id}
           decryptedPreviews={decryptedPreviews}
         />

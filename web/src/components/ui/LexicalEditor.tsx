@@ -27,11 +27,11 @@ import {
 import { registerCodeHighlighting } from "@lexical/code";
 import { mergeRegister } from "@lexical/utils";
 
-const PLACEHOLDER = "Post text (optional)";
+const DEFAULT_PLACEHOLDER = "Post text (optional)";
 
 // ── Placeholder Plugin ─────────────────────────────────────────────────────
 
-function PlaceholderPlugin() {
+function PlaceholderPlugin({ text }: { text: string }) {
   const [editor] = useLexicalComposerContext();
   const ref = useRef<HTMLDivElement>(null);
 
@@ -55,7 +55,7 @@ function PlaceholderPlugin() {
       ref={ref}
       className="absolute top-3 left-0 text-base text-on-surface-variant/50 pointer-events-none select-none"
     >
-      {PLACEHOLDER}
+      {text}
     </div>
   );
 }
@@ -167,11 +167,17 @@ export default function LexicalEditor({
   editorRef,
   initialMarkdown,
   bottomBarExtra,
+  placeholder,
+  showToolbar = true,
+  contentEditableClassName,
 }: {
   onChange: (markdown: string) => void;
   editorRef?: React.RefObject<LexicalEditorRef | null>;
   initialMarkdown?: string;
   bottomBarExtra?: React.ReactNode;
+  placeholder?: string;
+  showToolbar?: boolean;
+  contentEditableClassName?: string;
 }) {
   const [editor] = useLexicalComposerContext();
   const [markdown, setMarkdown] = useState("");
@@ -227,14 +233,19 @@ export default function LexicalEditor({
       <div className="relative py-3">
         <RichTextPlugin
           contentEditable={
-            <ContentEditable className="w-full min-h-[10rem] bg-transparent outline-none text-base text-on-surface leading-relaxed" />
+            <ContentEditable
+              className={
+                contentEditableClassName ??
+                "w-full min-h-[10rem] bg-transparent outline-none text-base text-on-surface leading-relaxed"
+              }
+            />
           }
-          placeholder={<PlaceholderPlugin />}
+          placeholder={<PlaceholderPlugin text={placeholder ?? DEFAULT_PLACEHOLDER} />}
           ErrorBoundary={LexicalErrorBoundary}
         />
       </div>
 
-      <Toolbar extra={bottomBarExtra} />
+      {showToolbar && <Toolbar extra={bottomBarExtra} />}
 
       <HistoryPlugin />
       <ListPlugin />
