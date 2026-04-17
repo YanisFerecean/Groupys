@@ -51,14 +51,15 @@ export default function MatchCelebrationModal() {
         {/* Profile image */}
         <div className="flex items-center gap-4">
           {pendingMatchModal.otherProfileImage ? (
-            <Image
-              src={pendingMatchModal.otherProfileImage}
-              alt={pendingMatchModal.otherDisplayName ?? pendingMatchModal.otherUsername}
-              width={80}
-              height={80}
-              className="rounded-full object-cover"
-              style={{ border: "3px solid var(--color-primary)" }}
-            />
+            <div className="w-20 h-20 rounded-full overflow-hidden flex-shrink-0" style={{ border: "3px solid var(--color-primary)" }}>
+              <Image
+                src={pendingMatchModal.otherProfileImage}
+                alt={pendingMatchModal.otherDisplayName ?? pendingMatchModal.otherUsername}
+                width={80}
+                height={80}
+                className="w-full h-full object-cover"
+              />
+            </div>
           ) : (
             <div
               className="w-20 h-20 rounded-full bg-surface-container-high flex items-center justify-center"

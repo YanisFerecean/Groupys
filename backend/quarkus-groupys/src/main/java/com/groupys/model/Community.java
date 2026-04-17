@@ -47,9 +47,11 @@ public class Community {
     @Column(name = "image_url") // legacy, kept for compatibility
     public String imageUrl;
 
-    @ElementCollection(fetch = FetchType.EAGER)
-    @CollectionTable(name = "community_tags", joinColumns = @JoinColumn(name = "community_id"))
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(name = "community_tags", joinColumns = @JoinColumn(name = "community_id"),
+        indexes = @Index(name = "idx_community_tags_community_id", columnList = "community_id"))
     @Column(name = "tag")
+    @org.hibernate.annotations.BatchSize(size = 50)
     public List<String> tags = new ArrayList<>();
 
     @Column(name = "member_count", nullable = false)

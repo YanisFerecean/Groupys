@@ -162,10 +162,10 @@ export default function Home() {
         imageSrcSet="/_next/image?url=%2Fdrake.png&w=256&q=75 256w, /_next/image?url=%2Fdrake.png&w=384&q=75 384w"
         imageSizes="280px"
       />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
+<script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+    />
       <div className="bg-surface text-on-surface selection:bg-primary-fixed selection:text-on-primary-fixed">
         <NavBar />
         <main className="pt-24 md:pt-32">

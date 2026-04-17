@@ -6,6 +6,7 @@ import { useRouter, usePathname } from "next/navigation";
 import SideNav from "@/components/app/SideNav";
 import TopBar from "@/components/app/TopBar";
 import ProfileRightSidebar from "@/components/profile/ProfileRightSidebar";
+import MutualsRightSidebar from "@/components/match/MutualsRightSidebar";
 import SearchOverlay from "@/components/discover/SearchOverlay";
 import SettingsDialog from "@/components/app/SettingsDialog";
 import CreatePostModal from "@/components/ui/CreatePostModal";
@@ -106,7 +107,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         onSearchClick={() => setSearchOpen(true)}
       />
       <ProfileRightSidebar />
-      <main className={`lg:ml-64 pt-16 lg:pt-20 min-h-screen${pathname === "/profile" ? " lg:mr-52" : ""}`}>{children}</main>
+      <MutualsRightSidebar />
+      <main className={`lg:ml-64 pt-16 lg:pt-20 min-h-screen${pathname === "/profile" || pathname?.startsWith("/match") ? " lg:mr-52" : ""}`}>{children}</main>
 
 {searchOpen && <SearchOverlay onClose={() => setSearchOpen(false)} />}
       <SettingsDialog

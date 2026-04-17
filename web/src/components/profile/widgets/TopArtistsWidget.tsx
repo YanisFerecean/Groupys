@@ -10,9 +10,10 @@ interface TopArtistsWidgetProps {
   artists?: ProfileCustomization["topArtists"];
   containerColor?: string;
   size?: "small" | "normal";
+  className?: string;
 }
 
-export default function TopArtistsWidget({ artists, containerColor, size = "normal" }: TopArtistsWidgetProps) {
+export default function TopArtistsWidget({ artists, containerColor, size = "normal", className }: TopArtistsWidgetProps) {
   const router = useRouter();
   const textColor = containerColor ? getContrastColor(containerColor) : undefined;
   const avatarSize = 48;
@@ -36,7 +37,7 @@ export default function TopArtistsWidget({ artists, containerColor, size = "norm
   return (
     <WidgetCard
       title={size === "small" ? "Top Artist" : "Top Artists"}
-      className="h-[260px] overflow-hidden"
+      className={className ?? "h-[260px] overflow-hidden"}
       style={containerColor ? { backgroundColor: containerColor } : undefined}
       textColor={textColor}
     >

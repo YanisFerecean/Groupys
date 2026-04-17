@@ -21,6 +21,7 @@ interface PostMedia {
 
 interface PostRes {
   id: string;
+  title: string | null;
   content: string;
   media: PostMedia[];
   communityId: string;
@@ -479,6 +480,13 @@ export default function PostDetail({ id }: { id: string }) {
             </p>
           </div>
         </div>
+
+        {/* Title */}
+        {post.title?.trim() && (
+          <h1 className="text-2xl sm:text-3xl font-bold leading-tight tracking-tight text-on-surface px-5 pb-3">
+            {post.title.trim()}
+          </h1>
+        )}
 
         {/* Full content */}
         {post.content && (

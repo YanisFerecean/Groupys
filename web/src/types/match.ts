@@ -37,4 +37,6 @@ export interface SuggestedUser {
   sharedCommunityCount: number;
   sameCountry: boolean;
   mutualFollowCount: number;
+  bio?: string | null;
+  widgets?: string | null;
 }

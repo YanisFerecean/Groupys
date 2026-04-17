@@ -80,10 +80,10 @@ const articleJsonLd = {
 export default function MusicAndDatingPage() {
   return (
     <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }}
-      />
+<script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }}
+    />
     <div className="min-h-screen bg-surface text-on-surface">
       <div className="max-w-2xl mx-auto px-6 py-24">
         <Link

@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import UserSync from "@/components/UserSync";
 import FontLoader from "@/components/FontLoader";
+import QueryProvider from "@/components/QueryProvider";
 import { Toaster } from "sonner";
 import "./globals.css";
 
@@ -73,7 +74,9 @@ export default function RootLayout({
     <>
       {CLERK_ENABLED ? <UserSync /> : null}
       <FontLoader />
-      {children}
+      <QueryProvider>
+        {children}
+      </QueryProvider>
       <Toaster />
     </>
   );

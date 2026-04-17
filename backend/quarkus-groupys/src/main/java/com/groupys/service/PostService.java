@@ -180,9 +180,21 @@ public class PostService {
 
     public List<PostResDto> getByAuthor(UUID authorId, String clerkId) {
         User currentUser = userRepository.findByClerkId(clerkId).orElse(null);
+        User author = userRepository.findByIdOptional(authorId).orElse(null);
+
+        // Check privacy: only return posts if the author's profile is public or the current user is following them
+        if (author != null && currentUser != null && !author.id.equals(currentUser.id)) {
+            // Check if current user can view this author's posts (friendship exists)
+            boolean canView = friendshipRepository.isFriend(author.id, currentUser.id);
+            if (!canView) {
+                // Return empty list if not friends - can be customized based on privacy settings
+                return List.of();
+            }
+        }
+
         return postRepository.findByAuthor(authorId).stream()
-                .map(post -> toDto(post, currentUser))
-                .toList();
+            .map(post -> toDto(post, currentUser))
+            .toList();
     }
 
     public PostResDto getById(UUID postId, String clerkId) {

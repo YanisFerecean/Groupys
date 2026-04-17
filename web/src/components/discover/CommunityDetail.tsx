@@ -47,6 +47,7 @@ interface PostMedia {
 
 interface PostRes {
   id: string;
+  title: string | null;
   content: string;
   media: PostMedia[];
   communityId: string;
@@ -229,14 +230,21 @@ function PostCard({
         )}
       </div>
 
-      {/* Content (truncated) */}
-      {post.content && (
-        <div className="px-4 pb-3">
-          <MarkdownContent
-            content={post.content}
-            truncate
-            className="text-on-surface"
-          />
+      {/* Title + content (truncated) */}
+      {(post.title || post.content) && (
+        <div className="px-4 pb-3 space-y-1.5">
+          {post.title && (
+            <h3 className="text-[17px] font-bold leading-6 tracking-tight text-on-surface line-clamp-2">
+              {post.title}
+            </h3>
+          )}
+          {post.content && (
+            <MarkdownContent
+              content={post.content}
+              truncate
+              className={post.title ? "text-on-surface-variant/80" : "text-on-surface"}
+            />
+          )}
         </div>
       )}
 

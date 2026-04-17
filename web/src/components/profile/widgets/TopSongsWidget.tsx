@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import Image from "next/image";
 import type { ProfileCustomization } from "@/types/profile";
 import { getContrastColor } from "@/lib/utils";
@@ -10,15 +10,56 @@ interface TopSongsWidgetProps {
   songs?: ProfileCustomization["topSongs"];
   containerColor?: string;
   size?: "small" | "normal";
+  className?: string;
 }
 
-export default function TopSongsWidget({ songs, containerColor, size = "normal" }: TopSongsWidgetProps) {
+async function resolvePreviewUrl(song: { title: string; artist: string; preview?: string }): Promise<string | null> {
+  if (song.preview?.startsWith("http")) return song.preview;
+  try {
+    const q = encodeURIComponent(`${song.title} ${song.artist}`.trim());
+    const res = await fetch(`/api/music-search?q=${q}&type=track`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const results: { title: string; artist: string; preview?: string | null }[] = data.results ?? [];
+    const match =
+      results.find(
+        (r) =>
+          r.title.toLowerCase() === song.title.toLowerCase() &&
+          r.artist.toLowerCase() === song.artist.toLowerCase()
+      ) ?? results[0];
+    return match?.preview?.startsWith("http") ? match.preview : null;
+  } catch {
+    return null;
+  }
+}
+
+export default function TopSongsWidget({ songs, containerColor, size = "normal", className }: TopSongsWidgetProps) {
   const textColor = containerColor ? getContrastColor(containerColor) : undefined;
   const coverSize = 48;
   const visibleSongs = songs?.slice(0, size === "small" ? 1 : 3) ?? [];
 
   const [playingIndex, setPlayingIndex] = useState<number | null>(null);
+  const [resolvedPreviews, setResolvedPreviews] = useState<Record<number, string>>({});
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Resolve preview URLs for all visible songs
+  const resolveAll = useCallback(async () => {
+    const entries = await Promise.all(
+      visibleSongs.map(async (song, i) => {
+        const url = await resolvePreviewUrl(song);
+        return [i, url] as const;
+      })
+    );
+    const map: Record<number, string> = {};
+    for (const [i, url] of entries) {
+      if (url) map[i] = url;
+    }
+    setResolvedPreviews(map);
+  }, [songs]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    void resolveAll();
+  }, [resolveAll]);
 
   // Cleanup audio on unmount
   useEffect(() => {
@@ -30,8 +71,9 @@ export default function TopSongsWidget({ songs, containerColor, size = "normal" 
     };
   }, []);
 
-  const handleSongClick = (index: number, previewUrl?: string) => {
-    // If clicking the same song that's playing, pause it
+  const handleSongClick = (index: number) => {
+    const previewUrl = resolvedPreviews[index];
+
     if (playingIndex === index) {
       audioRef.current?.pause();
       audioRef.current = null;
@@ -39,19 +81,13 @@ export default function TopSongsWidget({ songs, containerColor, size = "normal" 
       return;
     }
 
-    // Stop any currently playing audio
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current = null;
     }
 
-    // If no preview URL, just toggle off
-    if (!previewUrl) {
-      setPlayingIndex(null);
-      return;
-    }
+    if (!previewUrl) return;
 
-    // Play the new song
     const audio = new Audio(previewUrl);
     audioRef.current = audio;
 
@@ -74,11 +110,12 @@ export default function TopSongsWidget({ songs, containerColor, size = "normal" 
   };
 
   const isPlaying = (index: number) => playingIndex === index;
+  const hasPreview = (index: number) => !!resolvedPreviews[index];
 
   return (
     <WidgetCard
       title={size === "small" ? "Top Song" : "Top Songs"}
-      className="h-[260px] overflow-hidden"
+      className={className ?? "h-[260px] overflow-hidden"}
       style={containerColor ? { backgroundColor: containerColor } : undefined}
       textColor={textColor}
     >
@@ -86,8 +123,8 @@ export default function TopSongsWidget({ songs, containerColor, size = "normal" 
         size === "small" ? (
           <div className="flex flex-col gap-3">
             <div
-              className={`relative w-full aspect-square cursor-pointer group ${visibleSongs[0].preview ? "hover:opacity-90" : ""}`}
-              onClick={() => handleSongClick(0, visibleSongs[0].preview)}
+              className={`relative w-full aspect-square ${hasPreview(0) ? "cursor-pointer group" : ""}`}
+              onClick={() => handleSongClick(0)}
             >
               {visibleSongs[0].coverUrl ? (
                 <Image
@@ -104,8 +141,7 @@ export default function TopSongsWidget({ songs, containerColor, size = "normal" 
               <span className="absolute top-2 left-2 text-xs font-bold w-6 h-6 rounded-full bg-black/50 text-white flex items-center justify-center">
                 1
               </span>
-              {/* Play/Pause overlay */}
-              {visibleSongs[0].preview && (
+              {hasPreview(0) && (
                 <div className={`absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl transition-opacity ${isPlaying(0) ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
                   <span className="material-symbols-outlined text-white text-4xl">
                     {isPlaying(0) ? "pause" : "play_arrow"}
@@ -125,8 +161,8 @@ export default function TopSongsWidget({ songs, containerColor, size = "normal" 
             {visibleSongs.map((song, i) => (
               <li
                 key={i}
-                className={`flex items-center gap-3 ${song.preview ? "cursor-pointer group" : ""}`}
-                onClick={() => handleSongClick(i, song.preview)}
+                className={`flex items-center gap-3 ${hasPreview(i) ? "cursor-pointer group" : ""}`}
+                onClick={() => handleSongClick(i)}
               >
                 <span
                   className="text-xs font-bold w-5 text-center shrink-0"
@@ -134,7 +170,7 @@ export default function TopSongsWidget({ songs, containerColor, size = "normal" 
                 >
                   {i + 1}
                 </span>
-                <div className={`relative shrink-0 ${song.preview ? "group-hover:opacity-80" : ""}`}>
+                <div className={`relative shrink-0 ${hasPreview(i) ? "group-hover:opacity-80" : ""}`}>
                   {song.coverUrl ? (
                     <Image
                       src={song.coverUrl}
@@ -148,8 +184,7 @@ export default function TopSongsWidget({ songs, containerColor, size = "normal" 
                       <span className="material-symbols-outlined text-on-surface-variant text-lg">music_note</span>
                     </div>
                   )}
-                  {/* Play/Pause overlay */}
-                  {song.preview && (
+                  {hasPreview(i) && (
                     <div className={`absolute inset-0 flex items-center justify-center bg-black/40 rounded transition-opacity ${isPlaying(i) ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
                       <span className="material-symbols-outlined text-white text-lg">
                         {isPlaying(i) ? "pause" : "play_arrow"}

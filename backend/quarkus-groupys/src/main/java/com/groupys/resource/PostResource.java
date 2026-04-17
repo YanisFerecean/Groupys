@@ -52,6 +52,9 @@ public class PostResource {
     @Inject
     UserRepository userRepository;
 
+    @Inject
+    com.groupys.repository.PostRepository postRepository;
+
     private static final long MAX_NON_VIDEO_FILE_BYTES = 25L * 1024 * 1024; // 25 MB
     private static final long MAX_VIDEO_FILE_BYTES = 100L * 1024 * 1024; // 100 MB
 
@@ -83,6 +86,15 @@ public class PostResource {
     @Path("/author/{userId}")
     public List<PostResDto> getByAuthor(@PathParam("userId") UUID userId) {
         return postService.getByAuthor(userId, jwt.getSubject());
+    }
+
+    @GET
+    @Path("/author/{userId}/count")
+    @PermitAll
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response getAuthorPostCount(@PathParam("userId") UUID userId) {
+        long count = postRepository.countByAuthor(userId);
+        return Response.ok(java.util.Map.of("count", count)).build();
     }
 
     @GET

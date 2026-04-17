@@ -61,13 +61,22 @@ public class FriendshipRepository implements PanacheRepositoryBase<Friendship, U
     public Map<UUID, Set<UUID>> batchFriendIdsByCandidates(List<UUID> candidateIds) {
         if (candidateIds.isEmpty()) return Map.of();
         List<Friendship> friendships = list(
-                "(requester.id in ?1 or recipient.id in ?1) and status = ?2",
-                candidateIds, Friendship.Status.ACCEPTED);
+            "(requester.id in ?1 or recipient.id in ?1) and status = ?2",
+            candidateIds, Friendship.Status.ACCEPTED);
         Map<UUID, Set<UUID>> result = new HashMap<>();
         for (Friendship f : friendships) {
             result.computeIfAbsent(f.requester.id, k -> new HashSet<>()).add(f.recipient.id);
             result.computeIfAbsent(f.recipient.id, k -> new HashSet<>()).add(f.requester.id);
         }
         return result;
+    }
+
+    /**
+     * Checks if two users are friends (accepted friendship status).
+     */
+    public boolean isFriend(UUID userId1, UUID userId2) {
+        return findBetween(userId1, userId2)
+            .map(f -> f.status == Friendship.Status.ACCEPTED)
+            .orElse(false);
     }
 }

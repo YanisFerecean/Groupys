@@ -13,6 +13,7 @@ import { AutoLinkNode, LinkNode } from "@lexical/link";
 import { $convertFromMarkdownString, TRANSFORMERS } from "@lexical/markdown";
 import { useEffect, useRef } from "react";
 import { registerCodeHighlighting } from "@lexical/code";
+import DOMPurify from "isomorphic-dompurify";
 
 const EDITOR_NODES = [
   HeadingNode,
@@ -79,6 +80,19 @@ const THEME = {
   },
 };
 
+/**
+ * Sanitizes markdown content to prevent XSS before converting to Lexical format.
+ */
+function sanitizeMarkdown(content: string): string {
+  // First sanitize the raw content to remove any HTML/script injection
+  const sanitized = DOMPurify.sanitize(content, {
+    ALLOWED_TAGS: [],
+    ALLOWED_ATTR: [],
+  });
+  // Re-encode any remaining HTML entities
+  return sanitized.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 function LoadMarkdownPlugin({ content }: { content: string }) {
   const [editor] = useLexicalComposerContext();
   const initialized = useRef(false);
@@ -87,8 +101,11 @@ function LoadMarkdownPlugin({ content }: { content: string }) {
     if (initialized.current) return;
     initialized.current = true;
 
+    // Sanitize content before processing
+    const safeContent = sanitizeMarkdown(content);
+
     editor.update(() => {
-      $convertFromMarkdownString(content, TRANSFORMERS);
+      $convertFromMarkdownString(safeContent, TRANSFORMERS);
     });
 
     editor.setEditable(false);

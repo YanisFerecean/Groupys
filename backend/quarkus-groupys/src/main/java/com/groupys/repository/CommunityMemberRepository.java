@@ -143,18 +143,27 @@ public class CommunityMemberRepository implements PanacheRepositoryBase<Communit
 
     public long countSharedCommunities(UUID userId, UUID candidateUserId) {
         return getEntityManager().createQuery("""
-                select count(distinct mine.community.id)
-                from CommunityMember mine
-                where mine.user.id = :userId
-                  and exists (
-                    select 1
-                    from CommunityMember theirs
-                    where theirs.user.id = :candidateUserId
-                      and theirs.community.id = mine.community.id
-                  )
-                """, Long.class)
-                .setParameter("userId", userId)
-                .setParameter("candidateUserId", candidateUserId)
-                .getSingleResult();
+            select count(distinct mine.community.id)
+            from CommunityMember mine
+            where mine.user.id = :userId
+            and exists (
+                select 1
+                from CommunityMember theirs
+                where theirs.user.id = :candidateUserId
+                and theirs.community.id = mine.community.id
+            )
+        """, Long.class)
+        .setParameter("userId", userId)
+        .setParameter("candidateUserId", candidateUserId)
+        .getSingleResult();
+    }
+
+    /**
+     * Checks if a user is a member of a community with OWNER or MODERATOR role.
+     */
+    public boolean isOwnerOrModerator(UUID userId, UUID communityId) {
+        return find("user.id = ?1 and community.id = ?2 and role in ('OWNER', 'MODERATOR')", userId, communityId)
+            .firstResultOptional()
+            .isPresent();
     }
 }

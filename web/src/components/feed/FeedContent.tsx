@@ -1,17 +1,15 @@
 "use client";
 
-import { memo, useCallback, useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
+import { memo, useCallback, useState, useEffect } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@clerk/nextjs";
 import MarkdownContent from "@/components/ui/MarkdownContent";
 import AuthMedia from "@/components/ui/AuthMedia";
 import MediaLightbox, { LightboxItem } from "@/components/ui/MediaLightbox";
 import HotTakeCard from "./HotTakeCard";
+import { useFeed, usePrefetchFeed } from "@/hooks/useFeed";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
-const PAGE_SIZE = 20;
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -23,6 +21,7 @@ interface PostMedia {
 
 interface PostRes {
   id: string;
+  title: string | null;
   content: string;
   media: PostMedia[];
   communityId: string;
@@ -57,13 +56,15 @@ function timeAgo(dateStr: string): string {
 
 // ── FeedPostCard ─────────────────────────────────────────────────────────────
 
+interface FeedPostCardProps {
+  post: PostRes;
+  onReact: (postId: string, type: "like" | "dislike") => void;
+}
+
 const FeedPostCard = memo(function FeedPostCard({
   post,
   onReact,
-}: {
-  post: PostRes;
-  onReact: (postId: string, type: "like" | "dislike") => void;
-}) {
+}: FeedPostCardProps) {
   const router = useRouter();
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
@@ -80,9 +81,36 @@ const FeedPostCard = memo(function FeedPostCard({
     m.type.startsWith("image/") || m.type.startsWith("video/") ? ++vi : -1
   ) ?? [];
 
+  const handleLike = useCallback(() => {
+    onReact(post.id, "like");
+  }, [onReact, post.id]);
+
+  const handleDislike = useCallback(() => {
+    onReact(post.id, "dislike");
+  }, [onReact, post.id]);
+
+  const navigateToCommunity = useCallback(() => {
+    router.push(`/discover/community/${post.communityId}`);
+  }, [router, post.communityId]);
+
+  const navigateToProfile = useCallback(() => {
+    router.push(`/profile/${post.authorUsername}`);
+  }, [router, post.authorUsername]);
+
+  const navigateToPost = useCallback(() => {
+    router.push(`/discover/post/${post.id}`);
+  }, [router, post.id]);
+
+  const openLightbox = useCallback((idx: number) => {
+    setLightboxIndex(idx);
+  }, []);
+
+  const closeLightbox = useCallback(() => {
+    setLightboxIndex(null);
+  }, []);
+
   return (
     <div className="relative bg-surface-container-lowest/65 border border-white/80 rounded-2xl overflow-hidden shadow-sm">
-
       {/* FRIEND_POSTED — author name chip */}
       {post.feedReasonCode === "FRIEND_POSTED" && (
         <div className="px-4 pt-3 pb-0">
@@ -95,7 +123,7 @@ const FeedPostCard = memo(function FeedPostCard({
       {/* Community badge row — includes "Recommended" label on the right for RECOMMENDED_COMMUNITY */}
       <div className="flex items-center justify-between pr-4">
         <button
-          onClick={() => router.push(`/discover/community/${post.communityId}`)}
+          onClick={navigateToCommunity}
           className="flex items-center gap-2 px-4 pt-3 pb-1 group"
         >
           <span
@@ -116,7 +144,7 @@ const FeedPostCard = memo(function FeedPostCard({
       {/* Author header */}
       <div
         className="flex items-center gap-3 px-4 pt-1 pb-2 cursor-pointer"
-        onClick={() => router.push(`/profile/${post.authorUsername}`)}
+        onClick={navigateToProfile}
       >
         {post.authorProfileImage ? (
           <div className="w-9 h-9 shrink-0 rounded-full overflow-hidden">
@@ -145,17 +173,24 @@ const FeedPostCard = memo(function FeedPostCard({
         </div>
       </div>
 
-      {/* Content (truncated) */}
-      {post.content && (
+      {/* Title + content (truncated) */}
+      {(post.title || post.content) && (
         <div
-          className="px-4 pb-3 cursor-pointer"
-          onClick={() => router.push(`/discover/post/${post.id}`)}
+          className="px-4 pb-3 cursor-pointer space-y-1.5"
+          onClick={navigateToPost}
         >
-          <MarkdownContent
-            content={post.content}
-            truncate
-            className="text-on-surface"
-          />
+          {post.title && (
+            <h3 className="text-[17px] font-bold leading-6 tracking-tight text-on-surface line-clamp-2">
+              {post.title}
+            </h3>
+          )}
+          {post.content && (
+            <MarkdownContent
+              content={post.content}
+              truncate
+              className={post.title ? "text-on-surface-variant/80" : "text-on-surface"}
+            />
+          )}
         </div>
       )}
 
@@ -179,14 +214,14 @@ const FeedPostCard = memo(function FeedPostCard({
               return (
                 <div key={i} className={`relative${spanFull ? " col-span-2" : ""}`}>
                   {isImage ? (
-                    <div onClick={() => setLightboxIndex(vIdx)} className="cursor-zoom-in">
+                    <div onClick={() => openLightbox(vIdx)} className="cursor-zoom-in">
                       <AuthMedia src={src} type="image" className={mediaClass} />
                     </div>
                   ) : isVideo ? (
                     <div className="relative">
                       <AuthMedia src={src} type="video" className={mediaClass} />
                       <button
-                        onClick={() => setLightboxIndex(vIdx)}
+                        onClick={() => openLightbox(vIdx)}
                         className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center text-white transition-colors"
                       >
                         <span className="material-symbols-outlined" style={{ fontSize: 18 }}>fullscreen</span>
@@ -206,7 +241,7 @@ const FeedPostCard = memo(function FeedPostCard({
         <MediaLightbox
           items={visualItems}
           index={lightboxIndex}
-          onClose={() => setLightboxIndex(null)}
+          onClose={closeLightbox}
           onNav={setLightboxIndex}
         />
       )}
@@ -238,7 +273,7 @@ const FeedPostCard = memo(function FeedPostCard({
       {/* Reaction bar */}
       <div className="flex items-center gap-1 px-3 py-2 border-t border-surface-container-high/50">
         <button
-          onClick={() => onReact(post.id, "like")}
+          onClick={handleLike}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
             post.userReaction === "like"
               ? "bg-primary/15 text-primary"
@@ -258,7 +293,7 @@ const FeedPostCard = memo(function FeedPostCard({
         </button>
 
         <button
-          onClick={() => onReact(post.id, "dislike")}
+          onClick={handleDislike}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
             post.userReaction === "dislike"
               ? "bg-error/15 text-error"
@@ -278,7 +313,7 @@ const FeedPostCard = memo(function FeedPostCard({
         </button>
 
         <button
-          onClick={() => router.push(`/discover/post/${post.id}`)}
+          onClick={navigateToPost}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-on-surface-variant hover:bg-surface-container-high transition-colors ml-auto"
         >
           <span className="material-symbols-outlined text-base">
@@ -295,95 +330,42 @@ const FeedPostCard = memo(function FeedPostCard({
 // ── Main component ───────────────────────────────────────────────────────────
 
 export default function FeedContent() {
-  const { getToken } = useAuth();
-  const [posts, setPosts] = useState<PostRes[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const getTokenRef = useRef(getToken);
-  getTokenRef.current = getToken;
+  const { posts, isLoading, isLoadingMore, hasMore, loadMore, handleReact, error } = useFeed();
 
+  // Prefetch next page when user scrolls near bottom
+  const { prefetchNextPage } = usePrefetchFeed();
+  const [currentPage, setCurrentPage] = useState(0);
+
+  const handleLoadMore = useCallback(async () => {
+    setCurrentPage((p) => p + 1);
+    await loadMore();
+  }, [loadMore]);
+
+  // Prefetch next page
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const token = await getTokenRef.current();
-        const res = await fetch(
-          `${API_URL}/posts/feed?page=0&size=${PAGE_SIZE}`,
-          { headers: { Authorization: `Bearer ${token}` } },
-        );
-        if (res.ok && !cancelled) {
-          const data: PostRes[] = await res.json();
-          setPosts(data);
-          setHasMore(data.length === PAGE_SIZE);
-          setPage(1);
-        }
-      } catch (err) {
-        console.error("Failed to fetch feed:", err);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const loadMore = useCallback(async () => {
-    if (loadingMore || !hasMore) return;
-    setLoadingMore(true);
-    try {
-      const token = await getTokenRef.current();
-      const res = await fetch(
-        `${API_URL}/posts/feed?page=${page}&size=${PAGE_SIZE}`,
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      if (res.ok) {
-        const data: PostRes[] = await res.json();
-        setPosts((prev) => [...prev, ...data]);
-        setHasMore(data.length === PAGE_SIZE);
-        setPage((p) => p + 1);
-      }
-    } catch (err) {
-      console.error("Failed to load more:", err);
-    } finally {
-      setLoadingMore(false);
+    if (hasMore && !isLoadingMore) {
+      prefetchNextPage(currentPage);
     }
-  }, [page, hasMore, loadingMore]);
+  }, [hasMore, isLoadingMore, currentPage, prefetchNextPage]);
 
-  const handleReact = useCallback(
-    async (postId: string, type: "like" | "dislike") => {
-      try {
-        const token = await getTokenRef.current();
-        const res = await fetch(`${API_URL}/posts/${postId}/react`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ type }),
-        });
-        if (res.ok) {
-          const updated: PostRes = await res.json();
-          setPosts((prev) =>
-            prev.map((p) => (p.id === postId ? updated : p)),
-          );
-        } else {
-          toast.error("Failed to react");
-        }
-      } catch (err) {
-        console.error("React error:", err);
-        toast.error("Failed to react");
-      }
-    },
-    [],
-  );
+  if (error) {
+    return (
+      <section className="w-full max-w-4xl px-6 lg:px-12 py-8 lg:py-12">
+        <div className="flex flex-col items-center justify-center py-20 gap-4">
+          <span className="material-symbols-outlined text-error text-5xl">error</span>
+          <p className="text-on-surface font-bold text-lg">Failed to load feed</p>
+          <p className="text-on-surface-variant text-sm text-center max-w-xs">
+            Please try refreshing the page
+          </p>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="w-full max-w-4xl px-6 lg:px-12 py-8 lg:py-12">
       <header className="mb-10">
-        <h2 className="text-display-lg mb-1">Your Feed</h2>
+        <h2 className="text-display-lg mb-1 text-primary">Your Feed</h2>
         <p className="text-on-surface-variant text-sm">
           Latest posts from your communities
         </p>
@@ -391,7 +373,7 @@ export default function FeedContent() {
 
       <HotTakeCard />
 
-      {loading ? (
+      {isLoading ? (
         <div className="flex justify-center py-20">
           <div className="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center animate-pulse">
             <span className="material-symbols-outlined text-primary text-2xl">
@@ -418,11 +400,11 @@ export default function FeedContent() {
           {hasMore && (
             <div className="flex justify-center pt-2">
               <button
-                onClick={loadMore}
-                disabled={loadingMore}
+                onClick={handleLoadMore}
+                disabled={isLoadingMore}
                 className="px-6 py-2 rounded-full text-sm font-semibold text-primary border border-primary/30 hover:bg-primary/10 transition-colors disabled:opacity-50"
               >
-                {loadingMore ? "Loading…" : "Load more"}
+                {isLoadingMore ? "Loading…" : "Load more"}
               </button>
             </div>
           )}

@@ -16,6 +16,8 @@
         <quarkus.platform.version>3.32.4</quarkus.platform.version>
         <skipITs>true</skipITs>
         <surefire-plugin.version>3.5.4</surefire-plugin.version>
+        <!-- JVM Memory settings for production -->
+        <quarkus.package.jar.jvm-arguments>-Xms256m,-Xmx768m,-XX:+UseG1GC,-XX:MaxGCPauseMillis=200</quarkus.package.jar.jvm-arguments>
     </properties>
 
     <dependencyManagement>
@@ -110,6 +112,12 @@
             <groupId>net.coobird</groupId>
             <artifactId>thumbnailator</artifactId>
             <version>0.4.20</version>
+        </dependency>
+        <!-- OWASP Encoder for XSS prevention -->
+        <dependency>
+            <groupId>org.owasp.encoder</groupId>
+            <artifactId>encoder</artifactId>
+            <version>1.3.1</version>
         </dependency>
     </dependencies>
 

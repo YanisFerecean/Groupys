@@ -5,8 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { Bell, ChevronLeft, Info, Lock, Check, X } from "lucide-react";
-import { useUser } from "@clerk/nextjs";
 import { useAuth } from "@clerk/nextjs";
+import { useUserStore } from "@/store/userStore";
 import { useMessages } from "@/hooks/useMessages";
 import { Message } from "@/types/chat";
 import { useConversations } from "@/hooks/useConversations";
@@ -20,7 +20,7 @@ import { fetchPublicKey } from "@/lib/chat-api";
 export default function ConversationPage() {
   const params = useParams();
   const router = useRouter();
-  const { user } = useUser();
+  const { backendUserId, backendUsername } = useUserStore();
   const conversationIdValue = Array.isArray(params.conversationId) 
     ? params.conversationId[0] 
     : params.conversationId;
@@ -40,15 +40,15 @@ export default function ConversationPage() {
 
   useEffect(() => {
     async function fetchKey() {
-      if (!conversation || conversation.isGroup || !user) return;
-      const other = conversation.participants.find(p => p.username !== user.username);
+      if (!conversation || conversation.isGroup || !backendUserId) return;
+      const other = conversation.participants.find(p => p.userId !== backendUserId);
       if (!other) return;
       const token = await getToken();
       const key = await fetchPublicKey(other.username, token);
       setOtherPublicKey(key);
     }
     fetchKey();
-  }, [conversation?.id, user?.username]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [conversation?.id, backendUserId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const encryptFn = useMemo(
     () => (cryptoReady && otherPublicKey ? makeEncrypt(otherPublicKey) : undefined),
@@ -77,23 +77,23 @@ export default function ConversationPage() {
 
   useEffect(() => {
     async function seed() {
-      if (!conversation || !user) return;
-      const other = conversation.participants.find(p => p.username !== user.username);
+      if (!conversation || !backendUserId) return;
+      const other = conversation.participants.find(p => p.userId !== backendUserId);
       setOtherLastReadAt(other?.lastReadAt ?? null);
     }
     seed();
-  }, [conversation?.id, user?.username]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [conversation?.id, backendUserId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Current user's last read timestamp — captured once on open, before markAsRead clears it
   const [myLastReadAt, setMyLastReadAt] = useState<string | null>(null);
   const myLastReadAtSeededRef = useRef(false);
 
   useEffect(() => {
-    if (myLastReadAtSeededRef.current || !conversation || !user) return;
-    const me = conversation.participants.find(p => p.username === user.username);
+    if (myLastReadAtSeededRef.current || !conversation || !backendUserId) return;
+    const me = conversation.participants.find(p => p.userId === backendUserId);
     setMyLastReadAt(me?.lastReadAt ?? null);
     myLastReadAtSeededRef.current = true;
-  }, [conversation, user]);
+  }, [conversation, backendUserId]);
 
   useEffect(() => {
     if (!conversationId) return;
@@ -142,11 +142,11 @@ export default function ConversationPage() {
     let isOtherOnline = false;
     let otherUsername: string | null = null;
 
-    if (conversation && user) {
+    if (conversation && backendUserId) {
       if (conversation.isGroup) {
         headerTitle = conversation.groupName || "Group Chat";
       } else {
-        const other = conversation.participants.find(p => p.username !== user.username);
+        const other = conversation.participants.find(p => p.userId !== backendUserId);
         if (other) {
           headerTitle = other.displayName || other.username;
           avatarUrl = other.profileImage;
@@ -157,15 +157,15 @@ export default function ConversationPage() {
     }
 
     return { headerTitle, avatarUrl, isOtherOnline, otherUsername };
-  }, [conversation, user, isOnline]);
+  }, [conversation, backendUserId, isOnline]);
 
   // Compute "last seen X ago" outside render to avoid Date.now() purity violation
   const [lastSeenText, setLastSeenText] = useState<string | null>(null);
 
   useEffect(() => {
     async function update() {
-      if (!conversation || !user || conversation.isGroup) { setLastSeenText(null); return; }
-      const other = conversation.participants.find(p => p.username !== user.username);
+      if (!conversation || !backendUserId || conversation.isGroup) { setLastSeenText(null); return; }
+      const other = conversation.participants.find(p => p.userId !== backendUserId);
       if (!other || isOnline(other.userId) || !other.lastSeenAt) { setLastSeenText(null); return; }
       const diff = Date.now() - new Date(other.lastSeenAt).getTime();
       const minutes = Math.floor(diff / 60000);
@@ -175,12 +175,12 @@ export default function ConversationPage() {
       else setLastSeenText(`last seen ${Math.floor(minutes / 1440)}d ago`);
     }
     update();
-  }, [conversation, user, isOnline]);
+  }, [conversation, backendUserId, isOnline]);
 
   const handleSend = useCallback((content: string) => {
-    if (!user) return;
-    sendMessage(content, user.id, user.username || "me");
-  }, [user, sendMessage]);
+    if (!backendUserId) return;
+    sendMessage(content, backendUserId, backendUsername ?? "me");
+  }, [backendUserId, backendUsername, sendMessage]);
 
   const handleLoadMore = useCallback(() => {
     const nextPage = Math.floor(messages.length / 30);
@@ -208,7 +208,9 @@ export default function ConversationPage() {
             className="flex items-center gap-3 hover:opacity-80 transition-opacity"
           >
             {avatarUrl && !avatarError ? (
-              <Image src={avatarUrl} alt={headerTitle} width={48} height={48} className="rounded-full object-cover" onError={() => setAvatarError(true)} />
+              <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0">
+                <Image src={avatarUrl} alt={headerTitle} width={48} height={48} className="w-full h-full object-cover" onError={() => setAvatarError(true)} />
+              </div>
             ) : (
               <div className="w-12 h-12 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-lg uppercase">
                 {headerTitle.charAt(0)}

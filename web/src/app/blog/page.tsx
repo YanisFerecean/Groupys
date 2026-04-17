@@ -57,10 +57,10 @@ const posts = [
 export default function BlogPage() {
   return (
     <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
+<script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+    />
       <div className="min-h-screen bg-surface text-on-surface">
         <div className="max-w-3xl mx-auto px-6 py-24">
           <Link

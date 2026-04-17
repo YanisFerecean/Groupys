@@ -43,13 +43,15 @@ export function MatchHistoryListItem({ match }: Props) {
       className="w-full flex items-center gap-4 rounded-3xl bg-surface-container px-4 py-4 hover:bg-surface-container-high transition-colors disabled:cursor-default"
     >
       {match.otherProfileImage ? (
-        <Image
-          src={match.otherProfileImage}
-          alt={match.otherDisplayName ?? match.otherUsername}
-          width={56}
-          height={56}
-          className="rounded-full object-cover flex-shrink-0"
-        />
+        <div className="w-14 h-14 rounded-full overflow-hidden flex-shrink-0">
+          <Image
+            src={match.otherProfileImage}
+            alt={match.otherDisplayName ?? match.otherUsername}
+            width={56}
+            height={56}
+            className="w-full h-full object-cover"
+          />
+        </div>
       ) : (
         <div className="w-14 h-14 rounded-full bg-surface-container-high flex items-center justify-center flex-shrink-0">
           <User className="w-6 h-6 text-on-surface-variant" />

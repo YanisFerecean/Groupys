@@ -21,6 +21,9 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+
 @Path("/hot-takes")
 @Produces(MediaType.APPLICATION_JSON)
 public class HotTakeResource {
@@ -103,7 +106,7 @@ public class HotTakeResource {
             @HeaderParam("X-Admin-Secret") String secret,
             HotTakeCreateDto dto
     ) {
-        if (adminSecret.isBlank() || !adminSecret.equals(secret)) {
+        if (adminSecret.isBlank() || !constantTimeEquals(adminSecret, secret)) {
             return Response.status(Response.Status.FORBIDDEN).build();
         }
         if (dto == null || dto.question() == null || dto.question().isBlank()) {
@@ -113,5 +116,16 @@ public class HotTakeResource {
         }
         int answerCount = dto.answerCount() != null ? dto.answerCount() : 1;
         return Response.ok(hotTakeService.create(dto.question(), dto.weekLabel(), dto.answerType(), answerCount)).build();
+    }
+
+    /**
+     * Constant-time comparison to prevent timing attacks.
+     */
+    private boolean constantTimeEquals(String a, String b) {
+        if (a == null || b == null) {
+            return false;
+        }
+        return MessageDigest.isEqual(a.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                                     b.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 }
