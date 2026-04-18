@@ -4,10 +4,19 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.groupys.client.AppleMusicApiClient;
+import com.groupys.client.DeezerClient;
+import com.groupys.client.LastFmClient;
 import com.groupys.dto.MusicAlbumResDto;
 import com.groupys.dto.MusicArtistResDto;
 import com.groupys.dto.MusicDeveloperTokenResDto;
 import com.groupys.dto.MusicTrackResDto;
+import com.groupys.dto.deezer.DeezerArtistDto;
+import com.groupys.dto.deezer.DeezerArtistSearchResponse;
+import com.groupys.dto.lastfm.LastFmImage;
+import com.groupys.dto.lastfm.LastFmUserInfoResponse;
+import com.groupys.dto.lastfm.LastFmUserTopAlbumsResponse;
+import com.groupys.dto.lastfm.LastFmUserTopArtistsResponse;
+import com.groupys.dto.lastfm.LastFmUserTopTracksResponse;
 import com.groupys.model.User;
 import com.groupys.repository.UserRepository;
 import io.quarkus.logging.Log;
@@ -22,6 +31,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 
 import java.time.Instant;
+import java.time.Year;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -40,6 +50,8 @@ public class MusicService {
 
     private static final int DEFAULT_PROFILE_LIMIT = 3;
     private static final int FALLBACK_RECENT_LIMIT = 50;
+    private static final int APPLE_RECENT_MAX = 30;
+    private static final int APPLE_HEAVY_ROTATION_MAX = 10;
     private static final int MAX_RATE_LIMIT_RETRIES = 3;
     private static final long INITIAL_RETRY_BACKOFF_MS = 250L;
     private static final String SIMULATOR_MOCK_TOKEN_PREFIX = "simulator_mock_";
@@ -90,8 +102,17 @@ public class MusicService {
     @RestClient
     AppleMusicApiClient appleMusicApi;
 
+    @RestClient
+    DeezerClient deezerClient;
+
+    @RestClient
+    LastFmClient lastFmClient;
+
     @ConfigProperty(name = "music.simulator-mock-enabled", defaultValue = "false")
     boolean simulatorMockEnabled;
+
+    @ConfigProperty(name = "lastfm.api.key")
+    String lastFmApiKey;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -123,79 +144,122 @@ public class MusicService {
         user.appleMusicConnectedAt = null;
     }
 
-    public List<MusicArtistResDto> getTopArtists(String clerkId) {
-        String musicUserToken = getValidUserToken(clerkId);
-        if (useSimulatorMock(musicUserToken)) {
-            return simulatorTopArtists(DEFAULT_PROFILE_LIMIT);
-        }
+    @Transactional
+    public void connectLastFm(String clerkId, String username) {
+        String trimmed = username.trim();
+        validateLastFmUsername(trimmed);
+        User user = userRepository.findByClerkId(clerkId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        user.lastFmUsername = trimmed;
+        user.lastFmConnectedAt = Instant.now();
+    }
 
-        TopArtistsData topArtists = fetchTopArtistsForToken(musicUserToken, DEFAULT_PROFILE_LIMIT);
-        return topArtists.items().stream()
+    @Transactional
+    public void disconnectLastFm(String clerkId) {
+        User user = userRepository.findByClerkId(clerkId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        user.lastFmUsername = null;
+        user.lastFmConnectedAt = null;
+    }
+
+    private void validateLastFmUsername(String username) {
+        try {
+            LastFmUserInfoResponse info = lastFmClient.getUserInfo("user.getinfo", username, lastFmApiKey, "json");
+            if (info == null || info.user() == null || info.user().name() == null) {
+                throw new BadRequestException("Last.FM user not found: " + username);
+            }
+        } catch (BadRequestException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BadRequestException("Last.FM user not found: " + username);
+        }
+    }
+
+    public List<MusicArtistResDto> getTopArtists(String clerkId) {
+        User user = userRepository.findByClerkId(clerkId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        if (user.lastFmUsername != null && !user.lastFmUsername.isBlank()) {
+            List<MusicArtistResDto> result = fetchLastFmTopArtists(user.lastFmUsername, DEFAULT_PROFILE_LIMIT);
+            if (!result.isEmpty()) return result;
+        }
+        String musicUserToken = getValidUserToken(user);
+        if (useSimulatorMock(musicUserToken)) return simulatorTopArtists(DEFAULT_PROFILE_LIMIT);
+        return fetchTopArtistsForToken(musicUserToken, DEFAULT_PROFILE_LIMIT).items().stream()
                 .limit(DEFAULT_PROFILE_LIMIT)
                 .map(item -> new MusicArtistResDto(item.name(), item.imageUrl()))
                 .toList();
     }
 
     public List<MusicArtistResDto> getTopArtistsByUserId(String userId) {
-        String musicUserToken = getValidUserTokenByUserId(userId);
-        if (useSimulatorMock(musicUserToken)) {
-            return simulatorTopArtists(DEFAULT_PROFILE_LIMIT);
+        User user = userRepository.findByIdOptional(java.util.UUID.fromString(userId))
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        if (user.lastFmUsername != null && !user.lastFmUsername.isBlank()) {
+            List<MusicArtistResDto> result = fetchLastFmTopArtists(user.lastFmUsername, DEFAULT_PROFILE_LIMIT);
+            if (!result.isEmpty()) return result;
         }
-
-        TopArtistsData topArtists = fetchTopArtistsForToken(musicUserToken, DEFAULT_PROFILE_LIMIT);
-        return topArtists.items().stream()
+        String musicUserToken = getValidUserToken(user);
+        if (useSimulatorMock(musicUserToken)) return simulatorTopArtists(DEFAULT_PROFILE_LIMIT);
+        return fetchTopArtistsForToken(musicUserToken, DEFAULT_PROFILE_LIMIT).items().stream()
                 .limit(DEFAULT_PROFILE_LIMIT)
                 .map(item -> new MusicArtistResDto(item.name(), item.imageUrl()))
                 .toList();
     }
 
     public List<MusicTrackResDto> getTopTracks(String clerkId) {
-        String musicUserToken = getValidUserToken(clerkId);
-        if (useSimulatorMock(musicUserToken)) {
-            return simulatorTopTracks(DEFAULT_PROFILE_LIMIT);
+        User user = userRepository.findByClerkId(clerkId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        if (user.lastFmUsername != null && !user.lastFmUsername.isBlank()) {
+            List<MusicTrackResDto> result = fetchLastFmTopTracks(user.lastFmUsername, DEFAULT_PROFILE_LIMIT);
+            if (!result.isEmpty()) return result;
         }
-
-        TopTracksData topTracks = fetchTopTracksForToken(musicUserToken, DEFAULT_PROFILE_LIMIT);
-        return topTracks.items().stream()
+        String musicUserToken = getValidUserToken(user);
+        if (useSimulatorMock(musicUserToken)) return simulatorTopTracks(DEFAULT_PROFILE_LIMIT);
+        return fetchTopTracksForToken(musicUserToken, DEFAULT_PROFILE_LIMIT).items().stream()
                 .limit(DEFAULT_PROFILE_LIMIT)
                 .map(this::toTrackDto)
                 .toList();
     }
 
     public List<MusicTrackResDto> getTopTracksByUserId(String userId) {
-        String musicUserToken = getValidUserTokenByUserId(userId);
-        if (useSimulatorMock(musicUserToken)) {
-            return simulatorTopTracks(DEFAULT_PROFILE_LIMIT);
+        User user = userRepository.findByIdOptional(java.util.UUID.fromString(userId))
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        if (user.lastFmUsername != null && !user.lastFmUsername.isBlank()) {
+            List<MusicTrackResDto> result = fetchLastFmTopTracks(user.lastFmUsername, DEFAULT_PROFILE_LIMIT);
+            if (!result.isEmpty()) return result;
         }
-
-        TopTracksData topTracks = fetchTopTracksForToken(musicUserToken, DEFAULT_PROFILE_LIMIT);
-        return topTracks.items().stream()
+        String musicUserToken = getValidUserToken(user);
+        if (useSimulatorMock(musicUserToken)) return simulatorTopTracks(DEFAULT_PROFILE_LIMIT);
+        return fetchTopTracksForToken(musicUserToken, DEFAULT_PROFILE_LIMIT).items().stream()
                 .limit(DEFAULT_PROFILE_LIMIT)
                 .map(this::toTrackDto)
                 .toList();
     }
 
     public List<MusicAlbumResDto> getTopAlbums(String clerkId) {
-        String musicUserToken = getValidUserToken(clerkId);
-        if (useSimulatorMock(musicUserToken)) {
-            return simulatorTopAlbums(DEFAULT_PROFILE_LIMIT);
+        User user = userRepository.findByClerkId(clerkId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        if (user.lastFmUsername != null && !user.lastFmUsername.isBlank()) {
+            List<MusicAlbumResDto> result = fetchLastFmTopAlbums(user.lastFmUsername, DEFAULT_PROFILE_LIMIT);
+            if (!result.isEmpty()) return result;
         }
-
-        TopAlbumsData topAlbums = fetchTopAlbumsForToken(musicUserToken, DEFAULT_PROFILE_LIMIT);
-        return topAlbums.items().stream()
+        String musicUserToken = getValidUserToken(user);
+        if (useSimulatorMock(musicUserToken)) return simulatorTopAlbums(DEFAULT_PROFILE_LIMIT);
+        return fetchTopAlbumsForToken(musicUserToken, DEFAULT_PROFILE_LIMIT).items().stream()
                 .limit(DEFAULT_PROFILE_LIMIT)
                 .map(item -> new MusicAlbumResDto(item.name(), item.artistName(), item.coverUrl()))
                 .toList();
     }
 
     public List<MusicAlbumResDto> getTopAlbumsByUserId(String userId) {
-        String musicUserToken = getValidUserTokenByUserId(userId);
-        if (useSimulatorMock(musicUserToken)) {
-            return simulatorTopAlbums(DEFAULT_PROFILE_LIMIT);
+        User user = userRepository.findByIdOptional(java.util.UUID.fromString(userId))
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        if (user.lastFmUsername != null && !user.lastFmUsername.isBlank()) {
+            List<MusicAlbumResDto> result = fetchLastFmTopAlbums(user.lastFmUsername, DEFAULT_PROFILE_LIMIT);
+            if (!result.isEmpty()) return result;
         }
-
-        TopAlbumsData topAlbums = fetchTopAlbumsForToken(musicUserToken, DEFAULT_PROFILE_LIMIT);
-        return topAlbums.items().stream()
+        String musicUserToken = getValidUserToken(user);
+        if (useSimulatorMock(musicUserToken)) return simulatorTopAlbums(DEFAULT_PROFILE_LIMIT);
+        return fetchTopAlbumsForToken(musicUserToken, DEFAULT_PROFILE_LIMIT).items().stream()
                 .limit(DEFAULT_PROFILE_LIMIT)
                 .map(item -> new MusicAlbumResDto(item.name(), item.artistName(), item.coverUrl()))
                 .toList();
@@ -210,7 +274,9 @@ public class MusicService {
     }
 
     public MusicTrackResDto getCurrentlyPlayingByUserId(String userId) {
-        String musicUserToken = getValidUserTokenByUserId(userId);
+        User user = userRepository.findByIdOptional(java.util.UUID.fromString(userId))
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        String musicUserToken = getValidUserToken(user);
         if (useSimulatorMock(musicUserToken)) {
             return SIMULATOR_MOCK_TRACKS.isEmpty() ? null : toTrackDto(SIMULATOR_MOCK_TRACKS.getFirst());
         }
@@ -231,6 +297,82 @@ public class MusicService {
                 artistsData.items(),
                 tracksData.items()
         );
+    }
+
+    private List<MusicArtistResDto> fetchLastFmTopArtists(String username, int limit) {
+        try {
+            LastFmUserTopArtistsResponse response = lastFmClient.getUserTopArtists(
+                    "user.gettopartists", username, "1month", limit, lastFmApiKey, "json");
+            if (response == null || response.topartists() == null || response.topartists().artists() == null) {
+                return List.of();
+            }
+            List<MusicArtistItem> artists = response.topartists().artists().stream()
+                    .limit(limit)
+                    .map(a -> new MusicArtistItem(null, a.name(), List.of(), null, lastFmBestImage(a.images())))
+                    .toList();
+            return enrichArtistImagesFromDeezer(artists).stream()
+                    .map(a -> new MusicArtistResDto(a.name(), a.imageUrl()))
+                    .toList();
+        } catch (Exception e) {
+            Log.warnf(e, "Last.FM top artists failed for %s", username);
+            return List.of();
+        }
+    }
+
+    private List<MusicTrackResDto> fetchLastFmTopTracks(String username, int limit) {
+        try {
+            LastFmUserTopTracksResponse response = lastFmClient.getUserTopTracks(
+                    "user.gettoptracks", username, "1month", limit, lastFmApiKey, "json");
+            if (response == null || response.toptracks() == null || response.toptracks().tracks() == null) {
+                return List.of();
+            }
+            return response.toptracks().tracks().stream()
+                    .limit(limit)
+                    .map(t -> new MusicTrackResDto(
+                            t.name(),
+                            t.artist() != null ? t.artist().name() : "",
+                            lastFmBestImage(t.images())))
+                    .toList();
+        } catch (Exception e) {
+            Log.warnf(e, "Last.FM top tracks failed for %s", username);
+            return List.of();
+        }
+    }
+
+    private List<MusicAlbumResDto> fetchLastFmTopAlbums(String username, int limit) {
+        try {
+            LastFmUserTopAlbumsResponse response = lastFmClient.getUserTopAlbums(
+                    "user.gettopalbums", username, "1month", limit, lastFmApiKey, "json");
+            if (response == null || response.topalbums() == null || response.topalbums().albums() == null) {
+                return List.of();
+            }
+            return response.topalbums().albums().stream()
+                    .limit(limit)
+                    .map(a -> new MusicAlbumResDto(
+                            a.name(),
+                            a.artist() != null ? a.artist().name() : "",
+                            lastFmBestImage(a.images())))
+                    .toList();
+        } catch (Exception e) {
+            Log.warnf(e, "Last.FM top albums failed for %s", username);
+            return List.of();
+        }
+    }
+
+    private String lastFmBestImage(List<LastFmImage> images) {
+        if (images == null || images.isEmpty()) return null;
+        for (String size : List.of("extralarge", "mega", "large", "medium", "small")) {
+            for (LastFmImage img : images) {
+                if (size.equals(img.size()) && img.url() != null && !img.url().isBlank()) {
+                    return img.url();
+                }
+            }
+        }
+        return images.stream()
+                .map(LastFmImage::url)
+                .filter(u -> u != null && !u.isBlank())
+                .findFirst()
+                .orElse(null);
     }
 
     private boolean useSimulatorMock(String musicUserToken) {
@@ -311,38 +453,119 @@ public class MusicService {
     }
 
     private TopArtistsData fetchTopArtistsForToken(String musicUserToken, int limit) {
-        String replayPayload = fetchReplayPayload(musicUserToken, "top-artists");
-        List<MusicArtistItem> replayArtists = parseArtistsFromPayload(replayPayload, limit);
-        if (!replayArtists.isEmpty()) {
-            return new TopArtistsData(replayPayload, replayArtists);
+        FallbackTracks fallbackTracks = fetchFallbackTracks(musicUserToken, Math.max(limit * 6, FALLBACK_RECENT_LIMIT));
+        List<MusicArtistItem> artists = new ArrayList<>(deriveTopArtistsFromTracks(fallbackTracks.tracks(), limit));
+
+        if (artists.size() < limit) {
+            String replayPayload = fetchReplayPayload(musicUserToken, "top-artists");
+            List<MusicArtistItem> replayArtists = parseArtistsFromPayload(replayPayload, limit);
+            Set<String> seen = new LinkedHashSet<>();
+            for (MusicArtistItem a : artists) {
+                seen.add(a.id() != null && !a.id().isBlank() ? "id:" + a.id() : "name:" + normalize(a.name()));
+            }
+            for (MusicArtistItem a : replayArtists) {
+                String key = a.id() != null && !a.id().isBlank() ? "id:" + a.id() : "name:" + normalize(a.name());
+                if (seen.add(key)) {
+                    artists.add(a);
+                    if (artists.size() >= limit) break;
+                }
+            }
         }
 
-        FallbackTracks fallbackTracks = fetchFallbackTracks(musicUserToken, Math.max(limit * 6, FALLBACK_RECENT_LIMIT));
-        List<MusicArtistItem> artists = deriveTopArtistsFromTracks(fallbackTracks.tracks(), limit);
-        return new TopArtistsData(fallbackTracks.payload(), artists);
+        return new TopArtistsData(fallbackTracks.payload(), enrichArtistImagesFromDeezer(artists));
+    }
+
+    private List<MusicArtistItem> enrichArtistImagesFromDeezer(List<MusicArtistItem> artists) {
+        if (artists == null || artists.isEmpty()) {
+            return artists;
+        }
+        List<MusicArtistItem> enriched = new ArrayList<>(artists.size());
+        for (MusicArtistItem item : artists) {
+            String deezerImage = resolveDeezerArtistImage(item.name());
+            String imageUrl = deezerImage != null ? deezerImage : item.imageUrl();
+            enriched.add(new MusicArtistItem(item.id(), item.name(), item.genres(), item.popularity(), imageUrl));
+        }
+        return enriched;
+    }
+
+    private String resolveDeezerArtistImage(String name) {
+        if (name == null || name.isBlank()) {
+            return null;
+        }
+        try {
+            DeezerArtistSearchResponse response = deezerClient.searchArtists(name, 1);
+            if (response == null || response.data() == null || response.data().isEmpty()) {
+                return null;
+            }
+            DeezerArtistDto artist = response.data().getFirst();
+            return firstNonBlank(artist.pictureXl(), artist.pictureBig(), artist.pictureMedium(), artist.pictureSmall());
+        } catch (Exception e) {
+            Log.debugf(e, "Deezer artist image lookup failed for %s", name);
+            return null;
+        }
     }
 
     private TopTracksData fetchTopTracksForToken(String musicUserToken, int limit) {
-        String replayPayload = fetchReplayPayload(musicUserToken, "top-songs");
-        List<MusicTrackItem> replayTracks = parseTracksFromPayload(replayPayload, limit);
-        if (!replayTracks.isEmpty()) {
-            return new TopTracksData(replayPayload, replayTracks);
+        FallbackTracks fallbackTracks = fetchFallbackTracks(musicUserToken, Math.max(limit * 6, FALLBACK_RECENT_LIMIT));
+        Map<String, Integer> freq = countTrackFrequency(fallbackTracks.recentPayload());
+        List<MusicTrackItem> tracks = new ArrayList<>(
+                deriveTopTracksFromHistory(fallbackTracks.recentTracks(), freq, fallbackTracks.heavyTracks(), limit));
+
+        if (tracks.size() < limit) {
+            String replayPayload = fetchReplayPayload(musicUserToken, "top-songs");
+            List<MusicTrackItem> replayTracks = parseTracksFromPayload(replayPayload, limit);
+            Set<String> seen = new LinkedHashSet<>();
+            for (MusicTrackItem t : tracks) {
+                seen.add(trackKey(t));
+            }
+            for (MusicTrackItem t : replayTracks) {
+                if (seen.add(trackKey(t))) {
+                    tracks.add(t);
+                    if (tracks.size() >= limit) break;
+                }
+            }
         }
 
-        FallbackTracks fallbackTracks = fetchFallbackTracks(musicUserToken, Math.max(limit * 6, FALLBACK_RECENT_LIMIT));
-        List<MusicTrackItem> tracks = fallbackTracks.tracks().stream().limit(limit).toList();
         return new TopTracksData(fallbackTracks.payload(), tracks);
     }
 
     private TopAlbumsData fetchTopAlbumsForToken(String musicUserToken, int limit) {
-        String replayPayload = fetchReplayPayload(musicUserToken, "top-albums");
-        List<MusicAlbumItem> replayAlbums = parseAlbumsFromPayload(replayPayload, limit);
-        if (!replayAlbums.isEmpty()) {
-            return new TopAlbumsData(replayPayload, replayAlbums);
+        FallbackTracks fallbackTracks = fetchFallbackTracks(musicUserToken, Math.max(limit * 6, FALLBACK_RECENT_LIMIT));
+        // Derive from individual track history
+        List<MusicAlbumItem> albums = new ArrayList<>(deriveTopAlbumsFromTracks(fallbackTracks.tracks(), limit));
+
+        // Heavy rotation returns album-type resources directly — merge those in
+        if (albums.size() < limit) {
+            List<MusicAlbumItem> heavyAlbums = parseAlbumsFromPayload(fallbackTracks.heavyPayload(), limit);
+            Set<String> seen = new LinkedHashSet<>();
+            for (MusicAlbumItem a : albums) {
+                seen.add(a.id() != null && !a.id().isBlank() ? "id:" + a.id() : "name:" + normalize(a.name()));
+            }
+            for (MusicAlbumItem a : heavyAlbums) {
+                String key = a.id() != null && !a.id().isBlank() ? "id:" + a.id() : "name:" + normalize(a.name());
+                if (seen.add(key)) {
+                    albums.add(a);
+                    if (albums.size() >= limit) break;
+                }
+            }
         }
 
-        FallbackTracks fallbackTracks = fetchFallbackTracks(musicUserToken, Math.max(limit * 6, FALLBACK_RECENT_LIMIT));
-        List<MusicAlbumItem> albums = deriveTopAlbumsFromTracks(fallbackTracks.tracks(), limit);
+        if (albums.size() < limit) {
+            String replayPayload = fetchReplayPayload(musicUserToken, "top-albums");
+            List<MusicAlbumItem> replayAlbums = parseAlbumsFromPayload(replayPayload, limit);
+            Set<String> seen = new LinkedHashSet<>();
+            for (MusicAlbumItem a : albums) {
+                seen.add(a.id() != null && !a.id().isBlank() ? "id:" + a.id() : "name:" + normalize(a.name()));
+            }
+            for (MusicAlbumItem a : replayAlbums) {
+                String key = a.id() != null && !a.id().isBlank() ? "id:" + a.id() : "name:" + normalize(a.name());
+                if (seen.add(key)) {
+                    albums.add(a);
+                    if (albums.size() >= limit) break;
+                }
+            }
+        }
+
         return new TopAlbumsData(fallbackTracks.payload(), albums);
     }
 
@@ -356,8 +579,17 @@ public class MusicService {
 
     private String fetchReplayPayload(String musicUserToken, String views) {
         String bearer = "Bearer " + developerTokenService.getDeveloperToken();
+        int currentYear = Year.now().getValue();
+        String payload = requestReplay(bearer, musicUserToken, String.valueOf(currentYear), views);
+        if (payload == null) {
+            payload = requestReplay(bearer, musicUserToken, String.valueOf(currentYear - 1), views);
+        }
+        return payload;
+    }
+
+    private String requestReplay(String bearer, String musicUserToken, String year, String views) {
         try (Response response = executeWithRetry(() ->
-                appleMusicApi.getMusicSummaries(bearer, musicUserToken, "latest", views, views),
+                appleMusicApi.getMusicSummaries(bearer, musicUserToken, year, views),
                 "fetch replay summary")) {
             int status = response.getStatus();
             if (status == 200) {
@@ -373,13 +605,15 @@ public class MusicService {
 
     private FallbackTracks fetchFallbackTracks(String musicUserToken, int limit) {
         String bearer = "Bearer " + developerTokenService.getDeveloperToken();
-        String recentPayload = fetchRecentPayload(bearer, musicUserToken, limit);
-        String heavyPayload = fetchHeavyRotationPayload(bearer, musicUserToken, Math.max(10, limit / 2));
+        int recentLimit = Math.min(Math.max(1, limit), APPLE_RECENT_MAX);
+        int heavyLimit = Math.min(Math.max(1, limit / 2), APPLE_HEAVY_ROTATION_MAX);
+        String recentPayload = fetchRecentPayload(bearer, musicUserToken, recentLimit);
+        String heavyPayload = fetchHeavyRotationPayload(bearer, musicUserToken, heavyLimit);
 
         List<MusicTrackItem> recentTracks = parseTracksFromPayload(recentPayload, limit);
         List<MusicTrackItem> heavyTracks = parseTracksFromPayload(heavyPayload, limit);
         List<MusicTrackItem> merged = mergeTracks(recentTracks, heavyTracks, limit);
-        return new FallbackTracks(buildFallbackPayload(recentPayload, heavyPayload), merged);
+        return new FallbackTracks(buildFallbackPayload(recentPayload, heavyPayload), merged, recentTracks, heavyTracks, recentPayload, heavyPayload);
     }
 
     private String fetchRecentPayload(String bearer, String musicUserToken, int limit) {
@@ -447,7 +681,7 @@ public class MusicService {
         if (strict) {
             throw new BadRequestException("Apple Music request failed (" + status + ") during " + operation);
         }
-        Log.debugf("Apple Music request returned %d during %s; trying fallback", status, operation);
+        Log.warnf("Apple Music request returned %d during %s; trying fallback", status, operation);
     }
 
     private String buildFallbackPayload(String recentPayload, String heavyPayload) {
@@ -558,6 +792,84 @@ public class MusicService {
                 .limit(limit)
                 .map(acc -> new MusicAlbumItem(acc.id, acc.name, acc.artistName, acc.coverUrl))
                 .toList();
+    }
+
+    private Map<String, Integer> countTrackFrequency(String payload) {
+        if (payload == null || payload.isBlank()) {
+            return Map.of();
+        }
+        try {
+            JsonNode root = objectMapper.readTree(payload);
+            Map<String, Integer> counts = new LinkedHashMap<>();
+            JsonNode data = root.path("data");
+            if (!data.isArray()) {
+                return Map.of();
+            }
+            for (JsonNode item : data) {
+                String id = text(item, "id");
+                if (id != null && !id.isBlank()) {
+                    counts.merge("id:" + id, 1, Integer::sum);
+                } else {
+                    String name = firstNonBlank(
+                            text(item.path("attributes"), "name"),
+                            text(item.path("attributes"), "title"),
+                            text(item.path("attributes"), "songName"),
+                            text(item.path("attributes"), "trackName")
+                    );
+                    if (name != null) {
+                        counts.merge("name:" + normalize(name), 1, Integer::sum);
+                    }
+                }
+            }
+            return counts;
+        } catch (Exception e) {
+            return Map.of();
+        }
+    }
+
+    private List<MusicTrackItem> deriveTopTracksFromHistory(
+            List<MusicTrackItem> recentTracks,
+            Map<String, Integer> recentFrequency,
+            List<MusicTrackItem> heavyTracks,
+            int limit) {
+        LinkedHashMap<String, TrackAccumulator> accumulators = new LinkedHashMap<>();
+        int recentTotal = Math.max(1, recentTracks.size());
+        for (int i = 0; i < recentTracks.size(); i++) {
+            MusicTrackItem track = recentTracks.get(i);
+            String key = trackKey(track);
+            int freq = lookupFrequency(track, recentFrequency);
+            double weight = (double) freq * Math.max(1d, recentTotal - i);
+            accumulators.computeIfAbsent(key, k -> new TrackAccumulator(track)).score += weight;
+        }
+        int heavyTotal = Math.max(1, heavyTracks.size());
+        for (int i = 0; i < heavyTracks.size(); i++) {
+            MusicTrackItem track = heavyTracks.get(i);
+            double bonus = Math.max(1d, heavyTotal - i) * 2d;
+            String key = trackKey(track);
+            TrackAccumulator acc = accumulators.get(key);
+            if (acc != null) {
+                acc.score += bonus;
+            } else {
+                TrackAccumulator newAcc = new TrackAccumulator(track);
+                newAcc.score = bonus;
+                accumulators.put(key, newAcc);
+            }
+        }
+        return accumulators.values().stream()
+                .sorted((a, b) -> Double.compare(b.score, a.score))
+                .limit(limit)
+                .map(acc -> acc.track)
+                .toList();
+    }
+
+    private int lookupFrequency(MusicTrackItem track, Map<String, Integer> freq) {
+        if (freq.isEmpty()) {
+            return 1;
+        }
+        if (track.id() != null && !track.id().isBlank()) {
+            return freq.getOrDefault("id:" + track.id(), 1);
+        }
+        return freq.getOrDefault("name:" + normalize(track.name()), 1);
     }
 
     private List<MusicArtistItem> parseArtistsFromPayload(String payload, int limit) {
@@ -716,6 +1028,18 @@ public class MusicService {
             String key = id != null && !id.isBlank() ? id : normalize(name);
             if (!seen.add(key)) {
                 continue;
+            }
+            String albumType = firstNonBlank(
+                    text(attributes, "albumSubType"),
+                    text(attributes, "albumType"),
+                    text(rawAttributes, "albumSubType"),
+                    text(rawAttributes, "albumType")
+            );
+            if (albumType != null) {
+                String lc = albumType.toLowerCase(Locale.ROOT);
+                if (lc.contains("single") || lc.contains("ep")) {
+                    continue;
+                }
             }
             String artistName = firstNonBlank(
                     text(attributes, "artistName"),
@@ -1145,7 +1469,22 @@ public class MusicService {
         }
     }
 
-    private record FallbackTracks(String payload, List<MusicTrackItem> tracks) {
+    private static final class TrackAccumulator {
+        private final MusicTrackItem track;
+        private double score;
+
+        private TrackAccumulator(MusicTrackItem track) {
+            this.track = track;
+        }
+    }
+
+    private record FallbackTracks(
+            String payload,
+            List<MusicTrackItem> tracks,
+            List<MusicTrackItem> recentTracks,
+            List<MusicTrackItem> heavyTracks,
+            String recentPayload,
+            String heavyPayload) {
     }
 
     public record DiscoveryPayload(

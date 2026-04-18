@@ -18,6 +18,8 @@ export function useProfileCustomization() {
   const [backendUserId, setBackendUserId] = useState<string | null>(null);
   const [isProfileLoaded, setIsProfileLoaded] = useState(false);
   const [musicConnected, setMusicConnected] = useState(false);
+  const [lastFmConnected, setLastFmConnected] = useState(false);
+  const [lastFmUsername, setLastFmUsername] = useState<string | null>(null);
   const fetchedRef = useRef(false);
 
   // Fetch or create backend user when Clerk user is available
@@ -48,6 +50,8 @@ export function useProfileCustomization() {
 
         setBackendUserId(backendUser.id);
         setMusicConnected(backendUser.musicConnected === true);
+        setLastFmConnected(backendUser.lastFmConnected === true);
+        setLastFmUsername(backendUser.lastFmUsername ?? null);
         setProfile(backendUserToProfile(backendUser));
       } catch (err) {
         console.error("Failed to load profile from backend:", err);
@@ -126,5 +130,7 @@ export function useProfileCustomization() {
     isSaving,
     musicConnected,
     setMusicConnected,
+    lastFmConnected,
+    lastFmUsername,
   };
 }

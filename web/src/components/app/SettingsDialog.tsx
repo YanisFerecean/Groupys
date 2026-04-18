@@ -9,7 +9,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { connectAppleMusicWeb, disconnectMusic, isAppleMusicWebMockEnabled } from "@/lib/appleMusic";
+import { connectLastFm, disconnectLastFm } from "@/lib/lastfm";
 
 interface SettingsDialogProps {
   open: boolean;
@@ -17,6 +19,10 @@ interface SettingsDialogProps {
   musicConnected: boolean;
   onMusicConnected: () => void;
   onMusicDisconnected: () => void;
+  lastFmConnected?: boolean;
+  lastFmUsername?: string | null;
+  onLastFmConnected: (username: string) => void;
+  onLastFmDisconnected: () => void;
 }
 
 function AppleMusicIcon({ size = 20, monochrome = false }: { size?: number; monochrome?: boolean }) {
@@ -38,10 +44,17 @@ export default function SettingsDialog({
   musicConnected,
   onMusicConnected,
   onMusicDisconnected,
+  lastFmConnected,
+  lastFmUsername,
+  onLastFmConnected,
+  onLastFmDisconnected,
 }: SettingsDialogProps) {
   const { getToken } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastFmLoading, setLastFmLoading] = useState(false);
+  const [lastFmError, setLastFmError] = useState<string | null>(null);
+  const [lastFmInput, setLastFmInput] = useState("");
   const mockEnabled = isAppleMusicWebMockEnabled();
 
   const handleConnect = async () => {
@@ -73,6 +86,40 @@ export default function SettingsDialog({
       setError(err instanceof Error ? err.message : "Failed to disconnect Apple Music.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleLastFmConnect = async () => {
+    if (!lastFmInput.trim()) return;
+    setLastFmLoading(true);
+    setLastFmError(null);
+    try {
+      const token = await getToken();
+      if (!token) return;
+      await connectLastFm(lastFmInput.trim(), token);
+      onLastFmConnected(lastFmInput.trim());
+      setLastFmInput("");
+    } catch (err) {
+      console.error("Failed to connect Last.FM:", err);
+      setLastFmError(err instanceof Error ? err.message : "Last.FM user not found.");
+    } finally {
+      setLastFmLoading(false);
+    }
+  };
+
+  const handleLastFmDisconnect = async () => {
+    setLastFmLoading(true);
+    setLastFmError(null);
+    try {
+      const token = await getToken();
+      if (!token) return;
+      await disconnectLastFm(token);
+      onLastFmDisconnected();
+    } catch (err) {
+      console.error("Failed to disconnect Last.FM:", err);
+      setLastFmError(err instanceof Error ? err.message : "Failed to disconnect Last.FM.");
+    } finally {
+      setLastFmLoading(false);
     }
   };
 
@@ -172,6 +219,83 @@ export default function SettingsDialog({
                 {error && (
                   <p className="mt-3 text-xs text-red-300">{error}</p>
                 )}
+              </div>
+            </div>
+
+            {/* Last.FM card */}
+            <div
+              className="relative rounded-2xl overflow-hidden mt-3"
+              style={{ background: "linear-gradient(135deg, #1a0000 0%, #2d0a0a 60%, #1a0000 100%)" }}
+            >
+              <div className="absolute -top-8 -right-8 w-40 h-40 rounded-full opacity-10" style={{ background: "#D51007" }} />
+              <div className="absolute -bottom-6 -left-6 w-32 h-32 rounded-full opacity-[0.07]" style={{ background: "#D51007" }} />
+
+              <div className="relative p-5">
+                <div className="flex items-start gap-4">
+                  <div
+                    className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 text-white font-black text-lg"
+                    style={{ background: "#D51007" }}
+                  >
+                    ♫
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <p className="text-sm font-bold text-white">Last.FM</p>
+                      {lastFmConnected && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full" style={{ background: "rgba(213,16,7,0.2)", color: "#D51007" }}>
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#D51007] inline-block" />
+                          Connected
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-white/50 leading-snug">
+                      {lastFmConnected
+                        ? `Scrobbles synced as @${lastFmUsername}`
+                        : "Connect to import your top tracks, artists, and albums from scrobbles"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  {lastFmConnected ? (
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-1.5 text-white/40 text-xs">
+                        <span className="material-symbols-outlined" style={{ fontSize: 14 }}>check_circle</span>
+                        @{lastFmUsername}
+                      </div>
+                      <button
+                        onClick={handleLastFmDisconnect}
+                        disabled={lastFmLoading}
+                        className="text-xs font-semibold px-4 py-2 rounded-xl transition-colors disabled:opacity-50"
+                        style={{ background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.7)" }}
+                      >
+                        {lastFmLoading ? "Disconnecting…" : "Disconnect"}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Input
+                        value={lastFmInput}
+                        onChange={(e) => setLastFmInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") handleLastFmConnect(); }}
+                        placeholder="Your Last.FM username"
+                        className="flex-1 h-9 text-sm rounded-xl bg-white/10 border-white/20 text-white placeholder:text-white/30 focus-visible:ring-[#D51007]"
+                      />
+                      <button
+                        onClick={handleLastFmConnect}
+                        disabled={lastFmLoading || !lastFmInput.trim()}
+                        className="px-4 py-2 rounded-xl text-sm font-bold transition-all disabled:opacity-60 hover:brightness-110"
+                        style={{ background: "#D51007", color: "#fff" }}
+                      >
+                        {lastFmLoading ? "…" : "Connect"}
+                      </button>
+                    </div>
+                  )}
+                  {lastFmError && (
+                    <p className="mt-2 text-xs text-red-300">{lastFmError}</p>
+                  )}
+                </div>
               </div>
             </div>
           </div>

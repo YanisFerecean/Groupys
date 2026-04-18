@@ -21,7 +21,6 @@ public interface AppleMusicApiClient {
     Response getMusicSummaries(@HeaderParam("Authorization") String bearer,
                                @HeaderParam("Music-User-Token") String musicUserToken,
                                @QueryParam("filter[year]") String year,
-                               @QueryParam("include") String include,
                                @QueryParam("views") String views);
 
     @GET
