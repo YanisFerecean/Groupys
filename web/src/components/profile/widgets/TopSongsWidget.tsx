@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import Image from "next/image";
 import type { ProfileCustomization } from "@/types/profile";
 import { getContrastColor } from "@/lib/utils";
@@ -36,30 +36,33 @@ async function resolvePreviewUrl(song: { title: string; artist: string; preview?
 export default function TopSongsWidget({ songs, containerColor, size = "normal", className }: TopSongsWidgetProps) {
   const textColor = containerColor ? getContrastColor(containerColor) : undefined;
   const coverSize = 48;
-  const visibleSongs = songs?.slice(0, size === "small" ? 1 : 3) ?? [];
+  const visibleSongs = useMemo(() => songs?.slice(0, size === "small" ? 1 : 3) ?? [], [songs, size]);
 
   const [playingIndex, setPlayingIndex] = useState<number | null>(null);
   const [resolvedPreviews, setResolvedPreviews] = useState<Record<number, string>>({});
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Resolve preview URLs for all visible songs
-  const resolveAll = useCallback(async () => {
-    const entries = await Promise.all(
-      visibleSongs.map(async (song, i) => {
-        const url = await resolvePreviewUrl(song);
-        return [i, url] as const;
-      })
-    );
-    const map: Record<number, string> = {};
-    for (const [i, url] of entries) {
-      if (url) map[i] = url;
-    }
-    setResolvedPreviews(map);
-  }, [songs]); // eslint-disable-line react-hooks/exhaustive-deps
-
   useEffect(() => {
-    void resolveAll();
-  }, [resolveAll]);
+    let cancelled = false;
+    void (async () => {
+      const entries = await Promise.all(
+        visibleSongs.map(async (song, i) => {
+          const url = await resolvePreviewUrl(song);
+          return [i, url] as const;
+        })
+      );
+      if (cancelled) return;
+      const map: Record<number, string> = {};
+      for (const [i, url] of entries) {
+        if (url) map[i] = url;
+      }
+      setResolvedPreviews(map);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [visibleSongs]);
 
   // Cleanup audio on unmount
   useEffect(() => {

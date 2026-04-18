@@ -451,7 +451,7 @@ const setListeningFromSearch = (result: TrackResult) => {
     }
   };
 
-  const syncTopArtists = async () => {
+  const _syncTopArtists = async () => {
     const token = await getToken();
     if (!token) return;
     setSyncing("artists");
@@ -470,7 +470,7 @@ const setListeningFromSearch = (result: TrackResult) => {
     }
   };
 
-  const syncTopTracks = async () => {
+  const _syncTopTracks = async () => {
     const token = await getToken();
     if (!token) return;
     setSyncing("tracks");

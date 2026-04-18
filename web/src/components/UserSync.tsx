@@ -76,7 +76,7 @@ export default function UserSync() {
         setSyncing(false);
       }
     })();
-  }, [getToken, isAuthLoaded, isSignedIn, isLoaded, user, router, pathname]);
+  }, [getToken, isAuthLoaded, isSignedIn, isLoaded, user, router, pathname, setBackendUser]);
 
   // Only block the UI while actively syncing AND the user is on "/"
   if (!syncing || pathname !== "/") return null;
