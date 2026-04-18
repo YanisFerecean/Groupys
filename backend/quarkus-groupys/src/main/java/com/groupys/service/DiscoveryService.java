@@ -911,6 +911,7 @@ public class DiscoveryService {
             return;
         }
         int total = topTracks.size();
+        Set<Long> writtenArtistIds = new HashSet<>();
         for (int index = 0; index < topTracks.size(); index++) {
             MusicService.MusicTrackItem item = topTracks.get(index);
             Track track = resolveTrack(item);
@@ -931,16 +932,18 @@ public class DiscoveryService {
             }
             for (MusicService.MusicArtistRef artistRef : item.artists()) {
                 Artist artist = resolveArtist(artistRef);
-                UserArtistPreference pref = new UserArtistPreference();
-                pref.user = user;
-                pref.artist = artist;
-                pref.source = SOURCE_APPLE_TOP_TRACKS;
-                pref.sourceWindow = "LATEST";
-                pref.rankPosition = index + 1;
-                pref.rawScore = Math.max(1d, total - index - 0.5d);
-                pref.normalizedScore = normalized * 0.7d;
-                pref.confidence = 0.85d;
-                userArtistPreferenceRepository.persist(pref);
+                if (writtenArtistIds.add(artist.getId())) {
+                    UserArtistPreference pref = new UserArtistPreference();
+                    pref.user = user;
+                    pref.artist = artist;
+                    pref.source = SOURCE_APPLE_TOP_TRACKS;
+                    pref.sourceWindow = "LATEST";
+                    pref.rankPosition = index + 1;
+                    pref.rawScore = Math.max(1d, total - index - 0.5d);
+                    pref.normalizedScore = normalized * 0.7d;
+                    pref.confidence = 0.85d;
+                    userArtistPreferenceRepository.persist(pref);
+                }
 
                 artistGenreRepository.findByArtist(artist.getId()).forEach(artistGenre ->
                         genreWeights.merge(artistGenre.genre.id, normalized * 0.7d, Double::sum));

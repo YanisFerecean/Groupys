@@ -26,6 +26,8 @@ export interface BackendUser {
   tags: string[];
   dateJoined: string;
   musicConnected?: boolean;
+  lastFmConnected?: boolean;
+  lastFmUsername?: string | null;
 }
 
 // ── Widget ↔ ProfileCustomization conversion ───────────────────────────────

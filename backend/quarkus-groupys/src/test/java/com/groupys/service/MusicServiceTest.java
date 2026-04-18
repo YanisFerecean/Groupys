@@ -178,8 +178,8 @@ class MusicServiceTest {
     }
 
     @Test
-    void topTracksReplayRequestIncludesTopSongsRelationship() {
-        User user = user("clerk-replay-include-top-songs", "replay-include-top-songs");
+    void topTracksReplayRequestPassesTopSongsView() {
+        User user = user("clerk-replay-views-top-songs", "replay-views-top-songs");
         user.appleMusicUserToken = "music-user-token";
 
         MusicService service = new MusicService();
@@ -195,7 +195,7 @@ class MusicServiceTest {
 
         service.getTopTracks(user.clerkId);
 
-        assertEquals("top-songs", appleMusicApi.lastReplayInclude());
+        assertEquals("top-songs", appleMusicApi.lastReplayViews());
     }
 
     private static User user(String seed, String suffix) {
@@ -465,7 +465,7 @@ class MusicServiceTest {
         private final ResponseSpec replay;
         private final ResponseSpec recent;
         private final ResponseSpec heavy;
-        private String lastReplayInclude;
+        private String lastReplayViews;
 
         private StubAppleMusicApiClient(ResponseSpec storefront, ResponseSpec replay, ResponseSpec recent, ResponseSpec heavy) {
             this.storefront = storefront;
@@ -480,8 +480,8 @@ class MusicServiceTest {
         }
 
         @Override
-        public Response getMusicSummaries(String bearer, String musicUserToken, String year, String include, String views) {
-            this.lastReplayInclude = include;
+        public Response getMusicSummaries(String bearer, String musicUserToken, String year, String views) {
+            this.lastReplayViews = views;
             return Response.status(replay.status()).entity(replay.payload()).build();
         }
 
@@ -495,8 +495,8 @@ class MusicServiceTest {
             return Response.status(heavy.status()).entity(heavy.payload()).build();
         }
 
-        private String lastReplayInclude() {
-            return lastReplayInclude;
+        private String lastReplayViews() {
+            return lastReplayViews;
         }
     }
 }

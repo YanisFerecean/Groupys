@@ -69,6 +69,12 @@ public class User {
     @Column(name = "apple_music_connected_at")
     public Instant appleMusicConnectedAt;
 
+    @Column(name = "last_fm_username", length = 100)
+    public String lastFmUsername;
+
+    @Column(name = "last_fm_connected_at")
+    public Instant lastFmConnectedAt;
+
     @Column(name = "last_seen_at")
     public Instant lastSeenAt;
 

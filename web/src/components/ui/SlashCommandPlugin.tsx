@@ -125,11 +125,13 @@ function SlashCommandMenuItem({
   onMouseEnter: () => void;
   option: SlashCommandOption;
 }): ReactElement {
+  // Destructure option properties to avoid accessing refs during render
+  const { label, iconNode, setRefElement } = option;
   return (
     <li
       key={option.key}
       tabIndex={-1}
-      ref={option.setRefElement}
+      ref={setRefElement}
       role="option"
       aria-selected={isSelected}
       id={`slash-command-${index}`}
@@ -139,8 +141,8 @@ function SlashCommandMenuItem({
         isSelected ? "bg-surface-container-high" : "hover:bg-surface-container-high/60"
       }`}
     >
-      {option.iconNode}
-      <span>{option.label}</span>
+      {iconNode}
+      <span>{label}</span>
     </li>
   );
 }

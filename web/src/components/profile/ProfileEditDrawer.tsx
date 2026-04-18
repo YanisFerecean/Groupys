@@ -71,6 +71,8 @@ interface ProfileEditDrawerProps {
   onRemoveProfileImage: () => Promise<void>;
   isSaving: boolean;
   musicConnected?: boolean;
+  lastFmConnected?: boolean;
+  lastFmUsername?: string | null;
   initialTab?: "profile" | "customization" | "widgets";
 }
 
@@ -99,6 +101,8 @@ export default function ProfileEditDrawer({
   onRemoveProfileImage,
   isSaving,
   musicConnected,
+  lastFmConnected,
+  lastFmUsername,
   initialTab = "profile",
 }: ProfileEditDrawerProps) {
   const [activeTab, setActiveTab] = useState<string>(initialTab);
@@ -447,7 +451,7 @@ const setListeningFromSearch = (result: TrackResult) => {
     }
   };
 
-  const syncTopArtists = async () => {
+  const _syncTopArtists = async () => {
     const token = await getToken();
     if (!token) return;
     setSyncing("artists");
@@ -466,7 +470,7 @@ const setListeningFromSearch = (result: TrackResult) => {
     }
   };
 
-  const syncTopTracks = async () => {
+  const _syncTopTracks = async () => {
     const token = await getToken();
     if (!token) return;
     setSyncing("tracks");
@@ -817,7 +821,7 @@ const setListeningFromSearch = (result: TrackResult) => {
 
             {/* ── Widgets Tab ── */}
             <TabsContent value="widgets" className="space-y-5">
-              {musicConnected && (
+              {lastFmConnected && (
                 <button
                   type="button"
                   onClick={async () => {
@@ -825,38 +829,29 @@ const setListeningFromSearch = (result: TrackResult) => {
                     if (!token) return;
                     setSyncing("all");
                     try {
-                      await syncDiscoveryBestEffort(token);
-                      const [artists, tracks, albums, playing] = await Promise.all([
+                      const [artists, tracks, albums] = await Promise.all([
                         fetchMusicTopArtists(token),
                         fetchMusicTopTracks(token),
                         fetchMusicTopAlbums(token),
-                        fetchMusicCurrentlyPlaying(token),
                       ]);
                       setForm((prev) => ({
                         ...prev,
                         topArtists: artists.map((a) => ({ name: a.name, imageUrl: a.imageUrl })),
                         topSongs: tracks.map((t) => ({ title: t.title, artist: t.artist, coverUrl: t.coverUrl })),
                         topAlbums: albums.map((a) => ({ title: a.title, artist: a.artist, coverUrl: a.coverUrl })),
-                        ...(playing ? { currentlyListening: { title: playing.title, artist: playing.artist, coverUrl: playing.coverUrl } } : {}),
-                        musicSynced: {
-                          ...prev.musicSynced,
-                          topArtists: true,
-                          topSongs: true,
-                          topAlbums: true,
-                          ...(playing ? { currentlyListening: true } : {}),
-                        },
+                        musicSynced: { ...prev.musicSynced, topArtists: true, topSongs: true, topAlbums: true },
                       }));
                     } catch (err) {
-                      console.error("Failed to sync all from Apple Music:", err);
+                      console.error("Failed to sync all from Last.FM:", err);
                     } finally {
                       setSyncing(null);
                     }
                   }}
                   disabled={syncing !== null}
-                  className="w-full flex items-center justify-center gap-2.5 h-12 rounded-2xl border border-[#FA243C]/30 bg-[#FA243C]/5 text-[#FA243C] hover:bg-[#FA243C]/10 hover:text-[#ff4d5e] transition-colors font-semibold text-sm disabled:opacity-50"
+                  className="w-full flex items-center justify-center gap-2.5 h-12 rounded-2xl border border-[#D51007]/30 bg-[#D51007]/5 text-[#D51007] hover:bg-[#D51007]/10 transition-colors font-semibold text-sm disabled:opacity-50"
                 >
-                  <AppleMusicLogo size={20} />
-                  {syncing === "all" ? "Syncing all widgets..." : "Sync All from Apple Music"}
+                  <span className="text-base font-black">♫</span>
+                  {syncing === "all" ? "Syncing all widgets..." : `Sync All from Last.FM${lastFmUsername ? ` (@${lastFmUsername})` : ""}`}
                 </button>
               )}
 
@@ -936,16 +931,17 @@ const setListeningFromSearch = (result: TrackResult) => {
                       </button>
                     </div>
                   </div>
-                  {musicConnected && (
+                  {lastFmConnected && (
                     <Button
                       type="button"
                       variant="ghost"
                       size="xs"
-                      className="text-[#FA243C] hover:text-[#ff4d5e] gap-1.5 rounded-full"
+                      className="gap-1.5 rounded-full font-semibold"
+                      style={{ color: "#D51007" }}
                       onClick={syncSavedAlbums}
                       disabled={syncing !== null}
                     >
-                      <AppleMusicLogo size={14} />
+                      <span className="text-sm font-black">♫</span>
                       {syncing === "albums" ? "Syncing..." : "Sync"}
                     </Button>
                   )}
@@ -1084,19 +1080,6 @@ const setListeningFromSearch = (result: TrackResult) => {
                       </button>
                     </div>
                   </div>
-                  {musicConnected && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="xs"
-                      className="text-[#FA243C] hover:text-[#ff4d5e] gap-1.5 rounded-full"
-                      onClick={syncTopTracks}
-                      disabled={syncing !== null}
-                    >
-                      <AppleMusicLogo size={14} />
-                      {syncing === "tracks" ? "Syncing..." : "Sync"}
-                    </Button>
-                  )}
                 </div>
                 {(form.topSongs ?? []).map((song, i) => (
                   <div
@@ -1161,19 +1144,6 @@ const setListeningFromSearch = (result: TrackResult) => {
                       </button>
                     </div>
                   </div>
-                  {musicConnected && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="xs"
-                      className="text-[#FA243C] hover:text-[#ff4d5e] gap-1.5 rounded-full"
-                      onClick={syncTopArtists}
-                      disabled={syncing !== null}
-                    >
-                      <AppleMusicLogo size={14} />
-                      {syncing === "artists" ? "Syncing..." : "Sync"}
-                    </Button>
-                  )}
                 </div>
                 {(form.topArtists ?? []).map((artist, i) => (
                   <div

@@ -21,6 +21,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [createPostOpen, setCreatePostOpen] = useState(false);
   const [musicConnected, setMusicConnected] = useState(false);
+  const [lastFmConnected, setLastFmConnected] = useState(false);
+  const [lastFmUsername, setLastFmUsername] = useState<string | null>(null);
   const { getToken, isLoaded: isAuthLoaded, isSignedIn } = useAuth();
   const { user, isLoaded } = useUser();
   const router = useRouter();
@@ -48,7 +50,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     if (!isLoaded || !isAuthLoaded || !isSignedIn || !user) return;
     getTokenRef.current().then((token) => {
       fetchUserByClerkId(user.id, token).then((bu) => {
-        if (bu) setMusicConnected(bu.musicConnected === true);
+        if (bu) {
+          setMusicConnected(bu.musicConnected === true);
+          setLastFmConnected(bu.lastFmConnected === true);
+          setLastFmUsername(bu.lastFmUsername ?? null);
+        }
       });
     });
   }, [isLoaded, isAuthLoaded, isSignedIn, user]);
@@ -97,6 +103,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     setMusicConnected(false);
   }, []);
 
+  const handleLastFmConnected = useCallback((username: string) => {
+    setLastFmConnected(true);
+    setLastFmUsername(username);
+  }, []);
+
+  const handleLastFmDisconnected = useCallback(() => {
+    setLastFmConnected(false);
+    setLastFmUsername(null);
+  }, []);
+
   if (!isAuthLoaded || !isSignedIn) return null;
 
   return (
@@ -117,6 +133,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         musicConnected={musicConnected}
         onMusicConnected={handleMusicConnected}
         onMusicDisconnected={handleMusicDisconnected}
+        lastFmConnected={lastFmConnected}
+        lastFmUsername={lastFmUsername}
+        onLastFmConnected={handleLastFmConnected}
+        onLastFmDisconnected={handleLastFmDisconnected}
       />
       <CreatePostModal
         open={createPostOpen}

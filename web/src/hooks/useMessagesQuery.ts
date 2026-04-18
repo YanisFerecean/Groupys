@@ -88,11 +88,10 @@ export function useMessagesQuery(
 
   // Send message mutation with optimistic updates
   const sendMessageMutation = useMutation({
-    mutationFn: async ({
-      content,
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      tempId: _tempId,
-    }: {
+      mutationFn: async ({
+        content,
+        tempId: _tempId,
+      }: {
       content: string;
       tempId: string;
     }): Promise<Message> => {

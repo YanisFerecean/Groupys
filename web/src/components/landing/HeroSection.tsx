@@ -21,6 +21,7 @@ export default function HeroSection() {
               { type: "img", src: "https://i.pravatar.cc/56?img=47" },
             ].map((avatar, i) =>
               avatar.type === "img" ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   key={i}
                   src={avatar.src}
