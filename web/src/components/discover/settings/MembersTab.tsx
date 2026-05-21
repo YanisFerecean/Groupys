@@ -121,8 +121,9 @@ export default function MembersTab({ communityId, members, onMembersChange }: Me
 
       {filtered.map((m) => {
         const isLoading = loadingId === m.userId;
-        const avatarSrc = m.profileImage
-          ? (m.profileImage.startsWith("http") ? m.profileImage : `${API_URL}${m.profileImage.replace(/^\/api/, "")}`)
+        const profileImage = m.profileImage;
+        const avatarSrc = profileImage
+          ? (profileImage.startsWith("http") ? profileImage : `${API_URL}${profileImage.replace(/^\/api/, "")}`)
           : null;
 
         return (

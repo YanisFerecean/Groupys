@@ -2,9 +2,12 @@
 
 import { useRef, useState, useEffect } from "react";
 import { useAuth } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import Image from "next/image";
 import CountrySelect from "@/components/profile/CountrySelect";
 import { resizeImage } from "@/lib/imageResize";
+import { transferCommunityOwner, deleteCommunity } from "@/lib/api";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
 
@@ -37,12 +40,150 @@ interface CommunityRes {
   blacklistedWords?: string[];
 }
 
+interface MemberRes {
+  id: string;
+  userId: string;
+  username: string;
+  displayName: string | null;
+  profileImage: string | null;
+  role: string;
+  joinedAt: string;
+}
+
 interface GeneralTabProps {
   community: CommunityRes;
   onSaved: (updated: CommunityRes) => void;
+  members: MemberRes[];
+  onMembersChange: (members: MemberRes[]) => void;
 }
 
-export default function GeneralTab({ community, onSaved }: GeneralTabProps) {
+function avatarSrc(profileImage: string | null): string | null {
+  if (!profileImage) return null;
+  return profileImage.startsWith("http") ? profileImage : `${API_URL}${profileImage.replace(/^\/api/, "")}`;
+}
+
+function TransferPicker({
+  candidates,
+  communityId,
+  onClose,
+  onTransferred,
+}: {
+  candidates: MemberRes[];
+  communityId: string;
+  onClose: () => void;
+  onTransferred: (newOwnerId: string) => void;
+}) {
+  const { getToken } = useAuth();
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
+
+  const filtered = search.trim()
+    ? candidates.filter((m) => {
+        const q = search.toLowerCase();
+        return m.username.toLowerCase().includes(q) || (m.displayName ?? "").toLowerCase().includes(q);
+      })
+    : candidates;
+
+  const handleConfirm = async () => {
+    if (!selected) return;
+    setConfirming(true);
+    try {
+      const token = await getToken();
+      await transferCommunityOwner(communityId, selected, token);
+      onTransferred(selected);
+      toast.success("Ownership transferred successfully");
+    } catch {
+      toast.error("Failed to transfer ownership");
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 rounded-2xl border border-primary/20 bg-surface-container-low p-4 space-y-3">
+      <p className="text-sm font-semibold text-on-surface">Select new owner</p>
+
+      <div className="flex items-center gap-2 bg-surface-container-high rounded-xl px-3 py-2 focus-within:ring-2 focus-within:ring-primary/30 transition-shadow">
+        <span className="material-symbols-outlined text-on-surface-variant shrink-0" style={{ fontSize: 18 }}>search</span>
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search members…"
+          className="flex-1 bg-transparent border-none outline-none text-sm text-on-surface placeholder:text-outline"
+        />
+        {search && (
+          <button onClick={() => setSearch("")} className="text-on-surface-variant hover:text-on-surface transition-colors">
+            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
+          </button>
+        )}
+      </div>
+
+      <div className="space-y-1 max-h-44 overflow-y-auto pr-0.5">
+        {filtered.length === 0 && (
+          <p className="text-xs text-on-surface-variant text-center py-4">No members match your search.</p>
+        )}
+        {filtered.map((m) => {
+          const src = avatarSrc(m.profileImage);
+          const isSelected = selected === m.userId;
+          return (
+            <button
+              key={m.userId}
+              type="button"
+              onClick={() => setSelected(isSelected ? null : m.userId)}
+              className={`w-full flex items-center gap-3 p-2.5 rounded-xl transition-colors text-left ${
+                isSelected ? "bg-primary/10 ring-1 ring-primary/40" : "hover:bg-surface-container-high"
+              }`}
+            >
+              <div className="w-8 h-8 rounded-full overflow-hidden bg-surface-container-high shrink-0 flex items-center justify-center">
+                {src ? (
+                  <Image src={src} alt={m.displayName || m.username} width={32} height={32} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: 16 }}>person</span>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-on-surface truncate">{m.displayName || m.username}</p>
+                <p className="text-xs text-on-surface-variant">@{m.username}</p>
+              </div>
+              {m.role === "admin" && (
+                <span className="text-[10px] font-bold text-secondary bg-secondary/10 px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0">
+                  Admin
+                </span>
+              )}
+              {isSelected && (
+                <span className="material-symbols-outlined text-primary shrink-0" style={{ fontSize: 18, fontVariationSettings: "'FILL' 1" }}>
+                  check_circle
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex gap-2 pt-1">
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex-1 py-2 rounded-xl text-sm font-semibold bg-surface-container-high text-on-surface-variant hover:bg-surface-container transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={handleConfirm}
+          disabled={!selected || confirming}
+          className="flex-1 py-2 rounded-xl text-sm font-bold bg-primary text-on-primary hover:brightness-110 transition-all disabled:opacity-50"
+        >
+          {confirming ? "Transferring…" : "Confirm Transfer"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default function GeneralTab({ community, onSaved, members, onMembersChange }: GeneralTabProps) {
   const { getToken } = useAuth();
   const iconInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
@@ -52,7 +193,12 @@ export default function GeneralTab({ community, onSaved }: GeneralTabProps) {
   const [country, setCountry] = useState(community.country ?? "");
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>(community.tags ?? []);
+  const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
+  const [showTransferPicker, setShowTransferPicker] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteInput, setDeleteInput] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   const [iconFile, setIconFile] = useState<File | null>(null);
   const [iconPreview, setIconPreview] = useState<string | null>(resolveMediaUrl(community.iconUrl));
@@ -166,6 +312,33 @@ export default function GeneralTab({ community, onSaved }: GeneralTabProps) {
   };
 
   const availableSuggestions = TAG_SUGGESTIONS.filter((s) => !tags.includes(s));
+
+  const transferCandidates = members.filter((m) => m.role !== "owner");
+
+  const handleDeleteCommunity = async () => {
+    if (deleteInput !== community.name) return;
+    setDeleting(true);
+    try {
+      const token = await getToken();
+      await deleteCommunity(community.id, token);
+      toast.success("Community deleted");
+      router.push("/discover");
+    } catch {
+      toast.error("Failed to delete community");
+      setDeleting(false);
+    }
+  };
+
+  const handleTransferred = (newOwnerId: string) => {
+    onMembersChange(
+      members.map((m) => {
+        if (m.role === "owner") return { ...m, role: "admin" };
+        if (m.userId === newOwnerId) return { ...m, role: "owner" };
+        return m;
+      })
+    );
+    setShowTransferPicker(false);
+  };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 py-4">
@@ -315,6 +488,85 @@ export default function GeneralTab({ community, onSaved }: GeneralTabProps) {
       >
         {submitting ? "Saving…" : "Save Changes"}
       </button>
+
+      {/* Danger Zone */}
+      <div className="rounded-2xl bg-error p-4 space-y-3">
+        <p className="text-xs font-bold uppercase tracking-widest text-white/70 mb-1">
+          Danger Zone
+        </p>
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowTransferPicker((v) => !v)}
+            className={`w-full py-2.5 rounded-2xl text-sm font-bold border transition-colors ${
+              showTransferPicker
+                ? "border-white/40 text-white bg-white/20"
+                : "border-white/40 text-white hover:bg-white/10"
+            }`}
+          >
+            Transfer Ownership
+          </button>
+          {showTransferPicker && (
+            <TransferPicker
+              candidates={transferCandidates}
+              communityId={community.id}
+              onClose={() => setShowTransferPicker(false)}
+              onTransferred={handleTransferred}
+            />
+          )}
+        </div>
+
+        <div>
+          <button
+            type="button"
+            onClick={() => { setShowDeleteConfirm((v) => !v); setDeleteInput(""); }}
+            className={`w-full py-2.5 rounded-2xl text-sm font-bold border transition-colors ${
+              showDeleteConfirm
+                ? "border-white/40 text-white bg-white/20"
+                : "border-white/40 text-white hover:bg-white/10"
+            }`}
+          >
+            Delete Community
+          </button>
+          {showDeleteConfirm && (
+            <div className="mt-3 rounded-2xl border border-error/20 bg-surface-container-low p-4 space-y-3">
+              <p className="text-sm font-semibold text-on-surface">Are you sure?</p>
+              <p className="text-xs text-on-surface-variant leading-relaxed">
+                This will permanently delete <span className="font-semibold text-on-surface">{community.name}</span> along with all its posts, comments, banners, and icons. This cannot be undone.
+              </p>
+              <div>
+                <p className="text-xs text-on-surface-variant mb-1.5">
+                  Type <span className="font-semibold text-on-surface">{community.name}</span> to confirm
+                </p>
+                <input
+                  type="text"
+                  value={deleteInput}
+                  onChange={(e) => setDeleteInput(e.target.value)}
+                  placeholder={community.name}
+                  className="w-full bg-surface-container-high rounded-xl px-3 py-2 text-sm text-on-surface placeholder:text-outline border-none outline-none focus:ring-2 focus:ring-error/30 transition-shadow"
+                />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => { setShowDeleteConfirm(false); setDeleteInput(""); }}
+                  className="flex-1 py-2 rounded-xl text-sm font-semibold bg-surface-container-high text-on-surface-variant hover:bg-surface-container transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteCommunity}
+                  disabled={deleteInput !== community.name || deleting}
+                  className="flex-1 py-2 rounded-xl text-sm font-bold bg-error text-on-error hover:brightness-110 transition-all disabled:opacity-50"
+                >
+                  {deleting ? "Deleting…" : "Delete Community"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </form>
   );
 }

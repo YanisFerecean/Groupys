@@ -121,7 +121,7 @@ export default function CommunitySettings({ id }: { id: string }) {
         </TabsList>
 
         <TabsContent value="general">
-          <GeneralTab community={community} onSaved={setCommunity} />
+          <GeneralTab community={community} onSaved={setCommunity} members={members} onMembersChange={setMembers} />
         </TabsContent>
 
         <TabsContent value="members">
