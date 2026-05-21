@@ -34,6 +34,7 @@ function timeAgo(iso: string) {
 export default function MembersTab({ communityId, members, onMembersChange }: MembersTabProps) {
   const { getToken } = useAuth();
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   const updateRole = async (member: MemberRes, newRole: "admin" | "member") => {
     setLoadingId(member.userId);
@@ -77,6 +78,16 @@ export default function MembersTab({ communityId, members, onMembersChange }: Me
     }
   };
 
+  const filtered = search.trim()
+    ? members.filter((m) => {
+        const q = search.toLowerCase();
+        return (
+          m.username.toLowerCase().includes(q) ||
+          (m.displayName ?? "").toLowerCase().includes(q)
+        );
+      })
+    : members;
+
   if (!members.length) {
     return (
       <div className="flex flex-col items-center py-16 gap-2 text-on-surface-variant">
@@ -88,7 +99,27 @@ export default function MembersTab({ communityId, members, onMembersChange }: Me
 
   return (
     <div className="py-4 space-y-2">
-      {members.map((m) => {
+      <div className="flex items-center gap-2 bg-surface-container-high rounded-xl px-3 py-2 mb-2 focus-within:ring-2 focus-within:ring-primary/30 transition-shadow">
+        <span className="material-symbols-outlined text-on-surface-variant shrink-0" style={{ fontSize: 18 }}>search</span>
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search members…"
+          className="flex-1 bg-transparent border-none outline-none text-sm text-on-surface placeholder:text-outline"
+        />
+        {search && (
+          <button onClick={() => setSearch("")} className="text-on-surface-variant hover:text-on-surface transition-colors">
+            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
+          </button>
+        )}
+      </div>
+
+      {filtered.length === 0 && (
+        <p className="text-sm text-on-surface-variant text-center py-8">No members match your search.</p>
+      )}
+
+      {filtered.map((m) => {
         const isLoading = loadingId === m.userId;
         const avatarSrc = m.profileImage
           ? (m.profileImage.startsWith("http") ? m.profileImage : `${API_URL}${m.profileImage.replace(/^\/api/, "")}`)
