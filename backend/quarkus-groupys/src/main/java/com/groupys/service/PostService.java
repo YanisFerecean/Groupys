@@ -218,6 +218,8 @@ public class PostService {
         Community community = communityRepository.findByIdOptional(communityId)
                 .orElseThrow(() -> new NotFoundException("Community not found"));
 
+        com.groupys.util.CommunityUtil.enforceBlacklist(community, title, content);
+
         Post post = new Post();
         post.title = title;
         post.content = content;
@@ -283,9 +285,8 @@ public class PostService {
         User user = userRepository.findByClerkId(clerkId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
         boolean isAuthor = post.author.id.equals(user.id);
-        boolean isCommunityOwner = post.community.createdBy != null
-                && post.community.createdBy.id.equals(user.id);
-        if (!isAuthor && !isCommunityOwner) {
+        boolean canModerate = communityMemberRepository.isOwnerOrModerator(user.id, post.community.id);
+        if (!isAuthor && !canModerate) {
             throw new jakarta.ws.rs.ForbiddenException("Not authorized to delete this post");
         }
         UUID communityId = post.community.id;

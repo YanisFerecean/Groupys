@@ -101,6 +101,8 @@ public class CommentService {
         Post post = postRepository.findByIdOptional(postId)
                 .orElseThrow(() -> new NotFoundException("Post not found"));
 
+        com.groupys.util.CommunityUtil.enforceBlacklist(post.community, content);
+
         Comment comment = new Comment();
         comment.content = content;
         comment.post = post;

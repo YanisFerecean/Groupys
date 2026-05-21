@@ -142,6 +142,11 @@ function MemberRow({ member }: { member: MemberRes }) {
           Owner
         </span>
       )}
+      {member.role === "admin" && (
+        <span className="text-[10px] font-bold text-secondary bg-secondary/10 px-2 py-0.5 rounded-full uppercase tracking-wider">
+          Admin
+        </span>
+      )}
       <span className="text-xs text-on-surface-variant">
         {timeAgo(member.joinedAt)}
       </span>
@@ -155,12 +160,14 @@ function PostCard({
   onReact,
   communityOwnerId,
   currentUserId,
+  isCurrentUserAdmin,
   onDelete,
 }: {
   post: PostRes;
   onReact: (postId: string, type: "like" | "dislike") => void;
   communityOwnerId?: string;
   currentUserId?: string;
+  isCurrentUserAdmin?: boolean;
   onDelete?: (postId: string) => void;
 }) {
   const router = useRouter();
@@ -182,7 +189,8 @@ function PostCard({
   const canDelete =
     !!onDelete &&
     (currentUserId === post.authorId ||
-      currentUserId === communityOwnerId);
+      currentUserId === communityOwnerId ||
+      isCurrentUserAdmin);
 
   return (
     <div
@@ -468,6 +476,7 @@ export default function CommunityDetail({ id }: { id: string }) {
   const [loading, setLoading] = useState(true);
   const [joined, setJoined] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
+  const [memberRole, setMemberRole] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [membersExpanded, setMembersExpanded] = useState(false);
@@ -537,6 +546,7 @@ export default function CommunityDetail({ id }: { id: string }) {
           setMembers(membersData);
           setJoined(membershipData.member);
           setIsOwner(membershipData.owner ?? false);
+          setMemberRole(membershipData.role ?? null);
           setPosts(postsData);
         }
       } catch (err) {
@@ -843,6 +853,7 @@ export default function CommunityDetail({ id }: { id: string }) {
                     onReact={handleReact}
                     communityOwnerId={owner?.userId}
                     currentUserId={currentMember?.userId}
+                    isCurrentUserAdmin={memberRole === "admin"}
                     onDelete={handleDeletePost}
                   />
                 ))}

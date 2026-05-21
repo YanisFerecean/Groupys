@@ -5,6 +5,7 @@ import com.groupys.dto.CommunityMemberResDto;
 import com.groupys.dto.CommunityResDto;
 import com.groupys.dto.CommunityUpdateDto;
 import com.groupys.dto.MyCommunityResDto;
+import com.groupys.dto.UpdateMemberRoleDto;
 import com.groupys.model.User;
 import com.groupys.repository.UserRepository;
 import com.groupys.service.CommunityService;
@@ -136,7 +137,30 @@ public class CommunityResource {
         String clerkId = jwt.getSubject();
         boolean member = communityService.isMember(id, clerkId);
         boolean owner = communityService.isOwner(id, clerkId);
-        return Response.ok(java.util.Map.of("member", member, "owner", owner)).build();
+        String role = communityService.getMemberRole(id, clerkId);
+        java.util.Map<String, Object> body = new java.util.HashMap<>();
+        body.put("member", member);
+        body.put("owner", owner);
+        body.put("role", role);
+        return Response.ok(body).build();
+    }
+
+    @PUT
+    @Path("/{id}/members/{userId}/role")
+    public CommunityMemberResDto updateMemberRole(
+            @PathParam("id") UUID id,
+            @PathParam("userId") UUID userId,
+            @Valid UpdateMemberRoleDto dto) {
+        return communityService.updateMemberRole(id, userId, dto.role(), jwt.getSubject());
+    }
+
+    @DELETE
+    @Path("/{id}/members/{userId}")
+    public Response removeMember(
+            @PathParam("id") UUID id,
+            @PathParam("userId") UUID userId) {
+        communityService.removeMember(id, userId, jwt.getSubject());
+        return Response.noContent().build();
     }
 
     @POST

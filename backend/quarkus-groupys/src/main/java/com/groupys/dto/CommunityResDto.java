@@ -24,6 +24,7 @@ public record CommunityResDto(
         String visibility,
         boolean discoveryEnabled,
         Instant lastProfileRefreshAt,
-        String tasteSummaryText
+        String tasteSummaryText,
+        List<String> blacklistedWords
 ) {
 }

@@ -239,11 +239,12 @@ function cardColorFromId(id: string) {
   return CARD_COLORS[hash % CARD_COLORS.length];
 }
 
-function CommunityList({ communities, loading, onClickCommunity, onLeaveCommunity }: {
+function CommunityList({ communities, loading, onClickCommunity, onLeaveCommunity, onSettingsCommunity }: {
   communities: CommunityRes[];
   loading: boolean;
   onClickCommunity: (id: string) => void;
   onLeaveCommunity: (id: string) => Promise<void>;
+  onSettingsCommunity: (id: string) => void;
 }) {
   const [leavingId, setLeavingId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
@@ -310,6 +311,15 @@ function CommunityList({ communities, loading, onClickCommunity, onLeaveCommunit
                 className="absolute inset-0"
                 style={{ background: "linear-gradient(180deg, rgba(0,0,0,0) 35%, rgba(0,0,0,0.88) 100%)" }}
               />
+              {c.role === "owner" && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onSettingsCommunity(c.id); }}
+                  className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 hover:bg-black/70 text-white rounded-full p-1.5"
+                  title="Community settings"
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>settings</span>
+                </button>
+              )}
               {canLeave && (
                 <button
                   onClick={(e) => { e.stopPropagation(); setConfirmId(c.id); }}
@@ -588,6 +598,7 @@ export default function ProfileView() {
               loading={communitiesLoading}
               onClickCommunity={(id) => router.push(`/discover/community/${id}`)}
               onLeaveCommunity={handleLeaveCommunity}
+              onSettingsCommunity={(id) => router.push(`/discover/community/${id}/settings`)}
             />
           )}
         </div>
