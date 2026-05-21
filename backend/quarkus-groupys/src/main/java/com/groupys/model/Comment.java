@@ -24,7 +24,7 @@ public class Comment {
     public Post post;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "author_id", nullable = false)
+    @JoinColumn(name = "author_id", nullable = true)
     public User author;
 
     @ManyToOne(fetch = FetchType.LAZY)

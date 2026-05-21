@@ -232,6 +232,13 @@ public class UserResource {
         return Response.noContent().build();
     }
 
+    @GET
+    @Path("/me/owned-communities")
+    @Operation(summary = "Get owned communities", description = "Returns communities owned by the authenticated user")
+    public List<com.groupys.dto.OwnedCommunityResDto> getOwnedCommunities() {
+        return userService.getOwnedCommunities(jwt.getSubject());
+    }
+
     private static final long MAX_BANNER_SIZE = 5 * 1024 * 1024; // 5 MB
     private static final String BANNER_PREFIX = "/api/users/banner/";
 

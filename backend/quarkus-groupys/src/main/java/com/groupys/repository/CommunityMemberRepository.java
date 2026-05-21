@@ -168,4 +168,8 @@ public class CommunityMemberRepository implements PanacheRepositoryBase<Communit
             .firstResultOptional()
             .isPresent();
     }
+
+    public List<CommunityMember> findOwnerMemberships(UUID userId) {
+        return find("FROM CommunityMember cm LEFT JOIN FETCH cm.community WHERE cm.user.id = ?1 AND cm.role = 'owner'", userId).list();
+    }
 }

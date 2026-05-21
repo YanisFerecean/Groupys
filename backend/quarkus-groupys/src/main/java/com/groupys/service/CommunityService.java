@@ -376,6 +376,29 @@ public class CommunityService {
         discoveryService.removeCommunityReferences(id, impactedUserIds);
     }
 
+    @Transactional
+    public void transferOwner(UUID communityId, String clerkId, UUID newOwnerId) {
+        User currentOwner = userRepository.findByClerkId(clerkId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        Community community = requireOwnedCommunity(communityId, clerkId);
+
+        if (currentOwner.id.equals(newOwnerId)) {
+            throw new BadRequestException("Cannot transfer ownership to yourself");
+        }
+
+        CommunityMember currentOwnerMembership = communityMemberRepository
+                .findByUserAndCommunity(currentOwner.id, communityId)
+                .orElseThrow(() -> new NotFoundException("Owner membership not found"));
+
+        CommunityMember newOwnerMembership = communityMemberRepository
+                .findByUserAndCommunity(newOwnerId, communityId)
+                .orElseThrow(() -> new BadRequestException("New owner must be an existing community member"));
+
+        currentOwnerMembership.role = "admin";
+        newOwnerMembership.role = "owner";
+        community.createdBy = newOwnerMembership.user;
+    }
+
     private Community requireOwnedCommunity(UUID communityId, String clerkId) {
         User user = userRepository.findByClerkId(clerkId)
                 .orElseThrow(() -> new NotFoundException("User not found"));

@@ -12,6 +12,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { connectAppleMusicWeb, disconnectMusic, isAppleMusicWebMockEnabled } from "@/lib/appleMusic";
 import { connectLastFm, disconnectLastFm } from "@/lib/lastfm";
+import { useUserStore } from "@/store/userStore";
+import DeleteAccountModal from "@/components/app/DeleteAccountModal";
 
 interface SettingsDialogProps {
   open: boolean;
@@ -50,8 +52,10 @@ export default function SettingsDialog({
   onLastFmDisconnected,
 }: SettingsDialogProps) {
   const { getToken } = useAuth();
+  const { backendUsername } = useUserStore();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [lastFmLoading, setLastFmLoading] = useState(false);
   const [lastFmError, setLastFmError] = useState<string | null>(null);
   const [lastFmInput, setLastFmInput] = useState("");
@@ -299,8 +303,27 @@ export default function SettingsDialog({
               </div>
             </div>
           </div>
+
+          {/* Danger Zone */}
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-error/60 mb-3">
+              Danger Zone
+            </p>
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              className="w-full py-2.5 rounded-2xl text-sm font-bold border border-error/30 text-error hover:bg-error/10 transition-colors"
+            >
+              Delete Account
+            </button>
+          </div>
         </div>
       </DialogContent>
+
+      <DeleteAccountModal
+        open={showDeleteModal}
+        onOpenChange={setShowDeleteModal}
+        username={backendUsername ?? ""}
+      />
     </Dialog>
   );
 }

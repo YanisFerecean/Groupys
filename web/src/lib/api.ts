@@ -516,3 +516,40 @@ export async function uploadProfileBanner(
   if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to upload banner"));
   return res.json();
 }
+
+// ── Account deletion ──────────────────────────────────────────────────────
+
+export interface OwnedCommunity {
+  id: string;
+  name: string;
+  memberCount: number;
+  iconEmoji: string | null;
+}
+
+export async function getOwnedCommunities(token: string | null): Promise<OwnedCommunity[]> {
+  const res = await apiRequest("/users/me/owned-communities", token);
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to fetch owned communities"));
+  return res.json();
+}
+
+export async function deleteAccount(token: string | null): Promise<void> {
+  const res = await apiRequest("/users/me", token, { method: "DELETE" });
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to delete account"));
+}
+
+export async function transferCommunityOwner(
+  communityId: string,
+  newOwnerId: string,
+  token: string | null,
+): Promise<void> {
+  const res = await apiRequest(`/communities/${encodeURIComponent(communityId)}/transfer-owner`, token, {
+    method: "POST",
+    body: { newOwnerId },
+  });
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to transfer community ownership"));
+}
+
+export async function deleteCommunity(communityId: string, token: string | null): Promise<void> {
+  const res = await apiRequest(`/communities/${encodeURIComponent(communityId)}`, token, { method: "DELETE" });
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to delete community"));
+}

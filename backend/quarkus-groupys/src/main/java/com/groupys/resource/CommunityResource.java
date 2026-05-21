@@ -5,6 +5,7 @@ import com.groupys.dto.CommunityMemberResDto;
 import com.groupys.dto.CommunityResDto;
 import com.groupys.dto.CommunityUpdateDto;
 import com.groupys.dto.MyCommunityResDto;
+import com.groupys.dto.TransferOwnerReqDto;
 import com.groupys.dto.UpdateMemberRoleDto;
 import com.groupys.model.User;
 import com.groupys.repository.UserRepository;
@@ -180,6 +181,13 @@ public class CommunityResource {
     @Path("/{id}")
     public Response delete(@PathParam("id") UUID id) {
         communityService.delete(id, jwt.getSubject());
+        return Response.noContent().build();
+    }
+
+    @POST
+    @Path("/{id}/transfer-owner")
+    public Response transferOwner(@PathParam("id") UUID id, TransferOwnerReqDto body) {
+        communityService.transferOwner(id, jwt.getSubject(), body.newOwnerId());
         return Response.noContent().build();
     }
 

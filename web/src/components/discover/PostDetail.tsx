@@ -151,14 +151,14 @@ function CommentThread({
       <div className="py-3">
         {/* Author */}
         <div
-          className="flex items-center gap-2.5 mb-1.5 cursor-pointer"
-          onClick={() => router.push(`/profile/${comment.authorUsername}`)}
+          className={`flex items-center gap-2.5 mb-1.5 ${comment.authorUsername ? "cursor-pointer" : "cursor-default"}`}
+          onClick={comment.authorUsername ? () => router.push(`/profile/${comment.authorUsername}`) : undefined}
         >
           {comment.authorProfileImage ? (
             <div className="w-7 h-7 shrink-0 rounded-full overflow-hidden">
               <Image
                 src={comment.authorProfileImage}
-                alt={comment.authorDisplayName || comment.authorUsername}
+                alt={comment.authorDisplayName || comment.authorUsername || "Deleted User"}
                 width={28}
                 height={28}
                 className="w-full h-full object-cover"
@@ -172,7 +172,7 @@ function CommentThread({
             </div>
           )}
           <span className="text-sm font-semibold text-on-surface hover:text-primary transition-colors">
-            {comment.authorDisplayName || comment.authorUsername}
+            {comment.authorDisplayName || comment.authorUsername || "Deleted User"}
           </span>
           <span className="text-xs text-on-surface-variant">
             {timeAgo(comment.createdAt)}
@@ -267,7 +267,7 @@ function CommentThread({
                 onReply(comment.id, content);
                 setReplyingTo(null);
               }}
-              placeholder={`Reply to ${comment.authorDisplayName || comment.authorUsername}...`}
+              placeholder={`Reply to ${comment.authorDisplayName || comment.authorUsername || "Deleted User"}...`}
               submitting={submittingReply}
               autoFocus
             />
@@ -512,14 +512,14 @@ export default function PostDetail({ id }: { id: string }) {
 
         {/* Author header */}
         <div
-          className="flex items-center gap-3 px-5 pt-2 pb-3 cursor-pointer"
-          onClick={() => router.push(`/profile/${post.authorUsername}`)}
+          className={`flex items-center gap-3 px-5 pt-2 pb-3 ${post.authorUsername ? "cursor-pointer" : "cursor-default"}`}
+          onClick={post.authorUsername ? () => router.push(`/profile/${post.authorUsername}`) : undefined}
         >
           {post.authorProfileImage ? (
             <div className="w-11 h-11 shrink-0 rounded-full overflow-hidden">
               <Image
                 src={post.authorProfileImage}
-                alt={post.authorDisplayName || post.authorUsername}
+                alt={post.authorDisplayName || post.authorUsername || "Deleted User"}
                 width={44}
                 height={44}
                 className="w-full h-full object-cover"
@@ -534,10 +534,10 @@ export default function PostDetail({ id }: { id: string }) {
           )}
           <div className="flex-1 min-w-0">
             <p className="text-base font-semibold text-on-surface truncate hover:text-primary transition-colors">
-              {post.authorDisplayName || post.authorUsername}
+              {post.authorDisplayName || post.authorUsername || "Deleted User"}
             </p>
             <p className="text-xs text-on-surface-variant">
-              @{post.authorUsername} &middot; {timeAgo(post.createdAt)}
+              {post.authorUsername ? `@${post.authorUsername} · ` : ""}{timeAgo(post.createdAt)}
             </p>
           </div>
         </div>
