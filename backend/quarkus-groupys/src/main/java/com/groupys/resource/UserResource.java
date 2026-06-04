@@ -259,7 +259,7 @@ public class UserResource {
                     minioClient.removeObject(
                         RemoveObjectArgs.builder().bucket("banners").object(oldKey).build());
                 } catch (Exception e) {
-                    System.err.println("Failed to delete old banner: " + e.getMessage());
+                    io.quarkus.logging.Log.warnf("Failed to delete old banner %s: %s", oldKey, e.getMessage());
                 }
             }
 

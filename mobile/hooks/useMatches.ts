@@ -3,6 +3,8 @@ import { useAuth } from '@clerk/expo'
 import { useMatchStore } from '@/store/matchStore'
 import { fetchMatches, unmatchUser } from '@/lib/match-api'
 
+const MATCHES_STALE_TIME = 1000 * 60 * 2
+
 export function useMatches() {
   const { getToken } = useAuth()
   const getTokenRef = useRef(getToken)
@@ -10,7 +12,9 @@ export function useMatches() {
 
   const store = useMatchStore()
 
-  const loadMatches = useCallback(async () => {
+  const loadMatches = useCallback(async (force = false) => {
+    const state = useMatchStore.getState()
+    if (!force && state.matches.length > 0 && Date.now() - state.matchesLastFetched < MATCHES_STALE_TIME) return
     try {
       useMatchStore.getState().setMatchesLoading(true)
       const token = await getTokenRef.current()

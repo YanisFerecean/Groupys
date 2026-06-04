@@ -6,12 +6,13 @@ import { BlurView } from 'expo-blur'
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import { SymbolView } from 'expo-symbols'
 import { useEffect, useRef, useState, type ComponentProps } from 'react'
-import { Animated, Easing, Keyboard, Platform, Pressable, StyleSheet, TextInput, View, useWindowDimensions, type KeyboardEvent as RNKeyboardEvent } from 'react-native'
+import { Animated, Easing, Keyboard, Platform, Pressable, StyleSheet, TextInput, TouchableOpacity, View, useWindowDimensions, type KeyboardEvent as RNKeyboardEvent } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ChatProvider } from '@/components/chat/ChatProvider'
 import FullscreenSpinner from '@/components/ui/FullscreenSpinner'
 import { Colors } from '@/constants/colors'
 import { isAccountSetupComplete } from '@/lib/auth'
+import { fetchUserByClerkId } from '@/lib/api'
 
 type HomeTabName = '(feed)' | '(create-post)' | '(match)' | '(profile)' | '(discover)'
 type IoniconName = ComponentProps<typeof Ionicons>['name']
@@ -23,22 +24,6 @@ const HOME_TAB_LABELS: Record<HomeTabName, string> = {
   '(match)': 'Mutuals',
   '(profile)': 'Profile',
   '(discover)': 'Discover',
-}
-
-const HOME_TAB_ROUTE: Record<HomeTabName, string> = {
-  '(feed)': '/(home)/(feed)',
-  '(create-post)': '/(home)/(create-post)',
-  '(match)': '/(home)/(match)',
-  '(profile)': '/(home)/(profile)',
-  '(discover)': '/(home)/(discover)',
-}
-
-const HOME_TAB_RETURN_ICON: Record<HomeTabName, { ios: SymbolName; android: IoniconName }> = {
-  '(feed)': { ios: 'newspaper', android: 'newspaper-outline' },
-  '(create-post)': { ios: 'plus.app', android: 'add-circle-outline' },
-  '(match)': { ios: 'heart', android: 'heart-outline' },
-  '(profile)': { ios: 'person', android: 'person-outline' },
-  '(discover)': { ios: 'safari', android: 'compass-outline' },
 }
 
 function DockIcon({
@@ -58,33 +43,60 @@ function DockIcon({
   return <Ionicons name={androidName} size={size} color={color} />
 }
 
-function getActiveHomeTab(segments: string[]): HomeTabName {
-  const homeIndex = segments.indexOf('(home)')
-  const candidate = homeIndex === -1 ? null : segments[homeIndex + 1]
-  if (candidate && candidate in HOME_TAB_LABELS) {
-    return candidate as HomeTabName
-  }
-  return '(feed)'
-}
-
 function isDiscoverRootRoute(segments: string[]): boolean {
   const homeIndex = segments.indexOf('(home)')
   return homeIndex !== -1 && segments[homeIndex + 1] === '(discover)' && segments.length === homeIndex + 2
 }
 
-function internalRouteFromSegments(segments: string[]): string {
-  if (segments.length === 0) return '/'
-  return `/${segments.join('/')}`
+function buildInternalRouteFromSegments(
+  segments: string[],
+  params: Record<string, string | string[] | undefined>,
+): string | null {
+  const resolved: string[] = []
+
+  for (const segment of segments) {
+    const catchAllMatch = segment.match(/^\[\.\.\.(.+)\]$/)
+    if (catchAllMatch) {
+      const value = params[catchAllMatch[1]]
+      if (Array.isArray(value)) {
+        resolved.push(...value.map((item) => String(item)))
+        continue
+      }
+      if (typeof value === 'string' && value.length > 0) {
+        resolved.push(...value.split('/').filter(Boolean))
+        continue
+      }
+      return null
+    }
+
+    const dynamicMatch = segment.match(/^\[(.+)\]$/)
+    if (dynamicMatch) {
+      const value = params[dynamicMatch[1]]
+      if (typeof value === 'string' && value.length > 0) {
+        resolved.push(value)
+        continue
+      }
+      if (Array.isArray(value) && value.length > 0) {
+        resolved.push(String(value[0]))
+        continue
+      }
+      return null
+    }
+
+    resolved.push(segment)
+  }
+
+  return `/${resolved.join('/')}`
 }
 
 function DiscoverLiquidSearchDock({
-  returnTab,
-  onReturnToRememberedTab,
+  onBackPress,
+  onDeactivateSearch,
   progress,
   isOverlayActive,
 }: {
-  returnTab: HomeTabName
-  onReturnToRememberedTab: () => void
+  onBackPress: () => void
+  onDeactivateSearch: () => void
   progress: Animated.Value
   isOverlayActive: boolean
 }) {
@@ -97,9 +109,8 @@ function DiscoverLiquidSearchDock({
   const keyboardLift = useRef(new Animated.Value(0)).current
   const isKeyboardOpen = keyboardHeight > 0
   const isDockActive = isKeyboardOpen || isOverlayActive
-  const returnIcon = HOME_TAB_RETURN_ICON[returnTab]
-  const returnLabel = HOME_TAB_LABELS[returnTab]
   const canUseLiquidGlass = Platform.OS === 'ios' && isLiquidGlassAvailable()
+  const backIcon = { ios: 'chevron.left' as SymbolName, android: 'arrow-back' as IoniconName }
   const closeIcon = { ios: 'xmark' as SymbolName, android: 'close' as IoniconName }
   const buildOverlayRoute = (value: string) => {
     const normalized = value.trim()
@@ -118,26 +129,22 @@ function DiscoverLiquidSearchDock({
       router.replace(buildOverlayRoute(value) as any)
     }
   }
-  const closeOverlayAndKeyboard = () => {
-    Keyboard.dismiss()
-    router.replace('/(home)/(discover)' as any)
-  }
   const handleActionPress = () => {
     if (isOverlayActive) {
-      closeOverlayAndKeyboard()
+      Keyboard.dismiss()
+      setKeyboardHeight(0)
+      setQuery('')
+      onDeactivateSearch()
       return
     }
     if (isKeyboardOpen) {
       Keyboard.dismiss()
+      setKeyboardHeight(0)
       return
     }
-    onReturnToRememberedTab()
+    onBackPress()
   }
-  const actionAccessibilityLabel = isOverlayActive
-    ? 'Close search overlay and keyboard'
-    : isKeyboardOpen
-      ? 'Close keyboard'
-      : `Go to ${returnLabel}`
+  const actionAccessibilityLabel = 'Go back'
 
   const returnSize = 62
   const gap = 10
@@ -230,19 +237,21 @@ function DiscoverLiquidSearchDock({
     <Animated.View pointerEvents="box-none" style={dockHostStyle}>
       <View style={styles.discoverSearchRow}>
         <Animated.View style={[styles.returnSurfaceTouch, { transform: [{ translateX: actionTranslateX }] }]}>
-          <Pressable
+          <TouchableOpacity
             style={styles.returnPressable}
-            onPress={handleActionPress}
+            activeOpacity={0.9}
+            onPressOut={handleActionPress}
+            hitSlop={8}
             accessibilityLabel={actionAccessibilityLabel}
           >
             {canUseLiquidGlass ? (
-              <GlassView isInteractive style={styles.returnSurface}>
+              <GlassView style={styles.returnSurface}>
                 <View pointerEvents="none" style={styles.surfaceTint} />
                 <View pointerEvents="none" style={styles.returnButton}>
                   <Animated.View pointerEvents="none" style={[styles.returnIconLayer, { opacity: previousIconOpacity }]}>
                     <DockIcon
-                      iosName={returnIcon.ios}
-                      androidName={returnIcon.android}
+                      iosName={backIcon.ios}
+                      androidName={backIcon.android}
                       size={28}
                       color={Colors.onSurface}
                     />
@@ -263,8 +272,8 @@ function DiscoverLiquidSearchDock({
                 <View pointerEvents="none" style={styles.returnButton}>
                   <Animated.View pointerEvents="none" style={[styles.returnIconLayer, { opacity: previousIconOpacity }]}>
                     <DockIcon
-                      iosName={returnIcon.ios}
-                      androidName={returnIcon.android}
+                      iosName={backIcon.ios}
+                      androidName={backIcon.android}
                       size={28}
                       color={Colors.onSurface}
                     />
@@ -280,7 +289,7 @@ function DiscoverLiquidSearchDock({
                 </View>
               </BlurView>
             )}
-          </Pressable>
+          </TouchableOpacity>
         </Animated.View>
 
         <Animated.View style={[styles.searchRail, { transform: [{ translateX: searchTranslateX }] }]}>
@@ -368,12 +377,11 @@ function DiscoverLiquidSearchDock({
 }
 
 export default function HomeLayout() {
-  const { isSignedIn, isLoaded: isAuthLoaded } = useAuth()
+  const { isSignedIn, isLoaded: isAuthLoaded, getToken } = useAuth()
   const router = useRouter()
   const { user, isLoaded: isUserLoaded } = useUser()
   const segments = useSegments()
-  const searchParams = useGlobalSearchParams<{ search?: string | string[] }>()
-  const activeHomeTab = getActiveHomeTab(segments)
+  const searchParams = useGlobalSearchParams<Record<string, string | string[] | undefined>>()
   const discoverRootRoute = isDiscoverRootRoute(segments)
   const discoverSearchParam = searchParams.search
   const isSearchOverlayOpen = discoverRootRoute && (
@@ -381,8 +389,52 @@ export default function HomeLayout() {
       ? discoverSearchParam.includes('1')
       : discoverSearchParam === '1'
   )
-  const [rememberedHomeTab, setRememberedHomeTab] = useState<HomeTabName>('(feed)')
-  const [rememberedRoute, setRememberedRoute] = useState<string>(HOME_TAB_ROUTE['(feed)'])
+  const discoverRootRouteRef = useRef(discoverRootRoute)
+  const lastNonDiscoverRouteRef = useRef('/(home)/(feed)')
+
+  // Clerk metadata can mark onboarding complete while the backend user row is
+  // absent (e.g. DB reset). Verify the row exists or every user-scoped call 404s.
+  const [backendUserMissing, setBackendUserMissing] = useState<boolean | null>(null)
+  const checkedClerkIdRef = useRef<string | null>(null)
+  const getTokenRef = useRef(getToken)
+  const clerkId = user?.id ?? null
+  const setupComplete = isAccountSetupComplete(user)
+
+  useEffect(() => {
+    getTokenRef.current = getToken
+  }, [getToken])
+
+  useEffect(() => {
+    if (!isSignedIn || !isUserLoaded || !clerkId || !setupComplete) return
+    if (checkedClerkIdRef.current === clerkId) return
+
+    let cancelled = false
+    const timeoutId = setTimeout(() => {
+      // Backend slow/unreachable: don't block app behind spinner forever.
+      if (!cancelled) setBackendUserMissing(false)
+    }, 5000)
+    ;(async () => {
+      try {
+        const token = await getTokenRef.current()
+        const existing = await fetchUserByClerkId(clerkId, token)
+        if (cancelled) return
+        checkedClerkIdRef.current = clerkId
+        setBackendUserMissing(existing === null)
+      } catch {
+        if (cancelled) return
+        // Network/other errors: don't bounce to onboarding, let screens retry.
+        checkedClerkIdRef.current = clerkId
+        setBackendUserMissing(false)
+      } finally {
+        clearTimeout(timeoutId)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+      clearTimeout(timeoutId)
+    }
+  }, [isSignedIn, isUserLoaded, clerkId, setupComplete])
 
   const isChatThreadRoute =
     segments[0] === '(home)'
@@ -396,18 +448,29 @@ export default function HomeLayout() {
     && segments[2] === 'post'
     && segments.length > 3
 
-  useEffect(() => {
-    if (activeHomeTab !== '(discover)') {
-      setRememberedHomeTab(activeHomeTab)
-      setRememberedRoute(internalRouteFromSegments(segments))
-    }
-  }, [activeHomeTab, segments])
+  const isArtistRoute =
+    segments[0] === '(home)'
+    && (segments[1] === '(profile)' || segments[1] === '(discover)')
+    && segments[2] === 'artist'
+    && segments.length > 3
 
   const shouldShowDiscoverSearchDock = discoverRootRoute
   const dockProgress = useRef(new Animated.Value(shouldShowDiscoverSearchDock ? 1 : 0)).current
   const dockAnimationIdRef = useRef(0)
   const dockAnimationRef = useRef<Animated.CompositeAnimation | null>(null)
   const [isDockMounted, setIsDockMounted] = useState(shouldShowDiscoverSearchDock)
+
+  useEffect(() => {
+    discoverRootRouteRef.current = discoverRootRoute
+  }, [discoverRootRoute])
+
+  useEffect(() => {
+    if (discoverRootRoute) return
+    const resolvedRoute = buildInternalRouteFromSegments(segments, searchParams)
+    if (!resolvedRoute) return
+    if (resolvedRoute === '/(home)/(discover)') return
+    lastNonDiscoverRouteRef.current = resolvedRoute
+  }, [discoverRootRoute, searchParams, segments])
 
   useEffect(() => {
     dockAnimationIdRef.current += 1
@@ -446,13 +509,17 @@ export default function HomeLayout() {
 
   if (!isSignedIn) return <Redirect href="/(auth)/landing" />
 
-  if (!isAccountSetupComplete(user)) return <Redirect href="/complete-profile" />
+  if (!setupComplete) return <Redirect href="/complete-profile" />
+
+  if (backendUserMissing === null) return <FullscreenSpinner />
+
+  if (backendUserMissing) return <Redirect href="/complete-profile" />
 
   return (
     <ChatProvider>
       <View style={styles.root}>
         <NativeTabs
-          hidden={isChatThreadRoute || isPostDetailRoute || shouldShowDiscoverSearchDock || isDockMounted}
+          hidden={isChatThreadRoute || isPostDetailRoute || isArtistRoute || shouldShowDiscoverSearchDock || isDockMounted}
           tintColor={Colors.primary}
           iconColor={{ default: Colors.onSurfaceVariant, selected: Colors.primary }}
           labelStyle={{
@@ -526,16 +593,19 @@ export default function HomeLayout() {
 
         {isDockMounted && !isChatThreadRoute ? (
           <DiscoverLiquidSearchDock
-            returnTab={rememberedHomeTab}
             progress={dockProgress}
             isOverlayActive={isSearchOverlayOpen}
-            onReturnToRememberedTab={() => {
-              const targetRoute = rememberedRoute.includes('/(discover)')
-                ? HOME_TAB_ROUTE[rememberedHomeTab]
-                : rememberedRoute
-              requestAnimationFrame(() => {
-                router.replace(targetRoute as any)
-              })
+            onDeactivateSearch={() => {
+              router.replace('/(home)/(discover)' as any)
+            }}
+            onBackPress={() => {
+              router.back()
+              const fallbackRoute = lastNonDiscoverRouteRef.current
+              setTimeout(() => {
+                if (discoverRootRouteRef.current) {
+                  router.navigate(fallbackRoute as any)
+                }
+              }, 120)
             }}
           />
         ) : null}
@@ -602,7 +672,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     left: 0,
-    backgroundColor: `${Colors.primary}26`,
+    backgroundColor: 'transparent',
   },
   returnButton: {
     width: '100%',

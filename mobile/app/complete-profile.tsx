@@ -36,7 +36,13 @@ export default function CompleteProfileScreen() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [didPrefillFromClerk, setDidPrefillFromClerk] = useState(false)
+  const [backendUserExists, setBackendUserExists] = useState<boolean | null>(null)
   const didTryBackendPrefill = useRef(false)
+  const getTokenRef = useRef(getToken)
+
+  useEffect(() => {
+    getTokenRef.current = getToken
+  }, [getToken])
 
   useEffect(() => {
     if (didPrefillFromClerk || !user) {
@@ -53,15 +59,21 @@ export default function CompleteProfileScreen() {
       return
     }
 
-    didTryBackendPrefill.current = true
     let cancelled = false
 
     ;(async () => {
       try {
-        const token = await getToken()
+        const token = await getTokenRef.current()
         const backendUser = await fetchUserByClerkId(user.id, token)
 
-        if (!backendUser || cancelled) {
+        if (cancelled) {
+          return
+        }
+
+        didTryBackendPrefill.current = true
+        setBackendUserExists(backendUser !== null)
+
+        if (!backendUser) {
           return
         }
 
@@ -76,13 +88,17 @@ export default function CompleteProfileScreen() {
         }
       } catch (prefillError) {
         console.warn('Could not prefill backend onboarding fields', prefillError)
+        if (cancelled) return
+        didTryBackendPrefill.current = true
+        // Can't confirm; don't trap the user in onboarding on a transient error.
+        setBackendUserExists(true)
       }
     })()
 
     return () => {
       cancelled = true
     }
-  }, [getToken, isAuthLoaded, isSignedIn, isUserLoaded, user])
+  }, [isAuthLoaded, isSignedIn, isUserLoaded, user])
 
   if (!isAuthLoaded || !isUserLoaded) {
     return <FullscreenSpinner />
@@ -94,8 +110,15 @@ export default function CompleteProfileScreen() {
 
   const useGlass = isLiquidGlassAvailable()
 
+  // Clerk says setup is done — only leave once the backend row is confirmed.
+  // If the row is missing (e.g. DB reset), stay and let the user re-provision.
   if (isAccountSetupComplete(user)) {
-    return <Redirect href="/(home)/(feed)" />
+    if (backendUserExists === null) {
+      return <FullscreenSpinner />
+    }
+    if (backendUserExists) {
+      return <Redirect href="/(home)/(feed)" />
+    }
   }
 
   async function handleContinue() {

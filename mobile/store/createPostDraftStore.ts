@@ -31,12 +31,16 @@ export interface CreatePostDraft {
 
 interface CreatePostDraftState {
   draft: CreatePostDraft | null
+  pendingCommunitySelection: CreatePostDraftCommunity | null
   saveDraft: (draft: CreatePostDraft) => void
   clearDraft: () => void
+  setPendingCommunitySelection: (community: CreatePostDraftCommunity | null) => void
 }
 
 export const useCreatePostDraftStore = create<CreatePostDraftState>((set) => ({
   draft: null,
+  pendingCommunitySelection: null,
   saveDraft: (draft) => set({ draft }),
   clearDraft: () => set({ draft: null }),
+  setPendingCommunitySelection: (community) => set({ pendingCommunitySelection: community }),
 }))

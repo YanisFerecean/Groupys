@@ -19,7 +19,8 @@ import { AudioPlayer, createAudioPlayer, setAudioModeAsync } from 'expo-audio'
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import { LinearGradient } from 'expo-linear-gradient'
 import { apiFetch } from '@/lib/api'
-import { formatCount } from '@/lib/timeAgo'
+import { ApiError } from '@/lib/apiRequest'
+import { searchArtists } from '@/lib/musicSearch'
 import { communityResToCard } from '@/lib/communityUtils'
 import { Colors } from '@/constants/colors'
 import CommunityCard from '@/components/discover/CommunityCard'
@@ -141,7 +142,7 @@ function LoadingGroupys() {
 }
 
 export default function ArtistScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>()
+  const { id, name } = useLocalSearchParams<{ id: string; name?: string }>()
   const { getToken, isLoaded: isAuthLoaded } = useAuth()
   const getTokenRef = useRef(getToken)
   const insets = useSafeAreaInsets()
@@ -172,18 +173,55 @@ export default function ArtistScreen() {
     ;(async () => {
       try {
         const token = await getTokenRef.current()
-        const [artistData, tracksData, communitiesData] = await Promise.all([
-          apiFetch<ChartArtist>(`/artists/${id}`, token),
-          apiFetch<TrackRes[]>(`/artists/${id}/top-tracks?limit=5`, token).catch(() => [] as TrackRes[]),
-          apiFetch<CommunityResDto[]>(`/communities/artist/${id}`, token).catch(() => [] as CommunityResDto[]),
+        console.log(`[ArtistScreen] fetching id=${id} name=${name ?? ''}`)
+
+        // Stored ids can be stale after a backend music reseed.
+        // If the id 404s, resolve the current id by name and retry.
+        let resolvedId = id
+        let artistData: ChartArtist
+        try {
+          artistData = await apiFetch<ChartArtist>(`/artists/${resolvedId}`, token)
+        } catch (err) {
+          if (err instanceof ApiError && err.status === 404 && name) {
+            const matches = await searchArtists(name, token, 5)
+            console.log(`[ArtistScreen] 404 fallback: search "${name}" -> ${matches.length} matches [${matches.map((m) => m.id).join(',')}]`)
+            const ordered = [
+              ...matches.filter((m) => m.name.toLowerCase() === name.toLowerCase()),
+              ...matches.filter((m) => m.name.toLowerCase() !== name.toLowerCase()),
+            ]
+            let resolved: ChartArtist | null = null
+            for (const m of ordered) {
+              try {
+                resolved = await apiFetch<ChartArtist>(`/artists/${m.id}`, token)
+                resolvedId = String(m.id)
+                break
+              } catch (retryErr) {
+                console.log(`[ArtistScreen] retry id=${m.id} failed: ${retryErr instanceof ApiError ? retryErr.status : String(retryErr)}`)
+              }
+            }
+            if (!resolved) throw err
+            artistData = resolved
+          } else {
+            throw err
+          }
+        }
+
+        const [tracksData, communitiesData] = await Promise.all([
+          apiFetch<TrackRes[]>(`/artists/${resolvedId}/top-tracks?limit=5`, token).catch(() => [] as TrackRes[]),
+          apiFetch<CommunityResDto[]>(`/communities/artist/${resolvedId}`, token).catch(() => [] as CommunityResDto[]),
         ])
         if (!cancelled) {
+          console.log(`[ArtistScreen] loaded artist id=${artistData?.id} name=${artistData?.name} tracks=${tracksData.length} communities=${communitiesData.length}`)
           setArtist(artistData)
           setTracks(tracksData)
           setCommunities(communitiesData)
         }
       } catch (err) {
-        console.error('Failed to fetch artist:', err)
+        if (err instanceof ApiError) {
+          console.error(`[ArtistScreen] fetch failed status=${err.status} id=${id} name=${name ?? ''} msg=${err.message}`)
+        } else {
+          console.error('[ArtistScreen] fetch failed (non-API error):', err)
+        }
       } finally {
         if (!cancelled) {
           setLoading(false)
@@ -192,7 +230,7 @@ export default function ArtistScreen() {
       }
     })()
     return () => { cancelled = true }
-  }, [id, isAuthLoaded])
+  }, [id, name, isAuthLoaded])
 
   // Fade-in after load
   useEffect(() => {
@@ -303,9 +341,10 @@ export default function ArtistScreen() {
   const communityCards = communities.map(communityResToCard)
   const previewCommunities = communityCards.slice(0, 2)
 
+  const artistImages = artist?.images ?? []
   const heroImage =
-    artist?.images[artist.images.length - 1] ||
-    artist?.images.find((img) => img.includes('300x300')) ||
+    artistImages[artistImages.length - 1] ||
+    artistImages.find((img) => img.includes('300x300')) ||
     null
 
   return (
@@ -378,22 +417,14 @@ export default function ArtistScreen() {
               </View>
             </View>
 
-            {/* Stats - pulled up to overlap the gradient */}
-            <View className="flex-row px-5 pt-2 gap-6">
-              <View>
-                <Text className="text-primary font-extrabold text-xl">
-                  {formatCount(artist.listeners)}
-                </Text>
-                <Text className="text-on-surface-variant text-xs mt-0.5">Listeners</Text>
+            {/* Genre - pulled up to overlap the gradient */}
+            {artist.genre ? (
+              <View className="flex-row px-5 pt-3">
+                <View className="px-4 py-1.5 rounded-full" style={{ backgroundColor: 'rgba(186, 0, 43, 0.1)' }}>
+                  <Text className="text-primary text-sm font-bold">{artist.genre}</Text>
+                </View>
               </View>
-              <View className="w-px bg-white/10" />
-              <View>
-                <Text className="text-primary font-extrabold text-xl">
-                  {formatCount(artist.playcount)}
-                </Text>
-                <Text className="text-on-surface-variant text-xs mt-0.5">Plays</Text>
-              </View>
-            </View>
+            ) : null}
 
             {/* Communities */}
             <View className="px-5 pt-8 pb-2">
@@ -483,7 +514,6 @@ export default function ArtistScreen() {
               )}
             </View>
 
-            {/* Bio - moved to info sheet */}
           </ScrollView>
         </Animated.View>
       ) : (
@@ -498,39 +528,6 @@ export default function ArtistScreen() {
 
       {artist ? (
         <>
-          <View className="absolute" style={{ left: 16, bottom: 30, zIndex: 10 }}>
-            {isLiquidGlassAvailable() ? (
-              <GlassView isInteractive tintColor="rgba(186, 0, 43, 0.6)" style={{ borderRadius: 50 }}>
-                <TouchableOpacity
-                  onPress={() => {
-                    router.push({
-                      pathname: '/(home)/(discover)/artist/bio',
-                      params: { name: artist.name, bio: artist.summary ?? '' },
-                    })
-                  }}
-                  style={{ padding: 12 }}
-                  activeOpacity={0.7}
-                >
-                  <SymbolView name="info" size={22} tintColor="white" />
-                </TouchableOpacity>
-              </GlassView>
-            ) : (
-              <TouchableOpacity
-                onPress={() => {
-                  router.push({
-                    pathname: '/(home)/(discover)/artist/bio',
-                    params: { name: artist.name, bio: artist.summary ?? '' },
-                  })
-                }}
-                className="w-12 h-12 rounded-full items-center justify-center"
-                style={{ backgroundColor: Colors.primary }}
-                activeOpacity={0.7}
-              >
-                <SymbolView name="info" size={22} tintColor="white" />
-              </TouchableOpacity>
-            )}
-          </View>
-
           <View className="absolute" style={{ right: 16, bottom: 30, zIndex: 10 }}>
             {isLiquidGlassAvailable() ? (
               <GlassView isInteractive tintColor="rgba(186, 0, 43, 0.6)" style={{ borderRadius: 50 }}>

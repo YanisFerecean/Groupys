@@ -24,6 +24,7 @@ import { Colors } from '@/constants/colors'
 import {
   deleteAlbumRating,
   fetchAlbumRatings,
+  fetchAlbumRatingsByAppleMusicId,
   upsertAlbumRating,
   type AlbumRatingRes,
 } from '@/lib/api'
@@ -263,15 +264,20 @@ function RatingRow({ rating, isOwn }: { rating: AlbumRatingRes; isOwn: boolean }
 // ─── Rating content ──────────────────────────────────────────────────────────
 
 function RatingContent() {
-  const { albumId, albumTitle, albumCoverUrl, artistName, currentUserId, initialScore } =
+  const { albumId, appleMusicId, albumTitle, albumCoverUrl, artistName, currentUserId, initialScore } =
     useLocalSearchParams<{
       albumId: string
+      appleMusicId?: string
       albumTitle: string
       albumCoverUrl: string
       artistName: string
       currentUserId: string
       initialScore?: string
     }>()
+
+  const hasAlbumId = !!albumId && Number.isFinite(Number(albumId))
+  const hasAppleMusicId = !!appleMusicId
+  const albumKey = hasAppleMusicId ? appleMusicId : albumId ?? ''
 
   const insets = useSafeAreaInsets()
   const { getToken } = useAuth()
@@ -321,7 +327,7 @@ function RatingContent() {
   }, [isCurrentUsersRating, ratings])
 
   useEffect(() => {
-    if (!albumId) return
+    if (!hasAlbumId && !hasAppleMusicId) return
 
     setActiveTab('rate')
     setDisplayScore(initialDisplayScore)
@@ -335,7 +341,9 @@ function RatingContent() {
       setLoading(true)
       try {
         const token = await getTokenRef.current()
-        const data = await fetchAlbumRatings(Number(albumId), token)
+        const data = hasAppleMusicId
+          ? await fetchAlbumRatingsByAppleMusicId(appleMusicId as string, token)
+          : await fetchAlbumRatings(Number(albumId), token)
         if (cancelled) return
         setRatings(data)
         const mine = data.find(isCurrentUsersRating) ?? null
@@ -343,8 +351,8 @@ function RatingContent() {
           setDisplayScore(to5Star(mine.score))
           setReview(mine.review ?? '')
         }
-      } catch {
-        // non-critical
+      } catch (err) {
+        console.error('Failed to load album ratings', err)
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -352,37 +360,40 @@ function RatingContent() {
 
     void load()
     return () => { cancelled = true }
-  }, [albumId, initialDisplayScore, isCurrentUsersRating])
+  }, [albumKey, hasAlbumId, hasAppleMusicId, albumId, appleMusicId, initialDisplayScore, isCurrentUsersRating])
 
   const refreshRatings = async () => {
-    if (!albumId) return
+    if (!hasAlbumId && !hasAppleMusicId) return
     const token = await getTokenRef.current()
-    const updated = await fetchAlbumRatings(Number(albumId), token)
+    const updated = hasAppleMusicId
+      ? await fetchAlbumRatingsByAppleMusicId(appleMusicId as string, token)
+      : await fetchAlbumRatings(Number(albumId), token)
     setRatings(updated)
   }
 
   const handleSubmit = async () => {
-    if (!albumId || displayScore === 0) return
+    if ((!hasAlbumId && !hasAppleMusicId) || displayScore === 0) return
     const backendScore = to10Scale(displayScore)
     setError(null)
     setSubmitting(true)
     try {
       const token = await getTokenRef.current()
-      await upsertAlbumRating(
-        {
-          albumId: Number(albumId),
-          albumTitle: albumTitle ?? '',
-          albumCoverUrl: albumCoverUrl || null,
-          artistName: artistName || null,
-          score: backendScore,
-          review: review.trim() || null,
-        },
-        token,
-      )
+      const payload = {
+        albumId: hasAppleMusicId ? null : Number(albumId),
+        appleMusicId: hasAppleMusicId ? appleMusicId : null,
+        albumTitle: albumTitle ?? '',
+        albumCoverUrl: albumCoverUrl || null,
+        artistName: artistName || null,
+        score: backendScore,
+        review: review.trim() || null,
+      }
+      console.log('Submitting album rating', payload)
+      await upsertAlbumRating(payload, token)
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       await refreshRatings()
       router.back()
     } catch (err) {
+      console.error('Failed to submit album rating', err)
       setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {
       setSubmitting(false)
@@ -390,7 +401,7 @@ function RatingContent() {
   }
 
   const handleDelete = () => {
-    if (!myRating || !albumId) return
+    if (!myRating || (!hasAlbumId && !hasAppleMusicId)) return
     Alert.alert('Delete Rating', 'Are you sure you want to delete your rating?', [
       { text: 'Cancel', style: 'cancel' },
       {

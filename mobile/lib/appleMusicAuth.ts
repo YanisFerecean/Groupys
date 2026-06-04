@@ -23,9 +23,6 @@ const appleMusicConnectExplicitlyDisabled = appleMusicConnectEnv === 'false'
 export const APPLE_MUSIC_CONNECT_ENABLED =
   appleMusicConnectExplicitlyEnabled || (!appleMusicConnectExplicitlyDisabled && __DEV__)
 
-export const APPLE_MUSIC_SIMULATOR_MOCK_ENABLED =
-  process.env.EXPO_PUBLIC_ENABLE_APPLE_MUSIC_SIMULATOR_MOCK === 'true'
-
 function getNativeModule(): AppleMusicAuthNativeModule {
   if (Platform.OS !== 'ios') {
     throw new Error('Apple Music connect is currently available on iOS only.')

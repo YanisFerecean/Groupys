@@ -30,8 +30,6 @@ public record UserResDto(
         boolean recommendationOptOut,
         boolean discoveryVisible,
         long followerCount,
-        long followingCount,
-        boolean lastFmConnected,
-        String lastFmUsername
+        long followingCount
 ) {
 }

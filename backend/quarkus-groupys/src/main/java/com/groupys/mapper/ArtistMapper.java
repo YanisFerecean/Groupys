@@ -1,94 +1,73 @@
 package com.groupys.mapper;
 
 import com.groupys.dto.ArtistResDto;
-import com.groupys.dto.deezer.DeezerArtistDto;
-import com.groupys.dto.lastfm.LastFmArtistInfoResponse;
+import com.groupys.dto.apple.AppleCatalogArtist;
 import com.groupys.model.Artist;
 import jakarta.enterprise.context.ApplicationScoped;
 
-import java.util.ArrayList;
 import java.util.List;
 
 @ApplicationScoped
 public class ArtistMapper {
 
-    public ArtistResDto toResDto(DeezerArtistDto deezer) {
+    public ArtistResDto toResDto(Long id, AppleCatalogArtist artist, List<String> images) {
         return new ArtistResDto(
-                deezer.id(),
-                deezer.name(),
-                collectImages(deezer),
+                id,
+                artist != null ? artist.name() : null,
+                images,
                 null,
                 null,
-                null
-        );
-    }
-
-    public ArtistResDto toResDto(DeezerArtistDto deezer, LastFmArtistInfoResponse.LastFmArtistDetail lastfm) {
-        Long listeners = null;
-        Long playcount = null;
-        String summary = null;
-
-        if (lastfm != null) {
-            if (lastfm.stats() != null) {
-                listeners = parseLong(lastfm.stats().listeners());
-                playcount = parseLong(lastfm.stats().playcount());
-            }
-            if (lastfm.bio() != null) {
-                summary = lastfm.bio().summary();
-            }
-        }
-
-        return new ArtistResDto(
-                deezer.id(),
-                deezer.name(),
-                collectImages(deezer),
-                listeners,
-                playcount,
-                summary
+                artist != null ? firstNonBlank(artist.editorialNotesStandard(), artist.editorialNotesShort()) : null,
+                artist != null ? pickGenre(artist.genreNames()) : null
         );
     }
 
     public ArtistResDto toResDto(Artist entity) {
+        return toResDto(entity, null);
+    }
+
+    public ArtistResDto toResDto(Artist entity, String genreOverride) {
+        String genre = (genreOverride != null && !genreOverride.isBlank())
+                ? genreOverride.trim()
+                : (entity.getPrimaryGenre() != null ? entity.getPrimaryGenre().name : null);
         return new ArtistResDto(
                 entity.getId(),
                 entity.getName(),
                 entity.getImages(),
                 entity.getListeners(),
                 entity.getPlaycount(),
-                entity.getSummary()
+                entity.getSummary(),
+                genre
         );
     }
 
-    public Artist toEntity(DeezerArtistDto deezer, LastFmArtistInfoResponse.LastFmArtistDetail lastfm) {
-        Artist artist = new Artist();
-        artist.setId(deezer.id());
-        artist.setName(deezer.name());
-        artist.setImages(collectImages(deezer));
-
-        if (lastfm != null) {
-            if (lastfm.stats() != null) {
-                artist.setListeners(parseLong(lastfm.stats().listeners()));
-                artist.setPlaycount(parseLong(lastfm.stats().playcount()));
+    public String pickGenre(List<String> genreNames) {
+        if (genreNames == null) {
+            return null;
+        }
+        String fallback = null;
+        for (String value : genreNames) {
+            if (value == null || value.isBlank()) {
+                continue;
             }
-            if (lastfm.bio() != null) {
-                artist.setSummary(lastfm.bio().summary());
+            String trimmed = value.trim();
+            if (fallback == null) {
+                fallback = trimmed;
+            }
+            if (!trimmed.equalsIgnoreCase("Music")) {
+                return trimmed;
             }
         }
-
-        return artist;
+        return fallback;
     }
 
-    private List<String> collectImages(DeezerArtistDto dto) {
-        List<String> images = new ArrayList<>();
-        if (dto.pictureSmall() != null) images.add(dto.pictureSmall());
-        if (dto.pictureMedium() != null) images.add(dto.pictureMedium());
-        if (dto.pictureBig() != null) images.add(dto.pictureBig());
-        if (dto.pictureXl() != null) images.add(dto.pictureXl());
-        return images;
-    }
-
-    private Long parseLong(String value) {
-        if (value == null || value.isBlank()) return null;
-        return Long.parseLong(value);
+    private String firstNonBlank(String first, String second) {
+        if (first != null && !first.isBlank()) {
+            return first;
+        }
+        if (second != null && !second.isBlank()) {
+            return second;
+        }
+        return null;
     }
 }

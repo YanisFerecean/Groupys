@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  LayoutAnimation,
+  Modal,
 } from 'react-native'
 import { Image } from 'expo-image'
 import * as ImagePicker from 'expo-image-picker'
@@ -36,16 +36,9 @@ import type { AlbumSearchResult } from '@/models/AlbumSearchResult'
 // ── Presets ─────────────────────────────────────────────────────────────────
 
 const BANNER_PRESETS = [
-  // User's choices
   'https://images.unsplash.com/photo-1546519638-68e109498ffc?q=80&w=1000&auto=format&fit=crop', // Basketball
   'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?q=80&w=1000&auto=format&fit=crop', // Concert
   'https://images.unsplash.com/photo-1667833966178-f98135a582f8?q=80&w=1000&auto=format&fit=crop', // Abstract
-  // My choices (patterns/suits app)
-  'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop', // Dark Abstract Wave
-  'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?q=80&w=1000&auto=format&fit=crop', // Neon Music Studio
-  'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=1000&auto=format&fit=crop', // Minimalist Vinyl/Audio
-  'https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=1000&auto=format&fit=crop', // Synthwave / Cyberpunk
-  'https://images.unsplash.com/photo-1603048588665-791ca8aea617?q=80&w=1000&auto=format&fit=crop', // Vinyl Minimalist
 ]
 
 const ACCENT_PRESETS = [
@@ -77,36 +70,15 @@ type WidgetType = 'topAlbums' | 'currentlyListening' | 'topSongs' | 'topArtists'
 type WidgetListItem = {
   type: WidgetType
   title: string
-  description: string
   icon: keyof typeof Ionicons.glyphMap
 }
 
 const DEFAULT_WIDGET_ORDER: WidgetType[] = ['topAlbums', 'currentlyListening', 'topSongs', 'topArtists']
 const WIDGET_ITEMS: WidgetListItem[] = [
-  {
-    type: 'topAlbums',
-    title: 'Top Albums',
-    description: 'Show your favorite album picks.',
-    icon: 'albums-outline',
-  },
-  {
-    type: 'currentlyListening',
-    title: 'Currently Listening',
-    description: 'Highlight what is playing right now.',
-    icon: 'headset-outline',
-  },
-  {
-    type: 'topSongs',
-    title: 'Top Songs',
-    description: 'Pin the tracks that define your taste.',
-    icon: 'musical-notes-outline',
-  },
-  {
-    type: 'topArtists',
-    title: 'Top Artists',
-    description: 'Feature the artists you keep coming back to.',
-    icon: 'people-outline',
-  },
+  { type: 'topAlbums', title: 'Top Albums', icon: 'albums-outline' },
+  { type: 'currentlyListening', title: 'Currently Listening', icon: 'headset-outline' },
+  { type: 'topSongs', title: 'Top Songs', icon: 'musical-notes-outline' },
+  { type: 'topArtists', title: 'Top Artists', icon: 'people-outline' },
 ]
 
 function normalizeWidgetOrder(order?: string[]): WidgetType[] {
@@ -185,7 +157,7 @@ function MusicSearch({ type, placeholder, onSelect }: MusicSearchProps) {
         <View className="mt-1 rounded-xl bg-surface-container-lowest border border-outline-variant overflow-hidden">
           {results.map((result, i) => (
             <TouchableOpacity
-              key={String((result as { id: number }).id)}
+              key={`${String((result as { id: number }).id)}-${i}`}
               onPress={() => handleSelect(result)}
               className="flex-row items-center gap-3 px-4 py-3"
               style={{ borderTopWidth: i > 0 ? 1 : 0, borderTopColor: Colors.outlineVariant }}
@@ -234,105 +206,186 @@ function MusicSearch({ type, placeholder, onSelect }: MusicSearchProps) {
   )
 }
 
-// ── Color picker ─────────────────────────────────────────────────────────────
+// ── Color row + shared editor sheet ─────────────────────────────────────────
 
-interface ColorPickerProps {
+interface ColorRowProps {
+  label: string
+  value: string
+  onPress: () => void
+}
+
+function ColorRow({ label, value, onPress }: ColorRowProps) {
+  const isValidHex = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(value)
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.7}
+      className="flex-row items-center justify-between rounded-2xl px-4 py-3.5"
+      style={{ backgroundColor: Colors.surfaceContainer }}
+    >
+      <View className="flex-row items-center gap-3">
+        <View
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 8,
+            backgroundColor: isValidHex ? value : Colors.surfaceContainerHigh,
+            borderWidth: 1,
+            borderColor: Colors.outlineVariant,
+          }}
+        />
+        <Text className="text-base font-medium text-on-surface">{label}</Text>
+      </View>
+      <View className="flex-row items-center gap-2">
+        <Text className="text-sm font-mono text-on-surface-variant uppercase">
+          {isValidHex ? value : '—'}
+        </Text>
+        <Ionicons name="chevron-forward" size={18} color={Colors.onSurfaceVariant} />
+      </View>
+    </TouchableOpacity>
+  )
+}
+
+interface ColorEditorTarget {
   label: string
   value: string
   presets: string[]
   onChange: (v: string) => void
 }
 
-function ColorPicker({ label, value, onChange }: ColorPickerProps) {
-  const [isExpanded, setIsExpanded] = useState(false)
-  const isValidHex = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(value)
-  const initialColor = isValidHex ? value : '#ffffff'
+interface ColorEditorSheetProps {
+  target: ColorEditorTarget | null
+  onClose: () => void
+}
 
-  const toggle = () => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut)
-    setIsExpanded(!isExpanded)
-  }
+function ColorEditorSheet({ target, onClose }: ColorEditorSheetProps) {
+  const value = target?.value ?? ''
+  const isValidHex = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(value)
+  const wheelColor = isValidHex ? value : '#ffffff'
 
   return (
-    <View className="gap-2">
-      <TouchableOpacity
-        onPress={toggle}
-        activeOpacity={0.7}
-        className="flex-row items-center justify-between bg-surface-container rounded-2xl px-4 py-3.5"
-        style={{ borderWidth: isExpanded ? 2 : 1, borderColor: isExpanded ? Colors.primary : Colors.outlineVariant }}
-      >
-        <View className="flex-row items-center gap-3">
+    <Modal
+      visible={target !== null}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View className="flex-1 justify-end">
+        <BlurView
+          tint="dark"
+          intensity={40}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+        />
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={onClose}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+        />
+        <View
+          className="rounded-t-3xl px-5 pt-4 pb-8"
+          style={{ backgroundColor: Colors.surface }}
+        >
+          {/* Grabber */}
           <View
-            style={{
-              width: 24,
-              height: 24,
-              borderRadius: 6,
-              backgroundColor: isValidHex ? value : Colors.surfaceContainerHigh,
-              borderWidth: 1,
-              borderColor: Colors.outlineVariant,
-            }}
+            className="self-center mb-3 rounded-full"
+            style={{ width: 36, height: 4, backgroundColor: Colors.outlineVariant }}
           />
-          <Text className="text-base font-bold text-on-surface">{label}</Text>
-        </View>
-        <View className="flex-row items-center gap-2">
-          {isValidHex && !isExpanded && (
-            <Text className="text-sm font-mono text-on-surface-variant uppercase">{value}</Text>
-          )}
-          <Ionicons
-            name={isExpanded ? 'chevron-up' : 'chevron-down'}
-            size={20}
-            color={isExpanded ? Colors.primary : Colors.onSurfaceVariant}
-          />
-        </View>
-      </TouchableOpacity>
 
-      {isExpanded && (
-        <View className="bg-surface-container rounded-2xl p-4 gap-4 mt-1 border border-outline-variant">
-          <View style={{ height: 260 }}>
-            <ColorWheel
-              color={initialColor}
-              onColorChangeComplete={onChange}
-              thumbSize={24}
-              sliderSize={12}
-              noSnap={true}
-              row={false}
-            />
-          </View>
-          
-          <View className="flex-row items-center justify-between mt-2 gap-3">
-            <View className="flex-row items-center gap-3 flex-1">
-              <View
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 8,
-                  backgroundColor: isValidHex ? value : Colors.surfaceContainer,
-                  borderWidth: 1.5,
-                  borderColor: Colors.outlineVariant,
-                }}
-              />
-              <TextInput
-                value={value}
-                onChangeText={onChange}
-                placeholder="#hex color"
-                placeholderTextColor={Colors.onSurfaceVariant}
-                className="bg-surface-container-high rounded-xl px-3 py-2 text-base text-on-surface flex-1"
-                style={{ color: Colors.onSurface }}
-                autoCapitalize="none"
-                maxLength={7}
-              />
-            </View>
+          {/* Header */}
+          <View className="flex-row items-center justify-between mb-4">
+            <TouchableOpacity onPress={onClose} className="px-2 py-1">
+              <Ionicons name="close" size={24} color={Colors.onSurfaceVariant} />
+            </TouchableOpacity>
+            <Text className="text-base font-semibold text-on-surface">{target?.label ?? ''}</Text>
             <TouchableOpacity
-              onPress={() => onChange('')}
-              className="items-center justify-center bg-surface-container-high rounded-xl px-4 py-3"
-              style={{ borderWidth: 1.5, borderColor: Colors.outlineVariant }}
+              onPress={() => target?.onChange('')}
+              disabled={!isValidHex}
+              className="px-2 py-1"
             >
-              <Text className="text-sm font-semibold text-on-surface-variant">Clear</Text>
+              <Text
+                className="text-sm font-semibold"
+                style={{ color: isValidHex ? Colors.primary : Colors.onSurfaceVariant }}
+              >
+                Reset
+              </Text>
             </TouchableOpacity>
           </View>
+
+          {/* Presets */}
+          {target && target.presets.length > 0 && (
+            <View className="flex-row flex-wrap gap-3 mb-4">
+              {target.presets.map((preset) => {
+                const selected = preset.toLowerCase() === value.toLowerCase()
+                return (
+                  <TouchableOpacity
+                    key={preset}
+                    onPress={() => target.onChange(preset)}
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      backgroundColor: preset,
+                      borderWidth: selected ? 3 : 1,
+                      borderColor: selected ? Colors.primary : Colors.outlineVariant,
+                    }}
+                  />
+                )
+              })}
+            </View>
+          )}
+
+          {/* Wheel */}
+          <View style={{ height: 240 }}>
+            {target && (
+              <ColorWheel
+                color={wheelColor}
+                onColorChangeComplete={target.onChange}
+                thumbSize={24}
+                sliderSize={12}
+                noSnap={true}
+                row={false}
+                swatches={false}
+              />
+            )}
+          </View>
+
+          {/* Hex */}
+          <View className="flex-row items-center gap-3 mt-4">
+            <View
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 10,
+                backgroundColor: isValidHex ? value : Colors.surfaceContainerHigh,
+                borderWidth: 1,
+                borderColor: Colors.outlineVariant,
+              }}
+            />
+            <TextInput
+              value={value}
+              onChangeText={(v) => target?.onChange(v)}
+              placeholder="#hex"
+              placeholderTextColor={Colors.onSurfaceVariant}
+              className="bg-surface-container rounded-xl px-4 py-3 text-base text-on-surface flex-1"
+              style={{ color: Colors.onSurface }}
+              autoCapitalize="none"
+              maxLength={7}
+            />
+          </View>
+
+          {/* Done */}
+          <TouchableOpacity
+            onPress={onClose}
+            className="rounded-full py-3.5 mt-5 items-center"
+            style={{ backgroundColor: Colors.primary }}
+          >
+            <Text className="text-base font-bold" style={{ color: Colors.onPrimary }}>
+              Done
+            </Text>
+          </TouchableOpacity>
         </View>
-      )}
-    </View>
+      </View>
+    </Modal>
   )
 }
 
@@ -340,7 +393,7 @@ function ColorPicker({ label, value, onChange }: ColorPickerProps) {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <Text className="text-base font-extrabold text-on-surface mb-1">
+    <Text className="text-sm font-semibold text-on-surface mb-2">
       {children}
     </Text>
   )
@@ -360,17 +413,16 @@ function SectionHeaderWithMusicSync({
   onToggle,
 }: SectionHeaderWithMusicSyncProps) {
   return (
-    <View className="flex-row items-center justify-between">
-      <SectionLabel>{title}</SectionLabel>
+    <View className="flex-row items-center justify-between mb-1.5">
+      <Text className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
+        {title}
+      </Text>
       <View className="flex-row items-center gap-2">
         <MaterialCommunityIcons
           name="apple"
           size={16}
           color={canSync ? '#FA243C' : Colors.onSurfaceVariant}
         />
-        <Text className="text-xs font-semibold" style={{ color: canSync ? Colors.onSurface : Colors.onSurfaceVariant }}>
-          Sync
-        </Text>
         <Switch
           value={synced}
           onValueChange={onToggle}
@@ -395,29 +447,24 @@ const TABS: { key: Tab; label: string; icon: keyof typeof Ionicons.glyphMap }[] 
   { key: 'widgets', label: 'Widgets', icon: 'apps-outline' },
 ]
 
-const PROFILE_STEPS: { key: ProfileStep; label: string; subtitle: string }[] = [
-  { key: 'basics', label: 'Basics', subtitle: 'Photo, name, and bio' },
-  { key: 'details', label: 'Details', subtitle: 'Location, tags, and integration' },
+const PROFILE_STEPS: { key: ProfileStep; label: string }[] = [
+  { key: 'basics', label: 'Basics' },
+  { key: 'details', label: 'Details' },
 ]
 
 function toProviderNeutralProfile(profile: ProfileCustomization): ProfileCustomization {
-  const musicConnected = profile.musicConnected ?? profile.spotifyConnected ?? false
-  const syncTopSongsWithMusic = profile.syncTopSongsWithMusic ?? profile.syncTopSongsWithSpotify ?? false
-  const syncTopArtistsWithMusic = profile.syncTopArtistsWithMusic ?? profile.syncTopArtistsWithSpotify ?? false
-  const syncTopAlbumsWithMusic = profile.syncTopAlbumsWithMusic ?? profile.syncTopAlbumsWithSpotify ?? false
-
   return {
     ...profile,
-    musicConnected,
-    spotifyConnected: musicConnected,
-    syncTopSongsWithMusic,
-    syncTopArtistsWithMusic,
-    syncTopAlbumsWithMusic,
-    syncTopSongsWithSpotify: syncTopSongsWithMusic,
-    syncTopArtistsWithSpotify: syncTopArtistsWithMusic,
-    syncTopAlbumsWithSpotify: syncTopAlbumsWithMusic,
+    musicConnected: profile.musicConnected ?? false,
+    syncTopSongsWithMusic: profile.syncTopSongsWithMusic ?? false,
+    syncTopArtistsWithMusic: profile.syncTopArtistsWithMusic ?? false,
+    syncTopAlbumsWithMusic: profile.syncTopAlbumsWithMusic ?? false,
   }
 }
+
+// ── Color edit keys ──────────────────────────────────────────────────────────
+
+type ColorEditKey = 'banner' | 'accent' | 'name' | 'albums' | 'songs' | 'artists'
 
 // ── Main component ───────────────────────────────────────────────────────────
 
@@ -441,6 +488,7 @@ export default function EditProfileModal() {
     hiddenWidgets: toProviderNeutralProfile(profile).hiddenWidgets ?? [],
   })
   const [error, setError] = useState<string | null>(null)
+  const [editingColorKey, setEditingColorKey] = useState<ColorEditKey | null>(null)
   const hasInitializedRef = useRef(false)
 
   // Reset form when modal opens
@@ -578,7 +626,6 @@ export default function EditProfileModal() {
     setForm((prev) => ({
       ...prev,
       musicConnected: value,
-      spotifyConnected: value,
     }))
   }
 
@@ -586,27 +633,7 @@ export default function EditProfileModal() {
     key: 'syncTopAlbumsWithMusic' | 'syncTopSongsWithMusic' | 'syncTopArtistsWithMusic',
     value: boolean,
   ) => {
-    setForm((prev) => {
-      if (key === 'syncTopAlbumsWithMusic') {
-        return {
-          ...prev,
-          syncTopAlbumsWithMusic: value,
-          syncTopAlbumsWithSpotify: value,
-        }
-      }
-      if (key === 'syncTopSongsWithMusic') {
-        return {
-          ...prev,
-          syncTopSongsWithMusic: value,
-          syncTopSongsWithSpotify: value,
-        }
-      }
-      return {
-        ...prev,
-        syncTopArtistsWithMusic: value,
-        syncTopArtistsWithSpotify: value,
-      }
-    })
+    setForm((prev) => ({ ...prev, [key]: value }))
   }
 
   const handleSave = async () => {
@@ -628,6 +655,9 @@ export default function EditProfileModal() {
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.9,
+      // iOS HEIC/iCloud assets fail to load via the raw representation; force transcoding.
+      preferredAssetRepresentationMode:
+        ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
     })
 
     if (result.canceled || !result.assets?.[0]?.uri) return
@@ -765,20 +795,17 @@ export default function EditProfileModal() {
 
           <View className="flex-1">
             <View className="flex-row items-center gap-2">
-              <Text className="text-base font-bold text-on-surface">{item.title}</Text>
+              <Text className="text-base font-semibold text-on-surface">{item.title}</Text>
               {!hasContent ? (
-                <View className="rounded-full bg-surface-container px-2 py-1">
-                  <Text className="text-[11px] font-semibold text-on-surface-variant">Empty</Text>
+                <View className="rounded-full bg-surface-container px-2 py-0.5">
+                  <Text className="text-[11px] font-medium text-on-surface-variant">Empty</Text>
                 </View>
               ) : hidden ? (
-                <View className="rounded-full bg-surface-container px-2 py-1">
-                  <Text className="text-[11px] font-semibold text-on-surface-variant">Hidden</Text>
+                <View className="rounded-full bg-surface-container px-2 py-0.5">
+                  <Text className="text-[11px] font-medium text-on-surface-variant">Hidden</Text>
                 </View>
               ) : null}
             </View>
-            <Text className="mt-1 text-sm text-on-surface-variant">
-              {hasContent ? item.description : 'Add content in the Music tab to show this widget.'}
-            </Text>
           </View>
 
           <Switch
@@ -811,41 +838,50 @@ export default function EditProfileModal() {
     handleOpen()
   }, [handleOpen, isLoaded])
 
-  const profileStepIndex = PROFILE_STEPS.findIndex((item) => item.key === profileStep)
-  const currentProfileStep = PROFILE_STEPS[profileStepIndex] ?? PROFILE_STEPS[0]
-  const isFirstProfileStep = profileStepIndex <= 0
-  const isLastProfileStep = profileStepIndex >= PROFILE_STEPS.length - 1
+  const renderSectionSurface = (children: React.ReactNode) => (
+    <View>{children}</View>
+  )
 
-  const goToPrevProfileStep = () => {
-    if (isFirstProfileStep) return
-    setProfileStep(PROFILE_STEPS[profileStepIndex - 1].key)
+  const colorTargets: Record<ColorEditKey, ColorEditorTarget> = {
+    banner: {
+      label: 'Banner Color',
+      presets: ACCENT_PRESETS,
+      value: form.bannerUrl?.startsWith('#') ? form.bannerUrl : '',
+      onChange: (v) => set('bannerUrl', v || BANNER_PRESETS[0]),
+    },
+    accent: {
+      label: 'Accent Color',
+      presets: ACCENT_PRESETS,
+      value: form.accentColor ?? '',
+      onChange: (v) => set('accentColor', v || undefined),
+    },
+    name: {
+      label: 'Name Color',
+      presets: NAME_COLOR_PRESETS,
+      value: form.nameColor ?? '',
+      onChange: (v) => set('nameColor', v || undefined),
+    },
+    albums: {
+      label: 'Albums widget',
+      presets: ACCENT_PRESETS,
+      value: form.albumsContainerColor ?? '',
+      onChange: (v) => set('albumsContainerColor', v || undefined),
+    },
+    songs: {
+      label: 'Songs widget',
+      presets: ACCENT_PRESETS,
+      value: form.songsContainerColor ?? '',
+      onChange: (v) => set('songsContainerColor', v || undefined),
+    },
+    artists: {
+      label: 'Artists widget',
+      presets: ACCENT_PRESETS,
+      value: form.artistsContainerColor ?? '',
+      onChange: (v) => set('artistsContainerColor', v || undefined),
+    },
   }
 
-  const goToNextProfileStep = () => {
-    if (isLastProfileStep) {
-      setTab('appearance')
-      return
-    }
-    setProfileStep(PROFILE_STEPS[profileStepIndex + 1].key)
-  }
-
-  const sectionCardStyle = {
-    borderRadius: 20,
-    overflow: 'hidden' as const,
-    borderWidth: 1,
-    borderColor: Colors.outlineVariant,
-  }
-
-  const renderSectionSurface = (children: React.ReactNode, style?: object) => {
-    if (useGlass) {
-      return <GlassView style={[sectionCardStyle, style]}>{children}</GlassView>
-    }
-    return (
-      <BlurView tint="systemMaterial" intensity={100} style={[sectionCardStyle, style]}>
-        {children}
-      </BlurView>
-    )
-  }
+  const editingColor = editingColorKey ? colorTargets[editingColorKey] : null
 
   const formContent = (
     <KeyboardAvoidingView
@@ -854,18 +890,30 @@ export default function EditProfileModal() {
       style={{ paddingTop: Platform.OS === 'ios' ? 0 : insets.top }}
     >
       {/* Header */}
-      <View className="flex-row items-center justify-between px-5 py-4 border-b border-outline-variant">
-        <TouchableOpacity onPress={onClose}>
-          <Text className="text-base font-semibold text-on-surface-variant">Cancel</Text>
+      <View className="flex-row items-center justify-between px-4 py-3">
+        <TouchableOpacity
+          onPress={onClose}
+          className="rounded-full px-4 py-2"
+          style={{ backgroundColor: Colors.surfaceContainer }}
+        >
+          <Text className="text-sm font-semibold text-on-surface">Cancel</Text>
         </TouchableOpacity>
-        <Text className="text-xl font-extrabold text-on-surface">Edit Profile</Text>
-        <TouchableOpacity onPress={handleSave} disabled={isSaving || !isLoaded}>
+        <Text className="text-lg font-bold text-on-surface">Edit Profile</Text>
+        <TouchableOpacity
+          onPress={handleSave}
+          disabled={isSaving || !isLoaded}
+          className="rounded-full px-5 py-2"
+          style={{
+            backgroundColor: !isLoaded ? Colors.surfaceContainerHigh : Colors.primary,
+            opacity: isSaving ? 0.7 : 1,
+          }}
+        >
           {isSaving ? (
-            <ActivityIndicator size="small" color={Colors.primary} />
+            <ActivityIndicator size="small" color={Colors.onPrimary} />
           ) : (
             <Text
-              className="text-base font-bold"
-              style={{ color: !isLoaded ? Colors.onSurfaceVariant : Colors.primary }}
+              className="text-sm font-bold"
+              style={{ color: !isLoaded ? Colors.onSurfaceVariant : Colors.onPrimary }}
             >
               Save
             </Text>
@@ -873,112 +921,76 @@ export default function EditProfileModal() {
         </TouchableOpacity>
       </View>
 
-      {/* Top-level tabs */}
-      <View className="px-5 pt-3">
-        {useGlass ? (
-          <GlassView style={{ borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: Colors.outlineVariant }}>
-            <View className="flex-row h-14 p-1.5 gap-1.5">
-              {TABS.map((item) => {
-                const active = tab === item.key
-                return (
-                  <View key={item.key} className="flex-1">
-                    <TouchableOpacity
-                      onPress={() => setTab(item.key)}
-                      className="h-full w-full flex-row items-center justify-center gap-1.5 rounded-xl px-2"
-                      style={{ backgroundColor: active ? `${Colors.primary}22` : 'transparent' }}
-                    >
-                      <Ionicons
-                        name={item.icon}
-                        size={16}
-                        color={active ? Colors.primary : Colors.onSurfaceVariant}
-                      />
-                      <Text
-                        className="text-xs font-semibold"
-                        numberOfLines={1}
-                        adjustsFontSizeToFit
-                        minimumFontScale={0.85}
-                        style={{ color: active ? Colors.primary : Colors.onSurfaceVariant }}
-                      >
-                        {item.label}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                )
-              })}
-            </View>
-          </GlassView>
-        ) : (
-          <BlurView tint="systemMaterial" intensity={100} style={{ borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: Colors.outlineVariant }}>
-            <View className="flex-row h-14 p-1.5 gap-1.5">
-              {TABS.map((item) => {
-                const active = tab === item.key
-                return (
-                  <View key={item.key} className="flex-1">
-                    <TouchableOpacity
-                      onPress={() => setTab(item.key)}
-                      className="h-full w-full flex-row items-center justify-center gap-1.5 rounded-xl px-2"
-                      style={{ backgroundColor: active ? `${Colors.primary}22` : 'transparent' }}
-                    >
-                      <Ionicons
-                        name={item.icon}
-                        size={16}
-                        color={active ? Colors.primary : Colors.onSurfaceVariant}
-                      />
-                      <Text
-                        className="text-xs font-semibold"
-                        numberOfLines={1}
-                        adjustsFontSizeToFit
-                        minimumFontScale={0.85}
-                        style={{ color: active ? Colors.primary : Colors.onSurfaceVariant }}
-                      >
-                        {item.label}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                )
-              })}
-            </View>
-          </BlurView>
-        )}
+      {/* Top-level icon tabs */}
+      <View className="px-4 pt-1 pb-2">
+        <View className="flex-row justify-around items-center">
+          {TABS.map((item) => {
+            const active = tab === item.key
+            return (
+              <TouchableOpacity
+                key={item.key}
+                onPress={() => setTab(item.key)}
+                activeOpacity={0.7}
+                className="items-center justify-center rounded-2xl"
+                style={{
+                  width: 56,
+                  height: 44,
+                  backgroundColor: active ? `${Colors.primary}1f` : 'transparent',
+                }}
+              >
+                <Ionicons
+                  name={item.icon}
+                  size={22}
+                  color={active ? Colors.primary : Colors.onSurfaceVariant}
+                />
+              </TouchableOpacity>
+            )
+          })}
+        </View>
       </View>
 
-      {/* Profile-only wizard progress */}
+      {/* Profile-only wizard segmented */}
       {tab === 'profile' && (
-        <View className="px-5 pt-3">
-          {renderSectionSurface(
-            <View className="px-4 py-3">
-              <Text className="text-xs font-semibold text-on-surface-variant">
-                Profile step {profileStepIndex + 1} of {PROFILE_STEPS.length}
-              </Text>
-              <Text className="text-base font-bold text-on-surface mt-1">{currentProfileStep.label}</Text>
-              <Text className="text-xs text-on-surface-variant mt-0.5">{currentProfileStep.subtitle}</Text>
-              <View className="flex-row gap-2 mt-3">
-                {PROFILE_STEPS.map((item, index) => (
-                  <TouchableOpacity
-                    key={item.key}
-                    onPress={() => setProfileStep(item.key)}
-                    className="flex-1 h-2 rounded-full"
+        <View className="px-5 pb-2 pt-1">
+          <View
+            className="flex-row rounded-full p-1.5 self-center"
+            style={{ backgroundColor: Colors.surfaceContainer }}
+          >
+            {PROFILE_STEPS.map((item) => {
+              const active = profileStep === item.key
+              return (
+                <TouchableOpacity
+                  key={item.key}
+                  onPress={() => setProfileStep(item.key)}
+                  className="px-8 py-2.5 rounded-full"
+                  style={{ backgroundColor: active ? Colors.surface : 'transparent' }}
+                >
+                  <Text
+                    className="text-base"
                     style={{
-                      backgroundColor: index <= profileStepIndex ? Colors.primary : Colors.surfaceContainerHighest,
+                      color: active ? Colors.onSurface : Colors.onSurfaceVariant,
+                      fontWeight: active ? '700' : '500',
                     }}
-                  />
-                ))}
-              </View>
-            </View>
-          )}
+                  >
+                    {item.label}
+                  </Text>
+                </TouchableOpacity>
+              )
+            })}
+          </View>
         </View>
       )}
 
       {/* Error banner */}
       {error && (
-        <View className="mx-5 mt-3 p-3 bg-red-50 rounded-xl">
-          <Text className="text-base text-primary font-medium">{error}</Text>
+        <View className="mx-5 mt-2 px-3 py-2 rounded-lg" style={{ backgroundColor: `${Colors.primary}1a` }}>
+          <Text className="text-sm text-primary">{error}</Text>
         </View>
       )}
 
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ padding: 20, paddingTop: 28, paddingBottom: insets.bottom + 40 }}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 32 }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -986,16 +998,15 @@ export default function EditProfileModal() {
         {tab === 'profile' && profileStep === 'basics' && (
           <View className="gap-5">
             {renderSectionSurface(
-              <View className="p-5 gap-5">
-                <View className="items-center gap-3">
+              <View className="gap-5">
+                <View className="items-center pt-2 pb-3">
                   <TouchableOpacity
                     onPress={handleAvatarPress}
                     activeOpacity={0.8}
                     disabled={isUploadingAvatar}
                   >
                     <View
-                      className="w-24 h-24 rounded-2xl overflow-hidden bg-surface-container-high"
-                      style={{ borderWidth: 2, borderColor: Colors.outlineVariant }}
+                      className="w-32 h-32 rounded-3xl overflow-hidden bg-surface-container-high"
                     >
                       {avatarUrl ? (
                         <Image
@@ -1005,35 +1016,20 @@ export default function EditProfileModal() {
                         />
                       ) : (
                         <View className="w-full h-full items-center justify-center">
-                          <Ionicons name="person" size={40} color={Colors.onSurfaceVariant} />
+                          <Ionicons name="person" size={52} color={Colors.onSurfaceVariant} />
                         </View>
                       )}
                     </View>
                     <View
-                      className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full items-center justify-center"
-                      style={{ backgroundColor: Colors.primary }}
+                      className="absolute -bottom-1 -right-1 w-10 h-10 rounded-full items-center justify-center"
+                      style={{ backgroundColor: Colors.primary, borderWidth: 3, borderColor: Colors.surface }}
                     >
                       {isUploadingAvatar ? (
                         <ActivityIndicator size="small" color="#fff" />
                       ) : (
-                        <Ionicons name="camera" size={16} color="#fff" />
+                        <Ionicons name="camera" size={18} color="#fff" />
                       )}
                     </View>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={handleAvatarPress}
-                    disabled={isUploadingAvatar}
-                    className="rounded-full px-5 py-2"
-                    style={{ backgroundColor: Colors.surfaceContainerHigh }}
-                  >
-                    {isUploadingAvatar ? (
-                      <View className="flex-row items-center gap-2">
-                        <ActivityIndicator size="small" color={Colors.primary} />
-                        <Text className="text-sm font-semibold text-on-surface">Uploading…</Text>
-                      </View>
-                    ) : (
-                      <Text className="text-sm font-bold text-primary">Change Photo</Text>
-                    )}
                   </TouchableOpacity>
                 </View>
 
@@ -1042,9 +1038,9 @@ export default function EditProfileModal() {
                   <TextInput
                     value={form.displayName ?? ''}
                     onChangeText={(v) => set('displayName', v)}
-                    placeholder="Your display name"
+                    placeholder="Your name"
                     placeholderTextColor={Colors.onSurfaceVariant}
-                    className="bg-surface-container rounded-xl px-4 py-3.5 text-base text-on-surface"
+                    className="bg-surface-container rounded-2xl px-4 py-4 text-lg text-on-surface"
                     style={{ color: Colors.onSurface }}
                     maxLength={50}
                   />
@@ -1055,18 +1051,20 @@ export default function EditProfileModal() {
                   <TextInput
                     value={form.bio ?? ''}
                     onChangeText={(v) => set('bio', v)}
-                    placeholder="Tell people about yourself..."
+                    placeholder="Add a bio"
                     placeholderTextColor={Colors.onSurfaceVariant}
-                    className="bg-surface-container rounded-xl px-4 py-3.5 text-base text-on-surface"
-                    style={{ color: Colors.onSurface }}
+                    className="bg-surface-container rounded-2xl px-4 py-4 text-lg text-on-surface"
+                    style={{ color: Colors.onSurface, minHeight: 120 }}
                     multiline
-                    numberOfLines={4}
+                    numberOfLines={5}
                     textAlignVertical="top"
                     maxLength={300}
                   />
-                  <Text className="text-sm text-on-surface-variant text-right">
-                    {(form.bio ?? '').length}/300
-                  </Text>
+                  {(form.bio ?? '').length > 250 && (
+                    <Text className="text-xs text-on-surface-variant text-right">
+                      {(form.bio ?? '').length}/300
+                    </Text>
+                  )}
                 </View>
               </View>
             )}
@@ -1077,7 +1075,7 @@ export default function EditProfileModal() {
         {tab === 'profile' && profileStep === 'details' && (
           <View className="gap-5">
             {renderSectionSurface(
-              <View className="p-5 gap-4">
+              <View className="gap-4">
                 <View className="gap-2 z-50">
                   <SectionLabel>Country</SectionLabel>
                   <CountryPicker
@@ -1105,15 +1103,6 @@ export default function EditProfileModal() {
                     </View>
                   )}
                 </View>
-
-                <View className="gap-2 mt-2">
-                  <SectionLabel>Integrations</SectionLabel>
-                  <MusicConnectButton
-                    connected={form.musicConnected ?? false}
-                    onConnect={() => setMusicConnected(true)}
-                    onDisconnect={() => setMusicConnected(false)}
-                  />
-                </View>
               </View>
             )}
           </View>
@@ -1123,32 +1112,27 @@ export default function EditProfileModal() {
         {tab === 'appearance' && (
           <View className="gap-5">
             {renderSectionSurface(
-              <View className="p-5 gap-8">
+              <View className="gap-6">
                 <View className="gap-3">
                   <SectionLabel>Banner</SectionLabel>
 
-                  <ColorPicker
+                  <ColorRow
                     label="Custom Banner Color"
-                    value={form.bannerUrl?.startsWith('#') ? form.bannerUrl : ''}
-                    presets={ACCENT_PRESETS}
-                    onChange={(v) => set('bannerUrl', v || BANNER_PRESETS[0])}
+                    value={colorTargets.banner.value}
+                    onPress={() => setEditingColorKey('banner')}
                   />
 
-                  <Text className="text-sm font-semibold text-on-surface-variant mt-2">
-                    Or select a preset image:
-                  </Text>
-                  <View className="flex-row flex-wrap gap-3">
+                  <View className="flex-row flex-wrap justify-center gap-2.5">
                     {BANNER_PRESETS.map((url, i) => (
                       <TouchableOpacity
                         key={i}
                         onPress={() => set('bannerUrl', url)}
                         style={{
-                          width: 80,
-                          height: 50,
-                          borderRadius: 10,
-                          borderWidth: form.bannerUrl === url ? 3 : 1.5,
-                          borderColor:
-                            form.bannerUrl === url ? Colors.primary : Colors.outlineVariant,
+                          width: 104,
+                          height: 64,
+                          borderRadius: 14,
+                          borderWidth: form.bannerUrl === url ? 3 : 0,
+                          borderColor: Colors.primary,
                           overflow: 'hidden',
                         }}
                       >
@@ -1160,9 +1144,6 @@ export default function EditProfileModal() {
                       </TouchableOpacity>
                     ))}
                   </View>
-                  <Text className="text-sm font-semibold text-on-surface-variant mt-1">
-                    Or enter an image URL:
-                  </Text>
                   <TextInput
                     value={
                       form.bannerUrl?.startsWith('linear-gradient') ||
@@ -1171,48 +1152,43 @@ export default function EditProfileModal() {
                         : form.bannerUrl ?? ''
                     }
                     onChangeText={(v) => set('bannerUrl', v)}
-                    placeholder="https://example.com/banner.jpg"
+                    placeholder="Image URL"
                     placeholderTextColor={Colors.onSurfaceVariant}
-                    className="bg-surface-container rounded-xl px-4 py-3.5 text-base text-on-surface"
+                    className="bg-surface-container rounded-2xl px-4 py-4 text-base text-on-surface"
                     style={{ color: Colors.onSurface }}
                     autoCapitalize="none"
                     keyboardType="url"
                   />
                 </View>
 
-                <ColorPicker
+                <ColorRow
                   label="Accent Color"
-                  value={form.accentColor ?? ''}
-                  presets={ACCENT_PRESETS}
-                  onChange={(v) => set('accentColor', v || undefined)}
+                  value={colorTargets.accent.value}
+                  onPress={() => setEditingColorKey('accent')}
                 />
 
-                <ColorPicker
+                <ColorRow
                   label="Name Color"
-                  value={form.nameColor ?? ''}
-                  presets={NAME_COLOR_PRESETS}
-                  onChange={(v) => set('nameColor', v || undefined)}
+                  value={colorTargets.name.value}
+                  onPress={() => setEditingColorKey('name')}
                 />
 
-                <View className="gap-4">
+                <View className="gap-2">
                   <SectionLabel>Widget Colors</SectionLabel>
-                  <ColorPicker
+                  <ColorRow
                     label="Albums widget"
-                    value={form.albumsContainerColor ?? ''}
-                    presets={ACCENT_PRESETS}
-                    onChange={(v) => set('albumsContainerColor', v || undefined)}
+                    value={colorTargets.albums.value}
+                    onPress={() => setEditingColorKey('albums')}
                   />
-                  <ColorPicker
+                  <ColorRow
                     label="Songs widget"
-                    value={form.songsContainerColor ?? ''}
-                    presets={ACCENT_PRESETS}
-                    onChange={(v) => set('songsContainerColor', v || undefined)}
+                    value={colorTargets.songs.value}
+                    onPress={() => setEditingColorKey('songs')}
                   />
-                  <ColorPicker
+                  <ColorRow
                     label="Artists widget"
-                    value={form.artistsContainerColor ?? ''}
-                    presets={ACCENT_PRESETS}
-                    onChange={(v) => set('artistsContainerColor', v || undefined)}
+                    value={colorTargets.artists.value}
+                    onPress={() => setEditingColorKey('artists')}
                   />
                 </View>
               </View>
@@ -1225,22 +1201,19 @@ export default function EditProfileModal() {
           <View className="gap-6">
             {/* Integrations */}
             {renderSectionSurface(
-              <View className="gap-3 p-5">
+              <View className="gap-3">
                 <SectionLabel>Integrations</SectionLabel>
                 <MusicConnectButton
                   connected={form.musicConnected ?? false}
                   onConnect={() => setMusicConnected(true)}
                   onDisconnect={() => setMusicConnected(false)}
                 />
-                <Text className="text-xs text-on-surface-variant">
-                  Connect Apple Music to sync your top albums, songs, and artists automatically.
-                </Text>
               </View>
             )}
 
             {/* Top Albums */}
             {renderSectionSurface(
-              <View className="gap-3 p-5">
+              <View className="gap-3">
                 <SectionHeaderWithMusicSync
                   title="Top Albums"
                   synced={form.syncTopAlbumsWithMusic === true}
@@ -1260,18 +1233,18 @@ export default function EditProfileModal() {
                 {!(form.syncTopAlbumsWithMusic && form.musicConnected) && (form.topAlbums ?? []).length < 3 && (
                   <MusicSearch
                     type="album"
-                    placeholder="Search for an album..."
+                    placeholder="Search albums"
                     onSelect={(r) => addAlbum(r as AlbumSearchResult)}
                   />
                 )}
                 {form.syncTopAlbumsWithMusic && form.musicConnected && (
                   <Text className="text-xs text-on-surface-variant">
-                    Synced from Apple Music. Toggle off to curate this section manually.
+                    Synced from Apple Music.
                   </Text>
                 )}
                 {!canUseNativeMusicSync && (
                   <Text className="text-xs text-on-surface-variant">
-                    Auto-sync is currently iOS development-build only. Manual curation stays available.
+                    Auto-sync requires iOS dev build.
                   </Text>
                 )}
               </View>
@@ -1279,7 +1252,7 @@ export default function EditProfileModal() {
 
             {/* Top Songs */}
             {renderSectionSurface(
-              <View className="gap-3 p-5">
+              <View className="gap-3">
                 <SectionHeaderWithMusicSync
                   title="Top Songs"
                   synced={form.syncTopSongsWithMusic === true}
@@ -1300,18 +1273,18 @@ export default function EditProfileModal() {
                 {!(form.syncTopSongsWithMusic && form.musicConnected) && (form.topSongs ?? []).length < 3 && (
                   <MusicSearch
                     type="track"
-                    placeholder="Search for a song..."
+                    placeholder="Search songs"
                     onSelect={(r) => addSong(r as TrackSearchResult)}
                   />
                 )}
                 {form.syncTopSongsWithMusic && form.musicConnected && (
                   <Text className="text-xs text-on-surface-variant">
-                    Synced from Apple Music. Toggle off to curate this section manually.
+                    Synced from Apple Music.
                   </Text>
                 )}
                 {!canUseNativeMusicSync && (
                   <Text className="text-xs text-on-surface-variant">
-                    Auto-sync is currently iOS development-build only. Manual curation stays available.
+                    Auto-sync requires iOS dev build.
                   </Text>
                 )}
               </View>
@@ -1319,7 +1292,7 @@ export default function EditProfileModal() {
 
             {/* Top Artists */}
             {renderSectionSurface(
-              <View className="gap-3 p-5">
+              <View className="gap-3">
                 <SectionHeaderWithMusicSync
                   title="Top Artists"
                   synced={form.syncTopArtistsWithMusic === true}
@@ -1338,18 +1311,18 @@ export default function EditProfileModal() {
                 {!(form.syncTopArtistsWithMusic && form.musicConnected) && (form.topArtists ?? []).length < 3 && (
                   <MusicSearch
                     type="artist"
-                    placeholder="Search for an artist..."
+                    placeholder="Search artists"
                     onSelect={(r) => addArtist(r as ArtistSearchResult)}
                   />
                 )}
                 {form.syncTopArtistsWithMusic && form.musicConnected && (
                   <Text className="text-xs text-on-surface-variant">
-                    Synced from Apple Music. Toggle off to curate this section manually.
+                    Synced from Apple Music.
                   </Text>
                 )}
                 {!canUseNativeMusicSync && (
                   <Text className="text-xs text-on-surface-variant">
-                    Auto-sync is currently iOS development-build only. Manual curation stays available.
+                    Auto-sync requires iOS dev build.
                   </Text>
                 )}
               </View>
@@ -1358,15 +1331,10 @@ export default function EditProfileModal() {
         )}
 
         {tab === 'widgets' && (
-          <View className="gap-5">
-            {renderSectionSurface(
-              <View className="p-5">
-                <Text className="text-base font-bold text-on-surface">Arrange your profile widgets</Text>
-                <Text className="mt-2 text-sm leading-6 text-on-surface-variant">
-                  Long-press and drag a row to reorder it. Use the switch to hide a widget without removing its content.
-                </Text>
-              </View>
-            )}
+          <View className="gap-3">
+            <Text className="text-xs text-on-surface-variant">
+              Drag to reorder. Toggle to hide.
+            </Text>
 
             <DraggableFlatList
               data={normalizeWidgetOrder(form.widgetOrder).map(type =>
@@ -1384,37 +1352,9 @@ export default function EditProfileModal() {
           </View>
         )}
 
-        {/* Profile wizard controls */}
-        {tab === 'profile' &&
-          renderSectionSurface(
-            <View className="mx-1 px-4 py-4 flex-row items-center gap-4">
-              <TouchableOpacity
-                onPress={goToPrevProfileStep}
-                disabled={isFirstProfileStep}
-                className="flex-1 rounded-xl py-3.5 items-center"
-                style={{
-                  backgroundColor: isFirstProfileStep ? Colors.surfaceContainerHigh : Colors.surfaceContainer,
-                }}
-              >
-                <Text
-                  className="text-sm font-semibold"
-                  style={{ color: isFirstProfileStep ? Colors.onSurfaceVariant : Colors.onSurface }}
-                >
-                  Back
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={goToNextProfileStep}
-                className="flex-1 rounded-xl py-3.5 items-center"
-                style={{ backgroundColor: Colors.primary }}
-              >
-                <Text className="text-sm font-semibold" style={{ color: Colors.onPrimary }}>
-                  {isLastProfileStep ? 'Done' : 'Next'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
       </ScrollView>
+
+      <ColorEditorSheet target={editingColor} onClose={() => setEditingColorKey(null)} />
     </KeyboardAvoidingView>
   )
 

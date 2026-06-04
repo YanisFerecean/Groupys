@@ -5,4 +5,5 @@ export interface ArtistRes {
   listeners: number
   playcount: number
   summary: string
+  genre?: string | null
 }

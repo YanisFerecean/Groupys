@@ -58,20 +58,30 @@ export default function LexicalEditorNative({
   }, [toolbarAnim]);
 
   const pickMedia = async (type: 'images' | 'videos') => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: [type],
-      quality: 0.8,
-      allowsEditing: false,
-      allowsMultipleSelection: true,
-      selectionLimit: 4,
-    });
-    
-    if (!result.canceled && result.assets) {
-      const media = result.assets.map(asset => ({
-        uri: asset.uri,
-        type: asset.type === 'video' ? 'video' : 'image',
-      }));
-      onMediaSelect?.(media);
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: [type],
+        quality: 0.8,
+        allowsEditing: false,
+        allowsMultipleSelection: true,
+        selectionLimit: 4,
+        // iOS HEIC/iCloud assets fail to load via the raw representation; force transcoding.
+        preferredAssetRepresentationMode:
+          ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
+      });
+
+      if (!result.canceled && result.assets) {
+        const media = result.assets.map(asset => ({
+          uri: asset.uri,
+          type: asset.type === 'video' ? 'video' : 'image',
+        }));
+        onMediaSelect?.(media);
+      }
+    } catch {
+      // iCloud-only assets can fail to load (PHPhotosErrorDomain 3164) until downloaded to device.
+      alert(
+        `Could not load the selected ${type === 'videos' ? 'video' : 'image'}. If it is stored in iCloud, open it in the Photos app to download it, then try again.`,
+      );
     }
   };
 

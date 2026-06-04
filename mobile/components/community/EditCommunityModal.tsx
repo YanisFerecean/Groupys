@@ -250,6 +250,9 @@ export default function EditCommunityModal({
       quality: 0.8,
       allowsEditing: true,
       aspect: isBanner ? [16, 9] : [1, 1],
+      // iOS HEIC/iCloud assets fail to load via the raw representation; force transcoding.
+      preferredAssetRepresentationMode:
+        ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
     })
 
     if (!result.canceled && result.assets[0]?.uri) {

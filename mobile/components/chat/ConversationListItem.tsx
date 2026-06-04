@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
 import { GlassView } from 'expo-glass-effect'
@@ -15,7 +16,7 @@ interface ConversationListItemProps {
   useGlass?: boolean
 }
 
-export function ConversationListItem({
+export const ConversationListItem = memo(function ConversationListItem({
   conversation,
   currentUsername,
   preview,
@@ -134,4 +135,4 @@ export function ConversationListItem({
       {rowContent}
     </TouchableOpacity>
   )
-}
+})

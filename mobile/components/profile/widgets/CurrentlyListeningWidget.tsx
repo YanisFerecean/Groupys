@@ -81,14 +81,6 @@ interface CurrentlyListeningWidgetProps {
   track?: TrackInfo
   musicConnected?: boolean
   musicUserId?: string
-  /**
-   * @deprecated temporary compatibility alias
-   */
-  spotifyConnected?: boolean
-  /**
-   * @deprecated temporary compatibility alias
-   */
-  spotifyUserId?: string
   autoRefreshMs?: number
 }
 
@@ -106,8 +98,6 @@ export default function CurrentlyListeningWidget({
   track: manualTrack,
   musicConnected,
   musicUserId,
-  spotifyConnected,
-  spotifyUserId,
   autoRefreshMs = 0,
 }: CurrentlyListeningWidgetProps) {
   const { getToken } = useAuth()
@@ -135,8 +125,8 @@ export default function CurrentlyListeningWidget({
     outputRange: [0, 0, 1],
   })
 
-  const resolvedMusicConnected = musicConnected ?? spotifyConnected
-  const resolvedMusicUserId = musicUserId ?? spotifyUserId
+  const resolvedMusicConnected = musicConnected
+  const resolvedMusicUserId = musicUserId
 
   useEffect(() => {
     liveTrackRef.current = liveTrack
@@ -163,7 +153,7 @@ export default function CurrentlyListeningWidget({
 
     let cancelled = false
 
-    const fetchSpotify = async () => {
+    const fetchTrack = async () => {
       if (isFetchingRef.current) {
         return
       }
@@ -235,7 +225,7 @@ export default function CurrentlyListeningWidget({
       }
     }
 
-    fetchSpotify()
+    fetchTrack()
 
     if (!autoRefreshMs || autoRefreshMs <= 0) {
       return () => {
@@ -243,7 +233,7 @@ export default function CurrentlyListeningWidget({
       }
     }
 
-    const interval = setInterval(fetchSpotify, autoRefreshMs)
+    const interval = setInterval(fetchTrack, autoRefreshMs)
     return () => {
       cancelled = true
       clearInterval(interval)

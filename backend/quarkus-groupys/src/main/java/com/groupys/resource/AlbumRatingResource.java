@@ -49,6 +49,12 @@ public class AlbumRatingResource {
     }
 
     @GET
+    @Path("/album/by-apple-music/{appleMusicId}")
+    public List<AlbumRatingResDto> getByAppleMusicId(@PathParam("appleMusicId") String appleMusicId) {
+        return albumRatingService.getByAppleMusicId(appleMusicId);
+    }
+
+    @GET
     @Path("/mine")
     public List<AlbumRatingResDto> getMyRatings() {
         return albumRatingService.getMyRatings(jwt.getSubject());

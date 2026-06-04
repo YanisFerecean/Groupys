@@ -11,6 +11,8 @@ interface DiscoveryState {
   usersRefreshing: boolean
   communitiesError: boolean
   usersError: boolean
+  communitiesLastFetched: number
+  usersLastFetched: number
   setCommunities: (communities: SuggestedCommunity[]) => void
   setUsers: (users: SuggestedUser[]) => void
   setCommunitiesLoading: (loading: boolean) => void
@@ -32,8 +34,10 @@ export const useDiscoveryStore = create<DiscoveryState>((set) => ({
   usersRefreshing: false,
   communitiesError: false,
   usersError: false,
-  setCommunities: (communities) => set({ communities, communitiesError: false }),
-  setUsers: (users) => set({ users, usersError: false }),
+  communitiesLastFetched: 0,
+  usersLastFetched: 0,
+  setCommunities: (communities) => set({ communities, communitiesError: false, communitiesLastFetched: Date.now() }),
+  setUsers: (users) => set({ users, usersError: false, usersLastFetched: Date.now() }),
   setCommunitiesLoading: (communitiesLoading) => set({ communitiesLoading }),
   setUsersLoading: (usersLoading) => set({ usersLoading }),
   setCommunitiesRefreshing: (communitiesRefreshing) => set({ communitiesRefreshing }),

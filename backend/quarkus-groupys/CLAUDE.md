@@ -14,43 +14,43 @@ Run all commands from `backend/quarkus-groupys`:
 
 ## Architecture
 
-Quarkus 3.32.4 backend (Java 25) that aggregates music data from **Deezer** (search, metadata, IDs, images) and **Last.FM** (listeners, playcount, bio, charts) into JPA entities, exposed via REST.
+Quarkus 3.32.4 backend (Java 25) sourcing all music data from **Apple Music** (MusicKit catalog + per-user library APIs) into JPA entities, exposed via REST. Deezer and Last.fm integrations have been removed as of the Apple Music hard-cutover.
 
 ```
-Resource (JAX-RS) → Service → REST Client (Deezer/LastFM external APIs)
-                             → Repository (DB via PanacheRepositoryBase)
-                             → Mapper (DTO ↔ Entity conversion)
+Resource (JAX-RS) → Service → AppleCatalogService → AppleMusicApiClient (MusicKit REST)
+                            → AppleCatalogEntityService → Repository (DB via PanacheRepositoryBase)
+                            → Mapper (Apple DTO ↔ Entity ↔ Response DTO)
 ```
 
 ### Key Design Decisions
 
 - **Repository pattern**: Uses `PanacheRepositoryBase<Entity, Long>`, NOT `PanacheEntity`. Entities have private fields with getters/setters.
-- **Entity IDs from Deezer**: `@Id` with NO `@GeneratedValue` — IDs are externally assigned from Deezer.
-- **Dual-API merge**: Artist data merges Deezer (id, name, images) + LastFM (listeners, playcount, summary). Albums/Tracks come from Deezer only.
+- **Synthetic entity IDs**: `Artist`/`Album`/`Track` `@Id` is a stable `Long` derived from `MusicIdentityUtil` (SHA-256 of the Apple Music catalog ID, falling back to a name-based hash). No `@GeneratedValue`. `appleMusicId` is stored separately with a unique index.
+- **Single-source merge**: Artist/Album/Track data comes solely from Apple Music. No second-API enrichment. Legacy fields like `Artist.listeners`/`playcount` are nullable and left unpopulated.
 - **Never return entities from REST**: Always map to response DTOs to avoid `LazyInitializationException`.
-- **Concrete REST Client responses**: No generics in REST client return types (Java type erasure prevents deserialization).
+- **Concrete REST Client responses**: `AppleMusicApiClient` returns `String` payloads; `AppleCatalogService` parses with Jackson (Java type erasure prevents generic deserialization).
 - **`rank` is SQL reserved**: Track entity uses `@Column(name = "track_rank")`.
-- **LastFM returns numbers as strings**: Parse with `Long.parseLong()` in mappers/services.
+- **Storefront resolution**: `AppleStorefrontUtil` derives the per-user Apple storefront before catalog calls.
 
 ### Package Layout (`src/main/java/com/groupys/`)
 
 | Package | Purpose |
 |---------|---------|
-| `client/` | REST clients: `DeezerClient`, `LastFmClient` |
-| `dto/deezer/` | Deezer API response records (`@JsonProperty` for snake_case) |
-| `dto/lastfm/` | LastFM API response records (deeply nested JSON structure) |
+| `client/` | REST client: `AppleMusicApiClient` |
+| `dto/apple/` | Apple Music API response records (`AppleCatalogArtist`, `AppleCatalogAlbum`, `AppleCatalogSong`, `AppleCatalogGenre`, `AppleSearchResult`, `AppleChartsResult`) |
 | `dto/` | Response DTOs returned by REST endpoints |
-| `mapper/` | Conversion between external DTOs, entities, and response DTOs |
-| `model/` | JPA entities: `Artist`, `Album`, `Track`, `User` |
+| `mapper/` | Conversion between Apple DTOs, entities, and response DTOs |
+| `model/` | JPA entities: `Artist`, `Album`, `Track`, `Genre`, `User` |
 | `repository/` | `PanacheRepositoryBase` implementations |
 | `resource/` | JAX-RS REST endpoints (all under `/api` root path) |
-| `service/` | Business logic, external API orchestration, enrichment |
+| `service/` | Business logic, Apple Music orchestration, enrichment (`AppleCatalogService`, `AppleCatalogEntityService`, `MusicService`, `ChartService`, `DiscoveryService`, `AlbumService`, `ArtistService`, `TrackService`) |
+| `util/` | `MusicIdentityUtil`, `AppleStorefrontUtil`, `GenreSeed`, `UserUtil`, `CountryUtil` |
 
 ### API Root & External Services
 
 - All endpoints prefixed with `/api` (`quarkus.rest.path=/api`)
-- Deezer API: `https://api.deezer.com`
-- LastFM API: `https://ws.audioscrobbler.com/2.0/` (key via `LASTFM_API_KEY` env var)
+- Apple Music API: `https://api.music.apple.com` (configured via `quarkus.rest-client.apple-music-api.url`)
+- Developer token signed locally using `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY`, `APPLE_MEDIA_ID`, TTL via `APPLE_DEVELOPER_TOKEN_TTL_SECONDS` (default 300)
 - PostgreSQL: `localhost:5432/db`
 - MinIO: `localhost:9000`
 

@@ -2,9 +2,10 @@ package com.groupys.mapper;
 
 import com.groupys.dto.AlbumResDto;
 import com.groupys.dto.ArtistResDto;
-import com.groupys.dto.deezer.DeezerAlbumDto;
+import com.groupys.dto.apple.AppleCatalogAlbum;
+import com.groupys.dto.apple.AppleCatalogSong;
 import com.groupys.model.Album;
-import com.groupys.model.Artist;
+import com.groupys.service.AppleCatalogEntityService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -17,44 +18,45 @@ public class AlbumMapper {
     @Inject
     ArtistMapper artistMapper;
 
-    public AlbumResDto toResDto(DeezerAlbumDto deezer) {
-        ArtistResDto artistDto = null;
-        if (deezer.artist() != null) {
-            artistDto = artistMapper.toResDto(deezer.artist());
+    @Inject
+    AppleCatalogEntityService entityService;
+
+    public AlbumResDto toResDto(Long id, AppleCatalogAlbum album, ArtistResDto artistDto) {
+        List<AlbumResDto.TrackDto> tracks = album.tracks() == null
+                ? List.of()
+                : album.tracks().stream()
+                .map(track -> toTrackDto(track))
+                .toList();
+
+        Integer duration = null;
+        if (album.tracks() != null && !album.tracks().isEmpty()) {
+            int totalMillis = album.tracks().stream()
+                    .filter(track -> track != null && track.durationInMillis() != null)
+                    .mapToInt(AppleCatalogSong::durationInMillis)
+                    .sum();
+            duration = totalMillis > 0 ? totalMillis / 1000 : null;
         }
-        List<String> genres = deezer.genres() != null && deezer.genres().data() != null
-                ? deezer.genres().data().stream().map(g -> g.name()).toList()
-                : Collections.emptyList();
-        List<AlbumResDto.TrackDto> tracks = deezer.tracks() != null && deezer.tracks().data() != null
-                ? deezer.tracks().data().stream()
-                        .map(t -> new AlbumResDto.TrackDto(t.id(), t.title(), t.duration(), t.preview(), t.trackPosition()))
-                        .toList()
-                : Collections.emptyList();
 
         return new AlbumResDto(
-                deezer.id(),
-                deezer.title(),
-                deezer.coverSmall(),
-                deezer.coverMedium(),
-                deezer.coverBig(),
-                deezer.coverXl(),
-                deezer.releaseDate(),
-                deezer.label(),
-                deezer.duration(),
-                deezer.nbTracks(),
-                deezer.fans(),
-                genres,
+                id,
+                album.name(),
+                entityService.buildArtworkUrl(album.artworkUrlTemplate(), album.artworkWidth(), album.artworkHeight(), 120),
+                entityService.buildArtworkUrl(album.artworkUrlTemplate(), album.artworkWidth(), album.artworkHeight(), 300),
+                entityService.buildArtworkUrl(album.artworkUrlTemplate(), album.artworkWidth(), album.artworkHeight(), 600),
+                entityService.buildArtworkUrl(album.artworkUrlTemplate(), album.artworkWidth(), album.artworkHeight(), 1200),
+                album.releaseDate(),
+                album.recordLabel(),
+                duration,
+                album.trackCount(),
+                null,
+                album.genreNames() != null ? album.genreNames() : List.of(),
                 artistDto,
                 tracks
         );
     }
 
     public AlbumResDto toResDto(Album entity) {
-        ArtistResDto artistDto = null;
-        if (entity.getArtist() != null) {
-            artistDto = artistMapper.toResDto(entity.getArtist());
-        }
-
+        ArtistResDto artistDto = entity.getArtist() != null ? artistMapper.toResDto(entity.getArtist()) : null;
         return new AlbumResDto(
                 entity.getId(),
                 entity.getTitle(),
@@ -73,23 +75,16 @@ public class AlbumMapper {
         );
     }
 
-    public Album toEntity(DeezerAlbumDto deezer, Artist artist) {
-        Album album = new Album();
-        album.setId(deezer.id());
-        album.setTitle(deezer.title());
-        album.setCoverSmall(deezer.coverSmall());
-        album.setCoverMedium(deezer.coverMedium());
-        album.setCoverBig(deezer.coverBig());
-        album.setCoverXl(deezer.coverXl());
-        album.setReleaseDate(deezer.releaseDate());
-        album.setLabel(deezer.label());
-        album.setDuration(deezer.duration());
-        album.setNbTracks(deezer.nbTracks());
-        album.setFans(deezer.fans());
-        if (deezer.genres() != null && deezer.genres().data() != null) {
-            album.setGenres(deezer.genres().data().stream().map(g -> g.name()).toList());
-        }
-        album.setArtist(artist);
-        return album;
+    private AlbumResDto.TrackDto toTrackDto(AppleCatalogSong track) {
+        Long id = track.id() != null
+                ? com.groupys.util.MusicIdentityUtil.syntheticTrackId(track.id(), track.name(), track.artistName())
+                : null;
+        return new AlbumResDto.TrackDto(
+                id,
+                track.name(),
+                track.durationInMillis() != null ? Math.max(track.durationInMillis() / 1000, 0) : null,
+                track.previewUrl(),
+                track.trackNumber()
+        );
     }
 }

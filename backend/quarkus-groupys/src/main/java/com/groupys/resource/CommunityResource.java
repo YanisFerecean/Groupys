@@ -13,6 +13,7 @@ import io.minio.GetObjectArgs;
 import io.minio.MinioClient;
 import io.minio.StatObjectArgs;
 import io.minio.StatObjectResponse;
+import io.quarkus.logging.Log;
 import io.quarkus.security.Authenticated;
 import jakarta.annotation.security.PermitAll;
 import jakarta.annotation.security.RolesAllowed;
@@ -244,12 +245,16 @@ public class CommunityResource {
             User user = userRepository.findByClerkId(jwt.getSubject())
                     .orElseThrow(() -> new NotFoundException("User not found"));
             String mediaType = file.contentType();
-            InputStream is = Files.newInputStream(file.uploadedFile());
-            String mediaUrl = storageService.uploadPostMedia(user.id, file.fileName(), mediaType, is, file.size());
-            is.close();
-            return Response.ok(java.util.Map.of("url", mediaUrl)).build();
+            try (InputStream is = Files.newInputStream(file.uploadedFile())) {
+                String mediaUrl = storageService.uploadPostMedia(user.id, file.fileName(), mediaType, is, file.size());
+                return Response.ok(java.util.Map.of("url", mediaUrl)).build();
+            }
+        } catch (WebApplicationException e) {
+            throw e;
         } catch (Exception e) {
-            throw new InternalServerErrorException("File upload failed", e);
+            Log.errorf(e, "Community media upload failed (file=%s, size=%d, contentType=%s)",
+                    file.fileName(), file.size(), file.contentType());
+            throw new InternalServerErrorException("File upload failed: " + e.getMessage(), e);
         }
     }
 }

@@ -27,8 +27,10 @@ export default function TopAlbumsWidget({
   if (!albums?.length) return null
   const visibleAlbums = albums.slice(0, size === 'small' ? 1 : 3)
 
+  const canRateAlbum = (album: TopAlbum | undefined) => !!album && (!!album.id || !!album.appleMusicId)
+
   const handlePress = (album: TopAlbum) => {
-    if (!album.id || !onAlbumPress) return
+    if (!canRateAlbum(album) || !onAlbumPress) return
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     onAlbumPress(album)
   }
@@ -47,9 +49,9 @@ export default function TopAlbumsWidget({
       {size === 'small' ? (
         <View className="gap-3">
           <TouchableOpacity
-            activeOpacity={visibleAlbums[0]?.id && onAlbumPress ? 0.85 : 1}
+            activeOpacity={canRateAlbum(visibleAlbums[0]) && onAlbumPress ? 0.85 : 1}
             onPress={() => handlePress(visibleAlbums[0])}
-            disabled={!visibleAlbums[0]?.id || !onAlbumPress}
+            disabled={!canRateAlbum(visibleAlbums[0]) || !onAlbumPress}
           >
             <View className="aspect-square rounded-3xl overflow-hidden bg-surface-container-high relative">
               {visibleAlbums[0]?.coverUrl ? (
@@ -100,9 +102,9 @@ export default function TopAlbumsWidget({
           {visibleAlbums.map((album, i) => (
             <TouchableOpacity
               key={i}
-              activeOpacity={album.id && onAlbumPress ? 0.85 : 1}
+              activeOpacity={canRateAlbum(album) && onAlbumPress ? 0.85 : 1}
               onPress={() => handlePress(album)}
-              disabled={!album.id || !onAlbumPress}
+              disabled={!canRateAlbum(album) || !onAlbumPress}
             >
               <View className="w-[140px] h-[140px] rounded-3xl overflow-hidden bg-surface-container-high shrink-0 relative">
                 {album.coverUrl ? (

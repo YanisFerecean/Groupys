@@ -12,6 +12,7 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import FeedPostCard from '@/components/feed/FeedPostCard'
+import HotTakeCard from '@/components/hottake/HotTakeCard'
 import SwipeableTabScreen from '@/components/navigation/SwipeableTabScreen'
 import { apiFetch } from '@/lib/api'
 import { Colors } from '@/constants/colors'
@@ -140,9 +141,14 @@ export default function FeedScreen() {
               paddingBottom: 100,
               justifyContent: isEmpty ? 'center' : 'flex-start',
             }}
+            ListHeaderComponent={<HotTakeCard />}
             ListEmptyComponent={renderEmptyState}
             showsVerticalScrollIndicator={false}
             alwaysBounceVertical
+            maxToRenderPerBatch={5}
+            updateCellsBatchingPeriod={50}
+            windowSize={10}
+            removeClippedSubviews
             onViewableItemsChanged={onViewableItemsChanged}
             viewabilityConfig={viewabilityConfig}
             refreshControl={(

@@ -27,7 +27,7 @@ export default function TopArtistsWidget({
   const rootNavigationState = useRootNavigationState()
   const navigationReadyRef = useRef(false)
   const { getToken } = useAuth()
-  const [resolvingArtistKey, setResolvingArtistKey] = useState<string | null>(null)
+  const [resolvingArtistKeys, setResolvingArtistKeys] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     navigationReadyRef.current = !!rootNavigationState?.key
@@ -41,7 +41,8 @@ export default function TopArtistsWidget({
 
   const handleArtistPress = async (artist: TopArtist, index: number) => {
     const key = artist.id ? String(artist.id) : `${artist.name}-${index}`
-    setResolvingArtistKey(key)
+    if (resolvingArtistKeys.has(key)) return
+    setResolvingArtistKeys(prev => new Set(prev).add(key))
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
 
     try {
@@ -62,7 +63,11 @@ export default function TopArtistsWidget({
     } catch (err) {
       console.error('Failed to resolve artist id:', err)
     } finally {
-      setResolvingArtistKey(null)
+      setResolvingArtistKeys((prev) => {
+        const next = new Set(prev)
+        next.delete(key)
+        return next
+      })
     }
   }
 
@@ -82,7 +87,7 @@ export default function TopArtistsWidget({
       </Text>
       {size === 'small' ? (
         <Link
-          href={{ pathname: '/(home)/(profile)/artist/[id]', params: { id: String(visibleArtists[0]?.id ?? '') } }}
+          href={{ pathname: '/(home)/(profile)/artist/[id]', params: { id: String(visibleArtists[0]?.id ?? ''), name: visibleArtists[0]?.name ?? '' } }}
           asChild
         >
           <TouchableOpacity
@@ -124,34 +129,35 @@ export default function TopArtistsWidget({
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 16, paddingVertical: 4 }}>
           {visibleArtists.map((artist, i) => {
           const key = artist.id ? String(artist.id) : `${artist.name}-${i}`
-          const isResolving = resolvingArtistKey === key
-          const body = (
-            <>
-              <Link.AppleZoom>
-                <View className="w-24 h-24 rounded-full overflow-hidden bg-surface-container-high border-2 border-white/20">
-                  {artist.imageUrl ? (
-                    <Image
-                      source={{ uri: artist.imageUrl }}
-                      style={{ width: '100%', height: '100%', borderRadius: 999 }}
-                      contentFit="cover"
-                      transition={200}
-                    />
-                  ) : (
-                    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
-                      <Text className="text-3xl font-bold" style={{ color: textColor ?? undefined }}>
-                        {artist.name.charAt(0).toUpperCase()}
-                      </Text>
-                    </View>
-                  )}
-                  {isResolving ? (
-                    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
-                      <View className="w-9 h-9 rounded-full items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.35)' }}>
-                        <ActivityIndicator size="small" color={Colors.primary} />
-                      </View>
-                    </View>
-                  ) : null}
+          const isResolving = resolvingArtistKeys.has(key)
+          const artistImage = (
+            <View className="w-24 h-24 rounded-full overflow-hidden bg-surface-container-high border-2 border-white/20">
+              {artist.imageUrl ? (
+                <Image
+                  source={{ uri: artist.imageUrl }}
+                  style={{ width: '100%', height: '100%', borderRadius: 999 }}
+                  contentFit="cover"
+                  transition={200}
+                />
+              ) : (
+                <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text className="text-3xl font-bold" style={{ color: textColor ?? undefined }}>
+                    {artist.name.charAt(0).toUpperCase()}
+                  </Text>
                 </View>
-              </Link.AppleZoom>
+              )}
+              {isResolving ? (
+                <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
+                  <View className="w-9 h-9 rounded-full items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.35)' }}>
+                    <ActivityIndicator size="small" color={Colors.primary} />
+                  </View>
+                </View>
+              ) : null}
+            </View>
+          )
+
+          const artistLabel = (
+            <>
               <Text className="text-sm font-bold text-center" style={{ color: textColor ?? undefined }} numberOfLines={1}>
                 {artist.name}
               </Text>
@@ -167,7 +173,7 @@ export default function TopArtistsWidget({
             artist.id ? (
               <Link
                 key={i}
-                href={{ pathname: '/(home)/(profile)/artist/[id]', params: { id: String(artist.id) } }}
+                href={{ pathname: '/(home)/(profile)/artist/[id]', params: { id: String(artist.id), name: artist.name } }}
                 asChild
               >
                 <TouchableOpacity
@@ -176,7 +182,8 @@ export default function TopArtistsWidget({
                   activeOpacity={0.8}
                   onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
                 >
-                  {body}
+                  <Link.AppleZoom>{artistImage}</Link.AppleZoom>
+                  {artistLabel}
                 </TouchableOpacity>
               </Link>
             ) : (
@@ -186,9 +193,10 @@ export default function TopArtistsWidget({
                 style={{ width: 96 }}
                 activeOpacity={0.8}
                 onPress={() => handleArtistPress(artist, i)}
-                disabled={resolvingArtistKey !== null}
+                disabled={resolvingArtistKeys.has(key)}
               >
-                {body}
+                {artistImage}
+                {artistLabel}
               </TouchableOpacity>
             )
           )

@@ -45,8 +45,19 @@ public class SchemaBootstrapService {
             run(statement, "ALTER TABLE artists ADD COLUMN IF NOT EXISTS apple_music_id varchar(64)");
             run(statement, "CREATE UNIQUE INDEX IF NOT EXISTS idx_artists_apple_music_id ON artists (apple_music_id)");
 
+            run(statement, "ALTER TABLE albums ADD COLUMN IF NOT EXISTS apple_music_id varchar(64)");
+            run(statement, "CREATE UNIQUE INDEX IF NOT EXISTS idx_albums_apple_music_id ON albums (apple_music_id)");
+
             run(statement, "ALTER TABLE tracks ADD COLUMN IF NOT EXISTS apple_music_id varchar(64)");
             run(statement, "CREATE UNIQUE INDEX IF NOT EXISTS idx_tracks_apple_music_id ON tracks (apple_music_id)");
+
+            run(statement, "ALTER TABLE genres ADD COLUMN IF NOT EXISTS apple_genre_id varchar(64)");
+            run(statement, "CREATE UNIQUE INDEX IF NOT EXISTS idx_genres_apple_genre_id ON genres (apple_genre_id)");
+
+            // Apple Music hard-cutover — drop legacy Spotify columns (idempotent)
+            run(statement, "ALTER TABLE users DROP COLUMN IF EXISTS spotify_access_token");
+            run(statement, "ALTER TABLE users DROP COLUMN IF EXISTS spotify_refresh_token");
+            run(statement, "ALTER TABLE users DROP COLUMN IF EXISTS spotify_token_expiry");
 
             // Hot takes
             run(statement, """

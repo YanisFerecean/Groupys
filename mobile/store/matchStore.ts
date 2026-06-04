@@ -4,6 +4,7 @@ import type { UserMatch } from '@/models/Match'
 interface MatchState {
   matches: UserMatch[]
   matchesLoading: boolean
+  matchesLastFetched: number
   pendingMatchModal: UserMatch | null
   setMatches: (matches: UserMatch[]) => void
   addMatch: (match: UserMatch) => void
@@ -16,8 +17,9 @@ interface MatchState {
 export const useMatchStore = create<MatchState>((set) => ({
   matches: [],
   matchesLoading: false,
+  matchesLastFetched: 0,
   pendingMatchModal: null,
-  setMatches: (matches) => set({ matches }),
+  setMatches: (matches) => set({ matches, matchesLastFetched: Date.now() }),
   addMatch: (match) =>
     set((state) => ({
       matches: [match, ...state.matches.filter((m) => m.matchId !== match.matchId)],

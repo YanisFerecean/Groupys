@@ -52,12 +52,14 @@ public class RateLimitingFilter implements ContainerRequestFilter {
         try {
             // Check if Redis is available
             if (redisClient == null) {
-                LOG.debug("Redis not available, skipping rate limiting");
+                LOG.warn("Redis unavailable; rate limiting is DISABLED (fail-open) for this request");
                 return;
             }
 
-            // Token bucket algorithm using Redis
-            String currentCountStr = redisClient.get(key).toString();
+            // Token bucket algorithm using Redis.
+            // get() returns null Response when the key is absent (first request in window).
+            io.vertx.redis.client.Response current = redisClient.get(key);
+            String currentCountStr = current != null ? current.toString() : null;
             long currentCount = currentCountStr != null && !currentCountStr.isEmpty()
                 ? Long.parseLong(currentCountStr)
                 : 0;
@@ -85,8 +87,9 @@ public class RateLimitingFilter implements ContainerRequestFilter {
             requestContext.getHeaders().add("X-RateLimit-Remaining", String.valueOf(limit - currentCount - 1));
 
         } catch (Exception e) {
-            // Log but don't fail the request if Redis is unavailable
-            LOG.debugf("Rate limiting check failed: %s", e.getMessage());
+            // Fail-open: a Redis blip must not take down the whole API. Surfaced at WARN
+            // so operators can see when rate limiting is silently degraded.
+            LOG.warnf(e, "Rate limiting check failed (fail-open) for %s", path);
         }
     }
 
@@ -118,6 +121,8 @@ public class RateLimitingFilter implements ContainerRequestFilter {
     private boolean shouldSkipRateLimiting(String path) {
         // Skip rate limiting for health checks and static resources
         return path.contains("/health") ||
+               path.startsWith("ws/") ||
+               path.contains("/ws/") ||
                path.contains("/q/") ||
                path.endsWith(".js") ||
                path.endsWith(".css") ||

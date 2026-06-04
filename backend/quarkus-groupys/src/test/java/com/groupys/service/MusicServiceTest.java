@@ -3,6 +3,9 @@ package com.groupys.service;
 import com.groupys.client.AppleMusicApiClient;
 import com.groupys.model.User;
 import com.groupys.repository.UserRepository;
+import com.groupys.util.EncryptionUtil;
+import jakarta.enterprise.inject.Vetoed;
+import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
 import org.junit.jupiter.api.Test;
@@ -26,6 +29,7 @@ class MusicServiceTest {
         MusicService service = new MusicService();
         service.userRepository = new StubUserRepository(Map.of(user.clerkId, user));
         service.developerTokenService = new StubDeveloperTokenService();
+        service.encryptionUtil = new StubEncryptionUtil();
         service.appleMusicApi = new StubAppleMusicApiClient(
                 ResponseSpec.of(200, "{}"),
                 ResponseSpec.of(404, "{}"),
@@ -45,6 +49,7 @@ class MusicServiceTest {
         MusicService service = new MusicService();
         service.userRepository = new StubUserRepository(Map.of(user.clerkId, user));
         service.developerTokenService = new StubDeveloperTokenService();
+        service.encryptionUtil = new StubEncryptionUtil();
         service.appleMusicApi = new StubAppleMusicApiClient(
                 ResponseSpec.of(403, "{}"),
                 ResponseSpec.of(404, "{}"),
@@ -58,28 +63,17 @@ class MusicServiceTest {
     }
 
     @Test
-    void connectAllowsSimulatorMockTokenWhenEnabled() {
-        User user = user("clerk-connect-simulator", "connect-simulator");
-        MusicService service = new MusicService();
-        service.userRepository = new StubUserRepository(Map.of(user.clerkId, user));
-        service.simulatorMockEnabled = true;
-
-        service.connect(user.clerkId, "simulator_mock_user_token");
-
-        assertEquals("simulator_mock_user_token", user.appleMusicUserToken);
-        assertNotNull(user.appleMusicConnectedAt);
-    }
-
-    @Test
-    void topTracksReturnsSimulatorDataWhenMockTokenIsStored() {
-        User user = user("clerk-toptracks-simulator", "toptracks-simulator");
+    void getTopArtistsRejectsStoredTokenWhenDecryptionFails() {
+        User user = user("clerk-legacy-plaintext-token", "legacy-plaintext-token");
         user.appleMusicUserToken = "simulator_mock_user_token";
 
         MusicService service = new MusicService();
         service.userRepository = new StubUserRepository(Map.of(user.clerkId, user));
-        service.simulatorMockEnabled = true;
+        service.encryptionUtil = new FailingEncryptionUtil();
 
-        assertEquals(3, service.getTopTracks(user.clerkId).size());
+        BadRequestException error = assertThrows(BadRequestException.class, () -> service.getTopArtists(user.clerkId));
+
+        assertEquals("Apple Music connection is invalid. Please reconnect Apple Music.", error.getMessage());
     }
 
     @Test
@@ -90,6 +84,7 @@ class MusicServiceTest {
         MusicService service = new MusicService();
         service.userRepository = new StubUserRepository(Map.of(user.clerkId, user));
         service.developerTokenService = new StubDeveloperTokenService();
+        service.encryptionUtil = new StubEncryptionUtil();
         service.appleMusicApi = new StubAppleMusicApiClient(
                 ResponseSpec.of(200, "{}"),
                 ResponseSpec.of(200, replayPayload()),
@@ -110,6 +105,7 @@ class MusicServiceTest {
         MusicService service = new MusicService();
         service.userRepository = new StubUserRepository(Map.of(user.clerkId, user));
         service.developerTokenService = new StubDeveloperTokenService();
+        service.encryptionUtil = new StubEncryptionUtil();
         service.appleMusicApi = new StubAppleMusicApiClient(
                 ResponseSpec.of(200, "{}"),
                 ResponseSpec.of(404, "{}"),
@@ -130,6 +126,7 @@ class MusicServiceTest {
         MusicService service = new MusicService();
         service.userRepository = new StubUserRepository(Map.of(user.clerkId, user));
         service.developerTokenService = new StubDeveloperTokenService();
+        service.encryptionUtil = new StubEncryptionUtil();
         service.appleMusicApi = new StubAppleMusicApiClient(
                 ResponseSpec.of(200, "{}"),
                 ResponseSpec.of(200, replayViewsPayload()),
@@ -149,6 +146,7 @@ class MusicServiceTest {
         MusicService service = new MusicService();
         service.userRepository = new StubUserRepository(Map.of(user.clerkId, user));
         service.developerTokenService = new StubDeveloperTokenService();
+        service.encryptionUtil = new StubEncryptionUtil();
         service.appleMusicApi = new StubAppleMusicApiClient(
                 ResponseSpec.of(200, "{}"),
                 ResponseSpec.of(200, replayTopTracksViewPayload()),
@@ -167,6 +165,7 @@ class MusicServiceTest {
         MusicService service = new MusicService();
         service.userRepository = new StubUserRepository(Map.of(user.clerkId, user));
         service.developerTokenService = new StubDeveloperTokenService();
+        service.encryptionUtil = new StubEncryptionUtil();
         service.appleMusicApi = new StubAppleMusicApiClient(
                 ResponseSpec.of(200, "{}"),
                 ResponseSpec.of(200, replaySparseTrackPayload()),
@@ -185,6 +184,7 @@ class MusicServiceTest {
         MusicService service = new MusicService();
         service.userRepository = new StubUserRepository(Map.of(user.clerkId, user));
         service.developerTokenService = new StubDeveloperTokenService();
+        service.encryptionUtil = new StubEncryptionUtil();
         StubAppleMusicApiClient appleMusicApi = new StubAppleMusicApiClient(
                 ResponseSpec.of(200, "{}"),
                 ResponseSpec.of(200, replayPayload()),
@@ -460,6 +460,26 @@ class MusicServiceTest {
         }
     }
 
+    private static final class StubEncryptionUtil extends EncryptionUtil {
+        @Override
+        public String encrypt(String plaintext) {
+            return plaintext;
+        }
+
+        @Override
+        public String decrypt(String ciphertext) {
+            return ciphertext;
+        }
+    }
+
+    private static final class FailingEncryptionUtil extends EncryptionUtil {
+        @Override
+        public String decrypt(String ciphertext) {
+            throw new RuntimeException("Decryption failed");
+        }
+    }
+
+    @Vetoed
     private static final class StubAppleMusicApiClient implements AppleMusicApiClient {
         private final ResponseSpec storefront;
         private final ResponseSpec replay;
@@ -493,6 +513,46 @@ class MusicServiceTest {
         @Override
         public Response getHeavyRotation(String bearer, String musicUserToken, int limit) {
             return Response.status(heavy.status()).entity(heavy.payload()).build();
+        }
+
+        @Override
+        public Response search(String bearer, String storefront, String term, String types, int limit) {
+            return Response.status(501).build();
+        }
+
+        @Override
+        public Response getArtist(String bearer, String storefront, String id, String include) {
+            return Response.status(501).build();
+        }
+
+        @Override
+        public Response getArtists(String bearer, String storefront, String ids, String include) {
+            return Response.status(501).build();
+        }
+
+        @Override
+        public Response getAlbum(String bearer, String storefront, String id, String include) {
+            return Response.status(501).build();
+        }
+
+        @Override
+        public Response getSong(String bearer, String storefront, String id) {
+            return Response.status(501).build();
+        }
+
+        @Override
+        public Response getArtistTopSongs(String bearer, String storefront, String id, int limit) {
+            return Response.status(501).build();
+        }
+
+        @Override
+        public Response getCharts(String bearer, String storefront, String types, String genreId, int limit) {
+            return Response.status(501).build();
+        }
+
+        @Override
+        public Response getGenres(String bearer, String storefront) {
+            return Response.status(501).build();
         }
 
         private String lastReplayViews() {

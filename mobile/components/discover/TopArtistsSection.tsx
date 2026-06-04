@@ -8,12 +8,6 @@ import type { ArtistRes as ChartArtist } from '@/models/ArtistRes'
 
 export type { ChartArtist }
 
-function formatCount(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, '')}k`
-  return String(n)
-}
-
 function ArtistBubble({ artist }: { artist: ChartArtist }) {
   const imageUrl =
     artist.images.find((img) => img.includes('300x300')) ||
@@ -22,7 +16,7 @@ function ArtistBubble({ artist }: { artist: ChartArtist }) {
 
   return (
     <Link
-      href={{ pathname: '/artist/[id]', params: { id: artist.id } }}
+      href={{ pathname: '/artist/[id]', params: { id: artist.id, name: artist.name } }}
       asChild
     >
       <TouchableOpacity
@@ -43,9 +37,6 @@ function ArtistBubble({ artist }: { artist: ChartArtist }) {
         </Link.AppleZoom>
         <Text className="text-on-surface font-bold text-sm text-center" numberOfLines={1}>
           {artist.name}
-        </Text>
-        <Text className="text-on-surface-variant text-xs">
-          {formatCount(artist.listeners)} listeners
         </Text>
       </TouchableOpacity>
     </Link>
@@ -105,7 +96,6 @@ function ArtistSkeleton({ delay }: { delay: number }) {
     >
       <SkeletonPulse width={112} height={112} borderRadius={56} />
       <SkeletonPulse width={64} height={14} borderRadius={7} />
-      <SkeletonPulse width={48} height={10} borderRadius={5} />
     </Animated.View>
   )
 }

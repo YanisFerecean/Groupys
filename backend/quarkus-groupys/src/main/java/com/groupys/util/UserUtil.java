@@ -32,9 +32,7 @@ public final class UserUtil {
                 user.recommendationOptOut,
                 user.discoveryVisible,
                 followerCount,
-                followingCount,
-                user.lastFmUsername != null,
-                user.lastFmUsername);
+                followingCount);
     }
 
     private UserUtil() {

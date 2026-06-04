@@ -165,8 +165,8 @@ public class PostResource {
             }
             return Response.ok(java.util.Map.of("url", mediaUrl, "type", finalType)).build();
         } catch (Exception e) {
-            String msg = e.getMessage() != null ? e.getMessage() : "Upload failed";
-            return Response.status(500).entity(java.util.Map.of("error", msg)).build();
+            io.quarkus.logging.Log.error("Post media upload failed", e);
+            return Response.status(500).entity(java.util.Map.of("error", "Upload failed")).build();
         }
     }
 
@@ -205,10 +205,10 @@ public class PostResource {
             PostResDto created = postService.create(communityId, title, content, mediaList, clerkId);
             return Response.status(Response.Status.CREATED).entity(created).build();
         } catch (Exception e) {
-            String msg = e.getMessage() != null ? e.getMessage() : "Failed to create post";
+            io.quarkus.logging.Log.error("Post creation failed", e);
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
                     .type(MediaType.APPLICATION_JSON)
-                    .entity(java.util.Map.of("error", msg))
+                    .entity(java.util.Map.of("error", "Failed to create post"))
                     .build();
         }
     }

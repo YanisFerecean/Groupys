@@ -5,22 +5,22 @@
 -- =============================================================================
 
 -- ─── Genres (insert by name; use whatever ID already exists) ─────────────────
-INSERT INTO genres (name, deezer_id) VALUES
-  ('Hip-Hop',     132),
-  ('R&B',         165),
-  ('Pop',         132),
-  ('Rock',        152),
-  ('Indie',       85),
-  ('Electronic',  106),
-  ('Jazz',        129),
-  ('Trap',        116),
-  ('Afrobeats',   464),
-  ('Latin',       197),
-  ('Country',     6),
-  ('Alternative', 85)
+INSERT INTO genres (name) VALUES
+  ('Hip-Hop'),
+  ('R&B'),
+  ('Pop'),
+  ('Rock'),
+  ('Indie'),
+  ('Electronic'),
+  ('Jazz'),
+  ('Trap'),
+  ('Afrobeats'),
+  ('Latin'),
+  ('Country'),
+  ('Alternative')
 ON CONFLICT (name) DO NOTHING;
 
--- ─── Artists (IDs in the 9_000_000 range won't clash with real Deezer data) ──
+-- ─── Artists (IDs in the 9_000_000 range won't clash with Apple Music synthetic IDs) ──
 INSERT INTO artists (id, name, apple_music_id, popularity_score, genres_enriched) VALUES
   (9000001,'The Weeknd',       'seed_weeknd',     0.98,false),
   (9000002,'Drake',            'seed_drake',      0.97,false),

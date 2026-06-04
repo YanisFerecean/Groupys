@@ -4,6 +4,7 @@ import CurrentlyListeningWidget from '@/components/profile/widgets/CurrentlyList
 import TopAlbumsWidget from '@/components/profile/widgets/TopAlbumsWidget'
 import TopArtistsWidget from '@/components/profile/widgets/TopArtistsWidget'
 import TopSongsWidget from '@/components/profile/widgets/TopSongsWidget'
+import HotTakeWidget from '@/components/profile/widgets/HotTakeWidget'
 import { Colors } from '@/constants/colors'
 import { useAuthToken } from '@/hooks/useAuthToken'
 import { useChat } from '@/hooks/useChat'
@@ -218,16 +219,16 @@ export default function PublicProfileScreen({ userId }: PublicProfileScreenProps
 
   const { topMusic } = useTopMusic({
     targetUserId: backendUser?.id,
-    musicConnected: profile?.musicConnected ?? profile?.spotifyConnected,
-    syncTopAlbumsWithMusic: profile?.syncTopAlbumsWithMusic ?? profile?.syncTopAlbumsWithSpotify,
-    syncTopSongsWithMusic: profile?.syncTopSongsWithMusic ?? profile?.syncTopSongsWithSpotify,
-    syncTopArtistsWithMusic: profile?.syncTopArtistsWithMusic ?? profile?.syncTopArtistsWithSpotify,
+    musicConnected: profile?.musicConnected,
+    syncTopAlbumsWithMusic: profile?.syncTopAlbumsWithMusic,
+    syncTopSongsWithMusic: profile?.syncTopSongsWithMusic,
+    syncTopArtistsWithMusic: profile?.syncTopArtistsWithMusic,
   })
 
-  const isMusicConnected = profile?.musicConnected ?? profile?.spotifyConnected
-  const syncTopAlbumsWithMusic = profile?.syncTopAlbumsWithMusic ?? profile?.syncTopAlbumsWithSpotify
-  const syncTopSongsWithMusic = profile?.syncTopSongsWithMusic ?? profile?.syncTopSongsWithSpotify
-  const syncTopArtistsWithMusic = profile?.syncTopArtistsWithMusic ?? profile?.syncTopArtistsWithSpotify
+  const isMusicConnected = profile?.musicConnected ?? false
+  const syncTopAlbumsWithMusic = profile?.syncTopAlbumsWithMusic
+  const syncTopSongsWithMusic = profile?.syncTopSongsWithMusic
+  const syncTopArtistsWithMusic = profile?.syncTopArtistsWithMusic
 
   const topAlbums = syncTopAlbumsWithMusic && isMusicConnected
     ? topMusic.topAlbums
@@ -286,7 +287,7 @@ export default function PublicProfileScreen({ userId }: PublicProfileScreenProps
       : [...DEFAULT_WIDGET_ORDER]
     const hiddenWidgets = new Set(profile.hiddenWidgets ?? [])
 
-    return widgetOrder.flatMap((type) => {
+    const rendered = widgetOrder.flatMap((type) => {
       if (hiddenWidgets.has(type)) {
         return []
       }
@@ -343,7 +344,20 @@ export default function PublicProfileScreen({ userId }: PublicProfileScreenProps
           return []
       }
     })
-  }, [backendUser?.id, isMusicConnected, profile, topAlbums, topArtists, topSongs])
+
+    if (backendUser?.username) {
+      rendered.push(
+        <HotTakeWidget
+          key="hotTake"
+          username={backendUser.username}
+          isOwnProfile={backendUser.clerkId === user?.id}
+          textColor={profile.accentColor}
+        />,
+      )
+    }
+
+    return rendered
+  }, [backendUser?.id, backendUser?.username, backendUser?.clerkId, user?.id, isMusicConnected, profile, topAlbums, topArtists, topSongs])
   const hasWidgets = orderedWidgets.length > 0
 
   if (loading) {

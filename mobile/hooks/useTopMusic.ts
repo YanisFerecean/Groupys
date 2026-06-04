@@ -129,8 +129,8 @@ export function useTopMusic({
           albumsRes.status === 'fulfilled'
             ? albumsRes.value
                 .filter((album) => !!album.title)
-                .map((album, index) => ({
-                  id: index + 1,
+                .map((album) => ({
+                  appleMusicId: album.appleMusicId ?? undefined,
                   title: album.title,
                   artist: album.artist ?? '',
                   coverUrl: album.coverUrl ?? undefined,
