@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from 'react'
 import type { BackendUser } from '@/lib/api'
+import { ApiError } from '@/lib/apiRequest'
 import {
   acceptConversationRequest,
   denyConversationRequest,
@@ -178,10 +179,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       upsertConversation(conversation)
       return conversation
     } catch (error) {
+      if (error instanceof ApiError && (error.status === 403 || error.status === 404)) {
+        removeConversation(conversationId)
+        return null
+      }
+
       console.error('[chat] failed to hydrate conversation', error)
       return null
     }
-  }, [upsertConversation])
+  }, [removeConversation, upsertConversation])
 
   const startDirectConversation = useCallback(async (targetUserId: string) => {
     const token = await getTokenRef.current()

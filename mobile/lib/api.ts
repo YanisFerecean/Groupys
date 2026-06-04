@@ -459,6 +459,58 @@ export async function deleteMyAccount(token: string | null): Promise<void> {
   return apiDelete('/users/me', token)
 }
 
+// ── Push notifications ──────────────────────────────────────────────────────
+
+export interface NotificationPreferences {
+  matchesEnabled: boolean
+  messagesEnabled: boolean
+  communityEnabled: boolean
+  hotTakesEnabled: boolean
+  retentionEnabled: boolean
+  quietStartMinute: number | null
+  quietEndMinute: number | null
+  timezone: string | null
+}
+
+export async function registerDeviceToken(
+  token: string | null,
+  expoToken: string,
+  platform: string,
+): Promise<void> {
+  await apiPost('/notifications/device-tokens', token, { expoToken, platform })
+}
+
+export async function deleteDeviceToken(
+  token: string | null,
+  expoToken: string,
+): Promise<void> {
+  await apiDelete(`/notifications/device-tokens/${encodeURIComponent(expoToken)}`, token)
+}
+
+export async function fetchNotificationPreferences(
+  token: string | null,
+): Promise<NotificationPreferences> {
+  return apiFetch<NotificationPreferences>('/notifications/preferences', token, false)
+}
+
+export async function updateNotificationPreferences(
+  token: string | null,
+  prefs: NotificationPreferences,
+): Promise<NotificationPreferences> {
+  return apiPut<NotificationPreferences>('/notifications/preferences', token, prefs)
+}
+
+export async function recordProfileView(
+  userId: string,
+  token: string | null,
+): Promise<void> {
+  try {
+    await apiPost(`/users/${encodeURIComponent(userId)}/view`, token, {})
+  } catch {
+    // View tracking is best-effort; never block profile rendering.
+  }
+}
+
 export async function apiPostMultipart<T>(
   path: string,
   token: string | null,
@@ -859,6 +911,19 @@ export async function syncMusic(
 }
 
 export const syncSpotifyMusic = syncMusic
+
+/**
+ * Seed the user's explicit artist preferences from onboarding.
+ * `artistIds` are catalog entity IDs (numeric) returned by `searchArtists`.
+ */
+export async function saveOnboardingArtists(
+  artistIds: number[],
+  token: string | null,
+): Promise<void> {
+  const ids = artistIds.filter((id) => Number.isFinite(id))
+  if (!ids.length) return
+  await apiPost('/discovery/onboarding/artists', token, ids)
+}
 
 export async function fetchMusicTopTracks(
   token: string | null,

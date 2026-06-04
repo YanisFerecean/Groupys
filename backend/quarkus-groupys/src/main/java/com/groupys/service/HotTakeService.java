@@ -8,10 +8,12 @@ import com.groupys.dto.HotTakeResDto;
 import com.groupys.model.Friendship;
 import com.groupys.model.HotTake;
 import com.groupys.model.HotTakeAnswer;
+import com.groupys.model.HotTakeStreak;
 import com.groupys.model.User;
 import com.groupys.repository.FriendshipRepository;
 import com.groupys.repository.HotTakeAnswerRepository;
 import com.groupys.repository.HotTakeRepository;
+import com.groupys.repository.HotTakeStreakRepository;
 import com.groupys.repository.UserRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -20,7 +22,10 @@ import jakarta.ws.rs.ForbiddenException;
 import jakarta.ws.rs.NotFoundException;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @ApplicationScoped
@@ -37,6 +42,12 @@ public class HotTakeService {
 
     @Inject
     FriendshipRepository friendshipRepository;
+
+    @Inject
+    HotTakeStreakRepository hotTakeStreakRepository;
+
+    @Inject
+    NotificationService notificationService;
 
     @Inject
     ObjectMapper objectMapper;
@@ -71,6 +82,7 @@ public class HotTakeService {
                 .findByHotTakeAndUser(hotTake.id, user.id)
                 .orElse(null);
 
+        boolean isFirstAnswer = answer == null;
         if (answer == null) {
             answer = new HotTakeAnswer();
             answer.hotTake = hotTake;
@@ -89,7 +101,49 @@ public class HotTakeService {
         answer.answeredAt = Instant.now();
 
         hotTakeAnswerRepository.persist(answer);
+
+        updateStreak(user);
+        if (isFirstAnswer) {
+            notifyFriendsOfAnswer(user);
+        }
+
         return toAnswerDto(answer);
+    }
+
+    /** Bumps the user's daily answering streak — drives the "🔥 N-day streak" retention loop. */
+    void updateStreak(User user) {
+        HotTakeStreak streak = hotTakeStreakRepository.findByUser(user.id).orElse(null);
+        if (streak == null) {
+            streak = new HotTakeStreak();
+            streak.user = user;
+        }
+        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        if (today.equals(streak.lastAnswerDate)) {
+            return; // already counted today
+        }
+        if (streak.lastAnswerDate != null && today.minusDays(1).equals(streak.lastAnswerDate)) {
+            streak.currentStreak += 1;
+        } else {
+            streak.currentStreak = 1;
+        }
+        streak.longestStreak = Math.max(streak.longestStreak, streak.currentStreak);
+        streak.lastAnswerDate = today;
+        hotTakeStreakRepository.persist(streak);
+    }
+
+    /** Lets accepted friends know a user just answered, nudging them to open the app and compare picks. */
+    void notifyFriendsOfAnswer(User user) {
+        Set<UUID> friendIds = friendshipRepository.findAcceptedFriendIds(user.id);
+        if (friendIds.isEmpty()) {
+            return;
+        }
+        String name = user.displayName != null && !user.displayName.isBlank() ? user.displayName : user.username;
+        NotificationService.Content content = NotificationService.Content.of(
+                name + " answered today's hot take 🔥",
+                "Tap to see their pick and drop yours",
+                "/(home)/(feed)?hotTake=1")
+                .withImage(user.profileImage);
+        notificationService.notifyAll(friendIds, NotificationService.Type.HOT_TAKE, content);
     }
 
     public HotTakeAnswerResDto getMyAnswer(String clerkId) {

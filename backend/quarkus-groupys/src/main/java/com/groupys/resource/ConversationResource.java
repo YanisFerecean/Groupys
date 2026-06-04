@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.groupys.dto.ConversationResDto;
 import com.groupys.dto.MessageResDto;
 import com.groupys.service.ChatService;
+import com.groupys.service.NotificationService;
 import com.groupys.service.PresenceService;
 import com.groupys.service.UserService;
 import com.groupys.websocket.WebSocketMessage;
@@ -35,6 +36,9 @@ public class ConversationResource {
 
     @Inject
     PresenceService presenceService;
+
+    @Inject
+    NotificationService notificationService;
 
     @Inject
     ObjectMapper objectMapper;
@@ -115,13 +119,23 @@ public class ConversationResource {
             data.put("messageType", msg.messageType());
             data.put("createdAt", msg.createdAt().toString());
             String json = objectMapper.writeValueAsString(new WebSocketMessage("MESSAGE_NEW", data));
-            chatService.getParticipantClerkIds(msg.conversationId()).forEach((pid, clerkId) -> {
-                if (!clerkId.equals(senderClerkId)) {
+            String deeplink = "/(home)/(match)/chat/" + msg.conversationId();
+            String senderName = msg.senderDisplayName() != null && !msg.senderDisplayName().isBlank()
+                    ? msg.senderDisplayName() : msg.senderUsername();
+            chatService.getParticipantClerkIds(msg.conversationId()).forEach((userId, clerkId) -> {
+                if (clerkId.equals(senderClerkId)) return;
+                if (presenceService.isOnline(clerkId)) {
                     presenceService.sendTo(clerkId, json);
                 }
+                // Push even when websocket is connected: iOS may keep the socket alive in states where
+                // the user still expects an OS notification.
+                NotificationService.Content content = NotificationService.Content
+                        .of(senderName, "Sent you a message", deeplink)
+                        .withImage(msg.senderProfileImage());
+                notificationService.notify(userId, NotificationService.Type.MESSAGE, content);
             });
         } catch (Exception e) {
-            // WS push is best-effort — message is already saved
+            // WS/push are best-effort — message is already saved
         }
     }
 

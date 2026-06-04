@@ -15,7 +15,10 @@
         "applinks:groupys.app"
       ],
       "infoPlist": {
-        "NSAppleMusicUsageDescription": "Groupys uses Apple Music to connect your account and sync your top music."
+        "NSAppleMusicUsageDescription": "Groupys uses Apple Music to connect your account and sync your top music.",
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
       },
       "entitlements": {
         "com.apple.developer.music-user-token": true
@@ -41,9 +44,38 @@
               "pathPrefix": "/"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "groupys.app",
+              "pathPrefix": "/"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
-      ]
+      ],
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ],
+      "package": "groupys.app"
     },
     "web": {
       "output": "server",
@@ -70,7 +102,14 @@
       "expo-web-browser",
       "expo-font",
       "expo-image",
-      "expo-audio"
+      "expo-audio",
+      [
+        "expo-notifications",
+        {
+          "color": "#ba002b",
+          "defaultChannel": "default"
+        }
+      ]
     ],
     "extra": {
       "EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME": "${EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME}"
