@@ -4,6 +4,7 @@ import com.groupys.model.UserMatch;
 import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
 import jakarta.enterprise.context.ApplicationScoped;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -58,5 +59,25 @@ public class UserMatchRepository implements PanacheRepositoryBase<UserMatch, UUI
     public Optional<UserMatch> findByIdAndUser(UUID matchId, UUID userId) {
         return find("id = ?1 and (userA.id = ?2 or userB.id = ?2)", matchId, userId)
                 .firstResultOptional();
+    }
+
+    /**
+     * ACTIVE matches created before {@code before} whose conversation still has no messages.
+     * Feeds the match re-engagement nudge ("say hi before it goes cold").
+     */
+    public List<UserMatch> findStaleUnmessagedActiveMatches(Instant before, int limit) {
+        return getEntityManager().createQuery("""
+                select m from UserMatch m
+                where m.status = 'ACTIVE'
+                  and m.createdAt < :before
+                  and m.conversation is not null
+                  and not exists (
+                    select 1 from Message msg where msg.conversation.id = m.conversation.id
+                  )
+                order by m.createdAt asc
+                """, UserMatch.class)
+                .setParameter("before", before)
+                .setMaxResults(limit)
+                .getResultList();
     }
 }

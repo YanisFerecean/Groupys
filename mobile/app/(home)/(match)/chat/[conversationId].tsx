@@ -45,6 +45,7 @@ export default function ChatConversationScreen() {
     : params.conversationId
   const conversation = conversations.find(item => item.id === conversationId)
   const otherParticipant = conversation?.participants.find(participant => participant.username !== user?.username) ?? null
+  const activeConversationId = conversation ? conversationId ?? null : null
   const {
     hasMore,
     isLoading,
@@ -54,11 +55,12 @@ export default function ChatConversationScreen() {
     messages,
     resendMessage,
     sendMessage,
-  } = useChatMessages(conversationId ?? null, otherParticipant?.username ?? null)
+  } = useChatMessages(activeConversationId, otherParticipant?.username ?? null)
   const [typingUsers, setTypingUsers] = useState<Map<string, string>>(new Map())
   const [hasPartnerKey, setHasPartnerKey] = useState(false)
   const [isNearBottom, setIsNearBottom] = useState(true)
   const [requestAction, setRequestAction] = useState<'accept' | 'deny' | null>(null)
+  const [conversationLoadFailed, setConversationLoadFailed] = useState(false)
   const listRef = useRef<FlatList<Message>>(null)
   const isMountedRef = useRef(true)
 
@@ -69,11 +71,25 @@ export default function ChatConversationScreen() {
   }, [])
 
   useEffect(() => {
+    setConversationLoadFailed(false)
+  }, [conversationId])
+
+  useEffect(() => {
     if (!conversationId || conversation) {
       return
     }
 
-    void fetchConversationById(conversationId)
+    let cancelled = false
+
+    void fetchConversationById(conversationId).then((loaded) => {
+      if (!cancelled && !loaded) {
+        setConversationLoadFailed(true)
+      }
+    })
+
+    return () => {
+      cancelled = true
+    }
   }, [conversation, conversationId, fetchConversationById])
 
   useEffect(() => {
@@ -297,7 +313,23 @@ export default function ChatConversationScreen() {
 
       {!conversation ? (
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator color={Colors.primary} />
+          {conversationLoadFailed ? (
+            <View className="items-center px-8">
+              <Ionicons name="chatbubble-ellipses-outline" size={40} color={Colors.onSurfaceVariant} />
+              <Text className="mt-4 text-lg font-bold text-on-surface">Conversation unavailable</Text>
+              <Text className="mt-2 text-center text-sm font-medium text-on-surface-variant">
+                This chat could not be opened from your account.
+              </Text>
+              <TouchableOpacity
+                className="mt-6 rounded-full bg-primary px-6 py-3"
+                onPress={() => router.replace('/(home)/(match)/chat')}
+              >
+                <Text className="text-sm font-bold text-on-primary">Back to chats</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <ActivityIndicator color={Colors.primary} />
+          )}
         </View>
       ) : (
         <>

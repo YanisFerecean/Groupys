@@ -9,6 +9,7 @@ import { useEffect, useRef, useState, type ComponentProps } from 'react'
 import { Animated, Easing, Keyboard, Platform, Pressable, StyleSheet, TextInput, TouchableOpacity, View, useWindowDimensions, type KeyboardEvent as RNKeyboardEvent } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ChatProvider } from '@/components/chat/ChatProvider'
+import { NotificationProvider } from '@/components/notifications/NotificationProvider'
 import FullscreenSpinner from '@/components/ui/FullscreenSpinner'
 import { Colors } from '@/constants/colors'
 import { isAccountSetupComplete } from '@/lib/auth'
@@ -517,6 +518,7 @@ export default function HomeLayout() {
 
   return (
     <ChatProvider>
+      <NotificationProvider>
       <View style={styles.root}>
         <NativeTabs
           hidden={isChatThreadRoute || isPostDetailRoute || isArtistRoute || shouldShowDiscoverSearchDock || isDockMounted}
@@ -610,6 +612,7 @@ export default function HomeLayout() {
           />
         ) : null}
       </View>
+      </NotificationProvider>
     </ChatProvider>
   )
 }

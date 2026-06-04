@@ -168,7 +168,29 @@ export default function SettingsScreen() {
           </View>
         </View>
 
+        {/* Notifications */}
+        <View className="px-5 pt-8">
+          <Text className="text-xl font-bold text-on-surface">Notifications</Text>
+          <Text className="mt-1 text-sm text-on-surface-variant">
+            Manage push alerts and quiet hours.
+          </Text>
 
+          <TouchableOpacity
+            className="mt-5 flex-row items-center gap-3 rounded-2xl bg-surface-container-lowest p-4"
+            onPress={() => router.push('/(home)/(profile)/notifications')}
+          >
+            <View className="h-12 w-12 items-center justify-center rounded-full bg-surface-container-high">
+              <Ionicons name="notifications" size={22} color={Colors.primary} />
+            </View>
+            <View className="flex-1">
+              <Text className="font-semibold text-on-surface">Push Notifications</Text>
+              <Text className="text-xs text-on-surface-variant">
+                Matches, messages, communities, hot takes
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={Colors.onSurfaceVariant} />
+          </TouchableOpacity>
+        </View>
 
         {/* Sign Out */}
         <View className="px-5 pt-10">

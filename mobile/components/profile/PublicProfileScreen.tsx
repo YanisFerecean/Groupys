@@ -14,6 +14,7 @@ import {
   fetchAlbumRatingsByUsername,
   fetchPostsByAuthor,
   fetchUserById,
+  recordProfileView,
   type BackendUser,
 } from '@/lib/api'
 import type { PostResDto } from '@/models/PostRes'
@@ -152,6 +153,9 @@ export default function PublicProfileScreen({ userId }: PublicProfileScreenProps
 
       setBackendUser(profileData)
       setPosts(postsData)
+
+      // Record the view (feeds the "people viewed your profile" retention teaser).
+      void recordProfileView(userId, token)
 
       if (profileData?.username) {
         const ratingsData = await fetchAlbumRatingsByUsername(profileData.username, token).catch(() => [])

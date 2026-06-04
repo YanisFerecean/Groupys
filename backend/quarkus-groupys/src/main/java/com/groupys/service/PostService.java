@@ -44,6 +44,7 @@ public class PostService {
     private final CommentService commentService;
     private final StorageService storageService;
     private final Event<CommunityActivityEvent> communityActivityEvent;
+    private final NotificationService notificationService;
     private final PerformanceFeatureFlags flags;
 
     @Inject
@@ -59,6 +60,7 @@ public class PostService {
             CommentService commentService,
             StorageService storageService,
             Event<CommunityActivityEvent> communityActivityEvent,
+            NotificationService notificationService,
             PerformanceFeatureFlags flags) {
         this.postRepository = postRepository;
         this.communityRepository = communityRepository;
@@ -71,6 +73,7 @@ public class PostService {
         this.commentService = commentService;
         this.storageService = storageService;
         this.communityActivityEvent = communityActivityEvent;
+        this.notificationService = notificationService;
         this.flags = flags;
     }
 
@@ -233,7 +236,29 @@ public class PostService {
         communityActivityEvent.fireAsync(new CommunityActivityEvent(communityId))
                 .exceptionally(e -> { Log.warnf(e, "Async discovery refresh failed after post in community %s", communityId); return null; });
 
+        notifyCommunityMembers(community, author, post);
+
         return toDtoList(List.of(post), author).get(0);
+    }
+
+    /** Notify every community member (except the author) that a new post landed. */
+    void notifyCommunityMembers(Community community, User author, Post post) {
+        List<UUID> memberIds = communityMemberRepository.findByCommunity(community.id).stream()
+                .map(m -> m.user.id)
+                .filter(id -> !id.equals(author.id))
+                .limit(5000)
+                .toList();
+        if (memberIds.isEmpty()) {
+            return;
+        }
+        String name = author.displayName != null && !author.displayName.isBlank() ? author.displayName : author.username;
+        String preview = post.title != null && !post.title.isBlank() ? post.title : "shared a new post";
+        String deeplink = "/(home)/(feed)/post/" + post.id;
+        NotificationService.Content content = NotificationService.Content.of(
+                "New in " + community.name,
+                name + ": " + preview,
+                deeplink);
+        notificationService.notifyAll(memberIds, NotificationService.Type.COMMUNITY_POST, content);
     }
 
     @Transactional

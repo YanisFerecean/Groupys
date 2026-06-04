@@ -38,6 +38,7 @@ public class MatchService {
     private final DiscoveryService discoveryService;
     private final PerformanceFeatureFlags flags;
     private final DiscoveryRedisCacheService redisCacheService;
+    private final NotificationService notificationService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -53,7 +54,8 @@ public class MatchService {
             PresenceService presenceService,
             DiscoveryService discoveryService,
             PerformanceFeatureFlags flags,
-            DiscoveryRedisCacheService redisCacheService) {
+            DiscoveryRedisCacheService redisCacheService,
+            NotificationService notificationService) {
         this.userRepository = userRepository;
         this.userLikeRepository = userLikeRepository;
         this.userMatchRepository = userMatchRepository;
@@ -65,6 +67,7 @@ public class MatchService {
         this.discoveryService = discoveryService;
         this.flags = flags;
         this.redisCacheService = redisCacheService;
+        this.notificationService = notificationService;
     }
 
     // ── Like ──────────────────────────────────────────────────────────────────
@@ -137,9 +140,13 @@ public class MatchService {
 
                     Conversation conv = ensureMatchConversation(match, userA, userB);
 
-                    // Push MATCH_NEW to both parties via WebSocket
+                    // Push MATCH_NEW to both parties via WebSocket (real-time, in-app)
                     sendMatchEvent(liker, target, match.id, conv.id);
                     sendMatchEvent(target, liker, match.id, conv.id);
+
+                    // Push notification to both parties (reaches them even when offline)
+                    notifyMatch(liker, target, conv.id);
+                    notifyMatch(target, liker, conv.id);
 
                     return new LikeResponseDto(true, match.id, conv.id);
                 });
@@ -204,6 +211,15 @@ public class MatchService {
         } catch (JsonProcessingException e) {
             Log.warnf(e, "Failed to serialize MATCH_NEW event for user %s", recipient.id);
         }
+    }
+
+    void notifyMatch(User recipient, User other, UUID conversationId) {
+        String name = other.displayName != null && !other.displayName.isBlank() ? other.displayName : other.username;
+        String deeplink = "/(home)/(match)/chat/" + conversationId;
+        NotificationService.Content content = NotificationService.Content
+                .of("It's a match 🎶", "You and " + name + " vibe — say hi", deeplink)
+                .withImage(other.profileImage);
+        notificationService.notify(recipient.id, NotificationService.Type.MATCH, content);
     }
 
     // ── Pass ──────────────────────────────────────────────────────────────────

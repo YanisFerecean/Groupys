@@ -7,6 +7,7 @@ import com.groupys.dto.UserUpdateDto;
 import com.groupys.model.User;
 import com.groupys.repository.UserRepository;
 import com.groupys.service.DiscoveryService;
+import com.groupys.service.ProfileViewService;
 import com.groupys.service.StorageService;
 import com.groupys.service.UserService;
 import io.minio.GetObjectArgs;
@@ -57,6 +58,9 @@ public class UserResource {
 
     @Inject
     DiscoveryService discoveryService;
+
+    @Inject
+    ProfileViewService profileViewService;
 
     @Inject
     StorageService storageService;
@@ -189,6 +193,18 @@ public class UserResource {
     public UserFollowResDto follow(
             @PathParam("id") UUID id) {
         return discoveryService.followUser(jwt.getSubject(), id);
+    }
+
+    @POST
+    @Path("/{id: [0-9a-fA-F\\-]{36}}/view")
+    @Operation(summary = "Record a profile view", description = "Logs that the caller viewed this user's profile (feeds the retention teaser)")
+    @APIResponses({
+        @APIResponse(responseCode = "204", description = "View recorded"),
+        @APIResponse(responseCode = "401", description = "Unauthorized")
+    })
+    public Response recordView(@PathParam("id") UUID id) {
+        profileViewService.record(jwt.getSubject(), id);
+        return Response.noContent().build();
     }
 
     @DELETE

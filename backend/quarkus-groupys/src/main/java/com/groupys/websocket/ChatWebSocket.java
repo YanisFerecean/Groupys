@@ -6,6 +6,7 @@ import com.groupys.dto.MessageResDto;
 import com.groupys.model.User;
 import com.groupys.repository.UserRepository;
 import com.groupys.service.ChatService;
+import com.groupys.service.NotificationService;
 import com.groupys.service.PresenceService;
 import io.quarkus.arc.Arc;
 import io.quarkus.runtime.ShutdownEvent;
@@ -50,6 +51,9 @@ public class ChatWebSocket {
 
     @Inject
     ChatService chatService;
+
+    @Inject
+    NotificationService notificationService;
 
     @Inject
     UserRepository userRepository;
@@ -262,10 +266,17 @@ public class ChatWebSocket {
         // Broadcast MESSAGE_NEW
         Map<String, Object> messageData = buildMessageData(saved, tempId);
         String json = toJson(WebSocketMessage.messageNew(messageData));
+        String deeplink = "/(home)/(match)/chat/" + saved.conversationId();
+        String senderName = saved.senderDisplayName() != null && !saved.senderDisplayName().isBlank()
+                ? saved.senderDisplayName() : saved.senderUsername();
 
         chatService.getParticipantClerkIds(conversationId).forEach((pid, participantClerkId) -> {
             if (!pid.equals(sender.id)) {
                 presenceService.sendTo(participantClerkId, json);
+                NotificationService.Content pushContent = NotificationService.Content
+                        .of(senderName, "Sent you a message", deeplink)
+                        .withImage(saved.senderProfileImage());
+                notificationService.notify(pid, NotificationService.Type.MESSAGE, pushContent);
             }
         });
     }
