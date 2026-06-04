@@ -3,10 +3,10 @@ package com.groupys.mapper;
 import com.groupys.dto.AlbumResDto;
 import com.groupys.dto.ArtistResDto;
 import com.groupys.dto.TrackResDto;
-import com.groupys.dto.deezer.DeezerTrackDto;
+import com.groupys.dto.apple.AppleCatalogSong;
 import com.groupys.model.Album;
-import com.groupys.model.Artist;
 import com.groupys.model.Track;
+import com.groupys.service.AppleCatalogEntityService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -19,39 +19,24 @@ public class TrackMapper {
     @Inject
     AlbumMapper albumMapper;
 
-    public TrackResDto toResDto(DeezerTrackDto deezer) {
-        ArtistResDto artistDto = null;
-        if (deezer.artist() != null) {
-            artistDto = artistMapper.toResDto(deezer.artist());
-        }
+    @Inject
+    AppleCatalogEntityService entityService;
 
-        AlbumResDto albumDto = null;
-        if (deezer.album() != null) {
-            albumDto = albumMapper.toResDto(deezer.album());
-        }
-
+    public TrackResDto toResDto(Long id, AppleCatalogSong song, ArtistResDto artistDto, AlbumResDto albumDto) {
         return new TrackResDto(
-                deezer.id(),
-                deezer.title(),
-                deezer.preview(),
-                deezer.duration(),
-                deezer.rank(),
+                id,
+                song.name(),
+                song.previewUrl(),
+                song.durationInMillis() != null ? Math.max(song.durationInMillis() / 1000, 0) : null,
+                null,
                 artistDto,
                 albumDto
         );
     }
 
     public TrackResDto toResDto(Track entity) {
-        ArtistResDto artistDto = null;
-        if (entity.getArtist() != null) {
-            artistDto = artistMapper.toResDto(entity.getArtist());
-        }
-
-        AlbumResDto albumDto = null;
-        if (entity.getAlbum() != null) {
-            albumDto = albumMapper.toResDto(entity.getAlbum());
-        }
-
+        ArtistResDto artistDto = entity.getArtist() != null ? artistMapper.toResDto(entity.getArtist()) : null;
+        AlbumResDto albumDto = entity.getAlbum() != null ? albumMapper.toResDto(entity.getAlbum()) : null;
         return new TrackResDto(
                 entity.getId(),
                 entity.getTitle(),
@@ -63,15 +48,25 @@ public class TrackMapper {
         );
     }
 
-    public Track toEntity(DeezerTrackDto deezer, Artist artist, Album album) {
-        Track track = new Track();
-        track.setId(deezer.id());
-        track.setTitle(deezer.title());
-        track.setPreview(deezer.preview());
-        track.setDuration(deezer.duration());
-        track.setRank(deezer.rank());
-        track.setArtist(artist);
-        track.setAlbum(album);
-        return track;
+    public AlbumResDto toAlbumReference(Long id, String title, String artworkTemplate, Integer artworkWidth, Integer artworkHeight) {
+        if (id == null && (title == null || title.isBlank()) && (artworkTemplate == null || artworkTemplate.isBlank())) {
+            return null;
+        }
+        return new AlbumResDto(
+                id,
+                title,
+                entityService.buildArtworkUrl(artworkTemplate, artworkWidth, artworkHeight, 120),
+                entityService.buildArtworkUrl(artworkTemplate, artworkWidth, artworkHeight, 300),
+                entityService.buildArtworkUrl(artworkTemplate, artworkWidth, artworkHeight, 600),
+                entityService.buildArtworkUrl(artworkTemplate, artworkWidth, artworkHeight, 1200),
+                null,
+                null,
+                null,
+                null,
+                null,
+                java.util.List.of(),
+                null,
+                java.util.List.of()
+        );
     }
 }

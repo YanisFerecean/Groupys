@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
-import { Platform, ScrollView, Text, View, useWindowDimensions } from 'react-native'
+import { ScrollView, Text, View, useWindowDimensions } from 'react-native'
 import { Colors } from '@/constants/colors'
 import { parseWidgets, widgetsToProfile } from '@/lib/api'
 import type { SuggestedUser } from '@/models/SuggestedUser'
@@ -146,48 +146,6 @@ export default function UserHingeProfile({ user, scrollRef, bottomPadding = 20 }
         </SectionCard>
       )}
 
-      {/* Social context */}
-      {(user.mutualFollowCount > 0 || user.sharedCommunityCount > 0 || user.sameCountry) && (
-        <SectionCard>
-          <SectionLabel text="You two have in common" />
-          <View className="gap-3 mt-1">
-            {user.mutualFollowCount > 0 && (
-              <View className="flex-row items-center gap-3">
-                {Platform.OS === 'ios' ? (
-                  <View className="h-9 w-9 rounded-full bg-surface-container-high items-center justify-center">
-                    <Ionicons name="people" size={18} color={Colors.primary} />
-                  </View>
-                ) : (
-                  <View className="h-9 w-9 rounded-full bg-surface-container-high items-center justify-center">
-                    <Ionicons name="people-outline" size={18} color={Colors.primary} />
-                  </View>
-                )}
-                <Text className="text-base font-semibold text-on-surface">
-                  {user.mutualFollowCount} mutual {user.mutualFollowCount === 1 ? 'follow' : 'follows'}
-                </Text>
-              </View>
-            )}
-            {user.sharedCommunityCount > 0 && (
-              <View className="flex-row items-center gap-3">
-                <View className="h-9 w-9 rounded-full bg-surface-container-high items-center justify-center">
-                  <Ionicons name="people-circle-outline" size={18} color={Colors.primary} />
-                </View>
-                <Text className="text-base font-semibold text-on-surface">
-                  {user.sharedCommunityCount} shared {user.sharedCommunityCount === 1 ? 'community' : 'communities'}
-                </Text>
-              </View>
-            )}
-            {user.sameCountry && (
-              <View className="flex-row items-center gap-3">
-                <View className="h-9 w-9 rounded-full bg-surface-container-high items-center justify-center">
-                  <Text className="text-lg">🌍</Text>
-                </View>
-                <Text className="text-base font-semibold text-on-surface">Same country</Text>
-              </View>
-            )}
-          </View>
-        </SectionCard>
-      )}
     </ScrollView>
   )
 }

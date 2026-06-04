@@ -1,7 +1,6 @@
 package com.groupys.resource;
 
 import com.groupys.dto.DiscoverySyncResDto;
-import com.groupys.dto.LastFmConnectReqDto;
 import com.groupys.dto.MusicAlbumResDto;
 import com.groupys.dto.MusicArtistResDto;
 import com.groupys.dto.MusicConnectReqDto;
@@ -61,20 +60,6 @@ public class MusicResource {
     @Path("/disconnect")
     public Response disconnect() {
         musicService.disconnect(jwt.getSubject());
-        return Response.noContent().build();
-    }
-
-    @POST
-    @Path("/lastfm/connect")
-    public Response connectLastFm(@Valid LastFmConnectReqDto dto) {
-        musicService.connectLastFm(jwt.getSubject(), dto.username());
-        return Response.noContent().build();
-    }
-
-    @DELETE
-    @Path("/lastfm/disconnect")
-    public Response disconnectLastFm() {
-        musicService.disconnectLastFm(jwt.getSubject());
         return Response.noContent().build();
     }
 

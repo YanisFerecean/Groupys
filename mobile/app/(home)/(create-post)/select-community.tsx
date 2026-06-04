@@ -14,6 +14,7 @@ import { normalizeMediaUrl } from '@/lib/media'
 import type { CommunityResDto } from '@/models/CommunityRes'
 import AuthImageWithToken from '@/components/ui/AuthImageWithToken'
 import { useAuth } from '@clerk/expo'
+import { useCreatePostDraftStore } from '@/store/createPostDraftStore'
 
 export default function SelectCommunityScreen() {
   const insets = useSafeAreaInsets()
@@ -23,6 +24,9 @@ export default function SelectCommunityScreen() {
     selectedCommunityId?: string
   }>()
 
+  const setPendingCommunitySelection = useCreatePostDraftStore(
+    (state) => state.setPendingCommunitySelection,
+  )
   const [communities, setCommunities] = useState<CommunityResDto[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(
     selectedCommunityId ?? null
@@ -58,17 +62,15 @@ export default function SelectCommunityScreen() {
 
   const handleSelect = (community: CommunityResDto) => {
     setSelectedId(community.id)
+    setPendingCommunitySelection({
+      id: community.id,
+      name: community.name,
+      iconType: community.iconType,
+      iconEmoji: community.iconEmoji,
+      iconUrl: community.iconUrl,
+      description: community.description,
+    })
     router.back()
-    setTimeout(() => {
-      router.setParams({
-        selectedCommunityId: community.id,
-        selectedCommunityName: community.name,
-        selectedCommunityIconType: community.iconType,
-        selectedCommunityIconEmoji: community.iconEmoji,
-        selectedCommunityIconUrl: community.iconUrl,
-        selectedCommunityDescription: community.description,
-      })
-    }, 100)
   }
 
   const handleDiscover = () => {

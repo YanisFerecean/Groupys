@@ -15,6 +15,9 @@ import {
 } from '@/lib/api'
 import type { SuggestedUser } from '@/models/SuggestedUser'
 
+const COMMUNITIES_STALE_TIME = 1000 * 60 * 5
+const USERS_STALE_TIME = 1000 * 60 * 5
+
 export function useDiscovery() {
   const { getToken } = useAuth()
   const { fetchConversationById } = useChat()
@@ -28,10 +31,11 @@ export function useDiscovery() {
 
   const loadCommunities = useCallback(async (refresh = false) => {
     if (communitiesInflight.current) return
+    const state = useDiscoveryStore.getState()
+    if (!refresh && state.communities.length > 0 && Date.now() - state.communitiesLastFetched < COMMUNITIES_STALE_TIME) return
     communitiesInflight.current = true
 
     try {
-      const state = useDiscoveryStore.getState()
       if (refresh) state.setCommunitiesRefreshing(true)
       else if (state.communities.length === 0) state.setCommunitiesLoading(true)
 
@@ -51,12 +55,13 @@ export function useDiscovery() {
 
   const loadUsers = useCallback(async (refresh = false) => {
     if (usersInflight.current) return
+    const usersState = useDiscoveryStore.getState()
+    if (!refresh && usersState.users.length > 0 && Date.now() - usersState.usersLastFetched < USERS_STALE_TIME) return
     usersInflight.current = true
 
     try {
-      const state = useDiscoveryStore.getState()
-      if (refresh) state.setUsersRefreshing(true)
-      else if (state.users.length === 0) state.setUsersLoading(true)
+      if (refresh) usersState.setUsersRefreshing(true)
+      else if (usersState.users.length === 0) usersState.setUsersLoading(true)
 
       const token = await getTokenRef.current()
       const data = await fetchSuggestedUsers(token, 20, refresh)

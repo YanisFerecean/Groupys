@@ -2,7 +2,9 @@ package com.groupys.service;
 
 import com.groupys.dto.AlbumResDto;
 import com.groupys.dto.AlbumRatingCreateDto;
+import com.groupys.model.Album;
 import com.groupys.model.AlbumRating;
+import com.groupys.model.Artist;
 import com.groupys.model.User;
 import com.groupys.repository.AlbumRatingRepository;
 import com.groupys.repository.UserRepository;
@@ -30,9 +32,11 @@ class AlbumRatingServiceTest {
         service.userRepository = new StubUserRepository(user);
         service.albumService = new StubAlbumService();
         service.albumRatingRepository = repository;
+        service.appleCatalogEntityService = new StubAppleCatalogEntityService();
 
         AlbumRatingCreateDto dto = new AlbumRatingCreateDto(
                 302127L,
+                null,
                 "Album Title",
                 "https://example.com/cover.jpg",
                 "Artist Name",
@@ -47,6 +51,14 @@ class AlbumRatingServiceTest {
     private static final class StubAlbumService extends AlbumService {
         @Override
         public AlbumResDto getById(Long id) {
+            return null;
+        }
+    }
+
+    private static final class StubAppleCatalogEntityService extends AppleCatalogEntityService {
+        @Override
+        public Album upsertAlbumReference(String appleAlbumId, String albumName, Artist artist,
+                                          String artworkUrlTemplate, Integer artworkWidth, Integer artworkHeight) {
             return null;
         }
     }

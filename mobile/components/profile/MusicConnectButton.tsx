@@ -12,7 +12,6 @@ import {
 } from '@/lib/api'
 import {
   APPLE_MUSIC_CONNECT_ENABLED,
-  APPLE_MUSIC_SIMULATOR_MOCK_ENABLED,
   getAppleMusicDevBuildMessage,
   getCapabilityStatus,
   getMusicUserToken,
@@ -56,14 +55,6 @@ export function MusicConnectButton({ connected, onConnect, onDisconnect }: Music
       const token = await getToken()
       if (!token) {
         throw new Error('Missing auth session. Please sign in again.')
-      }
-
-      // Simulator fallback for local development when real MusicKit auth is unavailable.
-      if (__DEV__ && APPLE_MUSIC_SIMULATOR_MOCK_ENABLED) {
-        await connectMusic(token, 'simulator_mock_user_token')
-        onConnect()
-        Alert.alert('Apple Music', 'Connected using simulator mock mode.')
-        return
       }
 
       const developerTokenRes = await getMusicDeveloperToken(token)
@@ -117,8 +108,6 @@ export function MusicConnectButton({ connected, onConnect, onDisconnect }: Music
           <Text className="text-base font-semibold text-on-surface">Apple Music</Text>
           {!APPLE_MUSIC_CONNECT_ENABLED ? (
             <Text className="text-xs text-on-surface-variant mt-0.5">Disabled in this build</Text>
-          ) : __DEV__ && APPLE_MUSIC_SIMULATOR_MOCK_ENABLED ? (
-            <Text className="text-xs text-on-surface-variant mt-0.5">Simulator mock mode enabled</Text>
           ) : Platform.OS !== 'ios' ? (
             <Text className="text-xs text-on-surface-variant mt-0.5">iOS only right now</Text>
           ) : null}

@@ -13,6 +13,6 @@ public class Genre {
     @Column(nullable = false, unique = true)
     public String name;
 
-    @Column(name = "deezer_id")
-    public Long deezerId;
+    @Column(name = "apple_genre_id", length = 64, unique = true)
+    public String appleGenreId;
 }

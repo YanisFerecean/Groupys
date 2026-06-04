@@ -1,118 +1,54 @@
 package com.groupys.service;
 
-import com.groupys.client.LastFmClient;
 import com.groupys.dto.ArtistResDto;
 import com.groupys.dto.TopAlbumResDto;
 import com.groupys.dto.TopTrackResDto;
-import com.groupys.dto.lastfm.LastFmChartArtistsResponse;
-import com.groupys.dto.lastfm.LastFmChartTracksResponse;
-import com.groupys.dto.lastfm.LastFmGeoTracksResponse;
-import com.groupys.dto.lastfm.LastFmTagAlbumsResponse;
-import com.groupys.dto.lastfm.LastFmTopArtistsResponse;
+import com.groupys.dto.apple.AppleCatalogAlbum;
+import com.groupys.dto.apple.AppleCatalogSong;
+import com.groupys.dto.apple.AppleChartsResult;
+import com.groupys.repository.GenreRepository;
 import io.quarkus.cache.CacheResult;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import org.jboss.logging.Logger;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.eclipse.microprofile.rest.client.inject.RestClient;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.function.Supplier;
+import java.util.Locale;
 
 @ApplicationScoped
 public class ChartService {
 
-    private static final Logger LOG = Logger.getLogger(ChartService.class);
-
     @Inject
-    @RestClient
-    LastFmClient lastFmClient;
+    AppleCatalogService appleCatalogService;
 
     @Inject
     ArtistService artistService;
 
-    @ConfigProperty(name = "lastfm.api.key")
-    String lastfmApiKey;
+    @Inject
+    GenreRepository genreRepository;
 
     @CacheResult(cacheName = "charts-tracks")
     public List<TopTrackResDto> getGlobalTopTracks() {
-        LastFmChartTracksResponse response = fetchLastFmResponse(
-                "chart.gettoptracks",
-                () -> lastFmClient.getChartTopTracks("chart.gettoptracks", lastfmApiKey, "json")
-        );
-
-        if (response == null || response.tracks() == null || response.tracks().tracks() == null) {
-            return Collections.emptyList();
-        }
-
-        return response.tracks().tracks().stream()
-                .limit(10)
-                .map(t -> new TopTrackResDto(
-                        t.name(),
-                        t.artist() != null ? artistService.resolveByName(t.artist().name()) : null,
-                        parseLong(t.listeners()),
-                        parseLong(t.playcount())
-                ))
-                .toList();
+        return mapTopTracks(appleCatalogService.resolveStorefront(null), appleCatalogService.getCharts(appleCatalogService.resolveStorefront(null), null, 10));
     }
 
     @CacheResult(cacheName = "charts-tracks-country")
     public List<TopTrackResDto> getTopTracksByCountry(String country) {
-        LastFmGeoTracksResponse response = fetchLastFmResponse(
-                "geo.gettoptracks",
-                () -> lastFmClient.getGeoTopTracks("geo.gettoptracks", country, lastfmApiKey, "json")
-        );
-
-        if (response == null || response.tracks() == null || response.tracks().tracks() == null) {
-            return Collections.emptyList();
-        }
-
-        return response.tracks().tracks().stream()
-                .limit(10)
-                .map(t -> new TopTrackResDto(
-                        t.name(),
-                        t.artist() != null ? artistService.resolveByName(t.artist().name()) : null,
-                        parseLong(t.listeners()),
-                        null
-                ))
-                .toList();
+        String storefront = appleCatalogService.resolveStorefront(country);
+        return mapTopTracks(storefront, appleCatalogService.getCharts(storefront, null, 10));
     }
 
     @CacheResult(cacheName = "charts-artists")
     public List<ArtistResDto> getGlobalTopArtists() {
-        LastFmChartArtistsResponse response = fetchLastFmResponse(
-                "chart.gettopartists",
-                () -> lastFmClient.getChartTopArtists("chart.gettopartists", lastfmApiKey, "json")
-        );
-
-        if (response == null || response.artists() == null || response.artists().artists() == null) {
-            return Collections.emptyList();
-        }
-
-        return response.artists().artists().stream()
-                .limit(10)
-                .map(a -> artistService.resolveByName(a.name()))
-                .filter(a -> a != null)
-                .toList();
+        String storefront = appleCatalogService.resolveStorefront(null);
+        return artistService.deriveArtistsFromCharts(storefront, appleCatalogService.getCharts(storefront, null, 10), 10);
     }
 
     @CacheResult(cacheName = "charts-artists-country")
     public List<ArtistResDto> getTopArtistsByCountry(String country) {
-        LastFmTopArtistsResponse response = fetchLastFmResponse(
-                "geo.gettopartists",
-                () -> lastFmClient.getTopArtists("geo.gettopartists", country, lastfmApiKey, "json")
-        );
-
-        if (response == null || response.topartists() == null || response.topartists().artists() == null) {
-            return Collections.emptyList();
-        }
-
-        return response.topartists().artists().stream()
-                .limit(10)
-                .map(a -> artistService.resolveByName(a.name()))
-                .filter(a -> a != null)
-                .toList();
+        String storefront = appleCatalogService.resolveStorefront(country);
+        return artistService.deriveArtistsFromCharts(storefront, appleCatalogService.getCharts(storefront, null, 10), 10);
     }
 
     @CacheResult(cacheName = "charts-albums")
@@ -122,35 +58,71 @@ public class ChartService {
 
     @CacheResult(cacheName = "charts-albums-tag")
     public List<TopAlbumResDto> getTopAlbumsByTag(String tag) {
-        LastFmTagAlbumsResponse response = fetchLastFmResponse(
-                "tag.gettopalbums",
-                () -> lastFmClient.getTagTopAlbums("tag.gettopalbums", tag, lastfmApiKey, "json")
-        );
-
-        if (response == null || response.albums() == null || response.albums().albums() == null) {
-            return Collections.emptyList();
+        String storefront = appleCatalogService.resolveStorefront(null);
+        String normalizedTag = tag == null ? "" : tag.trim();
+        if (normalizedTag.isBlank() || "all".equalsIgnoreCase(normalizedTag)) {
+            return mapTopAlbums(storefront, appleCatalogService.getCharts(storefront, null, 10).topAlbums());
         }
 
-        return response.albums().albums().stream()
+        String genreId = genreRepository.findByNameIgnoreCase(normalizedTag)
+                .map(genre -> genre.appleGenreId)
+                .orElse(null);
+        if (genreId != null && !genreId.isBlank()) {
+            List<TopAlbumResDto> chartAlbums = mapTopAlbums(storefront, appleCatalogService.getCharts(storefront, genreId, 10).topAlbums());
+            if (!chartAlbums.isEmpty()) {
+                return chartAlbums;
+            }
+        }
+
+        var searchResult = appleCatalogService.search(storefront, normalizedTag, 10);
+        if (searchResult == null || searchResult.albums() == null) {
+            return Collections.emptyList();
+        }
+        List<AppleCatalogAlbum> filtered = new ArrayList<>();
+        for (AppleCatalogAlbum album : searchResult.albums()) {
+            if (matchesGenre(album.genreNames(), normalizedTag)) {
+                filtered.add(album);
+            }
+        }
+        return mapTopAlbums(storefront, filtered);
+    }
+
+    private List<TopTrackResDto> mapTopTracks(String storefront, AppleChartsResult charts) {
+        if (charts == null || charts.topSongs() == null) {
+            return Collections.emptyList();
+        }
+        return charts.topSongs().stream()
                 .limit(10)
-                .map(a -> new TopAlbumResDto(
-                        a.name(),
-                        a.artist() != null ? artistService.resolveByName(a.artist().name()) : null
+                .map(song -> new TopTrackResDto(
+                        song.name(),
+                        artistService.resolveByAppleReference(storefront, song.artistId(), song.artistName()),
+                        null,
+                        null
                 ))
                 .toList();
     }
 
-    private Long parseLong(String value) {
-        if (value == null || value.isBlank()) return null;
-        return Long.parseLong(value);
+    private List<TopAlbumResDto> mapTopAlbums(String storefront, List<AppleCatalogAlbum> albums) {
+        if (albums == null || albums.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return albums.stream()
+                .limit(10)
+                .map(album -> new TopAlbumResDto(
+                        album.name(),
+                        artistService.resolveByAppleReference(storefront, album.artistId(), album.artistName())
+                ))
+                .toList();
     }
 
-    private <T> T fetchLastFmResponse(String operation, Supplier<T> supplier) {
-        try {
-            return supplier.get();
-        } catch (RuntimeException e) {
-            LOG.warnf("Last.fm request failed for %s: %s", operation, e.getMessage());
-            return null;
+    private boolean matchesGenre(List<String> genreNames, String expected) {
+        if (genreNames == null || genreNames.isEmpty() || expected == null || expected.isBlank()) {
+            return false;
         }
+        String normalized = expected.trim().toLowerCase(Locale.ROOT);
+        return genreNames.stream()
+                .filter(value -> value != null && !value.isBlank())
+                .map(value -> value.trim().toLowerCase(Locale.ROOT))
+                .anyMatch(value -> value.equals(normalized));
     }
 }

@@ -23,6 +23,7 @@ export function useChatMessages(
   const getTokenRef = useRef(getToken)
   const decryptRef = useRef(decryptForUsername)
   const otherUsernameRef = useRef(otherUsername)
+  const decryptedCacheRef = useRef<Map<string, string>>(new Map())
 
   useEffect(() => {
     getTokenRef.current = getToken
@@ -37,33 +38,35 @@ export function useChatMessages(
   }, [otherUsername])
 
   useEffect(() => {
+    decryptedCacheRef.current.clear()
+  }, [conversationId])
+
+  useEffect(() => {
     if (!cryptoReady || !otherUsername) {
       return
     }
 
-    const encryptedMessages = messages.filter(message => isEncrypted(message.content))
-    if (encryptedMessages.length === 0) {
+    const unprocessed = messages.filter(
+      message => isEncrypted(message.content) && !decryptedCacheRef.current.has(message.id),
+    )
+    if (unprocessed.length === 0) {
       return
     }
 
     let cancelled = false
 
-    void Promise.all(messages.map(async (message) => {
-      if (!isEncrypted(message.content)) {
-        return message
-      }
-
-      const content = await decryptForUsername(otherUsername, message.content)
-      return { ...message, content }
-    })).then((decrypted) => {
-      if (cancelled) {
-        return
-      }
-
-      const changed = decrypted.some((message, index) => message.content !== messages[index]?.content)
-      if (changed) {
-        setMessages(decrypted)
-      }
+    void Promise.all(
+      unprocessed.map(async (message) => {
+        const content = await decryptForUsername(otherUsername, message.content)
+        return { id: message.id, content }
+      }),
+    ).then((results) => {
+      if (cancelled) return
+      results.forEach(r => decryptedCacheRef.current.set(r.id, r.content))
+      setMessages(prev => prev.map(m => ({
+        ...m,
+        content: decryptedCacheRef.current.get(m.id) ?? m.content,
+      })))
     })
 
     return () => {

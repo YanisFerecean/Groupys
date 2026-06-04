@@ -58,7 +58,8 @@ public class UserTasteProfileRepository implements PanacheRepositoryBase<UserTas
             } else if (row != null) {
                 try {
                     result.add(UUID.fromString(row.toString()));
-                } catch (Exception ignored) {
+                } catch (Exception e) {
+                    io.quarkus.logging.Log.debugf("Skipping unparseable neighbor id: %s", row);
                 }
             }
         }

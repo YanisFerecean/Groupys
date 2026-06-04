@@ -8,6 +8,7 @@ public record ArtistResDto(
         List<String> images,
         Long listeners,
         Long playcount,
-        String summary
+        String summary,
+        String genre
 ) {
 }

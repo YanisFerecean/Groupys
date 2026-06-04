@@ -25,38 +25,33 @@ public class GenreRepository implements PanacheRepository<Genre> {
         return find("LOWER(name) = LOWER(?1)", name).firstResultOptional();
     }
 
-    public Optional<Genre> findByDeezerId(Long deezerId) {
-        if (deezerId == null) {
+    public Optional<Genre> findByAppleGenreId(String appleGenreId) {
+        if (appleGenreId == null || appleGenreId.isBlank()) {
             return Optional.empty();
         }
-        return find("deezerId", deezerId).firstResultOptional();
+        return find("appleGenreId", appleGenreId).firstResultOptional();
     }
 
-    /**
-     * Batch load genres by IDs - eliminates N+1 query problem
-     */
     public Map<Long, Genre> findByIdsMap(Collection<Long> ids) {
         if (ids == null || ids.isEmpty()) {
             return Map.of();
         }
-        return find("id in ?1", ids).stream()
+        return ids.stream()
+                .map(this::findByIdOptional)
+                .flatMap(Optional::stream)
                 .collect(Collectors.toMap(g -> g.id, g -> g, (a, b) -> a, java.util.HashMap::new));
     }
 
-    /**
-     * Batch load genre names by IDs - eliminates N+1 query problem
-     */
     public Map<Long, String> findNamesByIds(Collection<Long> ids) {
         if (ids == null || ids.isEmpty()) {
             return Map.of();
         }
-        return find("id in ?1", ids).project(GenreIdName.class).stream()
+        return ids.stream()
+                .map(this::findByIdOptional)
+                .flatMap(Optional::stream)
                 .collect(Collectors.toMap(g -> g.id, g -> g.name, (n1, n2) -> n1, java.util.HashMap::new));
     }
 
-    /**
-     * Projection class for efficient batch queries
-     */
     public static class GenreIdName {
         public final Long id;
         public final String name;

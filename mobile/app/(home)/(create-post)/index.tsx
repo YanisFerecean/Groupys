@@ -16,9 +16,10 @@ import {
   StatusBar,
 } from 'react-native'
 import * as ImagePicker from 'expo-image-picker'
+import { UIImagePickerPreferredAssetRepresentationMode } from 'expo-image-picker'
 import * as DocumentPicker from 'expo-document-picker'
 import * as Haptics from 'expo-haptics'
-import { router, useLocalSearchParams, useFocusEffect } from 'expo-router'
+import { router, useFocusEffect } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import { SymbolView } from 'expo-symbols'
@@ -85,17 +86,15 @@ export default function CreatePostScreen() {
   const insets = useSafeAreaInsets()
   const { getToken } = useAuth()
   const getTokenRef = useRef(getToken)
-  const params = useLocalSearchParams<{
-    selectedCommunityId?: string
-    selectedCommunityName?: string
-    selectedCommunityIconType?: string
-    selectedCommunityIconEmoji?: string
-    selectedCommunityIconUrl?: string
-    selectedCommunityDescription?: string
-  }>()
   const draft = useCreatePostDraftStore((state) => state.draft)
   const saveDraft = useCreatePostDraftStore((state) => state.saveDraft)
   const clearDraft = useCreatePostDraftStore((state) => state.clearDraft)
+  const pendingCommunitySelection = useCreatePostDraftStore(
+    (state) => state.pendingCommunitySelection,
+  )
+  const setPendingCommunitySelection = useCreatePostDraftStore(
+    (state) => state.setPendingCommunitySelection,
+  )
 
   const [communities, setCommunities] = useState<CommunityResDto[]>([])
   const [selectedCommunity, setSelectedCommunity] = useState<CommunityResDto | null>(null)
@@ -142,8 +141,8 @@ export default function CreatePostScreen() {
         const data = await apiFetch<CommunityResDto[]>('/communities/mine', token)
         if (cancelled) return
         setCommunities(data)
-        // Only set default if no community was selected from params
-        if (!params.selectedCommunityId && !selectedCommunityRef.current && !draft?.community?.id) {
+        // Only set default if no community is selected and none is pending from the picker
+        if (!selectedCommunityRef.current && !draft?.community?.id && !pendingCommunitySelection) {
           setSelectedCommunity(data.length > 0 ? data[0] : null)
         }
       } catch (err) {
@@ -154,25 +153,15 @@ export default function CreatePostScreen() {
     return () => { cancelled = true }
   }, [])
 
-  // Handle community selection from params (coming back from select-community screen)
+  // Handle community selection coming back from the select-community sheet.
+  // Uses a Zustand pending-selection slot rather than router params because
+  // router.setParams after router.back() races with the modal unmount.
   useEffect(() => {
-    if (params.selectedCommunityId && communities.length > 0) {
-      const selected = communities.find(c => c.id === params.selectedCommunityId)
-      if (selected) {
-        setSelectedCommunity(selected)
-      } else if (params.selectedCommunityName) {
-        // Create a community object from params if not found in list
-        setSelectedCommunity({
-          id: params.selectedCommunityId,
-          name: params.selectedCommunityName,
-          iconType: params.selectedCommunityIconType as 'EMOJI' | 'IMAGE' | undefined,
-          iconEmoji: params.selectedCommunityIconEmoji,
-          iconUrl: params.selectedCommunityIconUrl,
-          description: params.selectedCommunityDescription,
-        } as CommunityResDto)
-      }
-    }
-  }, [params.selectedCommunityId, communities])
+    if (!pendingCommunitySelection) return
+    const fromList = communities.find((c) => c.id === pendingCommunitySelection.id)
+    setSelectedCommunity(fromList ?? (pendingCommunitySelection as CommunityResDto))
+    setPendingCommunitySelection(null)
+  }, [pendingCommunitySelection, communities, setPendingCommunitySelection])
 
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
@@ -281,21 +270,30 @@ export default function CreatePostScreen() {
       alert('Maximum 4 attachments allowed.')
       return
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: [type],
-      quality: 0.8,
-      allowsEditing: false,
-      allowsMultipleSelection: true,
-      selectionLimit: 4 - media.length,
-    })
-    if (!result.canceled && result.assets) {
-      const selectedMedia: CreatePostDraftMedia[] = result.assets.map((asset) => ({
-        uri: asset.uri,
-        type: asset.type,
-        mimeType: asset.mimeType,
-        name: asset.fileName,
-      }))
-      setMedia((prev) => [...prev, ...selectedMedia].slice(0, 4))
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: [type],
+        quality: 0.8,
+        allowsEditing: false,
+        allowsMultipleSelection: true,
+        selectionLimit: 4 - media.length,
+        // iOS HEIC assets fail to load via the raw representation; force transcoding to JPEG.
+        preferredAssetRepresentationMode: UIImagePickerPreferredAssetRepresentationMode.Compatible,
+      })
+      if (!result.canceled && result.assets) {
+        const selectedMedia: CreatePostDraftMedia[] = result.assets.map((asset) => ({
+          uri: asset.uri,
+          type: asset.type,
+          mimeType: asset.mimeType,
+          name: asset.fileName,
+        }))
+        setMedia((prev) => [...prev, ...selectedMedia].slice(0, 4))
+      }
+    } catch {
+      // iCloud-only assets can fail to load (PHPhotosErrorDomain 3164) until downloaded to device.
+      alert(
+        `Could not load the selected ${type === 'videos' ? 'video' : 'image'}. If it is stored in iCloud, open it in the Photos app to download it, then try again.`,
+      )
     }
   }
 

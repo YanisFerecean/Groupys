@@ -15,6 +15,7 @@ export interface TopArtist {
 
 export interface TopAlbum {
   id?: number
+  appleMusicId?: string
   title: string
   artist: string
   coverUrl?: string
@@ -27,10 +28,6 @@ export interface ProfileCustomization {
   country?: string
   tags?: string[]
   musicConnected?: boolean
-  /**
-   * @deprecated temporary read/write compatibility for legacy Spotify-shaped payloads
-   */
-  spotifyConnected?: boolean
   bannerUrl?: string
   bannerText?: string
   accentColor?: string
@@ -41,18 +38,6 @@ export interface ProfileCustomization {
   syncTopSongsWithMusic?: boolean
   syncTopArtistsWithMusic?: boolean
   syncTopAlbumsWithMusic?: boolean
-  /**
-   * @deprecated temporary read/write compatibility for legacy Spotify-shaped payloads
-   */
-  syncTopSongsWithSpotify?: boolean
-  /**
-   * @deprecated temporary read/write compatibility for legacy Spotify-shaped payloads
-   */
-  syncTopArtistsWithSpotify?: boolean
-  /**
-   * @deprecated temporary read/write compatibility for legacy Spotify-shaped payloads
-   */
-  syncTopAlbumsWithSpotify?: boolean
   currentlyListening?: { id?: number; title: string; artist: string; coverUrl?: string }
   albumsContainerColor?: string
   songsContainerColor?: string

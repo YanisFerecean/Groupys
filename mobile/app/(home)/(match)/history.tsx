@@ -253,6 +253,8 @@ export default function MatchHistoryScreen() {
   }, [activeTab])
 
   const refreshing = activeTab === 'matches' ? matchesLoading : likesLoading
+  const initialized = activeTab === 'matches' ? matchesInitialized : likesInitialized
+  const hasItems = (activeTab === 'matches' ? matches : likes).length > 0
   const loadingMore = activeTab === 'matches' ? matchesLoadingMore : likesLoadingMore
   const hasMore = activeTab === 'matches' ? matchesHasMore : likesHasMore
   const isLikesTab = activeTab === 'likes'
@@ -510,7 +512,7 @@ export default function MatchHistoryScreen() {
               )}
             </View>
           )}
-          ListFooterComponent={loadingMore ? (
+          ListFooterComponent={loadingMore && hasItems ? (
             <View className="py-4">
               {useGlass ? (
                 <View className="items-center">
@@ -526,7 +528,7 @@ export default function MatchHistoryScreen() {
             </View>
           ) : null}
           onEndReached={() => {
-            if (!hasMore || loadingMore) {
+            if (!hasMore || loadingMore || !hasItems) {
               return
             }
 
@@ -544,7 +546,7 @@ export default function MatchHistoryScreen() {
               void loadLikes(true)
             }
           }}
-          refreshing={refreshing}
+          refreshing={initialized && refreshing && hasItems}
           showsVerticalScrollIndicator={false}
         />
       </TabSlideTransition>

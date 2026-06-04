@@ -1,41 +1,43 @@
 package com.groupys.service;
 
-import com.groupys.client.DeezerClient;
-import com.groupys.client.LastFmClient;
 import com.groupys.dto.ArtistResDto;
 import com.groupys.dto.TrackResDto;
-import com.groupys.dto.deezer.DeezerArtistDto;
-import com.groupys.dto.deezer.DeezerArtistSearchResponse;
-import com.groupys.dto.deezer.DeezerTrackSearchResponse;
-import com.groupys.dto.lastfm.LastFmArtistInfoResponse;
-import com.groupys.dto.lastfm.LastFmTopArtistsResponse;
+import com.groupys.dto.apple.AppleCatalogArtist;
+import com.groupys.dto.apple.AppleCatalogSong;
+import com.groupys.dto.apple.AppleChartsResult;
+import com.groupys.mapper.AlbumMapper;
 import com.groupys.mapper.ArtistMapper;
 import com.groupys.mapper.TrackMapper;
 import com.groupys.model.Artist;
+import com.groupys.model.Track;
 import com.groupys.repository.ArtistRepository;
+import com.groupys.repository.GenreRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.eclipse.microprofile.rest.client.inject.RestClient;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
+import java.util.Locale;
+import java.util.Map;
 
 @ApplicationScoped
 public class ArtistService {
 
     @Inject
-    @RestClient
-    DeezerClient deezerClient;
+    AppleCatalogService appleCatalogService;
 
     @Inject
-    @RestClient
-    LastFmClient lastFmClient;
+    AppleCatalogEntityService entityService;
 
     @Inject
     ArtistMapper artistMapper;
+
+    @Inject
+    AlbumMapper albumMapper;
 
     @Inject
     TrackMapper trackMapper;
@@ -43,178 +45,207 @@ public class ArtistService {
     @Inject
     ArtistRepository artistRepository;
 
-    @ConfigProperty(name = "lastfm.api.key")
-    String lastfmApiKey;
+    @Inject
+    GenreRepository genreRepository;
 
     public List<ArtistResDto> search(String query, int limit) {
-        DeezerArtistSearchResponse response = deezerClient.searchArtists(query, limit);
-        if (response == null || response.data() == null) {
+        var response = appleCatalogService.search(appleCatalogService.resolveStorefront(null), query, limit);
+        if (response == null || response.artists() == null) {
             return Collections.emptyList();
         }
-        ClassLoader cl = Thread.currentThread().getContextClassLoader();
-        List<CompletableFuture<ArtistResDto>> futures = response.data().stream()
-                .map(a -> CompletableFuture.supplyAsync(() -> {
-                    Thread.currentThread().setContextClassLoader(cl);
-                    return enrichWithLastFm(a);
-                }))
+        return response.artists().stream()
+                .limit(Math.max(limit, 0))
+                .map(this::upsertAndMap)
+                .filter(dto -> dto != null)
                 .toList();
-        return futures.stream().map(CompletableFuture::join).toList();
     }
 
     @Transactional
     public ArtistResDto getById(Long id) {
-        Artist existing = artistRepository.findById(id);
-        DeezerArtistDto deezerArtist;
-        try {
-            deezerArtist = deezerClient.getArtistById(id);
-        } catch (Exception e) {
-            deezerArtist = null;
-        }
-
-        if (!hasRequiredArtistData(deezerArtist)) {
-            return existing != null ? artistMapper.toResDto(existing) : null;
-        }
-
-        LastFmArtistInfoResponse.LastFmArtistDetail lastfmDetail = fetchLastFmInfo(deezerArtist.name());
-        ArtistResDto result = artistMapper.toResDto(deezerArtist, lastfmDetail);
-        Artist entity = artistMapper.toEntity(deezerArtist, lastfmDetail);
+        Artist existing = artistRepository.findByIdOrRoundedUnsafeSyntheticId(id).orElse(null);
         if (existing == null) {
-            artistRepository.persist(entity);
-        } else {
-            mergeArtist(existing, entity);
+            return null;
+        }
+        if (existing.getAppleMusicId() == null || existing.getAppleMusicId().isBlank()) {
+            return artistMapper.toResDto(existing);
         }
 
-        return result;
+        return appleCatalogService.getArtist(appleCatalogService.resolveStorefront(null), existing.getAppleMusicId())
+                .map(artist -> artistMapper.toResDto(entityService.upsertArtist(artist), artistMapper.pickGenre(artist.genreNames())))
+                .orElseGet(() -> artistMapper.toResDto(existing));
     }
 
     public List<TrackResDto> getTopTracks(Long artistId, int limit) {
-        DeezerTrackSearchResponse response = deezerClient.getArtistTopTracks(artistId, limit);
-        if (response == null || response.data() == null) {
+        Artist artist = artistRepository.findByIdOrRoundedUnsafeSyntheticId(artistId).orElse(null);
+        if (artist == null || artist.getAppleMusicId() == null || artist.getAppleMusicId().isBlank()) {
             return Collections.emptyList();
         }
-
-        ArtistResDto enrichedArtist = getByIdWithoutPersist(artistId);
-
-        return response.data().stream()
-                .map(t -> {
-                    TrackResDto track = trackMapper.toResDto(t);
-                    return new TrackResDto(
-                            track.id(),
-                            track.title(),
-                            track.preview(),
-                            track.duration(),
-                            track.rank(),
-                            enrichedArtist,
-                            track.album()
-                    );
-                })
+        String storefront = appleCatalogService.resolveStorefront(null);
+        ArtistResDto artistDto = resolveByAppleReference(storefront, artist.getAppleMusicId(), artist.getName());
+        List<AppleCatalogSong> songs = appleCatalogService.getArtistTopSongs(storefront, artist.getAppleMusicId(), limit);
+        if (songs.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return songs.stream()
+                .limit(Math.max(limit, 0))
+                .map(song -> mapSong(song, artistDto))
+                .filter(dto -> dto != null)
                 .toList();
     }
 
     public List<ArtistResDto> getTopByCountry(String country) {
-        LastFmTopArtistsResponse response = lastFmClient.getTopArtists(
-                "geo.gettopartists", country, lastfmApiKey, "json");
-
-        if (response == null || response.topartists() == null || response.topartists().artists() == null) {
-            return Collections.emptyList();
-        }
-
-        return response.topartists().artists().stream()
-                .limit(10)
-                .map(a -> resolveByName(a.name()))
-                .filter(a -> a != null)
-                .toList();
+        String storefront = appleCatalogService.resolveStorefront(country);
+        AppleChartsResult charts = appleCatalogService.getCharts(storefront, null, 10);
+        return deriveArtistsFromCharts(storefront, charts, 10);
     }
 
     public List<ArtistResDto> getByGenre(String genreName, int limit) {
-        LastFmTopArtistsResponse response = lastFmClient.getTagTopArtists(
-                "tag.gettopartists", genreName, limit, lastfmApiKey, "json");
-
-        if (response == null || response.topartists() == null || response.topartists().artists() == null) {
+        if (genreName == null || genreName.isBlank()) {
             return Collections.emptyList();
         }
+        int safeLimit = Math.max(limit, 1);
+        String storefront = appleCatalogService.resolveStorefront(null);
+        String genreId = genreRepository.findByNameIgnoreCase(genreName.trim())
+                .map(genre -> genre.appleGenreId)
+                .orElse(null);
 
-        return response.topartists().artists().stream()
-                .map(a -> resolveByName(a.name()))
-                .filter(a -> a != null)
-                .toList();
+        if (genreId != null && !genreId.isBlank()) {
+            List<ArtistResDto> fromCharts = deriveArtistsFromCharts(
+                    storefront,
+                    appleCatalogService.getCharts(storefront, genreId, safeLimit),
+                    safeLimit
+            );
+            if (!fromCharts.isEmpty()) {
+                return fromCharts;
+            }
+        }
+
+        List<ArtistResDto> fromSearch = new ArrayList<>();
+        var response = appleCatalogService.search(storefront, genreName, Math.max(safeLimit, 10));
+        if (response != null && response.artists() != null) {
+            for (AppleCatalogArtist artist : response.artists()) {
+                if (matchesGenre(artist.genreNames(), genreName)) {
+                    ArtistResDto dto = upsertAndMap(artist);
+                    if (dto != null) {
+                        fromSearch.add(dto);
+                    }
+                }
+                if (fromSearch.size() >= safeLimit) {
+                    break;
+                }
+            }
+        }
+        return fromSearch;
     }
 
     public ArtistResDto resolveByName(String artistName) {
-        try {
-            DeezerArtistSearchResponse searchResponse = deezerClient.searchArtists(artistName, 1);
-            if (searchResponse == null || searchResponse.data() == null || searchResponse.data().isEmpty()) {
-                return null;
+        var response = appleCatalogService.search(appleCatalogService.resolveStorefront(null), artistName, 1);
+        if (response == null || response.artists() == null || response.artists().isEmpty()) {
+            return null;
+        }
+        return upsertAndMap(response.artists().getFirst());
+    }
+
+    public ArtistResDto resolveByAppleReference(String storefront, String artistId, String artistName) {
+        if (artistId != null && !artistId.isBlank()) {
+            var fetched = appleCatalogService.getArtist(storefront, artistId).orElse(null);
+            if (fetched != null) {
+                return artistMapper.toResDto(entityService.upsertArtist(fetched));
             }
-            return enrichWithLastFm(searchResponse.data().getFirst());
-        } catch (Exception e) {
+            Artist fallback = entityService.upsertArtistReference(artistId, artistName, null, null, null, null);
+            return fallback != null ? artistMapper.toResDto(fallback) : null;
+        }
+        return resolveByName(artistName);
+    }
+
+    List<ArtistResDto> deriveArtistsFromCharts(String storefront, AppleChartsResult charts, int limit) {
+        if (charts == null) {
+            return List.of();
+        }
+        Map<String, WeightedArtistRef> weighted = new LinkedHashMap<>();
+
+        List<AppleCatalogSong> songs = charts.topSongs() != null ? charts.topSongs() : List.of();
+        for (int index = 0; index < songs.size(); index++) {
+            AppleCatalogSong song = songs.get(index);
+            addWeightedArtist(weighted, song.artistId(), song.artistName(), ((songs.size() - index) * 2d));
+        }
+
+        List<com.groupys.dto.apple.AppleCatalogAlbum> albums = charts.topAlbums() != null ? charts.topAlbums() : List.of();
+        for (int index = 0; index < albums.size(); index++) {
+            var album = albums.get(index);
+            addWeightedArtist(weighted, album.artistId(), album.artistName(), albums.size() - index);
+        }
+
+        return weighted.values().stream()
+                .sorted(Comparator.comparingDouble(WeightedArtistRef::score).reversed())
+                .limit(Math.max(limit, 0))
+                .map(ref -> resolveByAppleReference(storefront, ref.artistId(), ref.artistName()))
+                .filter(dto -> dto != null)
+                .toList();
+    }
+
+    private void addWeightedArtist(Map<String, WeightedArtistRef> weighted,
+                                   String artistId,
+                                   String artistName,
+                                   double score) {
+        if ((artistId == null || artistId.isBlank()) && (artistName == null || artistName.isBlank())) {
+            return;
+        }
+        String key = artistId != null && !artistId.isBlank()
+                ? "id:" + artistId
+                : "name:" + artistName.trim().toLowerCase(Locale.ROOT);
+        weighted.compute(key, (ignored, current) -> {
+            if (current == null) {
+                return new WeightedArtistRef(artistId, artistName, score);
+            }
+            return new WeightedArtistRef(
+                    current.artistId() != null ? current.artistId() : artistId,
+                    current.artistName() != null ? current.artistName() : artistName,
+                    current.score() + score
+            );
+        });
+    }
+
+    private TrackResDto mapSong(AppleCatalogSong song, ArtistResDto overrideArtist) {
+        Track track = entityService.upsertTrack(song);
+        if (track == null) {
             return null;
         }
+        ArtistResDto artistDto = overrideArtist != null
+                ? overrideArtist
+                : (track.getArtist() != null ? artistMapper.toResDto(track.getArtist()) : null);
+        var album = track.getAlbum();
+        var albumDto = album != null
+                ? albumMapper.toResDto(album)
+                : trackMapper.toAlbumReference(
+                        song.albumId() != null ? com.groupys.util.MusicIdentityUtil.syntheticAlbumId(song.albumId(), song.albumName(), song.artistName()) : null,
+                        song.albumName(),
+                        song.artworkUrlTemplate(),
+                        song.artworkWidth(),
+                        song.artworkHeight()
+                );
+        return trackMapper.toResDto(track.getId(), song, artistDto, albumDto);
     }
 
-    private ArtistResDto enrichWithLastFm(DeezerArtistDto deezerArtist) {
-        LastFmArtistInfoResponse.LastFmArtistDetail lastfmDetail = fetchLastFmInfo(deezerArtist.name());
-        return artistMapper.toResDto(deezerArtist, lastfmDetail);
-    }
-
-    private LastFmArtistInfoResponse.LastFmArtistDetail fetchLastFmInfo(String artistName) {
-        try {
-            LastFmArtistInfoResponse response = lastFmClient.getArtistInfo(
-                    "artist.getinfo", artistName, lastfmApiKey, "json");
-            return response != null ? response.artist() : null;
-        } catch (Exception e) {
+    private ArtistResDto upsertAndMap(AppleCatalogArtist artist) {
+        Artist entity = entityService.upsertArtist(artist);
+        if (entity == null) {
             return null;
         }
+        return artistMapper.toResDto(entity);
     }
 
-    private Long parseLong(String value) {
-        if (value == null || value.isBlank()) return null;
-        return Long.parseLong(value);
+    private boolean matchesGenre(List<String> genreNames, String genreName) {
+        if (genreNames == null || genreNames.isEmpty() || genreName == null || genreName.isBlank()) {
+            return false;
+        }
+        String expected = genreName.trim().toLowerCase(Locale.ROOT);
+        return genreNames.stream()
+                .filter(value -> value != null && !value.isBlank())
+                .map(value -> value.trim().toLowerCase(Locale.ROOT))
+                .anyMatch(value -> value.equals(expected));
     }
 
-    private boolean hasRequiredArtistData(DeezerArtistDto deezerArtist) {
-        return deezerArtist != null
-                && deezerArtist.id() != null
-                && deezerArtist.name() != null
-                && !deezerArtist.name().isBlank();
-    }
-
-    private ArtistResDto getByIdWithoutPersist(Long id) {
-        Artist existing = artistRepository.findById(id);
-        if (existing != null) {
-            return artistMapper.toResDto(existing);
-        }
-
-        DeezerArtistDto deezerArtist;
-        try {
-            deezerArtist = deezerClient.getArtistById(id);
-        } catch (Exception e) {
-            deezerArtist = null;
-        }
-
-        if (!hasRequiredArtistData(deezerArtist)) {
-            return null;
-        }
-
-        LastFmArtistInfoResponse.LastFmArtistDetail lastfmDetail = fetchLastFmInfo(deezerArtist.name());
-        return artistMapper.toResDto(deezerArtist, lastfmDetail);
-    }
-
-    private void mergeArtist(Artist existing, Artist incoming) {
-        if (incoming.getName() != null && !incoming.getName().isBlank()) {
-            existing.setName(incoming.getName());
-        }
-        if (incoming.getImages() != null && !incoming.getImages().isEmpty()) {
-            existing.setImages(incoming.getImages());
-        }
-        if (incoming.getListeners() != null) {
-            existing.setListeners(incoming.getListeners());
-        }
-        if (incoming.getPlaycount() != null) {
-            existing.setPlaycount(incoming.getPlaycount());
-        }
-        if (incoming.getSummary() != null && !incoming.getSummary().isBlank()) {
-            existing.setSummary(incoming.getSummary());
-        }
+    private record WeightedArtistRef(String artistId, String artistName, double score) {
     }
 }

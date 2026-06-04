@@ -4,19 +4,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.groupys.client.AppleMusicApiClient;
-import com.groupys.client.DeezerClient;
-import com.groupys.client.LastFmClient;
 import com.groupys.dto.MusicAlbumResDto;
 import com.groupys.dto.MusicArtistResDto;
 import com.groupys.dto.MusicDeveloperTokenResDto;
 import com.groupys.dto.MusicTrackResDto;
-import com.groupys.dto.deezer.DeezerArtistDto;
-import com.groupys.dto.deezer.DeezerArtistSearchResponse;
-import com.groupys.dto.lastfm.LastFmImage;
-import com.groupys.dto.lastfm.LastFmUserInfoResponse;
-import com.groupys.dto.lastfm.LastFmUserTopAlbumsResponse;
-import com.groupys.dto.lastfm.LastFmUserTopArtistsResponse;
-import com.groupys.dto.lastfm.LastFmUserTopTracksResponse;
 import com.groupys.model.User;
 import com.groupys.repository.UserRepository;
 import com.groupys.util.EncryptionUtil;
@@ -28,7 +19,6 @@ import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 
 import java.time.Instant;
@@ -55,68 +45,18 @@ public class MusicService {
     private static final int APPLE_HEAVY_ROTATION_MAX = 10;
     private static final int MAX_RATE_LIMIT_RETRIES = 3;
     private static final long INITIAL_RETRY_BACKOFF_MS = 250L;
-    private static final String SIMULATOR_MOCK_TOKEN_PREFIX = "simulator_mock_";
-    private static final String SIMULATOR_MOCK_PAYLOAD = "{\"source\":\"SIMULATOR_MOCK\"}";
-    private static final List<MusicArtistItem> SIMULATOR_MOCK_ARTISTS = List.of(
-            new MusicArtistItem("sim-artist-1", "The Weeknd", List.of("Pop"), 95, "https://picsum.photos/seed/groupys-artist-1/600/600"),
-            new MusicArtistItem("sim-artist-2", "SZA", List.of("R&B"), 93, "https://picsum.photos/seed/groupys-artist-2/600/600"),
-            new MusicArtistItem("sim-artist-3", "Fred again..", List.of("Electronic"), 90, "https://picsum.photos/seed/groupys-artist-3/600/600")
-    );
-    private static final List<MusicTrackItem> SIMULATOR_MOCK_TRACKS = List.of(
-            new MusicTrackItem(
-                    "sim-track-1",
-                    "Blinding Lights",
-                    95,
-                    "USUG11904223",
-                    List.of(new MusicArtistRef("sim-artist-1", "The Weeknd")),
-                    new MusicAlbumRef("sim-album-1", "After Hours", "https://picsum.photos/seed/groupys-album-1/600/600")
-            ),
-            new MusicTrackItem(
-                    "sim-track-2",
-                    "Snooze",
-                    93,
-                    "USRC12301234",
-                    List.of(new MusicArtistRef("sim-artist-2", "SZA")),
-                    new MusicAlbumRef("sim-album-2", "SOS", "https://picsum.photos/seed/groupys-album-2/600/600")
-            ),
-            new MusicTrackItem(
-                    "sim-track-3",
-                    "Marea (we've lost dancing)",
-                    90,
-                    "GBARL2100450",
-                    List.of(new MusicArtistRef("sim-artist-3", "Fred again..")),
-                    new MusicAlbumRef("sim-album-3", "Actual Life", "https://picsum.photos/seed/groupys-album-3/600/600")
-            )
-    );
-    private static final List<MusicAlbumItem> SIMULATOR_MOCK_ALBUMS = List.of(
-            new MusicAlbumItem("sim-album-1", "After Hours", "The Weeknd", "https://picsum.photos/seed/groupys-album-1/600/600"),
-            new MusicAlbumItem("sim-album-2", "SOS", "SZA", "https://picsum.photos/seed/groupys-album-2/600/600"),
-            new MusicAlbumItem("sim-album-3", "Actual Life", "Fred again..", "https://picsum.photos/seed/groupys-album-3/600/600")
-    );
 
-@Inject
-UserRepository userRepository;
+    @Inject
+    UserRepository userRepository;
 
-@Inject
-EncryptionUtil encryptionUtil;
+    @Inject
+    EncryptionUtil encryptionUtil;
 
-@Inject
-AppleDeveloperTokenService developerTokenService;
+    @Inject
+    AppleDeveloperTokenService developerTokenService;
 
     @RestClient
     AppleMusicApiClient appleMusicApi;
-
-    @RestClient
-    DeezerClient deezerClient;
-
-    @RestClient
-    LastFmClient lastFmClient;
-
-    @ConfigProperty(name = "music.simulator-mock-enabled", defaultValue = "false")
-    boolean simulatorMockEnabled;
-
-    @ConfigProperty(name = "lastfm.api.key")
-    String lastFmApiKey;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -130,9 +70,7 @@ AppleDeveloperTokenService developerTokenService;
     @Transactional
     public void connect(String clerkId, String musicUserToken) {
         String token = requireToken(musicUserToken);
-        if (!useSimulatorMock(token)) {
-            validateMusicUserToken(token);
-        }
+        validateMusicUserToken(token);
 
         User user = userRepository.findByClerkId(clerkId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
@@ -149,46 +87,10 @@ AppleDeveloperTokenService developerTokenService;
         user.appleMusicConnectedAt = null;
     }
 
-    @Transactional
-    public void connectLastFm(String clerkId, String username) {
-        String trimmed = username.trim();
-        validateLastFmUsername(trimmed);
-        User user = userRepository.findByClerkId(clerkId)
-                .orElseThrow(() -> new NotFoundException("User not found"));
-        user.lastFmUsername = trimmed;
-        user.lastFmConnectedAt = Instant.now();
-    }
-
-    @Transactional
-    public void disconnectLastFm(String clerkId) {
-        User user = userRepository.findByClerkId(clerkId)
-                .orElseThrow(() -> new NotFoundException("User not found"));
-        user.lastFmUsername = null;
-        user.lastFmConnectedAt = null;
-    }
-
-    private void validateLastFmUsername(String username) {
-        try {
-            LastFmUserInfoResponse info = lastFmClient.getUserInfo("user.getinfo", username, lastFmApiKey, "json");
-            if (info == null || info.user() == null || info.user().name() == null) {
-                throw new BadRequestException("Last.FM user not found: " + username);
-            }
-        } catch (BadRequestException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new BadRequestException("Last.FM user not found: " + username);
-        }
-    }
-
     public List<MusicArtistResDto> getTopArtists(String clerkId) {
         User user = userRepository.findByClerkId(clerkId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
-        if (user.lastFmUsername != null && !user.lastFmUsername.isBlank()) {
-            List<MusicArtistResDto> result = fetchLastFmTopArtists(user.lastFmUsername, DEFAULT_PROFILE_LIMIT);
-            if (!result.isEmpty()) return result;
-        }
         String musicUserToken = getValidUserToken(user);
-        if (useSimulatorMock(musicUserToken)) return simulatorTopArtists(DEFAULT_PROFILE_LIMIT);
         return fetchTopArtistsForToken(musicUserToken, DEFAULT_PROFILE_LIMIT).items().stream()
                 .limit(DEFAULT_PROFILE_LIMIT)
                 .map(item -> new MusicArtistResDto(item.name(), item.imageUrl()))
@@ -198,12 +100,7 @@ AppleDeveloperTokenService developerTokenService;
     public List<MusicArtistResDto> getTopArtistsByUserId(String userId) {
         User user = userRepository.findByIdOptional(java.util.UUID.fromString(userId))
                 .orElseThrow(() -> new NotFoundException("User not found"));
-        if (user.lastFmUsername != null && !user.lastFmUsername.isBlank()) {
-            List<MusicArtistResDto> result = fetchLastFmTopArtists(user.lastFmUsername, DEFAULT_PROFILE_LIMIT);
-            if (!result.isEmpty()) return result;
-        }
         String musicUserToken = getValidUserToken(user);
-        if (useSimulatorMock(musicUserToken)) return simulatorTopArtists(DEFAULT_PROFILE_LIMIT);
         return fetchTopArtistsForToken(musicUserToken, DEFAULT_PROFILE_LIMIT).items().stream()
                 .limit(DEFAULT_PROFILE_LIMIT)
                 .map(item -> new MusicArtistResDto(item.name(), item.imageUrl()))
@@ -213,12 +110,7 @@ AppleDeveloperTokenService developerTokenService;
     public List<MusicTrackResDto> getTopTracks(String clerkId) {
         User user = userRepository.findByClerkId(clerkId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
-        if (user.lastFmUsername != null && !user.lastFmUsername.isBlank()) {
-            List<MusicTrackResDto> result = fetchLastFmTopTracks(user.lastFmUsername, DEFAULT_PROFILE_LIMIT);
-            if (!result.isEmpty()) return result;
-        }
         String musicUserToken = getValidUserToken(user);
-        if (useSimulatorMock(musicUserToken)) return simulatorTopTracks(DEFAULT_PROFILE_LIMIT);
         return fetchTopTracksForToken(musicUserToken, DEFAULT_PROFILE_LIMIT).items().stream()
                 .limit(DEFAULT_PROFILE_LIMIT)
                 .map(this::toTrackDto)
@@ -228,12 +120,7 @@ AppleDeveloperTokenService developerTokenService;
     public List<MusicTrackResDto> getTopTracksByUserId(String userId) {
         User user = userRepository.findByIdOptional(java.util.UUID.fromString(userId))
                 .orElseThrow(() -> new NotFoundException("User not found"));
-        if (user.lastFmUsername != null && !user.lastFmUsername.isBlank()) {
-            List<MusicTrackResDto> result = fetchLastFmTopTracks(user.lastFmUsername, DEFAULT_PROFILE_LIMIT);
-            if (!result.isEmpty()) return result;
-        }
         String musicUserToken = getValidUserToken(user);
-        if (useSimulatorMock(musicUserToken)) return simulatorTopTracks(DEFAULT_PROFILE_LIMIT);
         return fetchTopTracksForToken(musicUserToken, DEFAULT_PROFILE_LIMIT).items().stream()
                 .limit(DEFAULT_PROFILE_LIMIT)
                 .map(this::toTrackDto)
@@ -243,38 +130,25 @@ AppleDeveloperTokenService developerTokenService;
     public List<MusicAlbumResDto> getTopAlbums(String clerkId) {
         User user = userRepository.findByClerkId(clerkId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
-        if (user.lastFmUsername != null && !user.lastFmUsername.isBlank()) {
-            List<MusicAlbumResDto> result = fetchLastFmTopAlbums(user.lastFmUsername, DEFAULT_PROFILE_LIMIT);
-            if (!result.isEmpty()) return result;
-        }
         String musicUserToken = getValidUserToken(user);
-        if (useSimulatorMock(musicUserToken)) return simulatorTopAlbums(DEFAULT_PROFILE_LIMIT);
         return fetchTopAlbumsForToken(musicUserToken, DEFAULT_PROFILE_LIMIT).items().stream()
                 .limit(DEFAULT_PROFILE_LIMIT)
-                .map(item -> new MusicAlbumResDto(item.name(), item.artistName(), item.coverUrl()))
+                .map(item -> new MusicAlbumResDto(item.id(), item.name(), item.artistName(), item.coverUrl()))
                 .toList();
     }
 
     public List<MusicAlbumResDto> getTopAlbumsByUserId(String userId) {
         User user = userRepository.findByIdOptional(java.util.UUID.fromString(userId))
                 .orElseThrow(() -> new NotFoundException("User not found"));
-        if (user.lastFmUsername != null && !user.lastFmUsername.isBlank()) {
-            List<MusicAlbumResDto> result = fetchLastFmTopAlbums(user.lastFmUsername, DEFAULT_PROFILE_LIMIT);
-            if (!result.isEmpty()) return result;
-        }
         String musicUserToken = getValidUserToken(user);
-        if (useSimulatorMock(musicUserToken)) return simulatorTopAlbums(DEFAULT_PROFILE_LIMIT);
         return fetchTopAlbumsForToken(musicUserToken, DEFAULT_PROFILE_LIMIT).items().stream()
                 .limit(DEFAULT_PROFILE_LIMIT)
-                .map(item -> new MusicAlbumResDto(item.name(), item.artistName(), item.coverUrl()))
+                .map(item -> new MusicAlbumResDto(item.id(), item.name(), item.artistName(), item.coverUrl()))
                 .toList();
     }
 
     public MusicTrackResDto getCurrentlyPlaying(String clerkId) {
         String musicUserToken = getValidUserToken(clerkId);
-        if (useSimulatorMock(musicUserToken)) {
-            return SIMULATOR_MOCK_TRACKS.isEmpty() ? null : toTrackDto(SIMULATOR_MOCK_TRACKS.getFirst());
-        }
         return getMostRecentTrackForToken(musicUserToken);
     }
 
@@ -282,17 +156,11 @@ AppleDeveloperTokenService developerTokenService;
         User user = userRepository.findByIdOptional(java.util.UUID.fromString(userId))
                 .orElseThrow(() -> new NotFoundException("User not found"));
         String musicUserToken = getValidUserToken(user);
-        if (useSimulatorMock(musicUserToken)) {
-            return SIMULATOR_MOCK_TRACKS.isEmpty() ? null : toTrackDto(SIMULATOR_MOCK_TRACKS.getFirst());
-        }
         return getMostRecentTrackForToken(musicUserToken);
     }
 
     public DiscoveryPayload fetchDiscoveryPayload(String clerkId, int artistLimit, int trackLimit) {
         String token = getValidUserToken(clerkId);
-        if (useSimulatorMock(token)) {
-            return simulatorDiscoveryPayload(artistLimit, trackLimit);
-        }
 
         TopArtistsData artistsData = fetchTopArtistsForToken(token, artistLimit);
         TopTracksData tracksData = fetchTopTracksForToken(token, trackLimit);
@@ -302,129 +170,6 @@ AppleDeveloperTokenService developerTokenService;
                 artistsData.items(),
                 tracksData.items()
         );
-    }
-
-    private List<MusicArtistResDto> fetchLastFmTopArtists(String username, int limit) {
-        try {
-            LastFmUserTopArtistsResponse response = lastFmClient.getUserTopArtists(
-                    "user.gettopartists", username, "1month", limit, lastFmApiKey, "json");
-            if (response == null || response.topartists() == null || response.topartists().artists() == null) {
-                return List.of();
-            }
-            List<MusicArtistItem> artists = response.topartists().artists().stream()
-                    .limit(limit)
-                    .map(a -> new MusicArtistItem(null, a.name(), List.of(), null, lastFmBestImage(a.images())))
-                    .toList();
-            return enrichArtistImagesFromDeezer(artists).stream()
-                    .map(a -> new MusicArtistResDto(a.name(), a.imageUrl()))
-                    .toList();
-        } catch (Exception e) {
-            Log.warnf(e, "Last.FM top artists failed for %s", username);
-            return List.of();
-        }
-    }
-
-    private List<MusicTrackResDto> fetchLastFmTopTracks(String username, int limit) {
-        try {
-            LastFmUserTopTracksResponse response = lastFmClient.getUserTopTracks(
-                    "user.gettoptracks", username, "1month", limit, lastFmApiKey, "json");
-            if (response == null || response.toptracks() == null || response.toptracks().tracks() == null) {
-                return List.of();
-            }
-            return response.toptracks().tracks().stream()
-                    .limit(limit)
-                    .map(t -> new MusicTrackResDto(
-                            t.name(),
-                            t.artist() != null ? t.artist().name() : "",
-                            lastFmBestImage(t.images())))
-                    .toList();
-        } catch (Exception e) {
-            Log.warnf(e, "Last.FM top tracks failed for %s", username);
-            return List.of();
-        }
-    }
-
-    private List<MusicAlbumResDto> fetchLastFmTopAlbums(String username, int limit) {
-        try {
-            LastFmUserTopAlbumsResponse response = lastFmClient.getUserTopAlbums(
-                    "user.gettopalbums", username, "1month", limit, lastFmApiKey, "json");
-            if (response == null || response.topalbums() == null || response.topalbums().albums() == null) {
-                return List.of();
-            }
-            return response.topalbums().albums().stream()
-                    .limit(limit)
-                    .map(a -> new MusicAlbumResDto(
-                            a.name(),
-                            a.artist() != null ? a.artist().name() : "",
-                            lastFmBestImage(a.images())))
-                    .toList();
-        } catch (Exception e) {
-            Log.warnf(e, "Last.FM top albums failed for %s", username);
-            return List.of();
-        }
-    }
-
-    private String lastFmBestImage(List<LastFmImage> images) {
-        if (images == null || images.isEmpty()) return null;
-        for (String size : List.of("extralarge", "mega", "large", "medium", "small")) {
-            for (LastFmImage img : images) {
-                if (size.equals(img.size()) && img.url() != null && !img.url().isBlank()) {
-                    return img.url();
-                }
-            }
-        }
-        return images.stream()
-                .map(LastFmImage::url)
-                .filter(u -> u != null && !u.isBlank())
-                .findFirst()
-                .orElse(null);
-    }
-
-    private boolean useSimulatorMock(String musicUserToken) {
-        return simulatorMockEnabled
-                && musicUserToken != null
-                && musicUserToken.startsWith(SIMULATOR_MOCK_TOKEN_PREFIX);
-    }
-
-    private DiscoveryPayload simulatorDiscoveryPayload(int artistLimit, int trackLimit) {
-        int artistsLimit = Math.max(0, artistLimit);
-        int tracksLimit = Math.max(0, trackLimit);
-        List<MusicArtistItem> artists = SIMULATOR_MOCK_ARTISTS.stream()
-                .limit(artistsLimit)
-                .toList();
-        List<MusicTrackItem> tracks = SIMULATOR_MOCK_TRACKS.stream()
-                .limit(tracksLimit)
-                .toList();
-        return new DiscoveryPayload(
-                SIMULATOR_MOCK_PAYLOAD,
-                SIMULATOR_MOCK_PAYLOAD,
-                artists,
-                tracks
-        );
-    }
-
-    private List<MusicArtistResDto> simulatorTopArtists(int limit) {
-        int safeLimit = Math.max(0, limit);
-        return SIMULATOR_MOCK_ARTISTS.stream()
-                .limit(safeLimit)
-                .map(item -> new MusicArtistResDto(item.name(), item.imageUrl()))
-                .toList();
-    }
-
-    private List<MusicTrackResDto> simulatorTopTracks(int limit) {
-        int safeLimit = Math.max(0, limit);
-        return SIMULATOR_MOCK_TRACKS.stream()
-                .limit(safeLimit)
-                .map(this::toTrackDto)
-                .toList();
-    }
-
-    private List<MusicAlbumResDto> simulatorTopAlbums(int limit) {
-        int safeLimit = Math.max(0, limit);
-        return SIMULATOR_MOCK_ALBUMS.stream()
-                .limit(safeLimit)
-                .map(item -> new MusicAlbumResDto(item.name(), item.artistName(), item.coverUrl()))
-                .toList();
     }
 
     public String getValidUserToken(String clerkId) {
@@ -443,12 +188,14 @@ AppleDeveloperTokenService developerTokenService;
         if (user.appleMusicUserToken == null || user.appleMusicUserToken.isBlank()) {
             throw new BadRequestException("Apple Music not connected");
         }
-        // Simulator mock tokens are stored unencrypted, don't decrypt them
-        if (useSimulatorMock(user.appleMusicUserToken)) {
-            return user.appleMusicUserToken;
+        try {
+            return encryptionUtil.decrypt(user.appleMusicUserToken);
+        } catch (RuntimeException e) {
+            Log.warnf("Stored Apple Music token for user %s could not be decrypted; user must reconnect: %s",
+                    user.id,
+                    e.getMessage());
+            throw new BadRequestException("Apple Music connection is invalid. Please reconnect Apple Music.");
         }
-        // Decrypt the token before returning
-        return encryptionUtil.decrypt(user.appleMusicUserToken);
     }
 
     private void validateMusicUserToken(String musicUserToken) {
@@ -482,37 +229,7 @@ AppleDeveloperTokenService developerTokenService;
             }
         }
 
-        return new TopArtistsData(fallbackTracks.payload(), enrichArtistImagesFromDeezer(artists));
-    }
-
-    private List<MusicArtistItem> enrichArtistImagesFromDeezer(List<MusicArtistItem> artists) {
-        if (artists == null || artists.isEmpty()) {
-            return artists;
-        }
-        List<MusicArtistItem> enriched = new ArrayList<>(artists.size());
-        for (MusicArtistItem item : artists) {
-            String deezerImage = resolveDeezerArtistImage(item.name());
-            String imageUrl = deezerImage != null ? deezerImage : item.imageUrl();
-            enriched.add(new MusicArtistItem(item.id(), item.name(), item.genres(), item.popularity(), imageUrl));
-        }
-        return enriched;
-    }
-
-    private String resolveDeezerArtistImage(String name) {
-        if (name == null || name.isBlank()) {
-            return null;
-        }
-        try {
-            DeezerArtistSearchResponse response = deezerClient.searchArtists(name, 1);
-            if (response == null || response.data() == null || response.data().isEmpty()) {
-                return null;
-            }
-            DeezerArtistDto artist = response.data().getFirst();
-            return firstNonBlank(artist.pictureXl(), artist.pictureBig(), artist.pictureMedium(), artist.pictureSmall());
-        } catch (Exception e) {
-            Log.debugf(e, "Deezer artist image lookup failed for %s", name);
-            return null;
-        }
+        return new TopArtistsData(fallbackTracks.payload(), artists);
     }
 
     private TopTracksData fetchTopTracksForToken(String musicUserToken, int limit) {
@@ -1001,6 +718,9 @@ AppleDeveloperTokenService developerTokenService;
                     name,
                     integer(attributes, "popularity"),
                     text(attributes, "isrc"),
+                    !parseStringArray(attributes.path("genreNames")).isEmpty()
+                            ? parseStringArray(attributes.path("genreNames"))
+                            : parseStringArray(rawAttributes.path("genreNames")),
                     artists,
                     album
             ));
@@ -1537,6 +1257,7 @@ AppleDeveloperTokenService developerTokenService;
             String name,
             Integer popularity,
             String isrc,
+            List<String> genres,
             List<MusicArtistRef> artists,
             MusicAlbumRef album
     ) {

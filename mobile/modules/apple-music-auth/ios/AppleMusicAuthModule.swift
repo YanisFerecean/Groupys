@@ -31,7 +31,7 @@ public class AppleMusicAuthModule: Module {
     AsyncFunction("getMusicUserToken") { (developerToken: String, promise: Promise) in
       self.cloudServiceController.requestUserToken(forDeveloperToken: developerToken) { userToken, error in
         if let error = error {
-          promise.reject("APPLE_MUSIC_USER_TOKEN_ERROR", error.localizedDescription, error)
+          promise.reject("APPLE_MUSIC_USER_TOKEN_ERROR", error.localizedDescription)
           return
         }
 
@@ -47,7 +47,7 @@ public class AppleMusicAuthModule: Module {
     AsyncFunction("getCapabilityStatus") { (promise: Promise) in
       self.cloudServiceController.requestCapabilities { capabilities, error in
         if let error = error {
-          promise.reject("APPLE_MUSIC_CAPABILITY_ERROR", error.localizedDescription, error)
+          promise.reject("APPLE_MUSIC_CAPABILITY_ERROR", error.localizedDescription)
           return
         }
 

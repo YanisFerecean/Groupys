@@ -98,7 +98,7 @@ public class StorageService {
                             .build());
         } catch (Exception e) {
             // Log but don't fail the delete operation
-            System.err.println("Failed to delete media from storage: " + e.getMessage());
+            io.quarkus.logging.Log.warnf("Failed to delete media %s from storage: %s", mediaUrl, e.getMessage());
         }
     }
 

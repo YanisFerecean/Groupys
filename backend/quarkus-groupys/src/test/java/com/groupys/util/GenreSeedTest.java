@@ -1,15 +1,9 @@
 package com.groupys.util;
 
-import com.groupys.client.DeezerClient;
-import com.groupys.dto.deezer.DeezerAlbumDto;
-import com.groupys.dto.deezer.DeezerAlbumSearchResponse;
-import com.groupys.dto.deezer.DeezerArtistDto;
-import com.groupys.dto.deezer.DeezerArtistSearchResponse;
-import com.groupys.dto.deezer.DeezerGenreDto;
-import com.groupys.dto.deezer.DeezerGenreListResponse;
-import com.groupys.dto.deezer.DeezerTrackSearchResponse;
+import com.groupys.dto.apple.AppleCatalogGenre;
 import com.groupys.model.Genre;
 import com.groupys.repository.GenreRepository;
+import com.groupys.service.AppleCatalogService;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -32,11 +26,10 @@ class GenreSeedTest {
 
         GenreSeed genreSeed = new GenreSeed();
         genreSeed.genreRepository = genreRepository;
-        genreSeed.deezerClient = new StubDeezerClient(new DeezerGenreListResponse(List.of(
-                new DeezerGenreDto(0L, "All"),
-                new DeezerGenreDto(152L, "Rock"),
-                new DeezerGenreDto(132L, "Pop")
-        )));
+        genreSeed.appleCatalogService = new StubAppleCatalogService(List.of(
+                new AppleCatalogGenre("20", "Rock", null, null),
+                new AppleCatalogGenre("14", "Pop", null, null)
+        ));
 
         genreSeed.onStart(null);
 
@@ -45,33 +38,51 @@ class GenreSeedTest {
         Genre untouchedCustom = genreRepository.findByNameIgnoreCase("synthwave").orElseThrow();
 
         assertEquals(existingRock.id, syncedRock.id);
-        assertEquals(152L, syncedRock.deezerId);
+        assertEquals("20", syncedRock.appleGenreId);
 
         assertNotNull(createdPop.id);
-        assertEquals(132L, createdPop.deezerId);
+        assertEquals("14", createdPop.appleGenreId);
 
         assertEquals(customGenre.id, untouchedCustom.id);
-        assertNull(untouchedCustom.deezerId);
+        assertNull(untouchedCustom.appleGenreId);
         assertEquals(3, genreRepository.snapshot().size());
     }
 
     @Test
-    void onStartUpdatesExistingGenresByDeezerId() {
+    void onStartUpdatesExistingGenresByAppleGenreId() {
         InMemoryGenreRepository genreRepository = new InMemoryGenreRepository();
-        Genre existing = genreRepository.existing(300L, "Electro / Dance", 106L);
+        Genre existing = genreRepository.existing(300L, "Electro / Dance", "106");
 
         GenreSeed genreSeed = new GenreSeed();
         genreSeed.genreRepository = genreRepository;
-        genreSeed.deezerClient = new StubDeezerClient(new DeezerGenreListResponse(List.of(
-                new DeezerGenreDto(106L, "Dance")
-        )));
+        genreSeed.appleCatalogService = new StubAppleCatalogService(List.of(
+                new AppleCatalogGenre("106", "Dance", null, null)
+        ));
 
         genreSeed.onStart(null);
 
-        Genre updated = genreRepository.findByDeezerId(106L).orElseThrow();
+        Genre updated = genreRepository.findByAppleGenreId("106").orElseThrow();
         assertEquals(existing.id, updated.id);
         assertEquals("Dance", updated.name);
         assertEquals(1, genreRepository.snapshot().size());
+    }
+
+    private static final class StubAppleCatalogService extends AppleCatalogService {
+        private final List<AppleCatalogGenre> genres;
+
+        private StubAppleCatalogService(List<AppleCatalogGenre> genres) {
+            this.genres = genres;
+        }
+
+        @Override
+        public String resolveStorefront(String country) {
+            return "us";
+        }
+
+        @Override
+        public List<AppleCatalogGenre> getGenres(String storefront) {
+            return genres;
+        }
     }
 
     private static final class InMemoryGenreRepository extends GenreRepository {
@@ -79,14 +90,19 @@ class GenreSeedTest {
         private final List<Genre> genres = new ArrayList<>();
         private long nextId = 1000L;
 
-        Genre existing(Long id, String name, Long deezerId) {
+        Genre existing(Long id, String name, String appleGenreId) {
             Genre genre = new Genre();
             genre.id = id;
             genre.name = name;
-            genre.deezerId = deezerId;
+            genre.appleGenreId = appleGenreId;
             genres.add(genre);
             nextId = Math.max(nextId, id + 1);
             return genre;
+        }
+
+        @Override
+        public Genre findById(Long id) {
+            return genres.stream().filter(genre -> genre.id.equals(id)).findFirst().orElse(null);
         }
 
         @Override
@@ -97,9 +113,9 @@ class GenreSeedTest {
         }
 
         @Override
-        public Optional<Genre> findByDeezerId(Long deezerId) {
+        public Optional<Genre> findByAppleGenreId(String appleGenreId) {
             return genres.stream()
-                    .filter(genre -> deezerId != null && deezerId.equals(genre.deezerId))
+                    .filter(genre -> appleGenreId != null && appleGenreId.equals(genre.appleGenreId))
                     .findFirst();
         }
 
@@ -115,49 +131,6 @@ class GenreSeedTest {
             return genres.stream()
                     .sorted(Comparator.comparing(genre -> genre.id))
                     .toList();
-        }
-    }
-
-    private record StubDeezerClient(DeezerGenreListResponse genreListResponse) implements DeezerClient {
-
-        @Override
-        public DeezerArtistSearchResponse searchArtists(String query, int limit) {
-            return null;
-        }
-
-        @Override
-        public DeezerAlbumSearchResponse searchAlbums(String query, int limit) {
-            return null;
-        }
-
-        @Override
-        public DeezerTrackSearchResponse searchTracks(String query, int limit) {
-            return null;
-        }
-
-        @Override
-        public DeezerArtistDto getArtistById(Long id) {
-            return null;
-        }
-
-        @Override
-        public DeezerAlbumDto getAlbumById(Long id) {
-            return null;
-        }
-
-        @Override
-        public DeezerTrackSearchResponse getArtistTopTracks(Long id, int limit) {
-            return null;
-        }
-
-        @Override
-        public DeezerGenreListResponse getGenres() {
-            return genreListResponse;
-        }
-
-        @Override
-        public DeezerArtistSearchResponse getArtistsByGenre(Long id) {
-            throw new UnsupportedOperationException("Not used in this test");
         }
     }
 }

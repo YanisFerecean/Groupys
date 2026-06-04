@@ -1,5 +1,6 @@
 package com.groupys.util;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
@@ -20,6 +21,26 @@ public class EncryptionUtil {
     private static final String TRANSFORMATION = "AES/GCM/NoPadding";
     private static final int GCM_IV_LENGTH = 12;
     private static final int GCM_TAG_LENGTH = 16;
+
+    private SecretKeySpec key;
+
+    @PostConstruct
+    void init() {
+        byte[] keyBytes;
+        try {
+            keyBytes = Base64.getDecoder().decode(masterKey);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException(
+                    "encryption.master.key (ENCRYPTION_MASTER_KEY) is not valid Base64; "
+                            + "must be a Base64-encoded AES key of 16, 24, or 32 bytes", e);
+        }
+        if (keyBytes.length != 16 && keyBytes.length != 24 && keyBytes.length != 32) {
+            throw new IllegalStateException(
+                    "encryption.master.key (ENCRYPTION_MASTER_KEY) decodes to " + keyBytes.length
+                            + " bytes; must be a Base64-encoded AES key of 16, 24, or 32 bytes");
+        }
+        this.key = new SecretKeySpec(keyBytes, ALGORITHM);
+    }
 
     public String encrypt(String plaintext) {
         if (plaintext == null) return null;
@@ -65,7 +86,6 @@ public class EncryptionUtil {
     }
 
     private SecretKeySpec getKey() {
-        byte[] keyBytes = Base64.getDecoder().decode(masterKey);
-        return new SecretKeySpec(keyBytes, ALGORITHM);
+        return key;
     }
 }

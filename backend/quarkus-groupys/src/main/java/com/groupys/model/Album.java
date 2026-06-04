@@ -15,7 +15,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "albums")
+@Table(name = "albums", indexes = {
+        @jakarta.persistence.Index(name = "idx_albums_apple_music_id", columnList = "apple_music_id")
+})
 public class Album {
 
     @Id
@@ -23,6 +25,9 @@ public class Album {
 
     @Column(nullable = false)
     private String title;
+
+    @Column(name = "apple_music_id", length = 64, unique = true)
+    private String appleMusicId;
 
     private String coverSmall;
 
@@ -59,6 +64,9 @@ public class Album {
 
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }
+
+    public String getAppleMusicId() { return appleMusicId; }
+    public void setAppleMusicId(String appleMusicId) { this.appleMusicId = appleMusicId; }
 
     public String getCoverSmall() { return coverSmall; }
     public void setCoverSmall(String coverSmall) { this.coverSmall = coverSmall; }

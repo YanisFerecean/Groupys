@@ -15,6 +15,7 @@ class MusicIdentityUtilTest {
 
         assertEquals(first, second);
         assertTrue(first < 0);
+        assertTrue(first >= -MusicIdentityUtil.MAX_JAVASCRIPT_SAFE_INTEGER);
     }
 
     @Test

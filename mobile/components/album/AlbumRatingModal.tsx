@@ -17,11 +17,12 @@ export default function AlbumRatingModal({
   currentUserId,
 }: AlbumRatingModalProps) {
   const openSheet = useCallback(() => {
-    if (!album?.id) return
+    if (!album?.id && !album?.appleMusicId) return
     router.push({
       pathname: '/(home)/(profile)/rating',
       params: {
-        albumId: String(album.id),
+        albumId: album.id ? String(album.id) : '',
+        appleMusicId: album.appleMusicId ?? '',
         albumTitle: album.title ?? '',
         albumCoverUrl: album.coverUrl ?? '',
         artistName: album.artist ?? '',
@@ -31,10 +32,10 @@ export default function AlbumRatingModal({
   }, [album, currentUserId])
 
   useEffect(() => {
-    if (visible && album?.id) {
+    if (visible && (album?.id || album?.appleMusicId)) {
       openSheet()
     }
-  }, [visible, album?.id, openSheet])
+  }, [visible, album?.id, album?.appleMusicId, openSheet])
 
   // Return null since this is just a navigation trigger now
   return null

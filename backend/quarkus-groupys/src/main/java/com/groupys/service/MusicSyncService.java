@@ -2,9 +2,7 @@ package com.groupys.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.groupys.client.LastFmClient;
 import com.groupys.config.PerformanceFeatureFlags;
-import com.groupys.dto.lastfm.LastFmArtistInfoResponse;
 import com.groupys.model.*;
 import com.groupys.model.User;
 import com.groupys.repository.*;
@@ -13,10 +11,7 @@ import com.groupys.util.MusicIdentityUtil;
 import io.quarkus.logging.Log;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.inject.Named;
 import jakarta.transaction.Transactional;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.eclipse.microprofile.rest.client.inject.RestClient;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -27,8 +22,6 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
 
 @ApplicationScoped
 public class MusicSyncService {
@@ -44,9 +37,6 @@ public class MusicSyncService {
     private final UserArtistPreferenceRepository userArtistPreferenceRepository;
     private final UserGenrePreferenceRepository userGenrePreferenceRepository;
     private final UserTrackPreferenceRepository userTrackPreferenceRepository;
-    private final LastFmClient lastFmClient;
-    private final String lastfmApiKey;
-    private final ExecutorService virtualThreadExecutor;
     private final StorageService storageService;
     private final PerformanceFeatureFlags flags;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -64,9 +54,6 @@ public class MusicSyncService {
             UserArtistPreferenceRepository userArtistPreferenceRepository,
             UserGenrePreferenceRepository userGenrePreferenceRepository,
             UserTrackPreferenceRepository userTrackPreferenceRepository,
-            @RestClient LastFmClient lastFmClient,
-            @ConfigProperty(name = "lastfm.api.key") String lastfmApiKey,
-            @Named("virtual-thread-executor") ExecutorService virtualThreadExecutor,
             StorageService storageService,
             PerformanceFeatureFlags flags) {
         this.artistRepository = artistRepository;
@@ -77,9 +64,6 @@ public class MusicSyncService {
         this.userArtistPreferenceRepository = userArtistPreferenceRepository;
         this.userGenrePreferenceRepository = userGenrePreferenceRepository;
         this.userTrackPreferenceRepository = userTrackPreferenceRepository;
-        this.lastFmClient = lastFmClient;
-        this.lastfmApiKey = lastfmApiKey;
-        this.virtualThreadExecutor = virtualThreadExecutor;
         this.storageService = storageService;
         this.flags = flags;
     }
@@ -271,42 +255,11 @@ public class MusicSyncService {
         return size;
     }
 
-    public List<String> fetchLastFmGenres(String artistName) {
-        if (artistName == null || artistName.isBlank()) {
-            return List.of();
-        }
-        try {
-            CompletableFuture<LastFmArtistInfoResponse> future = CompletableFuture.supplyAsync(
-                    () -> lastFmClient.getArtistInfo(
-                            "artist.getinfo",
-                            artistName,
-                            lastfmApiKey,
-                            "json"
-                    ),
-                    virtualThreadExecutor
-            );
-            LastFmArtistInfoResponse response = future.get();
-            if (response == null || response.artist() == null || response.artist().tags() == null || response.artist().tags().tags() == null) {
-                return List.of();
-            }
-            return response.artist().tags().tags().stream()
-                    .map(LastFmArtistInfoResponse.LastFmTag::name)
-                    .filter(Objects::nonNull)
-                    .map(String::trim)
-                    .filter(s -> !s.isBlank())
-                    .limit(5)
-                    .toList();
-        } catch (Exception e) {
-            Log.debugf("Failed to enrich artist genres from Last.fm for '%s': %s", artistName, e.getMessage());
-            return List.of();
-        }
-    }
-
     List<String> resolveArtistGenres(MusicService.MusicArtistItem item) {
         if (item.genres() != null && !item.genres().isEmpty()) {
             return item.genres().stream().filter(Objects::nonNull).map(String::trim).filter(s -> !s.isBlank()).toList();
         }
-        return fetchLastFmGenres(item.name());
+        return List.of();
     }
 
     Artist resolveArtist(MusicService.MusicArtistItem item) {

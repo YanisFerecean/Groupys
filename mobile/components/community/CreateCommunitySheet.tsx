@@ -21,6 +21,7 @@ import {
 
 import * as Haptics from 'expo-haptics'
 import * as ImagePicker from 'expo-image-picker'
+import { UIImagePickerPreferredAssetRepresentationMode } from 'expo-image-picker'
 import { BlurView } from 'expo-blur'
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import { Colors } from '@/constants/colors'
@@ -266,6 +267,7 @@ function CreateCommunityContent() {
       quality: 0.85,
       allowsEditing: true,
       aspect: isBanner ? [16, 9] : [1, 1],
+      preferredAssetRepresentationMode: UIImagePickerPreferredAssetRepresentationMode.Compatible,
     })
 
     if (!result.canceled && result.assets[0]?.uri) {
@@ -327,6 +329,7 @@ function CreateCommunityContent() {
     setSubmitting(true)
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
 
+    let step: 'auth' | 'banner' | 'icon' | 'create' = 'auth'
     try {
       const token = await getToken()
       if (!token) {
@@ -338,13 +341,16 @@ function CreateCommunityContent() {
       let finalIconUrl: string | null = null
 
       if (bannerUri) {
+        step = 'banner'
         finalBannerUrl = await uploadCommunityMedia(token, bannerUri, 'image')
       }
 
       if (iconType === 'IMAGE' && iconUri) {
+        step = 'icon'
         finalIconUrl = await uploadCommunityMedia(token, iconUri, 'image')
       }
 
+      step = 'create'
       const created = await apiPost<CommunityResDto>('/communities', token, {
         name: name.trim(),
         description: '',
@@ -363,8 +369,16 @@ function CreateCommunityContent() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       playSuccessAnimation(created.id)
     } catch (err) {
-      console.error('Create community error:', err)
-      Alert.alert('Error', 'Failed to create community.')
+      console.error(`Create community error (step=${step}):`, err)
+      const stepLabel = step === 'banner'
+        ? 'Banner upload failed'
+        : step === 'icon'
+          ? 'Icon upload failed'
+          : step === 'create'
+            ? 'Community creation failed'
+            : 'Request failed'
+      const detail = err instanceof Error ? err.message : 'Unknown error'
+      Alert.alert(stepLabel, detail)
     } finally {
       setSubmitting(false)
     }
@@ -402,21 +416,28 @@ function CreateCommunityContent() {
       className="flex-1"
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <GlassSurface tinted={false} style={{ marginHorizontal: 16, marginTop: 12 }}>
-        <View className="flex-row items-center justify-between px-4 py-3">
-          <TouchableOpacity onPress={() => router.back()}>
-            <Text className="text-on-surface-variant text-base">Cancel</Text>
+      <View style={{ marginHorizontal: 16, marginTop: 12 }}>
+        <View className="flex-row items-center justify-between mb-4">
+          <TouchableOpacity
+            onPress={() => router.back()}
+            activeOpacity={0.85}
+            style={{
+              backgroundColor: Colors.primary,
+              paddingHorizontal: 18,
+              paddingVertical: 9,
+              borderRadius: 999,
+            }}
+          >
+            <Text className="text-white text-base font-bold">Cancel</Text>
           </TouchableOpacity>
-          <Text className="text-on-surface font-bold text-base">Create Community</Text>
-          <View style={{ width: 42 }} />
+          <Text className="text-on-surface font-extrabold text-xl">New Community</Text>
+          <View style={{ width: 86 }} />
         </View>
-      </GlassSurface>
 
-      <GlassSurface tinted={false} style={{ marginHorizontal: 16, marginTop: 10 }}>
-        <View className="px-4 py-3">
-          <Text className="text-on-surface text-base font-bold">{stageTitle}</Text>
-        </View>
-      </GlassSurface>
+        <Text className="text-on-surface text-3xl font-extrabold tracking-tight">
+          {stageTitle}
+        </Text>
+      </View>
 
       <Animated.ScrollView
         ref={pagerRef}
@@ -440,25 +461,25 @@ function CreateCommunityContent() {
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 170, gap: 12 }}
         >
           <GlassSurface>
-            <View className="px-4 py-3">
-              <Text className="text-on-surface text-sm font-semibold mb-2">Community Name</Text>
+            <View className="px-4 py-4">
+              <Text className="text-on-surface text-base font-bold mb-2">Community Name</Text>
               <TextInput
-                className="text-on-surface text-base py-1"
+                className="text-on-surface text-lg py-2"
                 placeholder="Community name"
                 placeholderTextColor={Colors.onSurfaceVariant}
                 value={name}
                 onChangeText={(t) => setName(t.slice(0, 60))}
                 maxLength={60}
               />
-              <Text className="text-xs text-on-surface-variant mt-1">{name.length}/60</Text>
+              <Text className="text-sm text-on-surface-variant mt-1">{name.length}/60</Text>
             </View>
           </GlassSurface>
 
           <GlassSurface>
-            <View className="px-4 py-3">
-              <Text className="text-on-surface text-sm font-semibold mb-2">Country (optional)</Text>
+            <View className="px-4 py-4">
+              <Text className="text-on-surface text-base font-bold mb-2">Country (optional)</Text>
               <TextInput
-                className="text-on-surface text-base py-1"
+                className="text-on-surface text-lg py-2"
                 placeholder="e.g. United States"
                 placeholderTextColor={Colors.onSurfaceVariant}
                 value={country}
@@ -480,7 +501,7 @@ function CreateCommunityContent() {
               activeOpacity={0.8}
             >
               <View className="p-4">
-                <Text className="text-on-surface text-sm font-semibold mb-3">Banner Image</Text>
+                <Text className="text-on-surface text-base font-bold mb-3">Banner Image</Text>
                 <View className="h-40 rounded-2xl overflow-hidden bg-black/20 items-center justify-center">
                   {bannerUri ? (
                     <>
@@ -499,7 +520,7 @@ function CreateCommunityContent() {
 
           <GlassSurface>
             <View className="p-4">
-              <Text className="text-on-surface text-sm font-semibold mb-3">Community Icon</Text>
+              <Text className="text-on-surface text-base font-bold mb-3">Community Icon</Text>
               <GlassSurface style={{ marginBottom: 12 }}>
                 <View
                   className="relative"
@@ -538,8 +559,8 @@ function CreateCommunityContent() {
                       activeOpacity={0.85}
                       style={{ flex: 1 }}
                     >
-                      <View className="py-2.5 items-center">
-                        <Text className={`font-semibold ${iconType === 'IMAGE' ? 'text-primary' : 'text-on-surface-variant'}`}>
+                      <View className="py-3 items-center">
+                        <Text className={`text-base font-bold ${iconType === 'IMAGE' ? 'text-primary' : 'text-on-surface-variant'}`}>
                           Image
                         </Text>
                       </View>
@@ -550,8 +571,8 @@ function CreateCommunityContent() {
                       activeOpacity={0.85}
                       style={{ flex: 1 }}
                     >
-                      <View className="py-2.5 items-center">
-                        <Text className={`font-semibold ${iconType === 'EMOJI' ? 'text-primary' : 'text-on-surface-variant'}`}>
+                      <View className="py-3 items-center">
+                        <Text className={`text-base font-bold ${iconType === 'EMOJI' ? 'text-primary' : 'text-on-surface-variant'}`}>
                           Emoji
                         </Text>
                       </View>
@@ -607,11 +628,11 @@ function CreateCommunityContent() {
         >
           <GlassSurface>
             <View className="p-4">
-              <Text className="text-on-surface text-sm font-semibold mb-2">Tags ({tags.length}/5)</Text>
-              <GlassSurface style={{ marginBottom: 10 }}>
+              <Text className="text-on-surface text-base font-bold mb-2">Tags ({tags.length}/5)</Text>
+              <GlassSurface style={{ marginBottom: 12 }}>
                 <View className="flex-row items-center px-3 py-2 gap-2">
                   <TextInput
-                    className="flex-1 text-on-surface text-sm"
+                    className="flex-1 text-on-surface text-base"
                     placeholder="Add a custom tag..."
                     placeholderTextColor={Colors.onSurfaceVariant}
                     value={tagInput}
@@ -626,8 +647,8 @@ function CreateCommunityContent() {
                       disabled={!tagInput.trim() || tags.length >= 5}
                       activeOpacity={0.8}
                     >
-                      <View className="px-3 py-1.5">
-                        <Text className={`${tagInput.trim() && tags.length < 5 ? 'text-primary' : 'text-on-surface-variant'} text-sm font-semibold`}>
+                      <View className="px-3 py-2">
+                        <Text className={`${tagInput.trim() && tags.length < 5 ? 'text-primary' : 'text-on-surface-variant'} text-base font-bold`}>
                           Add
                         </Text>
                       </View>
@@ -641,9 +662,9 @@ function CreateCommunityContent() {
                   {tags.map((tag) => (
                     <GlassSurface key={tag} isInteractive>
                       <TouchableOpacity onPress={() => removeTag(tag)} activeOpacity={0.8}>
-                        <View className="flex-row items-center gap-1 px-3 py-1.5">
-                          <Text className="text-primary text-xs font-semibold">#{tag}</Text>
-                          <Ionicons name="close" size={12} color={Colors.primary} />
+                        <View className="flex-row items-center gap-1 px-3 py-2">
+                          <Text className="text-primary text-sm font-bold">#{tag}</Text>
+                          <Ionicons name="close" size={14} color={Colors.primary} />
                         </View>
                       </TouchableOpacity>
                     </GlassSurface>
@@ -651,7 +672,7 @@ function CreateCommunityContent() {
                 </View>
               ) : null}
 
-              <Text className="text-xs text-on-surface-variant mb-2">Suggestions</Text>
+              <Text className="text-sm font-semibold text-on-surface-variant mb-2">Suggestions</Text>
               <View className="flex-row flex-wrap gap-2">
                 {TAG_SUGGESTIONS.filter((t) => !tags.includes(t.toLowerCase())).map((tag) => (
                   <GlassSurface key={tag} isInteractive>
@@ -660,8 +681,8 @@ function CreateCommunityContent() {
                       disabled={tags.length >= 5}
                       activeOpacity={0.8}
                     >
-                      <View className="px-3 py-1.5">
-                        <Text className={`text-xs font-semibold ${tags.length >= 5 ? 'text-on-surface-variant/50' : 'text-on-surface-variant'}`}>
+                      <View className="px-3 py-2">
+                        <Text className={`text-sm font-bold ${tags.length >= 5 ? 'text-on-surface-variant/50' : 'text-on-surface'}`}>
                           {tag}
                         </Text>
                       </View>
@@ -674,7 +695,7 @@ function CreateCommunityContent() {
 
           <GlassSurface>
             <View className="p-4">
-              <Text className="text-on-surface text-sm font-semibold mb-3">Visibility</Text>
+              <Text className="text-on-surface text-base font-bold mb-3">Visibility</Text>
               <View className="gap-2">
                 {([
                   {
@@ -698,26 +719,26 @@ function CreateCommunityContent() {
                         activeOpacity={0.8}
                       >
                         <View
-                          className="flex-row items-center justify-between px-3 py-3"
+                          className="flex-row items-center justify-between px-4 py-4"
                           style={{ backgroundColor: active ? 'rgba(186, 0, 43, 0.2)' : 'transparent' }}
                         >
-                          <View className="flex-row items-center gap-2 flex-1">
+                          <View className="flex-row items-center gap-3 flex-1">
                             <Ionicons
                               name={option.icon as any}
-                              size={18}
+                              size={22}
                               color={active ? Colors.primary : Colors.onSurfaceVariant}
                             />
                             <View className="flex-1">
-                              <Text className={`${active ? 'text-primary' : 'text-on-surface'} font-semibold`}>
+                              <Text className={`${active ? 'text-primary' : 'text-on-surface'} text-lg font-bold`}>
                                 {option.label}
                               </Text>
-                              <Text className="text-on-surface-variant text-xs mt-0.5">
+                              <Text className="text-on-surface-variant text-sm mt-0.5">
                                 {option.subtitle}
                               </Text>
                             </View>
                           </View>
                           {active ? (
-                            <Ionicons name="checkmark-circle" size={18} color={Colors.primary} />
+                            <Ionicons name="checkmark-circle" size={22} color={Colors.primary} />
                           ) : null}
                         </View>
                       </TouchableOpacity>
@@ -793,32 +814,32 @@ function CreateCommunityContent() {
                 style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.92)', borderColor: 'rgba(255,255,255,0.96)' }}
               >
                 <TouchableOpacity onPress={handleBack} activeOpacity={0.8}>
-                  <View className="py-3 items-center">
-                    <Text className="text-on-surface text-base font-semibold">Back</Text>
+                  <View className="py-4 items-center">
+                    <Text className="text-on-surface text-lg font-bold">Back</Text>
                   </View>
                 </TouchableOpacity>
               </GlassSurface>
             ) : null}
 
-            <GlassSurface
-              isInteractive
-              style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.92)', borderColor: 'rgba(255,255,255,0.96)' }}
+            <TouchableOpacity
+              onPress={stageIndex === STAGE_COUNT - 1 ? handleCreate : handleNext}
+              disabled={actionDisabled}
+              activeOpacity={0.85}
+              style={{
+                flex: 1,
+                backgroundColor: actionDisabled ? 'rgba(186, 0, 43, 0.4)' : Colors.primary,
+                borderRadius: 18,
+              }}
             >
-              <TouchableOpacity
-                onPress={stageIndex === STAGE_COUNT - 1 ? handleCreate : handleNext}
-                disabled={actionDisabled}
-                activeOpacity={0.8}
-              >
-                <View className="py-3 items-center flex-row justify-center gap-2">
-                  {submitting && stageIndex === STAGE_COUNT - 1 ? (
-                    <ActivityIndicator size="small" color={Colors.primary} />
-                  ) : null}
-                  <Text className={`text-base font-bold ${actionDisabled ? 'text-on-surface-variant' : 'text-primary'}`}>
-                    {stageIndex === STAGE_COUNT - 1 && submitting ? 'Creating...' : actionLabel}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            </GlassSurface>
+              <View className="py-4 items-center flex-row justify-center gap-2">
+                {submitting && stageIndex === STAGE_COUNT - 1 ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : null}
+                <Text className="text-white text-lg font-extrabold">
+                  {stageIndex === STAGE_COUNT - 1 && submitting ? 'Creating...' : actionLabel}
+                </Text>
+              </View>
+            </TouchableOpacity>
           </View>
         </View>
       </View>

@@ -32,9 +32,6 @@ public class Artist {
     @Column(name = "apple_music_id", length = 64, unique = true)
     private String appleMusicId;
 
-    @Column(name = "lastfm_name")
-    private String lastfmName;
-
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "artist_images", joinColumns = @JoinColumn(name = "artist_id"))
     @Column(name = "image_url")
@@ -47,7 +44,7 @@ public class Artist {
     @Column(columnDefinition = "TEXT")
     private String summary;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "primary_genre_id")
     private Genre primaryGenre;
 
@@ -118,14 +115,6 @@ public class Artist {
 
     public void setAppleMusicId(String appleMusicId) {
         this.appleMusicId = appleMusicId;
-    }
-
-    public String getLastfmName() {
-        return lastfmName;
-    }
-
-    public void setLastfmName(String lastfmName) {
-        this.lastfmName = lastfmName;
     }
 
     public Genre getPrimaryGenre() {

@@ -298,7 +298,10 @@ public class ChatWebSocket {
 
         try {
             chatService.markRead(conversationId, user.clerkId);
-        } catch (Exception ignored) { return; }
+        } catch (Exception e) {
+            LOG.warnf("markRead failed for conversation %s: %s", conversationId, e.getMessage());
+            return;
+        }
 
         String readAt = Instant.now().toString();
         String json = toJson(WebSocketMessage.readReceipt(conversationId, user.id.toString(), readAt));
@@ -353,7 +356,9 @@ public class ChatWebSocket {
         try {
             connection.sendTextAndAwait(toJson(WebSocketMessage.error(reason)));
             connection.close();
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            LOG.debugf("Failed to close WS connection cleanly: %s", e.getMessage());
+        }
     }
 
     private Map<String, Object> buildMessageData(MessageResDto m, String tempId) {

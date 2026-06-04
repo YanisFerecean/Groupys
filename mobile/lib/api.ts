@@ -1,12 +1,6 @@
 import type { ProfileCustomization } from '@/models/ProfileCustomization'
 import { ApiError, apiRequest } from '@/lib/apiRequest'
 import { API_URL } from '@/lib/config'
-import {
-  buildWidgetSyncFlags,
-  resolveMusicConnected,
-  resolveMusicSync,
-  resolveWidgetSyncFlags,
-} from '@/lib/musicCompatibility'
 import { getMusicErrorMessage } from '@/lib/musicErrors'
 
 export { API_URL }
@@ -44,10 +38,6 @@ export interface BackendUser {
   dateJoined: string
   tags?: string[]
   musicConnected?: boolean
-  /**
-   * @deprecated legacy alias from older backend payloads
-   */
-  spotifyConnected?: boolean
   isVerified?: boolean
   website?: string | null
   jobTitle?: string | null
@@ -68,6 +58,7 @@ export interface MusicArtistRes {
 }
 
 export interface MusicAlbumRes {
+  appleMusicId?: string | null
   title: string
   artist: string
   coverUrl?: string | null
@@ -187,6 +178,7 @@ function normalizeTrackItem(item: UnknownRecord) {
 function normalizeAlbumItem(item: UnknownRecord) {
   return {
     id: typeof item.id === 'number' ? item.id : undefined,
+    appleMusicId: firstString(item.appleMusicId, item.apple_music_id),
     title: firstString(item.title, item.name) ?? '',
     artist: pickArtistName(item.artist) ?? '',
     coverUrl: firstString(
@@ -235,9 +227,8 @@ export function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCusto
     switch (w.type) {
       case 'topSongs':
         {
-          const synced = resolveWidgetSyncFlags(data)
-          result.syncTopSongsWithMusic = synced
-          result.syncTopSongsWithSpotify = synced
+          result.syncTopSongsWithMusic =
+            data.syncWithMusic === true || data.synced === true
         }
         result.topSongs = items
           .map((i) => asRecord(i))
@@ -254,9 +245,8 @@ export function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCusto
         break
       case 'topArtists':
         {
-          const synced = resolveWidgetSyncFlags(data)
-          result.syncTopArtistsWithMusic = synced
-          result.syncTopArtistsWithSpotify = synced
+          result.syncTopArtistsWithMusic =
+            data.syncWithMusic === true || data.synced === true
         }
         result.topArtists = items
           .map((i) => asRecord(i))
@@ -273,9 +263,8 @@ export function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCusto
         break
       case 'topAlbums':
         {
-          const synced = resolveWidgetSyncFlags(data)
-          result.syncTopAlbumsWithMusic = synced
-          result.syncTopAlbumsWithSpotify = synced
+          result.syncTopAlbumsWithMusic =
+            data.syncWithMusic === true || data.synced === true
         }
         result.topAlbums = items
           .map((i) => asRecord(i))
@@ -315,18 +304,9 @@ function profileToWidgets(profile: Partial<ProfileCustomization>): BackendWidget
   type WidgetData = Omit<BackendWidget, 'pos'>
   const hidden = profile.hiddenWidgets ?? []
   const widgetMap: Partial<Record<string, WidgetData>> = {}
-  const syncTopAlbums = resolveMusicSync(
-    profile.syncTopAlbumsWithMusic,
-    profile.syncTopAlbumsWithSpotify,
-  )
-  const syncTopSongs = resolveMusicSync(
-    profile.syncTopSongsWithMusic,
-    profile.syncTopSongsWithSpotify,
-  )
-  const syncTopArtists = resolveMusicSync(
-    profile.syncTopArtistsWithMusic,
-    profile.syncTopArtistsWithSpotify,
-  )
+  const syncTopAlbums = profile.syncTopAlbumsWithMusic === true
+  const syncTopSongs = profile.syncTopSongsWithMusic === true
+  const syncTopArtists = profile.syncTopArtistsWithMusic === true
 
   if (profile.topAlbums?.length || syncTopAlbums) {
     widgetMap.topAlbums = {
@@ -334,7 +314,8 @@ function profileToWidgets(profile: Partial<ProfileCustomization>): BackendWidget
       color: profile.albumsContainerColor ?? null,
       data: {
         items: profile.topAlbums ?? [],
-        ...buildWidgetSyncFlags(syncTopAlbums),
+        syncWithMusic: syncTopAlbums,
+        synced: syncTopAlbums,
         size: profile.widgetSizes?.topAlbums ?? 'normal',
         hidden: hidden.includes('topAlbums'),
       },
@@ -358,7 +339,8 @@ function profileToWidgets(profile: Partial<ProfileCustomization>): BackendWidget
       color: profile.songsContainerColor ?? null,
       data: {
         items: profile.topSongs ?? [],
-        ...buildWidgetSyncFlags(syncTopSongs),
+        syncWithMusic: syncTopSongs,
+        synced: syncTopSongs,
         size: profile.widgetSizes?.topSongs ?? 'normal',
         hidden: hidden.includes('topSongs'),
       },
@@ -371,7 +353,8 @@ function profileToWidgets(profile: Partial<ProfileCustomization>): BackendWidget
       color: profile.artistsContainerColor ?? null,
       data: {
         items: profile.topArtists ?? [],
-        ...buildWidgetSyncFlags(syncTopArtists),
+        syncWithMusic: syncTopArtists,
+        synced: syncTopArtists,
         size: profile.widgetSizes?.topArtists ?? 'normal',
         hidden: hidden.includes('topArtists'),
       },
@@ -400,15 +383,13 @@ function profileToWidgets(profile: Partial<ProfileCustomization>): BackendWidget
 }
 
 export function backendUserToProfile(user: BackendUser): ProfileCustomization {
-  const musicConnected = resolveMusicConnected(user.musicConnected, user.spotifyConnected)
   return {
     id: user.id ?? undefined,
     displayName: user.displayName ?? undefined,
     bio: user.bio ?? undefined,
     country: user.country ?? undefined,
     tags: user.tags || [],
-    musicConnected,
-    spotifyConnected: musicConnected,
+    musicConnected: user.musicConnected ?? false,
     bannerUrl: user.bannerUrl ?? undefined,
     bannerText: user.bannerText ?? undefined,
     accentColor: user.accentColor ?? undefined,
@@ -882,7 +863,7 @@ export const syncSpotifyMusic = syncMusic
 export async function fetchMusicTopTracks(
   token: string | null,
 ): Promise<MusicTrackRes[]> {
-  return apiFetch<MusicTrackRes[]>('/music/top-tracks', token, false)
+  return apiFetch<MusicTrackRes[]>('/music/top-tracks', token)
 }
 
 export async function fetchMusicTopTracksByUserId(
@@ -899,7 +880,7 @@ export async function fetchMusicTopTracksByUserId(
 export async function fetchMusicTopArtists(
   token: string | null,
 ): Promise<MusicArtistRes[]> {
-  return apiFetch<MusicArtistRes[]>('/music/top-artists', token, false)
+  return apiFetch<MusicArtistRes[]>('/music/top-artists', token)
 }
 
 export async function fetchMusicTopArtistsByUserId(
@@ -916,7 +897,7 @@ export async function fetchMusicTopArtistsByUserId(
 export async function fetchMusicTopAlbums(
   token: string | null,
 ): Promise<MusicAlbumRes[]> {
-  return apiFetch<MusicAlbumRes[]>('/music/top-albums', token, false)
+  return apiFetch<MusicAlbumRes[]>('/music/top-albums', token)
 }
 
 export async function fetchMusicTopAlbumsByUserId(
@@ -956,15 +937,6 @@ export async function fetchMusicCurrentlyPlayingByUserId(
   }
   return res.json()
 }
-
-export const fetchSpotifyTopTracks = fetchMusicTopTracks
-export const fetchSpotifyTopTracksByUserId = fetchMusicTopTracksByUserId
-export const fetchSpotifyTopArtists = fetchMusicTopArtists
-export const fetchSpotifyTopArtistsByUserId = fetchMusicTopArtistsByUserId
-export const fetchSpotifyTopAlbums = fetchMusicTopAlbums
-export const fetchSpotifyTopAlbumsByUserId = fetchMusicTopAlbumsByUserId
-export const fetchSpotifyCurrentlyPlaying = fetchMusicCurrentlyPlaying
-export const fetchSpotifyCurrentlyPlayingByUserId = fetchMusicCurrentlyPlayingByUserId
 
 export async function followUser(
   userId: string,
@@ -1010,7 +982,8 @@ export interface AlbumRatingRes {
 }
 
 export interface AlbumRatingCreate {
-  albumId: number
+  albumId?: number | null
+  appleMusicId?: string | null
   albumTitle: string
   albumCoverUrl: string | null
   artistName: string | null
@@ -1023,6 +996,17 @@ export async function fetchAlbumRatings(
   token: string | null,
 ): Promise<AlbumRatingRes[]> {
   return apiFetch<AlbumRatingRes[]>(`/album-ratings/album/${albumId}`, token, false)
+}
+
+export async function fetchAlbumRatingsByAppleMusicId(
+  appleMusicId: string,
+  token: string | null,
+): Promise<AlbumRatingRes[]> {
+  return apiFetch<AlbumRatingRes[]>(
+    `/album-ratings/album/by-apple-music/${encodeURIComponent(appleMusicId)}`,
+    token,
+    false,
+  )
 }
 
 export async function upsertAlbumRating(

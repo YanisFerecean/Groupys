@@ -6,6 +6,8 @@ import java.security.NoSuchAlgorithmException;
 
 public final class MusicIdentityUtil {
 
+    public static final long MAX_JAVASCRIPT_SAFE_INTEGER = 9_007_199_254_740_991L;
+
     private MusicIdentityUtil() {
     }
 
@@ -16,6 +18,11 @@ public final class MusicIdentityUtil {
     public static long syntheticTrackId(String appleMusicId, String trackName, String primaryArtist) {
         String key = appleMusicId != null ? appleMusicId : trackName + "::" + primaryArtist;
         return stableNegativeLong("track", key);
+    }
+
+    public static long syntheticAlbumId(String appleMusicId, String albumName, String primaryArtist) {
+        String key = appleMusicId != null ? appleMusicId : albumName + "::" + primaryArtist;
+        return stableNegativeLong("album", key);
     }
 
     private static long stableNegativeLong(String namespace, String value) {
@@ -30,7 +37,7 @@ public final class MusicIdentityUtil {
                 result = (result << 8) | (hash[i] & 0xffL);
             }
             result = Math.abs(result == Long.MIN_VALUE ? 1L : result);
-            return -result;
+            return -(result % MAX_JAVASCRIPT_SAFE_INTEGER) - 1;
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 not available", e);
         }

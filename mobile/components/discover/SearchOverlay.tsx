@@ -30,13 +30,6 @@ import AlbumRatingModal from '@/components/album/AlbumRatingModal'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function formatCount(n: number): string {
-  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1).replace(/\.0$/, '')}B`
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, '')}k`
-  return String(n)
-}
-
 function formatDuration(s: number): string {
   const m = Math.floor(s / 60)
   const sec = s % 60
@@ -61,7 +54,6 @@ function ArtistRow({ artist, onPress }: { artist: ArtistRes; onPress: () => void
       )}
       <View style={styles.rowText}>
         <Text style={styles.rowTitle} numberOfLines={1}>{artist.name}</Text>
-        <Text style={styles.rowSub} numberOfLines={1}>{formatCount(artist.listeners)} listeners</Text>
       </View>
       <Ionicons name="chevron-forward" size={16} color="rgba(0,0,0,0.25)" />
     </TouchableOpacity>
@@ -386,9 +378,22 @@ export default function SearchOverlay({ onClose, initialQuery = '' }: SearchOver
         }
 
         if (!cancelled) {
+          const seenArtistIds = new Set<number>()
+          const dedupedArtists = data.artists.filter((artist) => {
+            if (seenArtistIds.has(artist.id)) return false
+            seenArtistIds.add(artist.id)
+            return true
+          })
+          const seenAlbumIds = new Set<number>()
+          const dedupedAlbums = data.albums.filter((album) => {
+            if (seenAlbumIds.has(album.id)) return false
+            seenAlbumIds.add(album.id)
+            return true
+          })
           const nextResults = {
             ...data,
-            artists: [...data.artists].sort((a, b) => b.listeners - a.listeners),
+            artists: dedupedArtists.sort((a, b) => b.listeners - a.listeners),
+            albums: dedupedAlbums,
           }
           setResults(nextResults)
           setResultsKey(`${category}:${debouncedQuery}`)
@@ -495,7 +500,7 @@ export default function SearchOverlay({ onClose, initialQuery = '' }: SearchOver
   const handleArtistPress = (artist: ArtistRes) => {
     handleClose()
     setTimeout(() => {
-      router.push({ pathname: '/artist/[id]', params: { id: artist.id } })
+      router.push({ pathname: '/artist/[id]', params: { id: artist.id, name: artist.name } })
     }, 200)
   }
 

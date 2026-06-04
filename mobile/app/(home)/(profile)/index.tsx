@@ -4,6 +4,7 @@ import CurrentlyListeningWidget from '@/components/profile/widgets/CurrentlyList
 import TopAlbumsWidget from '@/components/profile/widgets/TopAlbumsWidget'
 import TopArtistsWidget from '@/components/profile/widgets/TopArtistsWidget'
 import TopSongsWidget from '@/components/profile/widgets/TopSongsWidget'
+import HotTakeWidget from '@/components/profile/widgets/HotTakeWidget'
 import AlbumRatingModal from '@/components/album/AlbumRatingModal'
 import SwipeableTabScreen from '@/components/navigation/SwipeableTabScreen'
 import { Colors } from '@/constants/colors'
@@ -161,10 +162,10 @@ export default function ProfileScreen() {
   const { user } = useUser()
   const { profile, backendUser, updateProfile, refreshProfile, isLoaded } = useProfileCustomization()
   const { topMusic } = useTopMusic({
-    musicConnected: profile.musicConnected ?? profile.spotifyConnected,
-    syncTopAlbumsWithMusic: profile.syncTopAlbumsWithMusic ?? profile.syncTopAlbumsWithSpotify,
-    syncTopSongsWithMusic: profile.syncTopSongsWithMusic ?? profile.syncTopSongsWithSpotify,
-    syncTopArtistsWithMusic: profile.syncTopArtistsWithMusic ?? profile.syncTopArtistsWithSpotify,
+    musicConnected: profile.musicConnected,
+    syncTopAlbumsWithMusic: profile.syncTopAlbumsWithMusic,
+    syncTopSongsWithMusic: profile.syncTopSongsWithMusic,
+    syncTopArtistsWithMusic: profile.syncTopArtistsWithMusic,
   })
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
   const [ratingAlbum, setRatingAlbum] = useState<TopAlbum | null>(null)
@@ -287,10 +288,10 @@ export default function ProfileScreen() {
       ? user.createdAt.toISOString()
       : undefined
 
-  const isMusicConnected = profile.musicConnected ?? profile.spotifyConnected
-  const syncTopAlbumsWithMusic = profile.syncTopAlbumsWithMusic ?? profile.syncTopAlbumsWithSpotify
-  const syncTopSongsWithMusic = profile.syncTopSongsWithMusic ?? profile.syncTopSongsWithSpotify
-  const syncTopArtistsWithMusic = profile.syncTopArtistsWithMusic ?? profile.syncTopArtistsWithSpotify
+  const isMusicConnected = profile.musicConnected ?? false
+  const syncTopAlbumsWithMusic = profile.syncTopAlbumsWithMusic
+  const syncTopSongsWithMusic = profile.syncTopSongsWithMusic
+  const syncTopArtistsWithMusic = profile.syncTopArtistsWithMusic
 
   const topAlbums = syncTopAlbumsWithMusic && isMusicConnected
     ? topMusic.topAlbums
@@ -307,7 +308,7 @@ export default function ProfileScreen() {
       : [...DEFAULT_WIDGET_ORDER]
     const hiddenWidgets = new Set(profile.hiddenWidgets ?? [])
 
-    return widgetOrder.flatMap((type) => {
+    const rendered = widgetOrder.flatMap((type) => {
       if (hiddenWidgets.has(type)) {
         return []
       }
@@ -374,7 +375,7 @@ export default function ProfileScreen() {
                       containerColor={profile.albumsContainerColor}
                       textColor={profile.accentColor}
                       size={profile.widgetSizes?.topAlbums}
-                      onAlbumPress={(album) => { if (album.id) setRatingAlbum(album) }}
+                      onAlbumPress={(album) => { if (album.id || album.appleMusicId) setRatingAlbum(album) }}
                       userRatingScores={myRatingScores}
                     />
                   </WidgetFadeTransition>
@@ -496,6 +497,19 @@ export default function ProfileScreen() {
           return []
       }
     })
+
+    if (username) {
+      rendered.push(
+        <HotTakeWidget
+          key="hotTake"
+          username={username}
+          isOwnProfile
+          textColor={profile.accentColor}
+        />,
+      )
+    }
+
+    return rendered
   }, [
     profile.accentColor,
     profile.albumsContainerColor,
@@ -510,6 +524,7 @@ export default function ProfileScreen() {
     topArtists,
     topSongs,
     myRatingScores,
+    username,
   ])
   const hasWidgets = orderedWidgets.length > 0
   const activeTabIndex = Math.max(0, PROFILE_CONTENT_TABS.findIndex((tab) => tab.key === contentTab))
@@ -558,6 +573,9 @@ export default function ProfileScreen() {
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.9,
+      // iOS HEIC/iCloud assets fail to load via the raw representation; force transcoding.
+      preferredAssetRepresentationMode:
+        ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
     })
 
     if (result.canceled || !result.assets?.[0]?.uri) return
