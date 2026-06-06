@@ -12,6 +12,7 @@ import com.groupys.model.Friendship;
 import com.groupys.repository.ConversationRepository;
 import com.groupys.repository.FriendshipRepository;
 import com.groupys.repository.MessageRepository;
+import com.groupys.repository.UserBlockRepository;
 import com.groupys.repository.UserRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -37,6 +38,7 @@ public class ChatService {
     private final MessageRepository messageRepository;
     private final UserRepository userRepository;
     private final FriendshipRepository friendshipRepository;
+    private final UserBlockRepository userBlockRepository;
     private final DiscoveryService discoveryService;
     private final PerformanceFeatureFlags flags;
     private final ChatRedisStateService chatRedisStateService;
@@ -48,6 +50,7 @@ public class ChatService {
             MessageRepository messageRepository,
             UserRepository userRepository,
             FriendshipRepository friendshipRepository,
+            UserBlockRepository userBlockRepository,
             DiscoveryService discoveryService,
             PerformanceFeatureFlags flags,
             ChatRedisStateService chatRedisStateService,
@@ -56,6 +59,7 @@ public class ChatService {
         this.messageRepository = messageRepository;
         this.userRepository = userRepository;
         this.friendshipRepository = friendshipRepository;
+        this.userBlockRepository = userBlockRepository;
         this.discoveryService = discoveryService;
         this.flags = flags;
         this.chatRedisStateService = chatRedisStateService;
@@ -223,6 +227,10 @@ public class ChatService {
         User target = userRepository.findByIdOptional(targetUserId)
                 .orElseThrow(() -> new NotFoundException("Target user not found"));
 
+        if (userBlockRepository.blockExistsBetween(me.id, target.id)) {
+            throw new ForbiddenException("Cannot start a conversation with this user");
+        }
+
         // Return existing conversation if found
         return conversationRepository.findDirectConversation(me.id, target.id)
                 .map(c -> toConversationDto(c, me.id))
@@ -320,6 +328,15 @@ public class ChatService {
 
         if (REQUEST_STATUS_PENDING.equals(conv.requestStatus)) {
             throw new ForbiddenException("Chat request must be accepted before messaging");
+        }
+
+        // Block enforcement: no messaging if any participant is blocked by / has blocked the sender.
+        boolean blocked = conv.participants.stream()
+                .map(cp -> cp.user.id)
+                .filter(uid -> !uid.equals(sender.id))
+                .anyMatch(uid -> userBlockRepository.blockExistsBetween(sender.id, uid));
+        if (blocked) {
+            throw new ForbiddenException("Cannot send messages in this conversation");
         }
 
         // Validate content

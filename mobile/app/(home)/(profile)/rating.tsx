@@ -28,6 +28,7 @@ import {
   upsertAlbumRating,
   type AlbumRatingRes,
 } from '@/lib/api'
+import { logDebug } from '@/lib/logging'
 
 // Backend uses integer 1–10. UI uses 0.5 steps on a 1–5 scale.
 function to5Star(backendScore: number): number {
@@ -387,7 +388,7 @@ function RatingContent() {
         score: backendScore,
         review: review.trim() || null,
       }
-      console.log('Submitting album rating', payload)
+      logDebug('Submitting album rating', payload)
       await upsertAlbumRating(payload, token)
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       await refreshRatings()

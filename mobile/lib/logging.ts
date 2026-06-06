@@ -53,3 +53,13 @@ export function logError(context: string, error: unknown) {
 export function logWarn(context: string, error: unknown) {
   console.warn(`${context}: ${summarizeError(error)}`)
 }
+
+/**
+ * Dev-only diagnostic logging. No-ops in production builds so debug output
+ * (and any user data in it) never reaches release logs.
+ */
+export function logDebug(...args: unknown[]) {
+  if (__DEV__) {
+    console.log(...args)
+  }
+}

@@ -31,6 +31,8 @@ import {
   type ChatKeyPair,
 } from '@/lib/chat-crypto'
 import { chatWs } from '@/lib/chat-ws'
+import { getActiveConversationId } from '@/lib/activeChat'
+import { useNotificationBannerStore } from '@/stores/useNotificationBannerStore'
 import type { Conversation, Message, PresenceStatus } from '@/models/Chat'
 
 const PAGE_SIZE = 20
@@ -416,6 +418,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         })
       }),
       chatWs.on('MESSAGE_NEW', (payload: Message) => {
+        // In-app banner for incoming messages (the backend skips the sender). Driven by the
+        // websocket, so it works without APNs — e.g. in the simulator. Suppressed for the chat
+        // you're already viewing.
+        if (getActiveConversationId() !== payload.conversationId) {
+          useNotificationBannerStore.getState().show({
+            id: payload.id ?? `${payload.conversationId}:${payload.createdAt}`,
+            title: payload.senderDisplayName?.trim() || payload.senderUsername || 'Groupys',
+            body: payload.content,
+            imageUrl: payload.senderProfileImage ?? undefined,
+            deeplink: `/(home)/(match)/chat/${payload.conversationId}`,
+            type: 'message',
+          })
+        }
         setConversations(prev => {
           const next = [...prev]
           const index = next.findIndex(conversation => conversation.id === payload.conversationId)

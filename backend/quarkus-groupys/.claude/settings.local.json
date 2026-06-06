@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(./mvnw compile:*)",
-      "Bash(mvn compile:*)"
+      "Bash(mvn compile:*)",
+      "Bash(cat /Users/kyaw/Desktop/groupys-web-app/mobile/.env)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d['expo'].get\\('extra',{}\\),indent=2\\)\\); print\\('plugins:', d['expo'].get\\('plugins'\\)\\); print\\('owner:', d['expo'].get\\('owner'\\)\\)\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('slug:',d['expo'].get\\('slug'\\)\\); print\\('name:',d['expo'].get\\('name'\\)\\)\")"
     ]
   }
 }

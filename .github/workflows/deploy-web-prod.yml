@@ -202,8 +202,11 @@ jobs:
             EOF
 
             echo "$REGISTRY_PASSWORD" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
-            docker compose --env-file "$DEPLOY_PATH/docker/.env.prod" -f "$DEPLOY_PATH/docker/docker-compose.prod.yaml" pull
-            docker compose --env-file "$DEPLOY_PATH/docker/.env.prod" -f "$DEPLOY_PATH/docker/docker-compose.prod.yaml" up -d --remove-orphans
+            # Scope to the web service: the API stack is deployed by deploy-backend-prod.yml
+            # with its own env file. A bare `up` here would (re)start the API with web-only
+            # env and crash it on StartupConfigValidator.
+            docker compose --env-file "$DEPLOY_PATH/docker/.env.prod" -f "$DEPLOY_PATH/docker/docker-compose.prod.yaml" pull groupys-web
+            docker compose --env-file "$DEPLOY_PATH/docker/.env.prod" -f "$DEPLOY_PATH/docker/docker-compose.prod.yaml" up -d groupys-web
 
             APP_URL="http://127.0.0.1:3000"
             for i in $(seq 1 30); do

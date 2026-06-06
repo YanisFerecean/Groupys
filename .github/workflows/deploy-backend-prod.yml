@@ -1,0 +1,232 @@
+name: Deploy Backend Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-backend-prod-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  JAVA_VERSION: "25"
+  API_IMAGE_NAME: groupys-api
+
+jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      deploy: ${{ steps.filter.outputs.deploy }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/quarkus-groupys/**'
+            deploy:
+              - 'docker/docker-compose.prod.yaml'
+              - '.github/workflows/deploy-backend-prod.yml'
+
+  build:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Build and test
+        run: ./mvnw -B --no-transfer-progress verify
+        working-directory: backend/quarkus-groupys
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Normalize image owner
+        run: echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+
+      - name: Login to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push API image
+        id: docker_build
+        uses: docker/build-push-action@v7
+        with:
+          context: ./backend/quarkus-groupys
+          file: ./backend/quarkus-groupys/src/main/docker/Dockerfile.jvm
+          push: true
+          cache-from: type=gha,scope=groupys-api
+          cache-to: type=gha,mode=max,ignore-error=true,scope=groupys-api
+          tags: |
+            ghcr.io/${{ env.OWNER_LC }}/${{ env.API_IMAGE_NAME }}:${{ github.sha }}
+            ghcr.io/${{ env.OWNER_LC }}/${{ env.API_IMAGE_NAME }}:latest
+
+      - name: Build summary
+        run: |
+          {
+            echo "## Backend Build Summary"
+            echo ""
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| **Status** | ✅ Success |"
+            echo "| **Triggered by** | \`${{ github.actor }}\` |"
+            echo "| **Branch** | \`${{ github.ref_name }}\` |"
+            echo "| **Commit** | [\`${GITHUB_SHA::7}\`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}) |"
+            echo "| **Java version** | ${{ env.JAVA_VERSION }} |"
+            echo "| **Image (sha tag)** | \`ghcr.io/${OWNER_LC}/${API_IMAGE_NAME}:${GITHUB_SHA}\` |"
+            echo "| **Image (latest tag)** | \`ghcr.io/${OWNER_LC}/${API_IMAGE_NAME}:latest\` |"
+            echo "| **Digest** | \`${{ steps.docker_build.outputs.digest }}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    runs-on: ubuntu-24.04
+    if: always() && !failure() && !cancelled()
+    needs:
+      - changes
+      - build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Normalize image owner
+        run: echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+
+      - name: Resolve image tag
+        id: tags
+        run: |
+          if [ "${{ needs.changes.outputs.backend }}" = "true" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "api_tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "api_tag=latest" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Prepare remote deploy directory
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        with:
+          host: ${{ secrets.VM88_HOST }}
+          username: ${{ secrets.VM88_USER }}
+          key: ${{ secrets.VM88_SSH_PRIVATE_KEY }}
+          envs: DEPLOY_PATH
+          script: |
+            set -eu
+            mkdir -p "$DEPLOY_PATH/docker"
+
+      - name: Upload production compose assets
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VM88_HOST }}
+          username: ${{ secrets.VM88_USER }}
+          key: ${{ secrets.VM88_SSH_PRIVATE_KEY }}
+          source: docker/docker-compose.prod.yaml
+          target: ${{ secrets.DEPLOY_PATH }}/docker
+          strip_components: 1
+
+      - name: Deploy on server
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          REGISTRY_USERNAME: ${{ github.actor }}
+          REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          API_IMAGE: ghcr.io/${{ env.OWNER_LC }}/${{ env.API_IMAGE_NAME }}:${{ steps.tags.outputs.api_tag }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+          MINIO_ROOT_USER: ${{ secrets.MINIO_ROOT_USER }}
+          MINIO_ROOT_PASSWORD: ${{ secrets.MINIO_ROOT_PASSWORD }}
+          JWT_ISSUER: ${{ secrets.JWT_ISSUER }}
+          JWT_PUBLIC_KEY_LOCATION: ${{ secrets.JWT_PUBLIC_KEY_LOCATION }}
+          APP_CORS_ORIGINS: ${{ secrets.APP_CORS_ORIGINS }}
+          ENCRYPTION_MASTER_KEY: ${{ secrets.ENCRYPTION_MASTER_KEY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_KEY_ID: ${{ secrets.APPLE_KEY_ID }}
+          APPLE_PRIVATE_KEY: ${{ secrets.APPLE_PRIVATE_KEY }}
+          APPLE_MEDIA_ID: ${{ secrets.APPLE_MEDIA_ID }}
+          GROUPYS_ADMIN_SECRET: ${{ secrets.GROUPYS_ADMIN_SECRET }}
+        with:
+          host: ${{ secrets.VM88_HOST }}
+          username: ${{ secrets.VM88_USER }}
+          key: ${{ secrets.VM88_SSH_PRIVATE_KEY }}
+          envs: DEPLOY_PATH,REGISTRY_USERNAME,REGISTRY_PASSWORD,API_IMAGE,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,MINIO_ROOT_USER,MINIO_ROOT_PASSWORD,JWT_ISSUER,JWT_PUBLIC_KEY_LOCATION,APP_CORS_ORIGINS,ENCRYPTION_MASTER_KEY,APPLE_TEAM_ID,APPLE_KEY_ID,APPLE_PRIVATE_KEY,APPLE_MEDIA_ID,GROUPYS_ADMIN_SECRET
+          script: |
+            set -eu
+
+            if ! command -v docker >/dev/null 2>&1; then
+              echo "Docker is required on the server."
+              exit 1
+            fi
+
+            mkdir -p "$DEPLOY_PATH/docker"
+
+            # Backend-only env file. The web stack maintains its own .env.prod;
+            # this deploy only acts on the API + its datastores, so missing web
+            # variables surface as harmless interpolation warnings.
+            cat > "$DEPLOY_PATH/docker/.env.api.prod" <<EOF
+            API_IMAGE=$API_IMAGE
+            POSTGRES_USER=$POSTGRES_USER
+            POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+            POSTGRES_DB=${POSTGRES_DB:-db}
+            MINIO_ROOT_USER=$MINIO_ROOT_USER
+            MINIO_ROOT_PASSWORD=$MINIO_ROOT_PASSWORD
+            JWT_ISSUER=$JWT_ISSUER
+            JWT_PUBLIC_KEY_LOCATION=$JWT_PUBLIC_KEY_LOCATION
+            APP_CORS_ORIGINS=$APP_CORS_ORIGINS
+            ENCRYPTION_MASTER_KEY=$ENCRYPTION_MASTER_KEY
+            APPLE_TEAM_ID=$APPLE_TEAM_ID
+            APPLE_KEY_ID=$APPLE_KEY_ID
+            APPLE_PRIVATE_KEY=$APPLE_PRIVATE_KEY
+            APPLE_MEDIA_ID=$APPLE_MEDIA_ID
+            GROUPYS_ADMIN_SECRET=$GROUPYS_ADMIN_SECRET
+            EOF
+
+            COMPOSE="docker compose --env-file $DEPLOY_PATH/docker/.env.api.prod -f $DEPLOY_PATH/docker/docker-compose.prod.yaml"
+
+            echo "$REGISTRY_PASSWORD" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
+            $COMPOSE pull groupys-api
+            $COMPOSE up -d groupys-db groupys-minio groupys-redis groupys-api
+
+            for i in $(seq 1 45); do
+              if docker exec groupys-api sh -lc "curl -fsS http://127.0.0.1:8080/api/q/health/ready >/dev/null 2>&1"; then
+                echo "Backend healthy at /api/q/health/ready"
+                exit 0
+              fi
+              echo "Waiting for API startup... ($i/45)"
+              sleep 2
+            done
+
+            echo "API did not become healthy"
+            docker logs --tail=120 groupys-api || true
+            exit 1
+
+      - name: Deploy summary
+        run: |
+          {
+            echo "## Backend Deploy Summary"
+            echo ""
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| **Host** | ${{ secrets.VM88_HOST }} |"
+            echo "| **Image** | \`ghcr.io/${{ env.OWNER_LC }}/${{ env.API_IMAGE_NAME }}:${{ steps.tags.outputs.api_tag }}\` |"
+            echo "| **Deploy path** | ${{ secrets.DEPLOY_PATH }} |"
+          } >> "$GITHUB_STEP_SUMMARY"

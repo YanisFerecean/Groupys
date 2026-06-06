@@ -108,3 +108,43 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
     return null
   }
 }
+
+/**
+ * Requests notification permission WITHOUT the physical-device gate. Local notifications work in
+ * the simulator (unlike remote push), so this is the dev path to surface the iOS permission dialog
+ * and exercise the banner UI. Returns true when granted. Never throws.
+ */
+export async function requestLocalNotificationPermission(): Promise<boolean> {
+  const Notifications = getNotificationsModule()
+  if (!Notifications) return false
+
+  await ensureAndroidChannel()
+
+  const { status: existing } = await Notifications.getPermissionsAsync()
+  if (existing === 'granted') return true
+  const { status } = await Notifications.requestPermissionsAsync()
+  return status === 'granted'
+}
+
+/**
+ * Dev helper: schedules a LOCAL notification (~1s out) with a payload mirroring real pushes, so the
+ * foreground in-app banner + deep-link path can be tested in the simulator. No-op without the module.
+ */
+export async function sendLocalTestNotification(opts?: {
+  title?: string
+  body?: string
+  data?: Record<string, unknown>
+}): Promise<void> {
+  const Notifications = getNotificationsModule()
+  if (!Notifications) return
+  if (!(await requestLocalNotificationPermission())) return
+
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: opts?.title ?? 'Groupys',
+      body: opts?.body ?? 'This is a local test notification.',
+      data: opts?.data ?? { type: 'test', deeplink: '/(home)/(profile)/notifications' },
+    },
+    trigger: { seconds: 1 } as never,
+  })
+}

@@ -108,6 +108,9 @@ public class DiscoveryService {
     UserSimilarityCacheRepository userSimilarityCacheRepository;
 
     @Inject
+    UserBlockRepository userBlockRepository;
+
+    @Inject
     CommunityRecommendationCacheRepository communityRecommendationCacheRepository;
 
     @Inject
@@ -429,6 +432,8 @@ public class DiscoveryService {
                 .forEach(excluded::add);
         friendshipRepository.findAcceptedFriendIds(userId)
                 .forEach(excluded::add);
+        // Blocked users (either direction) never surface as candidates.
+        excluded.addAll(userBlockRepository.blockedUserIdsInvolving(userId));
         return excluded;
     }
 

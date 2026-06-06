@@ -22,6 +22,7 @@ import { apiFetch } from '@/lib/api'
 import { ApiError } from '@/lib/apiRequest'
 import { searchArtists } from '@/lib/musicSearch'
 import { communityResToCard } from '@/lib/communityUtils'
+import { logDebug } from '@/lib/logging'
 import { Colors } from '@/constants/colors'
 import CommunityCard from '@/components/discover/CommunityCard'
 import type { ArtistRes as ChartArtist } from '@/models/ArtistRes'
@@ -173,7 +174,7 @@ export default function ArtistScreen() {
     ;(async () => {
       try {
         const token = await getTokenRef.current()
-        console.log(`[ArtistScreen] fetching id=${id} name=${name ?? ''}`)
+        logDebug(`[ArtistScreen] fetching id=${id} name=${name ?? ''}`)
 
         // Stored ids can be stale after a backend music reseed.
         // If the id 404s, resolve the current id by name and retry.
@@ -184,7 +185,7 @@ export default function ArtistScreen() {
         } catch (err) {
           if (err instanceof ApiError && err.status === 404 && name) {
             const matches = await searchArtists(name, token, 5)
-            console.log(`[ArtistScreen] 404 fallback: search "${name}" -> ${matches.length} matches [${matches.map((m) => m.id).join(',')}]`)
+            logDebug(`[ArtistScreen] 404 fallback: search "${name}" -> ${matches.length} matches [${matches.map((m) => m.id).join(',')}]`)
             const ordered = [
               ...matches.filter((m) => m.name.toLowerCase() === name.toLowerCase()),
               ...matches.filter((m) => m.name.toLowerCase() !== name.toLowerCase()),
@@ -196,7 +197,7 @@ export default function ArtistScreen() {
                 resolvedId = String(m.id)
                 break
               } catch (retryErr) {
-                console.log(`[ArtistScreen] retry id=${m.id} failed: ${retryErr instanceof ApiError ? retryErr.status : String(retryErr)}`)
+                logDebug(`[ArtistScreen] retry id=${m.id} failed: ${retryErr instanceof ApiError ? retryErr.status : String(retryErr)}`)
               }
             }
             if (!resolved) throw err
@@ -211,7 +212,7 @@ export default function ArtistScreen() {
           apiFetch<CommunityResDto[]>(`/communities/artist/${resolvedId}`, token).catch(() => [] as CommunityResDto[]),
         ])
         if (!cancelled) {
-          console.log(`[ArtistScreen] loaded artist id=${artistData?.id} name=${artistData?.name} tracks=${tracksData.length} communities=${communitiesData.length}`)
+          logDebug(`[ArtistScreen] loaded artist id=${artistData?.id} name=${artistData?.name} tracks=${tracksData.length} communities=${communitiesData.length}`)
           setArtist(artistData)
           setTracks(tracksData)
           setCommunities(communitiesData)
