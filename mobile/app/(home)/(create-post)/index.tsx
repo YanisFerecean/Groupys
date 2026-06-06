@@ -38,6 +38,7 @@ import {
   type CreatePostDraftFile,
   type CreatePostDraftMedia,
 } from '@/store/createPostDraftStore'
+import { logDebug } from '@/lib/logging'
 
 const MAX_WORDS = 300
 const INITIAL_CONTENT = 'Edit this text to start! Type / to use command'
@@ -338,39 +339,16 @@ export default function CreatePostScreen() {
   }
 
   const handleSubmit = async () => {
-    console.log('Submit triggered:', { 
-      title: title.trim(), 
-      community: selectedCommunity?.id, 
-      submitting, 
-      isOverLimit,
-      contentLength: content?.length 
-    })
-    
-    if (!title.trim()) {
-      console.log('Submit blocked: no title')
-      return
-    }
-    if (!selectedCommunity) {
-      console.log('Submit blocked: no community selected')
-      return
-    }
-    if (submitting) {
-      console.log('Submit blocked: already submitting')
-      return
-    }
-    if (isOverLimit) {
-      console.log('Submit blocked: word count over limit')
-      return
-    }
-    
+    if (!title.trim()) return
+    if (!selectedCommunity) return
+    if (submitting) return
+    if (isOverLimit) return
+
     setSubmitting(true)
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     try {
       const token = await getToken()
-      if (!token) {
-        console.log('Submit blocked: no token')
-        return
-      }
+      if (!token) return
 
       const allMedia = [
         ...media.map(m => ({
@@ -385,11 +363,11 @@ export default function CreatePostScreen() {
         })),
       ]
 
-      console.log('Creating post with:', { 
-        communityId: selectedCommunity.id, 
+      logDebug('Creating post with:', {
+        communityId: selectedCommunity.id,
         title: title.trim(),
         contentLength: content?.length,
-        mediaCount: allMedia.length 
+        mediaCount: allMedia.length,
       })
 
       const payloadContent = encodeLexicalContent(content)
@@ -402,7 +380,7 @@ export default function CreatePostScreen() {
         allMedia.length ? allMedia : undefined
       )
 
-      console.log('Post created successfully')
+      logDebug('Post created successfully')
       clearDraft()
       resetForm()
       router.navigate('/(home)/(feed)')

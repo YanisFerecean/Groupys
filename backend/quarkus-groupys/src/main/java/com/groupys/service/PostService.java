@@ -41,6 +41,7 @@ public class PostService {
     private final CommunityMemberRepository communityMemberRepository;
     private final CommunityRecommendationCacheRepository communityRecommendationCacheRepository;
     private final FriendshipRepository friendshipRepository;
+    private final UserBlockRepository userBlockRepository;
     private final CommentService commentService;
     private final StorageService storageService;
     private final Event<CommunityActivityEvent> communityActivityEvent;
@@ -57,6 +58,7 @@ public class PostService {
             CommunityMemberRepository communityMemberRepository,
             CommunityRecommendationCacheRepository communityRecommendationCacheRepository,
             FriendshipRepository friendshipRepository,
+            UserBlockRepository userBlockRepository,
             CommentService commentService,
             StorageService storageService,
             Event<CommunityActivityEvent> communityActivityEvent,
@@ -70,6 +72,7 @@ public class PostService {
         this.communityMemberRepository = communityMemberRepository;
         this.communityRecommendationCacheRepository = communityRecommendationCacheRepository;
         this.friendshipRepository = friendshipRepository;
+        this.userBlockRepository = userBlockRepository;
         this.commentService = commentService;
         this.storageService = storageService;
         this.communityActivityEvent = communityActivityEvent;
@@ -154,10 +157,12 @@ public class PostService {
         }
         for (Post p : friendAuthoredPosts) reasonMap.put(p.id, "FRIEND_POSTED");
 
-        // Sort, deduplicate, paginate
+        // Sort, deduplicate, drop blocked authors, paginate
+        Set<UUID> blockedIds = userBlockRepository.blockedUserIdsInvolving(user.id);
         Set<UUID> seen = new HashSet<>();
         List<Post> result = scored.stream()
                 .sorted(Comparator.comparingDouble(ScoredPost::score).reversed())
+                .filter(sp -> !blockedIds.contains(sp.post.author.id))
                 .filter(sp -> seen.add(sp.post.id))
                 .map(ScoredPost::post)
                 .skip((long) page * size)

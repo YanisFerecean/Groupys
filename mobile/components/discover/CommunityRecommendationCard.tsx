@@ -23,9 +23,11 @@ function AuthedImage({ uri, style }: AuthedImageProps) {
 
   useEffect(() => {
     mounted.current = true
-    getToken().then((t) => {
-      if (mounted.current && t) setHeaders({ Authorization: `Bearer ${t}` })
-    })
+    getToken()
+      .then((t) => {
+        if (mounted.current && t) setHeaders({ Authorization: `Bearer ${t}` })
+      })
+      .catch(() => {})
     return () => { mounted.current = false }
   }, [getToken])
 

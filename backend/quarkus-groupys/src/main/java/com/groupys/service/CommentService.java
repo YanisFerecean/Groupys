@@ -10,6 +10,7 @@ import com.groupys.repository.CommentReactionRepository;
 import com.groupys.repository.CommentRepository;
 import com.groupys.repository.CommunityMemberRepository;
 import com.groupys.repository.PostRepository;
+import com.groupys.repository.UserBlockRepository;
 import com.groupys.repository.UserRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -38,6 +39,9 @@ public class CommentService {
     CommunityMemberRepository communityMemberRepository;
 
     @Inject
+    UserBlockRepository userBlockRepository;
+
+    @Inject
     DiscoveryService discoveryService;
 
     @Inject
@@ -47,6 +51,17 @@ public class CommentService {
         User user = userRepository.findByClerkId(clerkId).orElse(null);
         List<Comment> all = commentRepository.findByPost(postId);
         if (all.isEmpty()) return List.of();
+
+        // Hide comments authored by users involved in a block with the viewer (either direction).
+        if (user != null) {
+            Set<UUID> blockedIds = userBlockRepository.blockedUserIdsInvolving(user.id);
+            if (!blockedIds.isEmpty()) {
+                all = all.stream()
+                        .filter(c -> c.author == null || !blockedIds.contains(c.author.id))
+                        .toList();
+                if (all.isEmpty()) return List.of();
+            }
+        }
 
         List<UUID> commentIds = all.stream().map(c -> c.id).toList();
         Map<UUID, Long> likesMap = Map.of();

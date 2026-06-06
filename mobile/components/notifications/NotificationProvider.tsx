@@ -7,6 +7,7 @@ import {
   configureNotificationHandler,
   getNotificationsModule,
   registerForPushNotificationsAsync,
+  requestLocalNotificationPermission,
 } from '@/lib/notifications'
 import { useNotificationBannerStore } from '@/stores/useNotificationBannerStore'
 import InAppNotificationBanner from './InAppNotificationBanner'
@@ -36,6 +37,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     let cancelled = false
     ;(async () => {
       const expoToken = await registerForPushNotificationsAsync()
+      // Simulator can't get an Expo push token; still surface the permission dialog in dev so the
+      // local-notification banner can be tested.
+      if (!expoToken && __DEV__) await requestLocalNotificationPermission()
       if (cancelled || !expoToken || registeredTokenRef.current === expoToken) return
       try {
         const authToken = await getToken()

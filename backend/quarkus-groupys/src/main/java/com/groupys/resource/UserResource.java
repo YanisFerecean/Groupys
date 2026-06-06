@@ -1,5 +1,6 @@
 package com.groupys.resource;
 
+import com.groupys.dto.BlockedUserResDto;
 import com.groupys.dto.UserCreateDto;
 import com.groupys.dto.UserFollowResDto;
 import com.groupys.dto.UserResDto;
@@ -7,6 +8,7 @@ import com.groupys.dto.UserUpdateDto;
 import com.groupys.model.User;
 import com.groupys.repository.UserRepository;
 import com.groupys.service.DiscoveryService;
+import com.groupys.service.ModerationService;
 import com.groupys.service.ProfileViewService;
 import com.groupys.service.StorageService;
 import com.groupys.service.UserService;
@@ -61,6 +63,9 @@ public class UserResource {
 
     @Inject
     ProfileViewService profileViewService;
+
+    @Inject
+    ModerationService moderationService;
 
     @Inject
     StorageService storageService;
@@ -234,6 +239,44 @@ public class UserResource {
 
     private boolean isAdmin(User user) {
         return user.role != null && user.role == User.UserRole.ADMIN;
+    }
+
+    @POST
+    @Path("/{id: [0-9a-fA-F\\-]{36}}/block")
+    @Operation(summary = "Block user", description = "Blocks another user: unmatches, deletes the direct conversation, and hides them everywhere")
+    @APIResponses({
+        @APIResponse(responseCode = "204", description = "User blocked"),
+        @APIResponse(responseCode = "400", description = "Cannot block yourself"),
+        @APIResponse(responseCode = "404", description = "User not found"),
+        @APIResponse(responseCode = "401", description = "Unauthorized")
+    })
+    public Response block(@PathParam("id") UUID id) {
+        moderationService.blockUser(jwt.getSubject(), id);
+        return Response.noContent().build();
+    }
+
+    @DELETE
+    @Path("/{id: [0-9a-fA-F\\-]{36}}/block")
+    @Operation(summary = "Unblock user", description = "Removes a block on another user")
+    @APIResponses({
+        @APIResponse(responseCode = "204", description = "User unblocked"),
+        @APIResponse(responseCode = "401", description = "Unauthorized")
+    })
+    public Response unblock(@PathParam("id") UUID id) {
+        moderationService.unblockUser(jwt.getSubject(), id);
+        return Response.noContent().build();
+    }
+
+    @GET
+    @Path("/me/blocks")
+    @Operation(summary = "List blocked users", description = "Returns the users the authenticated user has blocked")
+    @APIResponses({
+        @APIResponse(responseCode = "200", description = "Blocked users",
+                     content = @Content(schema = @Schema(implementation = BlockedUserResDto.class))),
+        @APIResponse(responseCode = "401", description = "Unauthorized")
+    })
+    public List<BlockedUserResDto> listBlocks() {
+        return moderationService.getBlockedUsers(jwt.getSubject());
     }
 
     @DELETE

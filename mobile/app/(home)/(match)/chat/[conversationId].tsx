@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons'
 import { useUser } from '@clerk/expo'
 import { Image } from 'expo-image'
-import { useLocalSearchParams, useRouter } from 'expo-router'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
@@ -19,9 +19,11 @@ import { TypingIndicator } from '@/components/chat/TypingIndicator'
 import { Colors } from '@/constants/colors'
 import { useChat } from '@/hooks/useChat'
 import { useChatMessages } from '@/hooks/useChatMessages'
+import { useModeration } from '@/hooks/useModeration'
 import { logWarn } from '@/lib/logging'
 import { publicProfilePath } from '@/lib/profileRoutes'
 import { chatWs } from '@/lib/chat-ws'
+import { setActiveConversationId } from '@/lib/activeChat'
 import { timeAgo } from '@/lib/timeAgo'
 import type { Message } from '@/models/Chat'
 
@@ -30,6 +32,7 @@ export default function ChatConversationScreen() {
   const router = useRouter()
   const params = useLocalSearchParams<{ conversationId?: string | string[] }>()
   const { user } = useUser()
+  const { showModerationMenu } = useModeration()
   const {
     acceptDirectRequest,
     conversations,
@@ -69,6 +72,14 @@ export default function ChatConversationScreen() {
       isMountedRef.current = false
     }
   }, [])
+
+  // Mark this chat active while focused so its incoming-message banners are suppressed.
+  useFocusEffect(
+    useCallback(() => {
+      setActiveConversationId(conversationId ?? null)
+      return () => setActiveConversationId(null)
+    }, [conversationId]),
+  )
 
   useEffect(() => {
     setConversationLoadFailed(false)
@@ -309,6 +320,24 @@ export default function ChatConversationScreen() {
             ) : null
           ) : null}
         </TouchableOpacity>
+
+        {otherParticipant ? (
+          <TouchableOpacity
+            className="h-11 w-11 items-center justify-center rounded-full bg-surface-container"
+            accessibilityLabel="Conversation options"
+            onPress={() =>
+              showModerationMenu({
+                targetType: 'USER',
+                targetId: otherParticipant.userId,
+                userId: otherParticipant.userId,
+                displayName: headerTitle,
+                onBlocked: () => router.replace('/(home)/(match)/chat'),
+              })
+            }
+          >
+            <Ionicons name="ellipsis-horizontal" size={22} color={Colors.onSurface} />
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       {!conversation ? (

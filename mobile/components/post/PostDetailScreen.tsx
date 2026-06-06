@@ -37,6 +37,7 @@ import AuthImageWithToken from '@/components/ui/AuthImageWithToken'
 import AudioAutoplayPreview from '@/components/ui/AudioAutoplayPreview'
 import VideoThumbnail from '@/components/ui/VideoThumbnail'
 import { useAuthToken } from '@/hooks/useAuthToken'
+import { useModeration } from '@/hooks/useModeration'
 import CommentItem from '@/components/post/CommentItem'
 import type { PostResDto } from '@/models/PostRes'
 import type { CommentResDto } from '@/models/CommentRes'
@@ -90,6 +91,7 @@ export default function PostDetailScreen({ postId }: Props) {
   const currentTab = resolveHomeTab(segments)
   const { user } = useUser()
   const { refreshToken } = useAuthToken()
+  const { showModerationMenu } = useModeration()
 
   const commentInputRef = useRef<TextInput>(null)
   const [post, setPost] = useState<PostResDto | null>(null)
@@ -625,6 +627,25 @@ export default function PostDetailScreen({ postId }: Props) {
                   )}
                 </TouchableOpacity>
               )
+            )}
+
+            {!isAuthor && (
+              <TouchableOpacity
+                accessibilityLabel="Post options"
+                onPress={() =>
+                  showModerationMenu({
+                    targetType: 'POST',
+                    targetId: postId,
+                    userId: post.authorId,
+                    displayName: post.authorDisplayName || post.authorUsername,
+                    onBlocked: () => router.back(),
+                  })
+                }
+                className="h-10 w-10 items-center justify-center rounded-full bg-surface-container-low"
+                activeOpacity={0.7}
+              >
+                <Ionicons name="ellipsis-horizontal" size={20} color={Colors.onSurfaceVariant} />
+              </TouchableOpacity>
             )}
           </View>
 

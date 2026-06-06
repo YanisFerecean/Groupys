@@ -10,6 +10,7 @@ import {
   updateNotificationPreferences,
   type NotificationPreferences,
 } from '@/lib/api'
+import { sendLocalTestNotification } from '@/lib/notifications'
 
 const DEFAULT_QUIET_START = 22 * 60 // 22:00
 const DEFAULT_QUIET_END = 7 * 60 // 07:00
@@ -220,6 +221,22 @@ export default function NotificationSettingsScreen() {
                 )}
               </TouchableOpacity>
             </View>
+
+            {/* Dev-only: local notification test (works in the simulator, no APNs needed) */}
+            {__DEV__ ? (
+              <View className="px-5 pt-4">
+                <TouchableOpacity
+                  className="flex-row items-center justify-center gap-2 rounded-2xl border py-4"
+                  style={{ borderColor: Colors.primary }}
+                  onPress={() => sendLocalTestNotification()}
+                >
+                  <Ionicons name="flask" size={18} color={Colors.primary} />
+                  <Text className="font-semibold" style={{ color: Colors.primary }}>
+                    Send test notification
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
           </>
         )}
       </ScrollView>

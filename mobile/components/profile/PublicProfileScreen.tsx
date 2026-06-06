@@ -8,6 +8,7 @@ import HotTakeWidget from '@/components/profile/widgets/HotTakeWidget'
 import { Colors } from '@/constants/colors'
 import { useAuthToken } from '@/hooks/useAuthToken'
 import { useChat } from '@/hooks/useChat'
+import { useModeration } from '@/hooks/useModeration'
 import { useTopMusic } from '@/hooks/useTopMusic'
 import {
   backendUserToProfile,
@@ -183,6 +184,7 @@ export default function PublicProfileScreen({ userId }: PublicProfileScreenProps
   )
 
   const { conversations, startDirectConversation } = useChat()
+  const { showModerationMenu } = useModeration()
 
   const existingConversation = useMemo(() => {
     if (!backendUser) return null
@@ -413,6 +415,52 @@ export default function PublicProfileScreen({ userId }: PublicProfileScreenProps
             className="h-10 w-10 items-center justify-center rounded-full bg-surface-container"
           >
             <Ionicons name="chevron-back" size={20} color={Colors.onSurface} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <View
+        style={{
+          position: 'absolute',
+          top: 0,
+          right: 20,
+          zIndex: 10,
+          paddingTop: insets.top + 8,
+        }}
+      >
+        {useGlass ? (
+          <GlassView isInteractive style={{ borderRadius: 999, overflow: 'hidden' }}>
+            <TouchableOpacity
+              accessibilityLabel="Profile options"
+              onPress={() =>
+                showModerationMenu({
+                  targetType: 'USER',
+                  targetId: backendUser.id,
+                  userId: backendUser.id,
+                  displayName,
+                  onBlocked: () => router.back(),
+                })
+              }
+              className="h-10 w-10 items-center justify-center rounded-full"
+            >
+              <Ionicons name="ellipsis-horizontal" size={20} color={Colors.onSurface} />
+            </TouchableOpacity>
+          </GlassView>
+        ) : (
+          <TouchableOpacity
+            accessibilityLabel="Profile options"
+            onPress={() =>
+              showModerationMenu({
+                targetType: 'USER',
+                targetId: backendUser.id,
+                userId: backendUser.id,
+                displayName,
+                onBlocked: () => router.back(),
+              })
+            }
+            className="h-10 w-10 items-center justify-center rounded-full bg-surface-container"
+          >
+            <Ionicons name="ellipsis-horizontal" size={20} color={Colors.onSurface} />
           </TouchableOpacity>
         )}
       </View>

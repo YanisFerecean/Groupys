@@ -4,8 +4,11 @@ import { useRouter } from 'expo-router'
 import { useState } from 'react'
 import { ActivityIndicator, Alert, ScrollView, Switch, Text, TouchableOpacity, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import * as WebBrowser from 'expo-web-browser'
 import { Colors } from '@/constants/colors'
 import { deleteMyAccount } from '@/lib/api'
+import { logError, logWarn } from '@/lib/logging'
+import { PRIVACY_POLICY_URL, TERMS_OF_SERVICE_URL } from '@/constants/legal'
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets()
@@ -48,14 +51,14 @@ export default function SettingsScreen() {
           await user.delete()
           authAccountDeleted = true
         } catch (error) {
-          console.error('Failed to delete Clerk auth account:', error)
+          logError('[settings] failed to delete Clerk auth account', error)
         }
       }
 
       try {
         await signOut()
       } catch (error) {
-        console.warn('Sign-out after account deletion failed:', error)
+        logWarn('[settings] sign-out after account deletion failed', error)
       }
 
       router.replace('/(auth)/landing')
@@ -67,7 +70,7 @@ export default function SettingsScreen() {
         )
       }
     } catch (error) {
-      console.error('Failed to delete account:', error)
+      logError('[settings] failed to delete account', error)
       Alert.alert('Delete account failed', 'We could not delete your account. Please try again.')
     } finally {
       setIsDeletingAccount(false)
@@ -190,6 +193,33 @@ export default function SettingsScreen() {
             </View>
             <Ionicons name="chevron-forward" size={20} color={Colors.onSurfaceVariant} />
           </TouchableOpacity>
+        </View>
+
+        {/* Legal */}
+        <View className="px-5 pt-8">
+          <Text className="text-xl font-bold text-on-surface">Legal</Text>
+          <View className="mt-5 rounded-2xl bg-surface-container-lowest">
+            <TouchableOpacity
+              className="flex-row items-center gap-3 p-4"
+              onPress={() => void WebBrowser.openBrowserAsync(PRIVACY_POLICY_URL)}
+            >
+              <View className="h-12 w-12 items-center justify-center rounded-full bg-surface-container-high">
+                <Ionicons name="shield-checkmark" size={22} color={Colors.primary} />
+              </View>
+              <Text className="flex-1 font-semibold text-on-surface">Privacy Policy</Text>
+              <Ionicons name="open-outline" size={20} color={Colors.onSurfaceVariant} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              className="flex-row items-center gap-3 p-4"
+              onPress={() => void WebBrowser.openBrowserAsync(TERMS_OF_SERVICE_URL)}
+            >
+              <View className="h-12 w-12 items-center justify-center rounded-full bg-surface-container-high">
+                <Ionicons name="document-text" size={22} color={Colors.primary} />
+              </View>
+              <Text className="flex-1 font-semibold text-on-surface">Terms of Use</Text>
+              <Ionicons name="open-outline" size={20} color={Colors.onSurfaceVariant} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Sign Out */}

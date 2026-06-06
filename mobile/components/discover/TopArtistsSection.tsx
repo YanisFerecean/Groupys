@@ -4,6 +4,7 @@ import * as Haptics from 'expo-haptics'
 import { useAuth } from '@clerk/expo'
 import { Link, router } from 'expo-router'
 import { useTrendingArtistsStore } from '@/stores/useTrendingArtistsStore'
+import { logWarn } from '@/lib/logging'
 import type { ArtistRes as ChartArtist } from '@/models/ArtistRes'
 
 export type { ChartArtist }
@@ -122,7 +123,9 @@ export function useTopArtists() {
 
   useEffect(() => {
     if (!isAuthLoaded) return
-    getTokenRef.current().then((token) => fetchArtists(token))
+    getTokenRef.current()
+      .then((token) => fetchArtists(token))
+      .catch((error) => logWarn('[top-artists] failed to load artists', error))
   }, [isAuthLoaded, fetchArtists])
 
   const toggleExpand = useCallback(() => {

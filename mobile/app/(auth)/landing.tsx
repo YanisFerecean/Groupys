@@ -2,6 +2,7 @@ import { Image, Text, View, useWindowDimensions } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import SSOButtons from '@/components/auth/SSOButtons'
+import LegalLinks from '@/components/LegalLinks'
 
 const BASE_WIDTH = 390
 
@@ -93,6 +94,10 @@ export default function LandingScreen() {
       {/* CTAs */}
       <View className="mt-8">
         <SSOButtons mode="sign-up" />
+        <LegalLinks
+          className="mt-4 px-4"
+          prefix="By continuing, you agree to our"
+        />
       </View>
     </View>
   )

@@ -10,11 +10,18 @@ import jakarta.ws.rs.ext.Provider;
 import org.jboss.logging.Logger;
 
 import java.io.IOException;
-import java.time.Duration;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Rate limiting filter using Redis for distributed rate limiting.
  * Implements a token bucket algorithm with configurable limits.
+ *
+ * <p>If Redis is unavailable the filter falls back to a per-instance in-memory
+ * fixed-window counter instead of failing fully open. The fallback is best-effort
+ * (not shared across instances) but still throttles abusive clients while Redis
+ * recovers.
  */
 @Provider
 public class RateLimitingFilter implements ContainerRequestFilter {
@@ -29,6 +36,13 @@ public class RateLimitingFilter implements ContainerRequestFilter {
     // Specific endpoint limits
     private static final int UPLOAD_LIMIT = 10;         // 10 uploads per minute
     private static final int LOGIN_LIMIT = 5;           // 5 login attempts per minute
+
+    // In-memory fallback (used only when Redis is down). Cap the map so a flood of
+    // distinct clients can't exhaust heap; the cap is generous relative to expected fan-out.
+    private static final int FALLBACK_MAX_KEYS = 100_000;
+    private final ConcurrentHashMap<String, FixedWindow> fallbackCounters = new ConcurrentHashMap<>();
+    // Throttle the "Redis unavailable" log so a sustained outage doesn't spam the logs.
+    private final AtomicLong lastFallbackLogEpochSec = new AtomicLong(0);
 
     @Inject
     @RedisClientName("default")
@@ -52,7 +66,8 @@ public class RateLimitingFilter implements ContainerRequestFilter {
         try {
             // Check if Redis is available
             if (redisClient == null) {
-                LOG.warn("Redis unavailable; rate limiting is DISABLED (fail-open) for this request");
+                logFallbackOnce();
+                applyInMemoryLimit(requestContext, key, limit, windowSeconds, method, path, clientId);
                 return;
             }
 
@@ -87,9 +102,75 @@ public class RateLimitingFilter implements ContainerRequestFilter {
             requestContext.getHeaders().add("X-RateLimit-Remaining", String.valueOf(limit - currentCount - 1));
 
         } catch (Exception e) {
-            // Fail-open: a Redis blip must not take down the whole API. Surfaced at WARN
-            // so operators can see when rate limiting is silently degraded.
-            LOG.warnf(e, "Rate limiting check failed (fail-open) for %s", path);
+            // A Redis blip must not take down the whole API. Degrade to the in-memory
+            // limiter instead of failing fully open. Surfaced at WARN (throttled) so
+            // operators can see when distributed rate limiting is degraded.
+            logFallbackOnce();
+            LOG.warnf(e, "Redis rate limiting failed for %s; using in-memory fallback", path);
+            try {
+                applyInMemoryLimit(requestContext, key, limit, windowSeconds, method, path, clientId);
+            } catch (Exception fallbackError) {
+                // Last resort: never let the limiter itself break the request.
+                LOG.warnf(fallbackError, "In-memory rate limit fallback failed for %s", path);
+            }
+        }
+    }
+
+    /**
+     * Per-instance fixed-window rate limit used when Redis is unavailable. Not shared
+     * across instances, so the effective global limit is (limit * instanceCount) during
+     * an outage — an acceptable degraded mode that still blocks single-client floods.
+     */
+    private void applyInMemoryLimit(ContainerRequestContext requestContext, String key, int limit,
+                                    int windowSeconds, String method, String path, String clientId) {
+        long nowSec = System.currentTimeMillis() / 1000L;
+        long windowId = nowSec / windowSeconds;
+
+        // Guard against unbounded growth if a huge set of distinct clients appears.
+        if (fallbackCounters.size() > FALLBACK_MAX_KEYS) {
+            fallbackCounters.clear();
+        }
+
+        FixedWindow window = fallbackCounters.compute(key, (k, existing) -> {
+            if (existing == null || existing.windowId != windowId) {
+                return new FixedWindow(windowId);
+            }
+            return existing;
+        });
+
+        int used = window.count.incrementAndGet();
+        if (used > limit) {
+            LOG.warnf("Rate limit exceeded (in-memory) for client %s on %s %s", clientId, method, path);
+            requestContext.abortWith(
+                Response.status(Response.Status.TOO_MANY_REQUESTS)
+                    .entity("{\"error\":\"Rate limit exceeded. Please try again later.\"}")
+                    .header("Content-Type", "application/json")
+                    .header("Retry-After", String.valueOf(windowSeconds))
+                    .build()
+            );
+            return;
+        }
+
+        requestContext.getHeaders().add("X-RateLimit-Limit", String.valueOf(limit));
+        requestContext.getHeaders().add("X-RateLimit-Remaining", String.valueOf(Math.max(0, limit - used)));
+    }
+
+    /** Logs the Redis-unavailable warning at most once per minute to avoid log spam during an outage. */
+    private void logFallbackOnce() {
+        long nowSec = System.currentTimeMillis() / 1000L;
+        long last = lastFallbackLogEpochSec.get();
+        if (nowSec - last >= 60 && lastFallbackLogEpochSec.compareAndSet(last, nowSec)) {
+            LOG.warn("Redis unavailable; rate limiting degraded to per-instance in-memory fallback");
+        }
+    }
+
+    /** Fixed-window counter: a window id (epochSecond / windowSeconds) and a request count. */
+    private static final class FixedWindow {
+        final long windowId;
+        final AtomicInteger count = new AtomicInteger(0);
+
+        FixedWindow(long windowId) {
+            this.windowId = windowId;
         }
     }
 

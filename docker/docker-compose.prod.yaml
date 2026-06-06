@@ -24,3 +24,106 @@ services:
       timeout: 10s
       retries: 3
       start_period: 20s
+
+  groupys-api:
+    image: ${API_IMAGE}
+    container_name: groupys-api
+    restart: unless-stopped
+    environment:
+      QUARKUS_PROFILE: prod
+      # Datasource — override the localhost default to the compose service.
+      QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://groupys-db:5432/${POSTGRES_DB:-db}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASS: ${POSTGRES_PASSWORD}
+      # Flyway owns the prod schema; validate against migrations on boot.
+      FLYWAY_MIGRATE_AT_START: "true"
+      HIBERNATE_SCHEMA_STRATEGY: validate
+      # MinIO — override the localhost default to the compose service.
+      QUARKUS_MINIO_HOST: groupys-minio
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      # Redis
+      REDIS_HOSTS: redis://groupys-redis:6379
+      # Auth (Clerk)
+      JWT_ISSUER: ${JWT_ISSUER}
+      JWT_PUBLIC_KEY_LOCATION: ${JWT_PUBLIC_KEY_LOCATION}
+      # CORS — real frontend origin(s); StartupConfigValidator rejects localhost in prod.
+      APP_CORS_ORIGINS: ${APP_CORS_ORIGINS}
+      # Token encryption — must be a fresh key, NOT the dev fallback.
+      ENCRYPTION_MASTER_KEY: ${ENCRYPTION_MASTER_KEY}
+      # Apple Music developer token signing
+      APPLE_TEAM_ID: ${APPLE_TEAM_ID}
+      APPLE_KEY_ID: ${APPLE_KEY_ID}
+      APPLE_PRIVATE_KEY: ${APPLE_PRIVATE_KEY}
+      APPLE_MEDIA_ID: ${APPLE_MEDIA_ID}
+      # Hot-takes admin secret
+      GROUPYS_ADMIN_SECRET: ${GROUPYS_ADMIN_SECRET}
+    ports:
+      - "127.0.0.1:${API_PORT:-8080}:8080"
+    depends_on:
+      groupys-db:
+        condition: service_healthy
+      groupys-minio:
+        condition: service_healthy
+      groupys-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/api/q/health/ready || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  groupys-db:
+    image: pgvector/pgvector:pg18
+    container_name: groupys-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-db}
+    volumes:
+      - groupys_data_pg18:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB:-db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  groupys-minio:
+    image: quay.io/minio/minio
+    container_name: groupys-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_REGION: eu-central-1
+      MINIO_BROWSER: "off"
+    volumes:
+      - groupys_minio_data:/data
+      - groupys_minio_config:/root/.minio
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD-SHELL", "mc ready local || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  groupys-redis:
+    image: redis:7-alpine
+    container_name: groupys-redis
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  groupys_data_pg18:
+  groupys_minio_data:
+  groupys_minio_config:
