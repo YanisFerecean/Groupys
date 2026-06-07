@@ -2,8 +2,6 @@
 -- PostgreSQL database dump
 --
 
-\restrict 8S1a6Ea0kOyMmGkmN5ZxIj1dw6XoLtSqHcZQZD0ohXIgQZWfRVeYj6PjCqU1yX4
-
 -- Dumped from database version 18.3 (Debian 18.3-1.pgdg12+1)
 -- Dumped by pg_dump version 18.3 (Debian 18.3-1.pgdg12+1)
 
@@ -2340,6 +2338,4 @@ ALTER TABLE ONLY public.music_source_snapshot
 --
 -- PostgreSQL database dump complete
 --
-
-\unrestrict 8S1a6Ea0kOyMmGkmN5ZxIj1dw6XoLtSqHcZQZD0ohXIgQZWfRVeYj6PjCqU1yX4
 
