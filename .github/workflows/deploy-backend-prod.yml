@@ -179,6 +179,11 @@ jobs:
 
             mkdir -p "$DEPLOY_PATH/docker"
 
+            # docker compose --env-file has no multi-line support, so the Apple
+            # .p8 PEM (real newlines) must be collapsed to a single line with
+            # literal \n escapes. The API decodes \n back to newlines on startup.
+            APPLE_PRIVATE_KEY_ONELINE=$(printf '%s' "$APPLE_PRIVATE_KEY" | awk 'BEGIN{ORS=""} {gsub(/\r/,"")} NR>1{printf "\\n"} {printf "%s",$0}')
+
             # Backend-only env file. The web stack maintains its own .env.prod;
             # this deploy only acts on the API + its datastores, so missing web
             # variables surface as harmless interpolation warnings.
@@ -195,7 +200,7 @@ jobs:
             ENCRYPTION_MASTER_KEY=$ENCRYPTION_MASTER_KEY
             APPLE_TEAM_ID=$APPLE_TEAM_ID
             APPLE_KEY_ID=$APPLE_KEY_ID
-            APPLE_PRIVATE_KEY=$APPLE_PRIVATE_KEY
+            APPLE_PRIVATE_KEY=$APPLE_PRIVATE_KEY_ONELINE
             APPLE_MEDIA_ID=$APPLE_MEDIA_ID
             GROUPYS_ADMIN_SECRET=$GROUPYS_ADMIN_SECRET
             EOF
