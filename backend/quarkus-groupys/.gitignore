@@ -44,5 +44,8 @@ nb-configuration.xml
 # TLS Certificates
 .certs/
 
-.mvn
+.mvn/*
+!.mvn/wrapper
+.mvn/wrapper/*
+!.mvn/wrapper/maven-wrapper.properties
 /auth-key.p8
