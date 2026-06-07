@@ -228,9 +228,35 @@ jobs:
 
             COMPOSE="docker compose --env-file $DEPLOY_PATH/docker/.env.api.prod -f $DEPLOY_PATH/docker/docker-compose.api.prod.yaml"
 
+            # MinIO FATAL-exits within ~1s if the root password is shorter than
+            # 8 chars or the user shorter than 3, which then cascades as
+            # "dependency groupys-minio is unhealthy" with no obvious cause.
+            # Catch a misconfigured secret here with a clear message instead.
+            if [ "${#MINIO_ROOT_USER}" -lt 3 ] || [ "${#MINIO_ROOT_PASSWORD}" -lt 8 ]; then
+              echo "ERROR: MINIO_ROOT_USER must be >= 3 chars and MINIO_ROOT_PASSWORD >= 8 chars."
+              echo "       Fix the GitHub repository secrets and re-run."
+              exit 1
+            fi
+
+            # Dump the full stack state + per-container logs on any failure so a
+            # crashing dependency (e.g. minio) is diagnosable from the CI log
+            # rather than just "dependency failed to start".
+            dump_diagnostics() {
+              echo "===== docker compose ps ====="
+              $COMPOSE ps -a || true
+              for svc in groupys-db groupys-minio groupys-redis groupys-api; do
+                echo "===== logs: $svc ====="
+                docker logs --tail=120 "$svc" 2>&1 || true
+              done
+            }
+
             echo "$REGISTRY_PASSWORD" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
             $COMPOSE pull groupys-api
-            $COMPOSE up -d groupys-db groupys-minio groupys-redis groupys-api
+            if ! $COMPOSE up -d groupys-db groupys-minio groupys-redis groupys-api; then
+              echo "Compose failed to bring the stack up."
+              dump_diagnostics
+              exit 1
+            fi
 
             for i in $(seq 1 45); do
               if docker exec groupys-api sh -lc "curl -fsS http://127.0.0.1:8080/api/q/health/ready >/dev/null 2>&1"; then
@@ -242,7 +268,7 @@ jobs:
             done
 
             echo "API did not become healthy"
-            docker logs --tail=120 groupys-api || true
+            dump_diagnostics
             exit 1
 
       - name: Deploy summary
