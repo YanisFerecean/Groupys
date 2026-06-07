@@ -23,18 +23,18 @@
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_ENABLE_APPLE_MUSIC_SIMULATOR_MOCK": "false",
-        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_live_REPLACE_ME",
-        "EXPO_PUBLIC_API_URL": "https://REPLACE_ME_API_DOMAIN/api",
-        "EXPO_PUBLIC_WS_URL": "wss://REPLACE_ME_API_DOMAIN/api/ws/chat"
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsuZ3JvdXB5cy5hcHAk",
+        "EXPO_PUBLIC_API_URL": "https://api.groupys.app",
+        "EXPO_PUBLIC_WS_URL": "wss://api.groupys.app/ws/chat"
       }
     }
   },
   "submit": {
     "production": {
       "ios": {
-        "appleId": "YOUR_APPLE_ID_EMAIL",
-        "ascAppId": "YOUR_APP_STORE_CONNECT_APP_ID",
-        "appleTeamId": "YOUR_APPLE_TEAM_ID"
+        "appleId": "kyawhh@icloud.com",
+        "ascAppId": "6777797149",
+        "appleTeamId": "4DNLHLX3RU"
       },
       "android": {
         "serviceAccountKeyPath": "./play-store-service-account.json",
