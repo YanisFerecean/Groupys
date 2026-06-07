@@ -41,7 +41,10 @@ export default function OnboardingShell({
   const insets = useSafeAreaInsets()
 
   return (
-    <View className="flex-1 bg-surface">
+    <KeyboardAvoidingView
+      className="flex-1 bg-surface"
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
       <LinearGradient
         colors={[Colors.primaryContainer, Colors.secondaryContainer, Colors.surface]}
         locations={[0, 0.4, 1]}
@@ -72,47 +75,38 @@ export default function OnboardingShell({
         </View>
       </View>
 
-      <KeyboardAvoidingView
+      <ScrollView
         className="flex-1"
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={insets.top + 56}
+        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 24 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        <ScrollView
-          className="flex-1"
-          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 24 }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <Text className="text-4xl font-black tracking-tighter text-on-surface">{title}</Text>
-          {subtitle ? (
-            <Text className="mt-3 text-lg leading-6 text-on-surface-variant">{subtitle}</Text>
-          ) : null}
-          <View className="mt-8">{children}</View>
-        </ScrollView>
+        <Text className="text-4xl font-black tracking-tighter text-on-surface">{title}</Text>
+        {subtitle ? (
+          <Text className="mt-3 text-lg leading-6 text-on-surface-variant">{subtitle}</Text>
+        ) : null}
+        <View className="mt-8">{children}</View>
+      </ScrollView>
 
-        <View
-          style={{ paddingBottom: insets.bottom + 12 }}
-          className="px-6 pt-3"
-        >
-          {footer ?? (
-            <>
-              {ctaLabel && onCta ? (
-                <PrimaryButton
-                  label={ctaLabel}
-                  onPress={onCta}
-                  disabled={ctaDisabled}
-                  loading={ctaLoading}
-                />
-              ) : null}
-              {onSkip ? (
-                <TouchableOpacity onPress={onSkip} className="mt-3 items-center py-2">
-                  <Text className="text-base font-semibold text-on-surface-variant">{skipLabel}</Text>
-                </TouchableOpacity>
-              ) : null}
-            </>
-          )}
-        </View>
-      </KeyboardAvoidingView>
-    </View>
+      <View style={{ paddingBottom: insets.bottom + 12 }} className="px-6 pt-3">
+        {footer ?? (
+          <>
+            {ctaLabel && onCta ? (
+              <PrimaryButton
+                label={ctaLabel}
+                onPress={onCta}
+                disabled={ctaDisabled}
+                loading={ctaLoading}
+              />
+            ) : null}
+            {onSkip ? (
+              <TouchableOpacity onPress={onSkip} className="mt-3 items-center py-2">
+                <Text className="text-base font-semibold text-on-surface-variant">{skipLabel}</Text>
+              </TouchableOpacity>
+            ) : null}
+          </>
+        )}
+      </View>
+    </KeyboardAvoidingView>
   )
 }
