@@ -38,7 +38,11 @@ jobs:
 
   build:
     needs: changes
-    if: needs.changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch'
+    # Build whenever the backend changed, the deploy assets (compose/workflow)
+    # changed, or on manual dispatch — so a fresh image (incl. :latest) always
+    # exists before the deploy job pulls it. Avoids "manifest unknown" on
+    # config-only pushes that fall back to the :latest tag.
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.deploy == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
