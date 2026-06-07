@@ -13,7 +13,9 @@ const inter = Inter({
 });
 
 const BASE_URL = "https://groupys.app";
-const CLERK_ENABLED = process.env.NODE_ENV !== "production";
+// Mount Clerk whenever a publishable key is configured (dev: pk_test, prod: pk_live).
+// Falls back to a Clerk-free render if no key is set, so keyless builds don't crash.
+const CLERK_ENABLED = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
 export const metadata: Metadata = {
   metadataBase: new URL(BASE_URL),

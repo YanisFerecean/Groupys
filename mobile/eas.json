@@ -22,7 +22,10 @@
       "channel": "production",
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_ENABLE_APPLE_MUSIC_SIMULATOR_MOCK": "false"
+        "EXPO_PUBLIC_ENABLE_APPLE_MUSIC_SIMULATOR_MOCK": "false",
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_live_REPLACE_ME",
+        "EXPO_PUBLIC_API_URL": "https://REPLACE_ME_API_DOMAIN/api",
+        "EXPO_PUBLIC_WS_URL": "wss://REPLACE_ME_API_DOMAIN/api/ws/chat"
       }
     }
   },

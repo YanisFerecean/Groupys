@@ -9,7 +9,7 @@ const AuthControls = dynamic(() => import("@/components/landing/NavBarAuthContro
   ssr: false,
 });
 
-const clerkEnabled = process.env.NODE_ENV !== "production";
+const clerkEnabled = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
 export default function NavBar() {
   const [mobileOpen, setMobileOpen] = useState(false);
