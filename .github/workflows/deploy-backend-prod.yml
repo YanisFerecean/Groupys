@@ -33,7 +33,7 @@ jobs:
             backend:
               - 'backend/quarkus-groupys/**'
             deploy:
-              - 'docker/docker-compose.prod.yaml'
+              - 'docker/docker-compose.api.prod.yaml'
               - '.github/workflows/deploy-backend-prod.yml'
 
   build:
@@ -139,7 +139,7 @@ jobs:
           host: ${{ secrets.VM88_HOST }}
           username: ${{ secrets.VM88_USER }}
           key: ${{ secrets.VM88_SSH_PRIVATE_KEY }}
-          source: docker/docker-compose.prod.yaml
+          source: docker/docker-compose.api.prod.yaml
           target: ${{ secrets.DEPLOY_PATH }}/docker
           strip_components: 1
 
@@ -200,7 +200,7 @@ jobs:
             GROUPYS_ADMIN_SECRET=$GROUPYS_ADMIN_SECRET
             EOF
 
-            COMPOSE="docker compose --env-file $DEPLOY_PATH/docker/.env.api.prod -f $DEPLOY_PATH/docker/docker-compose.prod.yaml"
+            COMPOSE="docker compose --env-file $DEPLOY_PATH/docker/.env.api.prod -f $DEPLOY_PATH/docker/docker-compose.api.prod.yaml"
 
             echo "$REGISTRY_PASSWORD" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
             $COMPOSE pull groupys-api

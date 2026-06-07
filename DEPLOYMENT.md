@@ -13,7 +13,9 @@ Order: stand up the **backend** first (mobile and web point at it), then **mobil
 Deployed by `.github/workflows/deploy-backend-prod.yml` → builds `Dockerfile.jvm`,
 pushes `ghcr.io/<owner>/groupys-api`, and runs the full stack
 (`groupys-api` + `groupys-db` + `groupys-minio` + `groupys-redis`) from
-`docker/docker-compose.prod.yaml` on the VM88 host over SSH.
+`docker/docker-compose.api.prod.yaml` on the VM88 host over SSH. The web app
+deploys separately from `docker/docker-compose.web.prod.yaml`; both files share
+the `groupys-prod` compose project so container names and volumes stay consistent.
 
 ### GitHub Actions secrets to create
 

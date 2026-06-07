@@ -33,7 +33,7 @@ jobs:
             web:
               - 'web/**'
             deploy:
-              - 'docker/docker-compose.prod.yaml'
+              - 'docker/docker-compose.web.prod.yaml'
               - '.github/workflows/deploy-web-prod.yml'
 
   build:
@@ -156,7 +156,7 @@ jobs:
           host: ${{ secrets.VM88_HOST }}
           username: ${{ secrets.VM88_USER }}
           key: ${{ secrets.VM88_SSH_PRIVATE_KEY }}
-          source: docker/docker-compose.prod.yaml
+          source: docker/docker-compose.web.prod.yaml
           target: ${{ secrets.DEPLOY_PATH }}/docker
           strip_components: 1
 
@@ -201,16 +201,18 @@ jobs:
             SPOTIFY_CLIENT_SECRET=$SPOTIFY_CLIENT_SECRET
             EOF
 
+            # Web stack lives in its own compose file; the API stack is deployed
+            # separately by deploy-backend-prod.yml. Both share project name
+            # "groupys-prod" so container labels and volumes stay consistent.
+            COMPOSE="docker compose --env-file $DEPLOY_PATH/docker/.env.prod -f $DEPLOY_PATH/docker/docker-compose.web.prod.yaml"
+
             echo "$REGISTRY_PASSWORD" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
-            # Scope to the web service: the API stack is deployed by deploy-backend-prod.yml
-            # with its own env file. A bare `up` here would (re)start the API with web-only
-            # env and crash it on StartupConfigValidator.
-            docker compose --env-file "$DEPLOY_PATH/docker/.env.prod" -f "$DEPLOY_PATH/docker/docker-compose.prod.yaml" pull groupys-web
-            docker compose --env-file "$DEPLOY_PATH/docker/.env.prod" -f "$DEPLOY_PATH/docker/docker-compose.prod.yaml" up -d groupys-web
+            $COMPOSE pull groupys-web
+            $COMPOSE up -d groupys-web
 
             APP_URL="http://127.0.0.1:3000"
             for i in $(seq 1 30); do
-              if docker compose --env-file "$DEPLOY_PATH/docker/.env.prod" -f "$DEPLOY_PATH/docker/docker-compose.prod.yaml" exec -T groupys-web sh -lc "wget -qO- '$APP_URL' >/dev/null 2>&1"; then
+              if $COMPOSE exec -T groupys-web sh -lc "wget -qO- '$APP_URL' >/dev/null 2>&1"; then
                 echo "Deployment healthy at $APP_URL"
                 exit 0
               fi
@@ -219,7 +221,7 @@ jobs:
             done
 
             echo "Application did not become healthy at $APP_URL"
-            docker compose --env-file "$DEPLOY_PATH/docker/.env.prod" -f "$DEPLOY_PATH/docker/docker-compose.prod.yaml" logs --tail=80 groupys-web || true
+            $COMPOSE logs --tail=80 groupys-web || true
             exit 1
 
       - name: Deploy summary
