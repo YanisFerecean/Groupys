@@ -9,6 +9,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Refuses to boot a production runtime that is still wired with insecure dev defaults.
@@ -33,14 +34,18 @@ public class StartupConfigValidator {
     @ConfigProperty(name = "quarkus.http.cors.origins")
     String corsOrigins;
 
+    // Optional because these default to an empty value in dev/test, and an empty
+    // config value is treated as absent by MicroProfile Config — a plain String
+    // injection point would fail to start the app before the NORMAL-mode guard
+    // in onStart() ever runs.
     @ConfigProperty(name = "music.apple.team-id")
-    String appleTeamId;
+    Optional<String> appleTeamId;
 
     @ConfigProperty(name = "music.apple.key-id")
-    String appleKeyId;
+    Optional<String> appleKeyId;
 
     @ConfigProperty(name = "music.apple.private-key")
-    String applePrivateKey;
+    Optional<String> applePrivateKey;
 
     void onStart(@Observes StartupEvent ignored) {
         if (LaunchMode.current() != LaunchMode.NORMAL) {
@@ -61,7 +66,7 @@ public class StartupConfigValidator {
         if (corsOrigins != null && corsOrigins.contains("localhost")) {
             problems.add("APP_CORS_ORIGINS is unset (using localhost dev origins)");
         }
-        if (isBlank(appleTeamId) || isBlank(appleKeyId) || isBlank(applePrivateKey)) {
+        if (isBlank(appleTeamId.orElse(null)) || isBlank(appleKeyId.orElse(null)) || isBlank(applePrivateKey.orElse(null))) {
             problems.add("Apple Music credentials (APPLE_TEAM_ID/APPLE_KEY_ID/APPLE_PRIVATE_KEY) are not all set");
         }
 
