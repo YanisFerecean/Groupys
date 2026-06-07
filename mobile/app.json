@@ -7,7 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "groupys",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "groupys.app",
@@ -63,7 +62,6 @@
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "intentFilters": [
         {
@@ -91,7 +89,7 @@
       "package": "groupys.app"
     },
     "web": {
-      "output": "server",
+      "output": "single",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
@@ -122,7 +120,8 @@
           "color": "#ba002b",
           "defaultChannel": "default"
         }
-      ]
+      ],
+      "expo-asset"
     ],
     "extra": {
       "EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME": "${EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME}",
