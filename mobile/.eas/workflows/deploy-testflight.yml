@@ -1,0 +1,22 @@
+name: Deploy to TestFlight
+
+on:
+  push:
+    branches: ['main']
+    paths: ['mobile/**']
+
+jobs:
+  build_ios:
+    name: Build iOS (production)
+    type: build
+    params:
+      platform: ios
+      profile: production
+
+  submit_ios:
+    name: Submit to TestFlight
+    type: submit
+    needs: [build_ios]
+    params:
+      build_id: ${{ needs.build_ios.outputs.build_id }}
+      profile: production
