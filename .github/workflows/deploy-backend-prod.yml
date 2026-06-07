@@ -44,6 +44,23 @@ jobs:
     # config-only pushes that fall back to the :latest tag.
     if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.deploy == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
+    # @QuarkusTest boots the full app with datasource dev services disabled, so
+    # it needs a real Postgres at localhost:5432 (db/app/app) — same as the local
+    # docker compose dev stack. Redis is provided by Quarkus dev services.
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_DB: db
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app -d db"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Checkout
         uses: actions/checkout@v5
