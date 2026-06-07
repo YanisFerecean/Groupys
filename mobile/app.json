@@ -24,9 +24,6 @@
           "remote-notification"
         ]
       },
-      "entitlements": {
-        "com.apple.developer.music-user-token": true
-      },
       "privacyManifests": {
         "NSPrivacyAccessedAPITypes": [
           {
