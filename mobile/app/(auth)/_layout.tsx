@@ -1,6 +1,6 @@
 import { useAuth, useUser } from '@clerk/expo'
 import { Redirect, Stack } from 'expo-router'
-import FullscreenSpinner from '@/components/ui/FullscreenSpinner'
+import LoadingGate from '@/components/ui/LoadingGate'
 import { isAccountSetupComplete } from '@/lib/auth'
 
 export default function AuthLayout() {
@@ -8,7 +8,14 @@ export default function AuthLayout() {
   const { user, isLoaded: isUserLoaded } = useUser()
 
   if (!isAuthLoaded || (isSignedIn && !isUserLoaded)) {
-    return <FullscreenSpinner />
+    return (
+      <LoadingGate
+        isAuthLoaded={isAuthLoaded}
+        isSignedIn={isSignedIn}
+        isUserLoaded={isUserLoaded}
+        label="auth-layout"
+      />
+    )
   }
 
   if (isSignedIn) {
