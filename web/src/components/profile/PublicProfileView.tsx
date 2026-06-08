@@ -21,6 +21,7 @@ import {
 } from "@/lib/api";
 import { countryFlag } from "@/lib/countries";
 import { getContrastColor } from "@/lib/utils";
+import ModerationMenu from "@/components/moderation/ModerationMenu";
 import ProfileWidgetGrid from "./ProfileWidgetGrid";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
@@ -377,6 +378,16 @@ export default function PublicProfileView({
                     {messagingLoading ? "Opening..." : "Message"}
                   </span>
                 </button>
+              )}
+              {clerkUser && backendUser && (
+                <ModerationMenu
+                  targetType="USER"
+                  targetId={backendUser.id}
+                  targetLabel={backendUser.displayName ?? backendUser.username}
+                  blockUserId={backendUser.id}
+                  onBlocked={() => router.push("/discover")}
+                  className="flex h-10 w-10 items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container transition-colors"
+                />
               )}
             </div>
           </div>

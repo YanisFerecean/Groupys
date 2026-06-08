@@ -6,6 +6,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth, useUser } from "@clerk/nextjs";
 import MarkdownContent from "@/components/ui/MarkdownContent";
+import ModerationMenu from "@/components/moderation/ModerationMenu";
 import AuthMedia from "@/components/ui/AuthMedia";
 import MediaLightbox, { LightboxItem } from "@/components/ui/MediaLightbox";
 import {
@@ -540,6 +541,17 @@ export default function PostDetail({ id }: { id: string }) {
               {post.authorUsername ? `@${post.authorUsername} · ` : ""}{timeAgo(post.createdAt)}
             </p>
           </div>
+          {clerkUser && post.authorUsername && clerkUser.username !== post.authorUsername && (
+            <span onClick={(e) => e.stopPropagation()} className="shrink-0">
+              <ModerationMenu
+                targetType="POST"
+                targetId={post.id}
+                targetLabel="post"
+                blockUserId={post.authorId || undefined}
+                onBlocked={() => router.push("/feed")}
+              />
+            </span>
+          )}
         </div>
 
         {/* Title */}
