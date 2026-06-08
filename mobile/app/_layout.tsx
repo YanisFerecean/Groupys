@@ -1,5 +1,4 @@
 import '@/global.css'
-import '@/lib/globalErrorTrap'
 import { useEffect } from 'react'
 import { ClerkProvider } from '@clerk/expo'
 import { tokenCache } from '@clerk/expo/token-cache'

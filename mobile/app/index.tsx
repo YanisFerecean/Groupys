@@ -1,6 +1,6 @@
 import { useAuth, useUser } from '@clerk/expo'
 import { Redirect } from 'expo-router'
-import LoadingGate from '@/components/ui/LoadingGate'
+import FullscreenSpinner from '@/components/ui/FullscreenSpinner'
 import { isAccountSetupComplete } from '@/lib/auth'
 
 export default function Index() {
@@ -8,14 +8,7 @@ export default function Index() {
   const { user, isLoaded: isUserLoaded } = useUser()
 
   if (!isAuthLoaded || (isSignedIn && !isUserLoaded)) {
-    return (
-      <LoadingGate
-        isAuthLoaded={isAuthLoaded}
-        isSignedIn={isSignedIn}
-        isUserLoaded={isUserLoaded}
-        label="index"
-      />
-    )
+    return <FullscreenSpinner />
   }
 
   if (!isSignedIn) {

@@ -16,12 +16,20 @@
       "channel": "preview",
       "ios": {
         "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_ENABLE_APPLE_MUSIC_CONNECT": "true",
+        "EXPO_PUBLIC_ENABLE_APPLE_MUSIC_SIMULATOR_MOCK": "false",
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsuZ3JvdXB5cy5hcHAk",
+        "EXPO_PUBLIC_API_URL": "https://api.groupys.app",
+        "EXPO_PUBLIC_WS_URL": "wss://api.groupys.app/ws/chat"
       }
     },
     "production": {
       "channel": "production",
       "autoIncrement": true,
       "env": {
+        "EXPO_PUBLIC_ENABLE_APPLE_MUSIC_CONNECT": "true",
         "EXPO_PUBLIC_ENABLE_APPLE_MUSIC_SIMULATOR_MOCK": "false",
         "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsuZ3JvdXB5cy5hcHAk",
         "EXPO_PUBLIC_API_URL": "https://api.groupys.app",
