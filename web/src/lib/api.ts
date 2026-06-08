@@ -19,15 +19,17 @@ export interface BackendUser {
   bio: string | null;
   country: string | null;
   bannerUrl: string | null;
+  bannerText: string | null;
   accentColor: string | null;
   nameColor: string | null;
+  countryCode: string | null;
   profileImage: string | null;
   widgets: string | null;
   tags: string[];
   dateJoined: string;
   musicConnected?: boolean;
-  lastFmConnected?: boolean;
-  lastFmUsername?: string | null;
+  recommendationOptOut?: boolean;
+  discoveryVisible?: boolean;
 }
 
 // ── Widget ↔ ProfileCustomization conversion ───────────────────────────────
@@ -71,6 +73,7 @@ export function widgetsToProfile(widgets: BackendWidget[]): Partial<ProfileCusto
       case "topAlbums":
         result.topAlbums = items.map((i) => ({
           id: i.id,
+          appleMusicId: i.appleMusicId,
           title: i.title,
           artist: i.artist,
           coverUrl: i.coverUrl,
@@ -286,7 +289,8 @@ export interface AlbumRatingRes {
 }
 
 export interface AlbumRatingCreate {
-  albumId: number;
+  albumId?: number | null;
+  appleMusicId?: string | null;
   albumTitle: string;
   albumCoverUrl: string | null;
   artistName: string | null;
@@ -311,6 +315,15 @@ export async function fetchAlbumRatings(
   token: string | null,
 ): Promise<AlbumRatingRes[]> {
   const res = await apiRequest(`/album-ratings/album/${albumId}`, token);
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to fetch ratings"));
+  return res.json();
+}
+
+export async function fetchAlbumRatingsByAppleMusicId(
+  appleMusicId: string,
+  token: string | null,
+): Promise<AlbumRatingRes[]> {
+  const res = await apiRequest(`/album-ratings/album/by-apple-music/${encodeURIComponent(appleMusicId)}`, token);
   if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to fetch ratings"));
   return res.json();
 }
@@ -412,6 +425,36 @@ export async function updateBackendUser(
     body,
   });
   if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to update user profile"));
+  return res.json();
+}
+
+/**
+ * Toggle discoverability / recommendation preferences without touching the rest of
+ * the profile. The backend PUT overwrites displayName/bio/country/banner/colors
+ * unconditionally, so we echo the current values back to avoid wiping them.
+ */
+export async function updateUserPrivacy(
+  user: BackendUser,
+  changes: { discoveryVisible?: boolean; recommendationOptOut?: boolean },
+  token: string | null,
+): Promise<BackendUser> {
+  const body = {
+    displayName: user.displayName,
+    bio: user.bio,
+    country: user.country,
+    countryCode: user.countryCode,
+    bannerUrl: user.bannerUrl,
+    bannerText: user.bannerText,
+    accentColor: user.accentColor,
+    nameColor: user.nameColor,
+    discoveryVisible: changes.discoveryVisible,
+    recommendationOptOut: changes.recommendationOptOut,
+  };
+  const res = await apiRequest(`/users/${encodeURIComponent(user.id)}`, token, {
+    method: "PUT",
+    body,
+  });
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to update settings"));
   return res.json();
 }
 
