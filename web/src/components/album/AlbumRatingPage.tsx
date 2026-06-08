@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import {
   type AlbumRatingRes,
   type AlbumRatingCreate,
   upsertAlbumRating,
   fetchAlbumRatings,
+  fetchAlbumRatingsByAppleMusicId,
   deleteAlbumRating,
 } from "@/lib/api";
 
@@ -62,42 +63,79 @@ function scoreLabel(score: number): string {
   return labels[score] ?? "";
 }
 
+// Backend stores an integer 1–10; the UI uses a 1–5 star scale in 0.5 steps
+// (matching the mobile app). Convert between the two.
+const to5 = (backendScore: number) => backendScore / 2;
+const to10 = (stars: number) => Math.round(stars * 2);
+
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function ScorePicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+/** Read-only star row for a value in 0–5 stars (0.5 steps). */
+function StarDisplay({ stars, size = 16 }: { stars: number; size?: number }) {
+  return (
+    <div className="flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map((i) => {
+        const full = stars >= i;
+        const half = !full && stars >= i - 0.5;
+        return (
+          <span
+            key={i}
+            className={`material-symbols-outlined ${full || half ? "text-primary" : "text-outline/30"}`}
+            style={{ fontSize: size, fontVariationSettings: full || half ? "'FILL' 1" : "'FILL' 0" }}
+          >
+            {full ? "star" : half ? "star_half" : "star"}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Interactive 5-star picker with half-star steps. Value is in stars (0–5). */
+function StarPicker({ value, onChange }: { value: number; onChange: (stars: number) => void }) {
   const [hovered, setHovered] = useState<number | null>(null);
   const display = hovered ?? value;
+
+  const starValue = (i: number, e: React.MouseEvent<HTMLButtonElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const isHalf = e.clientX - rect.left < rect.width / 2;
+    return i - (isHalf ? 0.5 : 0);
+  };
 
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center gap-0.5">
-        {Array.from({ length: 10 }, (_, i) => i + 1).map((star) => (
-          <button
-            key={star}
-            type="button"
-            onClick={() => onChange(star)}
-            onMouseEnter={() => setHovered(star)}
-            onMouseLeave={() => setHovered(null)}
-            className="p-0.5 transition-transform hover:scale-110 active:scale-95"
-            aria-label={`Rate ${star}`}
-          >
-            <span
-              className={`material-symbols-outlined text-[22px] transition-colors ${
-                star <= display ? "text-primary" : "text-outline/40"
-              }`}
-              style={{ fontVariationSettings: star <= display ? "'FILL' 1" : "'FILL' 0" }}
+        {[1, 2, 3, 4, 5].map((i) => {
+          const full = display >= i;
+          const half = !full && display >= i - 0.5;
+          return (
+            <button
+              key={i}
+              type="button"
+              onMouseMove={(e) => setHovered(starValue(i, e))}
+              onMouseLeave={() => setHovered(null)}
+              onClick={(e) => onChange(starValue(i, e))}
+              className="p-0.5 transition-transform hover:scale-110 active:scale-95"
+              aria-label={`Rate ${i} star${i > 1 ? "s" : ""}`}
             >
-              star
-            </span>
-          </button>
-        ))}
-        <span className={`ml-3 text-2xl font-extrabold tabular-nums leading-none ${scoreColor(value)}`}>
-          {value}
+              <span
+                className={`material-symbols-outlined text-[30px] transition-colors ${
+                  full || half ? "text-primary" : "text-outline/40"
+                }`}
+                style={{ fontVariationSettings: full || half ? "'FILL' 1" : "'FILL' 0" }}
+              >
+                {full ? "star" : half ? "star_half" : "star"}
+              </span>
+            </button>
+          );
+        })}
+        <span className={`ml-3 text-2xl font-extrabold tabular-nums leading-none ${scoreColor(to10(display))}`}>
+          {display > 0 ? display.toFixed(1) : "–"}
         </span>
-        <span className="text-outline text-sm ml-0.5">/10</span>
+        <span className="text-outline text-sm ml-0.5">/5</span>
       </div>
-      <p className={`text-xs font-bold tracking-widest uppercase ${scoreColor(display)}`}>
-        {scoreLabel(display)}
+      <p className={`text-xs font-bold tracking-widest uppercase ${scoreColor(to10(display))}`}>
+        {display > 0 ? scoreLabel(to10(display)) : "Tap to rate"}
       </p>
     </div>
   );
@@ -141,12 +179,7 @@ function RatingCard({
           </div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          <div className="flex items-baseline gap-0.5">
-            <span className={`text-xl font-extrabold tabular-nums ${scoreColor(rating.score)}`}>
-              {rating.score}
-            </span>
-            <span className="text-outline text-xs">/10</span>
-          </div>
+          <StarDisplay stars={to5(rating.score)} size={16} />
           {isOwn && onDelete && (
             <button
               onClick={onDelete}
@@ -246,7 +279,7 @@ export default function AlbumRatingPage({ id }: { id: string }) {
   const [ratings, setRatings] = useState<AlbumRatingRes[]>([]);
   const [ratingsLoading, setRatingsLoading] = useState(true);
 
-  const [score, setScore] = useState(7);
+  const [score, setScore] = useState(0);
   const [review, setReview] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -256,7 +289,13 @@ export default function AlbumRatingPage({ id }: { id: string }) {
   const [loadingId, setLoadingId] = useState<number | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const albumId = Number(id);
+  // Albums reached from Apple Music data (e.g. a synced top album) have no numeric
+  // backend id yet, so they are routed as `am-{appleMusicId}` with the display
+  // metadata passed via query params. Numeric ids use the existing `/albums/{id}` path.
+  const searchParams = useSearchParams();
+  const isAppleMusic = id.startsWith("am-");
+  const appleMusicId = isAppleMusic ? id.slice(3) : null;
+  const albumId = isAppleMusic ? NaN : Number(id);
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
 
@@ -264,6 +303,26 @@ export default function AlbumRatingPage({ id }: { id: string }) {
     (async () => {
       setAlbumLoading(true);
       try {
+        if (isAppleMusic) {
+          // No full album resource for catalog-only albums — render from query params.
+          setAlbum({
+            id: 0,
+            title: searchParams.get("title") ?? "",
+            coverSmall: null,
+            coverMedium: searchParams.get("cover"),
+            coverBig: searchParams.get("cover"),
+            coverXl: searchParams.get("cover"),
+            releaseDate: null,
+            label: null,
+            duration: null,
+            nbTracks: null,
+            fans: null,
+            genres: [],
+            artist: searchParams.get("artist") ? { id: 0, name: searchParams.get("artist") as string, images: [] } : null,
+            tracks: [],
+          });
+          return;
+        }
         const token = await getTokenRef.current();
         const res = await fetch(`${API_URL}/albums/${albumId}`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -273,19 +332,22 @@ export default function AlbumRatingPage({ id }: { id: string }) {
         setAlbumLoading(false);
       }
     })();
-  }, [albumId]);
+  }, [albumId, isAppleMusic, appleMusicId, searchParams]);
 
   const loadRatings = async () => {
     setRatingsLoading(true);
     try {
       const token = await getTokenRef.current();
-      setRatings(await fetchAlbumRatings(albumId, token));
+      const loaded = isAppleMusic && appleMusicId
+        ? await fetchAlbumRatingsByAppleMusicId(appleMusicId, token)
+        : await fetchAlbumRatings(albumId, token);
+      setRatings(loaded);
     } finally {
       setRatingsLoading(false);
     }
   };
 
-  useEffect(() => { loadRatings(); }, [albumId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadRatings(); }, [albumId, isAppleMusic, appleMusicId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     (async () => {
@@ -296,7 +358,10 @@ export default function AlbumRatingPage({ id }: { id: string }) {
         });
         if (!res.ok) return;
         const mine: AlbumRatingRes[] = await res.json();
-        const existing = mine.find((r) => r.albumId === albumId);
+        // by-apple-music ratings resolve to a numeric albumId once the album row
+        // exists; match "mine" against the album id surfaced by the loaded ratings.
+        const targetAlbumId = isAppleMusic ? ratings[0]?.albumId : albumId;
+        const existing = targetAlbumId != null ? mine.find((r) => r.albumId === targetAlbumId) : undefined;
         if (existing) {
           setMyRatingId(existing.id);
           setScore(existing.score);
@@ -304,7 +369,7 @@ export default function AlbumRatingPage({ id }: { id: string }) {
         }
       } catch { /* not critical */ }
     })();
-  }, [albumId]);
+  }, [albumId, isAppleMusic, ratings]);
 
   const myRating = ratings.find((r) => r.id === myRatingId) ?? null;
   const otherRatings = ratings.filter((r) => r.id !== myRatingId);
@@ -319,8 +384,9 @@ export default function AlbumRatingPage({ id }: { id: string }) {
     try {
       const token = await getTokenRef.current();
       const payload: AlbumRatingCreate = {
-        albumId,
-        albumTitle: album?.title ?? String(albumId),
+        albumId: isAppleMusic ? (ratings[0]?.albumId ?? null) : albumId,
+        appleMusicId: appleMusicId ?? undefined,
+        albumTitle: album?.title ?? (isAppleMusic ? "" : String(albumId)),
         albumCoverUrl: album?.coverMedium ?? null,
         artistName: album?.artist?.name ?? null,
         score,
@@ -370,7 +436,7 @@ export default function AlbumRatingPage({ id }: { id: string }) {
       const token = await getTokenRef.current();
       await deleteAlbumRating(myRatingId, token);
       setMyRatingId(null);
-      setScore(7);
+      setScore(0);
       setReview("");
       await loadRatings();
     } catch (err) {
@@ -494,9 +560,10 @@ export default function AlbumRatingPage({ id }: { id: string }) {
               <div className="shrink-0 flex flex-col items-center pb-1 px-3 py-2 rounded-xl bg-black/35 backdrop-blur-sm">
                 <div className="flex items-baseline gap-0.5">
                   <span className={`text-3xl font-extrabold tabular-nums ${scoreColor(Number(avgScore))}`}>
-                    {avgScore}
+                    {to5(Number(avgScore)).toFixed(1)}
                   </span>
-                  <span className="text-white/60 text-sm ml-0.5">/10</span>
+                  <span className="text-white/60 text-sm ml-0.5">/5</span>
+                  <span className="material-symbols-outlined text-primary ml-1" style={{ fontSize: 20, fontVariationSettings: "'FILL' 1" }}>star</span>
                 </div>
                 <p className="text-white/60 text-xs mt-0.5 text-center">
                   {ratings.length} {ratings.length === 1 ? "rating" : "ratings"}
@@ -556,7 +623,7 @@ export default function AlbumRatingPage({ id }: { id: string }) {
             onSubmit={handleSubmit}
             className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl p-5 flex flex-col gap-4"
           >
-            <ScorePicker value={score} onChange={setScore} />
+            <StarPicker value={to5(score)} onChange={(stars) => setScore(to10(stars))} />
 
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-bold tracking-widest uppercase text-outline">Review</label>
@@ -591,7 +658,7 @@ export default function AlbumRatingPage({ id }: { id: string }) {
               ) : <div />}
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || score < 1}
                 className="rounded-xl bg-primary text-on-primary font-bold px-8 py-2.5 text-sm hover:bg-primary/90 transition-colors disabled:opacity-50"
               >
                 {submitting ? "Saving…" : myRatingId ? "Update" : "Submit Rating"}

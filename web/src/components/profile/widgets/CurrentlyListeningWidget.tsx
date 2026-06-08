@@ -49,7 +49,7 @@ export default function CurrentlyListeningWidget({
     return () => clearInterval(id);
   }, [musicConnected, getToken, savedTrack]);
 
-  // Resolve preview URL by always fetching fresh (Deezer URLs expire)
+  // Resolve preview URL by always fetching fresh (Apple Music preview URLs expire)
   useEffect(() => {
     const t = musicConnected ? liveTrack : savedTrack;
     if (!t?.title) return;

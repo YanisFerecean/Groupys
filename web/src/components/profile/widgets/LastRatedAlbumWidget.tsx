@@ -69,7 +69,7 @@ export default function LastRatedAlbumWidget({ username, containerColor, size = 
               </p>
               <p className="text-xs font-bold mt-0.5 flex items-baseline gap-1.5 min-w-0">
                 <span style={{ color: textColor ?? "var(--profile-accent, var(--color-primary))", flexShrink: 0 }}>
-                  {ratings[0].score}/10
+                  ★ {(ratings[0].score / 2).toFixed(1)}
                 </span>
                 {ratings[0].review && (
                   <span
@@ -120,7 +120,7 @@ export default function LastRatedAlbumWidget({ username, containerColor, size = 
                   )}
                   <p className="text-xs font-bold mt-0.5 flex items-baseline gap-1.5 min-w-0">
                     <span style={{ color: textColor ?? "var(--profile-accent, var(--color-primary))", flexShrink: 0 }}>
-                      {rating.score}/10
+                      ★ {(rating.score / 2).toFixed(1)}
                     </span>
                     {rating.review && (
                       <span

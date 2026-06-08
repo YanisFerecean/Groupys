@@ -419,8 +419,6 @@ export default function ProfileView() {
     isSaving,
     musicConnected,
     setMusicConnected,
-    lastFmConnected,
-    lastFmUsername,
   } = useProfileCustomization();
   const { user } = useUser();
   const { getToken } = useAuth();
@@ -620,8 +618,6 @@ export default function ProfileView() {
         onRemoveProfileImage={removeProfileImage}
         isSaving={isSaving}
         musicConnected={musicConnected}
-        lastFmConnected={lastFmConnected}
-        lastFmUsername={lastFmUsername}
         initialTab={musicCallback === "connected" ? "widgets" : "profile"}
       />
     </div>
