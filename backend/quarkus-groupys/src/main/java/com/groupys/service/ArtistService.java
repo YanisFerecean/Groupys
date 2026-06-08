@@ -150,7 +150,7 @@ public class ArtistService {
         if (artistId != null && !artistId.isBlank()) {
             var fetched = appleCatalogService.getArtist(storefront, artistId).orElse(null);
             if (fetched != null) {
-                return artistMapper.toResDto(entityService.upsertArtist(fetched));
+                return artistMapper.toResDto(entityService.upsertArtist(fetched), artistMapper.pickGenre(fetched.genreNames()));
             }
             Artist fallback = entityService.upsertArtistReference(artistId, artistName, null, null, null, null);
             return fallback != null ? artistMapper.toResDto(fallback) : null;

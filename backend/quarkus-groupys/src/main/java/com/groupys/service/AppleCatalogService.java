@@ -290,7 +290,11 @@ public class AppleCatalogService {
         JsonNode trackData = node.path("relationships").path("tracks").path("data");
         if (trackData.isArray()) {
             for (JsonNode ref : trackData) {
-                JsonNode resolved = included.get(text(ref, "type") + ":" + text(ref, "id"));
+                // Album track relationships are returned inline with their attributes;
+                // fall back to the top-level included map for reference-only payloads.
+                JsonNode resolved = ref.hasNonNull("attributes")
+                        ? ref
+                        : included.get(text(ref, "type") + ":" + text(ref, "id"));
                 if (resolved != null) {
                     tracks.add(parseSong(resolved, included));
                 }
