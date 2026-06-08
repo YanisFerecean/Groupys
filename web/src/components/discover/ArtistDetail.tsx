@@ -17,6 +17,7 @@ interface ArtistRes {
   listeners: number;
   playcount: number;
   summary: string;
+  genre?: string | null;
 }
 
 interface AlbumRes {
@@ -477,22 +478,14 @@ export default function ArtistDetail({ id }: { id: string }) {
       </div>
 
       <div className="px-6 lg:px-8">
-        {/* Stats */}
-        <div className="flex gap-8 pt-6">
-          <div>
-            <p className="text-primary font-extrabold text-xl">
-              {formatCount(artist.listeners)}
-            </p>
-            <p className="text-on-surface-variant text-xs mt-0.5">listeners</p>
+        {/* Genre */}
+        {artist.genre && (
+          <div className="flex pt-6">
+            <span className="px-4 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-bold">
+              {artist.genre}
+            </span>
           </div>
-          <div className="w-px bg-surface-container-highest" />
-          <div>
-            <p className="text-primary font-extrabold text-xl">
-              {formatCount(artist.playcount)}
-            </p>
-            <p className="text-on-surface-variant text-xs mt-0.5">plays</p>
-          </div>
-        </div>
+        )}
 
         {/* Communities */}
         <section className="pt-8">
