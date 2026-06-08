@@ -31,7 +31,7 @@ Reuses the existing web deploy secrets `VM88_HOST`, `VM88_USER`,
 | `MINIO_ROOT_PASSWORD` | strong random |
 | `JWT_ISSUER` | Clerk issuer URL, e.g. `https://<your>.clerk.accounts.dev` |
 | `JWT_PUBLIC_KEY_LOCATION` | Clerk JWKS endpoint, e.g. `<issuer>/.well-known/jwks.json` |
-| `APP_CORS_ORIGINS` | real frontend origin(s), comma-separated. **No `localhost`** — boot fails otherwise |
+| `APP_CORS_ORIGINS` | real frontend origin(s), comma-separated, including the API origin used by native WebSockets (for example `https://groupys.app,https://api.groupys.app`). **No `localhost`** — boot fails otherwise |
 | `ENCRYPTION_MASTER_KEY` | **freshly generated**, NOT the dev fallback. `openssl rand -base64 32` |
 | `APPLE_TEAM_ID` | Apple Music dev token signing |
 | `APPLE_KEY_ID` | Apple Music dev token signing |
@@ -43,7 +43,7 @@ Reuses the existing web deploy secrets `VM88_HOST`, `VM88_USER`,
 - `FLYWAY_MIGRATE_AT_START=true`, `QUARKUS_PROFILE=prod`, `REDIS_HOSTS`, and the
   `groupys-db` / `groupys-minio` host overrides are set as literals in the compose
   file — no secrets needed.
-- Prod uses Hibernate `validate` + Flyway migrations V1–V5. First boot applies them.
+- Prod uses Hibernate `validate` + Flyway migrations. First boot applies them.
 - TLS/reverse-proxy: the API binds `127.0.0.1:8080`. Front it with the existing
   reverse proxy and give it the public origin used in `APP_CORS_ORIGINS` and in the
   mobile `EXPO_PUBLIC_API_URL` / `EXPO_PUBLIC_WS_URL`.
