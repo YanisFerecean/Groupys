@@ -23,6 +23,13 @@ export default function TopAlbumsWidget({ albums, containerColor, size = "normal
       router.push(`/discover/album/${album.id}`);
       return;
     }
+    if (album.appleMusicId) {
+      const params = new URLSearchParams({ title: album.title });
+      if (album.artist) params.set("artist", album.artist);
+      if (album.coverUrl) params.set("cover", album.coverUrl);
+      router.push(`/discover/album/am-${album.appleMusicId}?${params.toString()}`);
+      return;
+    }
     try {
       const res = await fetch(`/api/music-search?q=${encodeURIComponent(album.title)}&type=album`);
       const data = await res.json();
