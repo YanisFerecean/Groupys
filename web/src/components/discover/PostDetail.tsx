@@ -4,10 +4,18 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth, useUser } from "@clerk/nextjs";
 import MarkdownContent from "@/components/ui/MarkdownContent";
 import AuthMedia from "@/components/ui/AuthMedia";
 import MediaLightbox, { LightboxItem } from "@/components/ui/MediaLightbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
 
@@ -116,17 +124,23 @@ function CommentThread({
   depth,
   onReact,
   onReply,
+  onDelete,
   replyingTo,
   setReplyingTo,
   submittingReply,
+  currentUsername,
+  canModerate,
 }: {
   comment: CommentRes;
   depth: number;
   onReact: (commentId: string, type: "like" | "dislike") => void;
   onReply: (parentCommentId: string, content: string) => void;
+  onDelete: (commentId: string, hasReplies: boolean) => void;
   replyingTo: string | null;
   setReplyingTo: (id: string | null) => void;
   submittingReply: boolean;
+  currentUsername?: string;
+  canModerate?: boolean;
 }) {
   const router = useRouter();
   const isReplying = replyingTo === comment.id;
@@ -137,14 +151,14 @@ function CommentThread({
       <div className="py-3">
         {/* Author */}
         <div
-          className="flex items-center gap-2.5 mb-1.5 cursor-pointer"
-          onClick={() => router.push(`/profile/${comment.authorUsername}`)}
+          className={`flex items-center gap-2.5 mb-1.5 ${comment.authorUsername ? "cursor-pointer" : "cursor-default"}`}
+          onClick={comment.authorUsername ? () => router.push(`/profile/${comment.authorUsername}`) : undefined}
         >
           {comment.authorProfileImage ? (
             <div className="w-7 h-7 shrink-0 rounded-full overflow-hidden">
               <Image
                 src={comment.authorProfileImage}
-                alt={comment.authorDisplayName || comment.authorUsername}
+                alt={comment.authorDisplayName || comment.authorUsername || "Deleted User"}
                 width={28}
                 height={28}
                 className="w-full h-full object-cover"
@@ -158,7 +172,7 @@ function CommentThread({
             </div>
           )}
           <span className="text-sm font-semibold text-on-surface hover:text-primary transition-colors">
-            {comment.authorDisplayName || comment.authorUsername}
+            {comment.authorDisplayName || comment.authorUsername || "Deleted User"}
           </span>
           <span className="text-xs text-on-surface-variant">
             {timeAgo(comment.createdAt)}
@@ -232,6 +246,17 @@ function CommentThread({
             </span>
             Report
           </button>
+
+          {(currentUsername === comment.authorUsername || canModerate) && (
+            <button
+              onClick={() => onDelete(comment.id, comment.replies.length > 0)}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold text-error/70 hover:text-error hover:bg-error/10 transition-colors"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
+                delete
+              </span>
+            </button>
+          )}
         </div>
 
         {/* Reply form */}
@@ -242,7 +267,7 @@ function CommentThread({
                 onReply(comment.id, content);
                 setReplyingTo(null);
               }}
-              placeholder={`Reply to ${comment.authorDisplayName || comment.authorUsername}...`}
+              placeholder={`Reply to ${comment.authorDisplayName || comment.authorUsername || "Deleted User"}...`}
               submitting={submittingReply}
               autoFocus
             />
@@ -260,9 +285,12 @@ function CommentThread({
               depth={depth + 1}
               onReact={onReact}
               onReply={onReply}
+              onDelete={onDelete}
               replyingTo={replyingTo}
               setReplyingTo={setReplyingTo}
               submittingReply={submittingReply}
+              currentUsername={currentUsername}
+              canModerate={canModerate}
             />
           ))}
         </div>
@@ -276,6 +304,7 @@ function CommentThread({
 export default function PostDetail({ id }: { id: string }) {
   const router = useRouter();
   const { getToken } = useAuth();
+  const { user: clerkUser } = useUser();
 
   const [post, setPost] = useState<PostRes | null>(null);
   const [comments, setComments] = useState<CommentRes[]>([]);
@@ -283,6 +312,8 @@ export default function PostDetail({ id }: { id: string }) {
   const [submittingComment, setSubmittingComment] = useState(false);
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [canModerate, setCanModerate] = useState(false);
+  const [deleteCommentConfirm, setDeleteCommentConfirm] = useState<{ id: string; hasReplies: boolean } | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -298,6 +329,13 @@ export default function PostDetail({ id }: { id: string }) {
       ]);
       setPost(postData);
       setComments(commentsData);
+      if (postData?.communityId) {
+        const membershipRes = await fetch(`${API_URL}/communities/${postData.communityId}/membership`, { headers });
+        if (membershipRes.ok) {
+          const membership = await membershipRes.json();
+          setCanModerate(membership.owner === true || membership.role === "admin");
+        }
+      }
     } catch (err) {
       console.error("Failed to fetch post:", err);
     } finally {
@@ -394,6 +432,29 @@ export default function PostDetail({ id }: { id: string }) {
     [id, getToken],
   );
 
+  const handleDeleteComment = useCallback(
+    async (commentId: string) => {
+      try {
+        const token = await getToken();
+        const res = await fetch(`${API_URL}/comments/${commentId}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error("Failed to delete comment");
+        const [commentsData, postData] = await Promise.all([
+          fetch(`${API_URL}/comments/post/${id}`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.ok ? r.json() : []),
+          fetch(`${API_URL}/posts/${id}`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.ok ? r.json() : null),
+        ]);
+        setComments(commentsData);
+        if (postData) setPost(postData);
+        toast.success("Comment deleted");
+      } catch {
+        toast.error("Failed to delete comment");
+      }
+    },
+    [id, getToken],
+  );
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -451,14 +512,14 @@ export default function PostDetail({ id }: { id: string }) {
 
         {/* Author header */}
         <div
-          className="flex items-center gap-3 px-5 pt-2 pb-3 cursor-pointer"
-          onClick={() => router.push(`/profile/${post.authorUsername}`)}
+          className={`flex items-center gap-3 px-5 pt-2 pb-3 ${post.authorUsername ? "cursor-pointer" : "cursor-default"}`}
+          onClick={post.authorUsername ? () => router.push(`/profile/${post.authorUsername}`) : undefined}
         >
           {post.authorProfileImage ? (
             <div className="w-11 h-11 shrink-0 rounded-full overflow-hidden">
               <Image
                 src={post.authorProfileImage}
-                alt={post.authorDisplayName || post.authorUsername}
+                alt={post.authorDisplayName || post.authorUsername || "Deleted User"}
                 width={44}
                 height={44}
                 className="w-full h-full object-cover"
@@ -473,10 +534,10 @@ export default function PostDetail({ id }: { id: string }) {
           )}
           <div className="flex-1 min-w-0">
             <p className="text-base font-semibold text-on-surface truncate hover:text-primary transition-colors">
-              {post.authorDisplayName || post.authorUsername}
+              {post.authorDisplayName || post.authorUsername || "Deleted User"}
             </p>
             <p className="text-xs text-on-surface-variant">
-              @{post.authorUsername} &middot; {timeAgo(post.createdAt)}
+              {post.authorUsername ? `@${post.authorUsername} · ` : ""}{timeAgo(post.createdAt)}
             </p>
           </div>
         </div>
@@ -637,13 +698,48 @@ export default function PostDetail({ id }: { id: string }) {
               depth={0}
               onReact={handleCommentReact}
               onReply={(parentId, content) => handleComment(content, parentId)}
+              onDelete={(commentId, hasReplies) => setDeleteCommentConfirm({ id: commentId, hasReplies })}
               replyingTo={replyingTo}
               setReplyingTo={setReplyingTo}
               submittingReply={submittingComment}
+              currentUsername={clerkUser?.username ?? undefined}
+              canModerate={canModerate}
             />
           ))}
         </div>
       )}
+
+      <Dialog open={!!deleteCommentConfirm} onOpenChange={(open) => { if (!open) setDeleteCommentConfirm(null); }}>
+        <DialogContent className="max-w-sm" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Delete comment?</DialogTitle>
+            <DialogDescription>
+              {deleteCommentConfirm?.hasReplies
+                ? "This will also delete all replies to this comment. This action cannot be undone."
+                : "This action cannot be undone."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button
+              onClick={() => setDeleteCommentConfirm(null)}
+              className="px-4 py-2 rounded-full text-sm font-semibold text-on-surface hover:bg-surface-container-high transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                if (deleteCommentConfirm) {
+                  handleDeleteComment(deleteCommentConfirm.id);
+                  setDeleteCommentConfirm(null);
+                }
+              }}
+              className="px-4 py-2 rounded-full text-sm font-semibold bg-error text-white hover:opacity-90 transition-opacity"
+            >
+              Delete
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

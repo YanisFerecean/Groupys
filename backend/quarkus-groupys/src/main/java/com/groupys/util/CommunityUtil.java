@@ -2,6 +2,9 @@ package com.groupys.util;
 
 import com.groupys.dto.CommunityResDto;
 import com.groupys.model.Community;
+import jakarta.ws.rs.BadRequestException;
+
+import java.util.regex.Pattern;
 
 public final class CommunityUtil {
 
@@ -29,7 +32,25 @@ public final class CommunityUtil {
                 community.visibility,
                 community.discoveryEnabled,
                 community.lastProfileRefreshAt,
-                community.tasteSummaryText
+                community.tasteSummaryText,
+                community.blacklistedWords != null ? new java.util.ArrayList<>(community.blacklistedWords) : java.util.List.of()
         );
+    }
+
+    public static void enforceBlacklist(Community community, String... texts) {
+        if (community.blacklistedWords == null || community.blacklistedWords.isEmpty()) return;
+        for (String text : texts) {
+            if (text == null || text.isBlank()) continue;
+            String lower = text.toLowerCase();
+            for (String word : community.blacklistedWords) {
+                Pattern pattern = Pattern.compile(
+                        "(?<![\\w])" + Pattern.quote(word) + "(?![\\w])",
+                        Pattern.CASE_INSENSITIVE
+                );
+                if (pattern.matcher(lower).find()) {
+                    throw new BadRequestException("Your content contains a word that is not allowed in this community");
+                }
+            }
+        }
     }
 }

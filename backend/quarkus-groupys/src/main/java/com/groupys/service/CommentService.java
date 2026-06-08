@@ -116,6 +116,8 @@ public class CommentService {
         Post post = postRepository.findByIdOptional(postId)
                 .orElseThrow(() -> new NotFoundException("Post not found"));
 
+        com.groupys.util.CommunityUtil.enforceBlacklist(post.community, content);
+
         Comment comment = new Comment();
         comment.content = content;
         comment.post = post;
@@ -199,7 +201,7 @@ public class CommentService {
         User user = userRepository.findByClerkId(clerkId)
             .orElseThrow(() -> new NotFoundException("User not found"));
 
-        boolean isAuthor = comment.author.id.equals(user.id);
+        boolean isAuthor = comment.author != null && comment.author.id.equals(user.id);
         boolean isCommunityModerator = communityMemberRepository.isOwnerOrModerator(user.id, comment.post.community.id);
 
         if (!isAuthor && !isCommunityModerator) {
@@ -255,10 +257,10 @@ public class CommentService {
                 comment.content,
                 comment.post.id,
                 comment.parentComment != null ? comment.parentComment.id : null,
-                comment.author.id,
-                comment.author.username,
-                comment.author.displayName,
-                comment.author.profileImage,
+                comment.author != null ? comment.author.id : null,
+                comment.author != null ? comment.author.username : null,
+                comment.author != null ? comment.author.displayName : null,
+                comment.author != null ? comment.author.profileImage : null,
                 comment.createdAt,
                 likes,
                 dislikes,

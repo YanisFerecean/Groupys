@@ -5,6 +5,7 @@ import com.groupys.dto.CommunityMemberResDto;
 import com.groupys.dto.CommunityResDto;
 import com.groupys.dto.CommunityUpdateDto;
 import com.groupys.dto.MyCommunityResDto;
+import com.groupys.dto.UpdateMemberRoleDto;
 import com.groupys.model.Artist;
 import com.groupys.model.Community;
 import com.groupys.model.CommunityMember;
@@ -316,8 +317,50 @@ public class CommunityService {
             community.discoveryEnabled = dto.discoveryEnabled();
         }
         community.tasteSummaryText = dto.tasteSummaryText();
+        if (dto.blacklistedWords() != null) {
+            community.blacklistedWords = dto.blacklistedWords().stream()
+                    .map(String::trim)
+                    .map(String::toLowerCase)
+                    .filter(w -> !w.isBlank())
+                    .distinct()
+                    .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
+        }
         discoveryService.refreshAfterCommunityActivity(id);
         return CommunityUtil.toDto(community);
+    }
+
+    @Transactional
+    public CommunityMemberResDto updateMemberRole(UUID communityId, UUID targetUserId, String newRole, String callerClerkId) {
+        requireOwnedCommunity(communityId, callerClerkId);
+        CommunityMember member = communityMemberRepository.findByUserAndCommunity(targetUserId, communityId)
+                .orElseThrow(() -> new NotFoundException("Member not found"));
+        if ("owner".equals(member.role)) {
+            throw new BadRequestException("Cannot change the owner's role");
+        }
+        member.role = newRole;
+        return new CommunityMemberResDto(member.id, member.user.id, member.user.username,
+                member.user.displayName, member.user.profileImage, member.role, member.joinedAt);
+    }
+
+    @Transactional
+    public void removeMember(UUID communityId, UUID targetUserId, String callerClerkId) {
+        Community community = requireOwnedCommunity(communityId, callerClerkId);
+        CommunityMember member = communityMemberRepository.findByUserAndCommunity(targetUserId, communityId)
+                .orElseThrow(() -> new NotFoundException("Member not found"));
+        if ("owner".equals(member.role)) {
+            throw new BadRequestException("Cannot remove the community owner");
+        }
+        communityMemberRepository.delete(member);
+        community.memberCount = Math.max(0, community.memberCount - 1);
+        discoveryService.refreshAfterCommunityChangeSafe(targetUserId, communityId);
+    }
+
+    public String getMemberRole(UUID communityId, String clerkId) {
+        User user = userRepository.findByClerkId(clerkId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        return communityMemberRepository.findByUserAndCommunity(user.id, communityId)
+                .map(m -> m.role)
+                .orElse(null);
     }
 
     @Transactional
@@ -331,6 +374,29 @@ public class CommunityService {
                 .orElseThrow(() -> new NotFoundException("Community not found"));
         communityRepository.delete(community);
         discoveryService.removeCommunityReferences(id, impactedUserIds);
+    }
+
+    @Transactional
+    public void transferOwner(UUID communityId, String clerkId, UUID newOwnerId) {
+        User currentOwner = userRepository.findByClerkId(clerkId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        Community community = requireOwnedCommunity(communityId, clerkId);
+
+        if (currentOwner.id.equals(newOwnerId)) {
+            throw new BadRequestException("Cannot transfer ownership to yourself");
+        }
+
+        CommunityMember currentOwnerMembership = communityMemberRepository
+                .findByUserAndCommunity(currentOwner.id, communityId)
+                .orElseThrow(() -> new NotFoundException("Owner membership not found"));
+
+        CommunityMember newOwnerMembership = communityMemberRepository
+                .findByUserAndCommunity(newOwnerId, communityId)
+                .orElseThrow(() -> new BadRequestException("New owner must be an existing community member"));
+
+        currentOwnerMembership.role = "admin";
+        newOwnerMembership.role = "owner";
+        community.createdBy = newOwnerMembership.user;
     }
 
     private Community requireOwnedCommunity(UUID communityId, String clerkId) {

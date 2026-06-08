@@ -226,6 +226,8 @@ public class PostService {
         Community community = communityRepository.findByIdOptional(communityId)
                 .orElseThrow(() -> new NotFoundException("Community not found"));
 
+        com.groupys.util.CommunityUtil.enforceBlacklist(community, title, content);
+
         Post post = new Post();
         post.title = title;
         post.content = content;
@@ -312,10 +314,9 @@ public class PostService {
                 .orElseThrow(() -> new NotFoundException("Post not found"));
         User user = userRepository.findByClerkId(clerkId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
-        boolean isAuthor = post.author.id.equals(user.id);
-        boolean isCommunityOwner = post.community.createdBy != null
-                && post.community.createdBy.id.equals(user.id);
-        if (!isAuthor && !isCommunityOwner) {
+        boolean isAuthor = post.author != null && post.author.id.equals(user.id);
+        boolean canModerate = communityMemberRepository.isOwnerOrModerator(user.id, post.community.id);
+        if (!isAuthor && !canModerate) {
             throw new jakarta.ws.rs.ForbiddenException("Not authorized to delete this post");
         }
         UUID communityId = post.community.id;
@@ -380,11 +381,11 @@ public class PostService {
                     mediaDtos,
                     post.community.id,
                     post.community.name,
-                    post.author.id,
-                    post.author.username,
-                    post.author.displayName,
-                    post.author.profileImage,
-                    post.author.clerkId,
+                    post.author != null ? post.author.id : null,
+                    post.author != null ? post.author.username : null,
+                    post.author != null ? post.author.displayName : null,
+                    post.author != null ? post.author.profileImage : null,
+                    post.author != null ? post.author.clerkId : null,
                     post.createdAt,
                     readModelEnabled ? Math.max(0L, post.likeCount) : (rc != null ? rc[0] : 0L),
                     readModelEnabled ? Math.max(0L, post.dislikeCount) : (rc != null ? rc[1] : 0L),

@@ -164,8 +164,12 @@ public class CommunityMemberRepository implements PanacheRepositoryBase<Communit
      * Checks if a user is a member of a community with OWNER or MODERATOR role.
      */
     public boolean isOwnerOrModerator(UUID userId, UUID communityId) {
-        return find("user.id = ?1 and community.id = ?2 and role in ('OWNER', 'MODERATOR')", userId, communityId)
+        return find("user.id = ?1 and community.id = ?2 and role in ('owner', 'admin')", userId, communityId)
             .firstResultOptional()
             .isPresent();
+    }
+
+    public List<CommunityMember> findOwnerMemberships(UUID userId) {
+        return find("FROM CommunityMember cm LEFT JOIN FETCH cm.community WHERE cm.user.id = ?1 AND cm.role = 'owner'", userId).list();
     }
 }

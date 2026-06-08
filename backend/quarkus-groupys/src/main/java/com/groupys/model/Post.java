@@ -41,7 +41,7 @@ public class Post {
     public Community community;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "author_id", nullable = false)
+    @JoinColumn(name = "author_id", nullable = true)
     public User author;
 
     @Column(name = "like_count", nullable = false)

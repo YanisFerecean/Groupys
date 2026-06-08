@@ -19,6 +19,7 @@ public record CommunityUpdateDto(
         Long artistId,
         String visibility,
         Boolean discoveryEnabled,
-        String tasteSummaryText
+        String tasteSummaryText,
+        List<String> blacklistedWords
 ) {
 }

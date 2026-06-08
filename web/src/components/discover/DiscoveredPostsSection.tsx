@@ -83,16 +83,17 @@ function DiscoveredPostCard({ item }: { item: DiscoveredPost }) {
       {/* Author */}
       <div
         className="flex items-center gap-2 px-3 py-1.5"
-        onClick={(e) => {
+        onClick={post.authorUsername ? (e) => {
           e.stopPropagation();
           router.push(`/profile/${post.authorUsername}`);
-        }}
+        } : undefined}
+        style={post.authorUsername ? undefined : { cursor: "default" }}
       >
         {post.authorProfileImage ? (
           <div className="w-6 h-6 shrink-0 rounded-full overflow-hidden">
             <Image
               src={resolveImageUrl(post.authorProfileImage)}
-              alt={post.authorDisplayName || post.authorUsername}
+              alt={post.authorDisplayName || post.authorUsername || "Deleted User"}
               width={24}
               height={24}
               className="w-full h-full object-cover"
@@ -104,7 +105,7 @@ function DiscoveredPostCard({ item }: { item: DiscoveredPost }) {
           </div>
         )}
         <p className="text-xs font-semibold text-on-surface truncate hover:text-primary transition-colors">
-          {post.authorDisplayName || post.authorUsername}
+          {post.authorDisplayName || post.authorUsername || "Deleted User"}
         </p>
         <p className="text-xs text-on-surface-variant ml-auto shrink-0">{timeAgo(post.createdAt)}</p>
       </div>

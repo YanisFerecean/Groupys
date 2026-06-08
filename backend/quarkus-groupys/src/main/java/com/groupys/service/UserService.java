@@ -1,9 +1,12 @@
 package com.groupys.service;
 
+import com.groupys.dto.OwnedCommunityResDto;
 import com.groupys.dto.UserCreateDto;
 import com.groupys.dto.UserResDto;
 import com.groupys.dto.UserUpdateDto;
+import com.groupys.model.CommunityMember;
 import com.groupys.model.User;
+import com.groupys.repository.CommunityMemberRepository;
 import com.groupys.repository.UserFollowRepository;
 import com.groupys.repository.UserRepository;
 import com.groupys.util.CountryUtil;
@@ -13,6 +16,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
+import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.NotFoundException;
 
 import java.util.List;
@@ -26,15 +30,18 @@ public class UserService {
     private final UserRepository userRepository;
     private final UserFollowRepository userFollowRepository;
     private final DiscoveryService discoveryService;
+    private final CommunityMemberRepository communityMemberRepository;
 
     @Inject
     public UserService(
             UserRepository userRepository,
             UserFollowRepository userFollowRepository,
-            DiscoveryService discoveryService) {
+            DiscoveryService discoveryService,
+            CommunityMemberRepository communityMemberRepository) {
         this.userRepository = userRepository;
         this.userFollowRepository = userFollowRepository;
         this.discoveryService = discoveryService;
+        this.communityMemberRepository = communityMemberRepository;
     }
 
     public List<UserResDto> listAll() {
@@ -171,8 +178,25 @@ public class UserService {
         User user = userRepository.findByClerkId(clerkId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
 
+        List<CommunityMember> ownedCommunities = communityMemberRepository.findOwnerMemberships(user.id);
+        if (!ownedCommunities.isEmpty()) {
+            throw new BadRequestException("Transfer or delete all owned communities before deleting your account");
+        }
+
         purgeUserData(user.id);
         userRepository.delete(user);
+    }
+
+    public List<OwnedCommunityResDto> getOwnedCommunities(String clerkId) {
+        User user = userRepository.findByClerkId(clerkId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        return communityMemberRepository.findOwnerMemberships(user.id).stream()
+                .map(m -> new OwnedCommunityResDto(
+                        m.community.id,
+                        m.community.name,
+                        m.community.memberCount,
+                        m.community.iconEmoji))
+                .toList();
     }
 
     public String getPublicKeyByUsername(String username) {
@@ -226,53 +250,13 @@ public class UserService {
                 """, userId);
         nativeUpdate(em, "DELETE FROM user_matches WHERE user_a_id = :userId OR user_b_id = :userId", userId);
 
-        // User-generated content and interactions
+        // Reactions made by this user (remove attribution, keep reactions on their content)
         nativeUpdate(em, "DELETE FROM post_reactions WHERE user_id = :userId", userId);
         nativeUpdate(em, "DELETE FROM comment_reactions WHERE user_id = :userId", userId);
 
-        nativeUpdate(em, """
-                DELETE FROM post_reactions
-                WHERE post_id IN (
-                    SELECT id
-                    FROM posts
-                    WHERE author_id = :userId
-                )
-                """, userId);
-        nativeUpdate(em, """
-                DELETE FROM comment_reactions
-                WHERE comment_id IN (
-                    SELECT id
-                    FROM comments
-                    WHERE author_id = :userId
-                       OR post_id IN (SELECT id FROM posts WHERE author_id = :userId)
-                )
-                """, userId);
-
-        nativeUpdate(em, """
-                UPDATE comments
-                SET parent_comment_id = NULL
-                WHERE parent_comment_id IN (
-                    SELECT id
-                    FROM comments
-                    WHERE author_id = :userId
-                       OR post_id IN (SELECT id FROM posts WHERE author_id = :userId)
-                )
-                """, userId);
-        nativeUpdate(em, """
-                DELETE FROM comments
-                WHERE author_id = :userId
-                   OR post_id IN (SELECT id FROM posts WHERE author_id = :userId)
-                """, userId);
-
-        nativeUpdate(em, """
-                DELETE FROM post_media
-                WHERE post_id IN (
-                    SELECT id
-                    FROM posts
-                    WHERE author_id = :userId
-                )
-                """, userId);
-        nativeUpdate(em, "DELETE FROM posts WHERE author_id = :userId", userId);
+        // Anonymize posts and comments — keep them visible under "Deleted User"
+        nativeUpdate(em, "UPDATE comments SET author_id = NULL WHERE author_id = :userId", userId);
+        nativeUpdate(em, "UPDATE posts SET author_id = NULL WHERE author_id = :userId", userId);
 
         nativeUpdate(em, "DELETE FROM hot_take_answers WHERE user_id = :userId", userId);
         nativeUpdate(em, "DELETE FROM album_ratings WHERE user_id = :userId", userId);

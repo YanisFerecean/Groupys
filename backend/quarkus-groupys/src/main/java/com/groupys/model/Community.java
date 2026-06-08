@@ -54,6 +54,13 @@ public class Community {
     @org.hibernate.annotations.BatchSize(size = 50)
     public List<String> tags = new ArrayList<>();
 
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(name = "community_blacklisted_words", joinColumns = @JoinColumn(name = "community_id"),
+        indexes = @Index(name = "idx_community_blacklisted_words_community_id", columnList = "community_id"))
+    @Column(name = "word")
+    @org.hibernate.annotations.BatchSize(size = 50)
+    public List<String> blacklistedWords = new ArrayList<>();
+
     @Column(name = "member_count", nullable = false)
     public int memberCount = 0;
 
