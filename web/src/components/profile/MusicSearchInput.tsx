@@ -75,8 +75,18 @@ export default function MusicSearchInput<T extends SearchType>({
           `/api/music-search?q=${encodeURIComponent(q)}&type=${type}`,
         );
         const data = await res.json();
-        setResults(data.results ?? []);
-        setIsOpen(data.results?.length > 0);
+        // The catalog search can return the same entity id more than once;
+        // de-dupe by id so render keys stay unique and picks aren't doubled.
+        const raw: ResultMap[T][] = data.results ?? [];
+        const seen = new Set<string>();
+        const unique = raw.filter((r) => {
+          const id = (r as { id: string }).id;
+          if (seen.has(id)) return false;
+          seen.add(id);
+          return true;
+        });
+        setResults(unique);
+        setIsOpen(unique.length > 0);
       } catch {
         setResults([]);
       } finally {
@@ -133,9 +143,9 @@ export default function MusicSearchInput<T extends SearchType>({
 
       {isOpen && results.length > 0 && (
         <div className="absolute z-50 mt-1 w-full max-h-64 overflow-y-auto rounded-xl border border-surface-container bg-surface shadow-xl">
-          {results.map((result) => (
+          {results.map((result, i) => (
             <button
-              key={(result as { id: string }).id}
+              key={`${(result as { id: string }).id}-${i}`}
               type="button"
               className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-surface-container-low transition-colors"
               onClick={() => handleSelect(result)}
