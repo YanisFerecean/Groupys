@@ -2,27 +2,24 @@ import { Ionicons } from '@expo/vector-icons'
 import { useCallback, useEffect, useState } from 'react'
 import {
   ActivityIndicator,
-  Image,
   ScrollView,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native'
-import { Link, router, useSegments } from 'expo-router'
+import { Link, router } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import { apiFetch, apiPost } from '@/lib/api'
 import { normalizeMediaUrl } from '@/lib/media'
-import { formatCount } from '@/lib/timeAgo'
 import { Colors } from '@/constants/colors'
 import FeedPostCard from '@/components/feed/FeedPostCard'
 import { useAuthToken } from '@/hooks/useAuthToken'
 import EditCommunityModal from '@/components/community/EditCommunityModal'
 import AuthImageWithToken from '@/components/ui/AuthImageWithToken'
-import { homeTabRootPath, publicProfilePath, resolveHomeTab } from '@/lib/profileRoutes'
+import { homeTabRootPath } from '@/lib/profileRoutes'
 import type { CommunityResDto } from '@/models/CommunityRes'
-import type { CommunityMemberResDto } from '@/models/CommunityMemberRes'
 import type { PostResDto } from '@/models/PostRes'
 
 const HERO_COLORS = [
@@ -47,13 +44,10 @@ interface Props {
 
 export default function CommunityDetailScreen({ communityId, postRoute, communityRoute }: Props) {
   const insets = useSafeAreaInsets()
-  const segments = useSegments()
   const useGlass = isLiquidGlassAvailable()
-  const currentTab = resolveHomeTab(segments)
   const { refreshToken } = useAuthToken()
 
   const [community, setCommunity] = useState<CommunityResDto | null>(null)
-  const [members, setMembers] = useState<CommunityMemberResDto[]>([])
   const [posts, setPosts] = useState<PostResDto[]>([])
   const [isMember, setIsMember] = useState(false)
   const [isOwner, setIsOwner] = useState(false)
@@ -65,16 +59,14 @@ export default function CommunityDetailScreen({ communityId, postRoute, communit
     const token = await refreshToken()
     if (!token) return
     try {
-      const [communityData, membershipData, membersData, postsData] = await Promise.all([
+      const [communityData, membershipData, postsData] = await Promise.all([
         apiFetch<CommunityResDto>(`/communities/${communityId}`, token),
         apiFetch<{ member: boolean; owner: boolean }>(`/communities/${communityId}/membership`, token),
-        apiFetch<CommunityMemberResDto[]>(`/communities/${communityId}/members`, token),
         apiFetch<PostResDto[]>(`/posts/community/${communityId}`, token),
       ])
       setCommunity(communityData)
       setIsMember(membershipData.member)
       setIsOwner(membershipData.owner)
-      setMembers(membersData)
       setPosts(postsData)
     } catch (err) {
       console.error('Failed to fetch community:', err)
@@ -244,20 +236,14 @@ export default function CommunityDetailScreen({ communityId, postRoute, communit
                   {community.description}
                 </Text>
               ) : null}
-              <View className="flex-row items-center gap-4 mt-3">
-                <View className="flex-row items-center gap-1">
-                  <Ionicons name="people" size={14} color="rgba(255,255,255,0.8)" />
-                  <Text className="text-white/80 text-xs font-semibold">
-                    {formatCount(community.memberCount)} members
-                  </Text>
-                </View>
-                {community.genre ? (
+              {community.genre ? (
+                <View className="flex-row items-center gap-4 mt-3">
                   <View className="flex-row items-center gap-1">
                     <Ionicons name="musical-notes" size={14} color="rgba(255,255,255,0.8)" />
                     <Text className="text-white/80 text-xs font-semibold">{community.genre}</Text>
                   </View>
-                ) : null}
-              </View>
+                </View>
+              ) : null}
             </View>
           </View>
           </View>
@@ -313,93 +299,10 @@ export default function CommunityDetailScreen({ communityId, postRoute, communit
           </View>
         </View>
 
-        {/* Members */}
-        {members.length > 0 ? (
-          <View className="pt-4">
-            <View className="px-5">
-              <Text className="text-on-surface font-bold text-base mb-3">
-                Members ({members.length})
-              </Text>
-            </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }}
-            >
-              {members.slice(0, 15).map((member) => (
-                useGlass ? (
-                  <GlassView
-                    key={member.id}
-                    isInteractive
-                    style={{ width: 64, borderRadius: 16, overflow: 'hidden' }}
-                  >
-                    <TouchableOpacity
-                      className="items-center px-1 py-2"
-                      activeOpacity={0.8}
-                      onPress={() => router.push(publicProfilePath(member.userId, currentTab) as any)}
-                    >
-                      {member.profileImage ? (
-                        <Image
-                          source={{ uri: member.profileImage }}
-                          className="w-12 h-12 rounded-full"
-                          resizeMode="cover"
-                        />
-                      ) : (
-                        <View className="w-12 h-12 rounded-full bg-surface-container-high items-center justify-center">
-                          <Ionicons name="person" size={20} color="#999" />
-                        </View>
-                      )}
-                      <Text className="text-xs text-on-surface-variant mt-1 text-center" numberOfLines={1}>
-                        {member.displayName || member.username}
-                      </Text>
-                      {member.role === 'owner' ? (
-                        <View className="bg-primary/15 px-2 py-0.5 rounded-full mt-0.5">
-                          <Text className="text-primary text-[10px] font-bold">OWNER</Text>
-                        </View>
-                      ) : null}
-                    </TouchableOpacity>
-                  </GlassView>
-                ) : (
-                  <TouchableOpacity
-                    key={member.id}
-                    className="items-center"
-                    style={{ width: 64 }}
-                    activeOpacity={0.8}
-                    onPress={() => router.push(publicProfilePath(member.userId, currentTab) as any)}
-                  >
-                    {member.profileImage ? (
-                      <Image
-                        source={{ uri: member.profileImage }}
-                        className="w-12 h-12 rounded-full"
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <View className="w-12 h-12 rounded-full bg-surface-container-high items-center justify-center">
-                        <Ionicons name="person" size={20} color="#999" />
-                      </View>
-                    )}
-                    <Text className="text-xs text-on-surface-variant mt-1 text-center" numberOfLines={1}>
-                      {member.displayName || member.username}
-                    </Text>
-                    {member.role === 'owner' ? (
-                      <View className="bg-primary/15 px-2 py-0.5 rounded-full mt-0.5">
-                        <Text className="text-primary text-[10px] font-bold">OWNER</Text>
-                      </View>
-                    ) : null}
-                  </TouchableOpacity>
-                )
-              ))}
-            </ScrollView>
-          </View>
-        ) : null}
-
         {/* Posts */}
-        <View className="px-5 pt-6">
-          <Text className="text-on-surface font-bold text-base mb-3">
-            Posts ({posts.length})
-          </Text>
+        <View className="pt-6">
           {posts.length === 0 ? (
-            <View className="items-center py-8">
+            <View className="items-center py-8 px-5">
               <Ionicons name="newspaper-outline" size={36} color={Colors.onSurfaceVariant} />
               <Text className="text-on-surface-variant text-sm mt-2">No posts yet</Text>
               {isMember ? (

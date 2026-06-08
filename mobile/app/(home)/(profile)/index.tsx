@@ -10,7 +10,8 @@ import SwipeableTabScreen from '@/components/navigation/SwipeableTabScreen'
 import { Colors } from '@/constants/colors'
 import { useProfileCustomization } from '@/hooks/useProfileCustomization'
 import { useTopMusic } from '@/hooks/useTopMusic'
-import { apiFetch, fetchMyPosts, fetchMyAlbumRatings } from '@/lib/api'
+import { apiFetch, fetchMyPosts, fetchMyAlbumRatings, fetchMyFriends } from '@/lib/api'
+import { shareProfile } from '@/lib/shareLinks'
 import type { CommunityResDto } from '@/models/CommunityRes'
 import type { PostResDto } from '@/models/PostRes'
 import type { TopAlbum } from '@/models/ProfileCustomization'
@@ -179,6 +180,7 @@ export default function ProfileScreen() {
   // My posts
   const [myPosts, setMyPosts] = useState<PostResDto[]>([])
   const [joinedCommunitiesCount, setJoinedCommunitiesCount] = useState(0)
+  const [friendsCount, setFriendsCount] = useState(0)
   const [loadingPosts, setLoadingPosts] = useState(true)
   const [postSearch, setPostSearch] = useState('')
   const [postMediaFilter, setPostMediaFilter] = useState<'all' | 'photo' | 'video'>('all')
@@ -232,6 +234,18 @@ export default function ProfileScreen() {
         }
       }
       void loadRatingScores()
+
+      const loadFriendsCount = async () => {
+        try {
+          const token = await getTokenRef.current()
+          if (!token) return
+          const friends = await fetchMyFriends(token)
+          setFriendsCount(friends.filter((f) => f.status === 'ACCEPTED').length)
+        } catch {
+          // non-critical
+        }
+      }
+      void loadFriendsCount()
     }, [isLoaded, refreshProfile])
   )
 
@@ -616,6 +630,18 @@ export default function ProfileScreen() {
           <View className="flex-row items-center gap-3">
             {isLiquidGlassAvailable() ? (
               <>
+                {username ? (
+                  <GlassView isInteractive style={{ borderRadius: 50 }}>
+                    <TouchableOpacity
+                      accessibilityLabel="Share profile"
+                      onPress={() => void shareProfile({ username, displayName })}
+                      style={{ padding: 12 }}
+                      activeOpacity={0.7}
+                    >
+                      <SymbolView name="square.and.arrow.up" size={20} tintColor={Colors.primary} />
+                    </TouchableOpacity>
+                  </GlassView>
+                ) : null}
                 <GlassView isInteractive style={{ borderRadius: 50 }}>
                   <TouchableOpacity
                     onPress={openEditProfileSheet}
@@ -637,6 +663,15 @@ export default function ProfileScreen() {
               </>
             ) : (
               <>
+                {username ? (
+                  <TouchableOpacity
+                    accessibilityLabel="Share profile"
+                    onPress={() => void shareProfile({ username, displayName })}
+                    className="w-11 h-11 rounded-full bg-surface-container items-center justify-center"
+                  >
+                    <SymbolView name="square.and.arrow.up" size={20} tintColor={Colors.primary} />
+                  </TouchableOpacity>
+                ) : null}
                 <TouchableOpacity
                   onPress={openEditProfileSheet}
                   className="w-11 h-11 rounded-full bg-surface-container items-center justify-center"
@@ -678,6 +713,8 @@ export default function ProfileScreen() {
                   postsCount={myPosts.length}
                   ratedAlbumsCount={Object.keys(myRatingScores).length}
                   onRatedAlbumsPress={() => router.push('/(home)/(profile)/rated-albums')}
+                  friendsCount={friendsCount}
+                  onFriendsPress={() => router.push('/(home)/(profile)/friends')}
                   onEditPress={openEditProfileSheet}
                   onAvatarPress={handleAvatarPress}
                   isUploadingAvatar={isUploadingAvatar}

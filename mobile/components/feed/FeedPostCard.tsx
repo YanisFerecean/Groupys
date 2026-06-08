@@ -21,6 +21,7 @@ import { apiPost } from '@/lib/api'
 import { lexicalContentToMarkdown, lexicalContentToPlainText } from '@/lib/lexicalContent'
 import { normalizeMediaUrl } from '@/lib/media'
 import { publicProfilePath, resolveHomeTab } from '@/lib/profileRoutes'
+import { sharePost } from '@/lib/shareLinks'
 import { timeAgo } from '@/lib/timeAgo'
 import { Colors } from '@/constants/colors'
 import AuthImageWithToken from '@/components/ui/AuthImageWithToken'
@@ -707,6 +708,8 @@ export default function FeedPostCard({
         {useGlass ? (
           <GlassView isInteractive style={{ borderRadius: 999, overflow: 'hidden' }}>
             <TouchableOpacity
+              accessibilityLabel="Share post"
+              onPress={() => void sharePost({ postId: post.id, title: post.title, authorName })}
               className="h-9 w-9 items-center justify-center rounded-full"
               activeOpacity={0.7}
             >
@@ -715,6 +718,8 @@ export default function FeedPostCard({
           </GlassView>
         ) : (
           <TouchableOpacity
+            accessibilityLabel="Share post"
+            onPress={() => void sharePost({ postId: post.id, title: post.title, authorName })}
             className="h-9 w-9 items-center justify-center rounded-full bg-surface-container-low/50"
             activeOpacity={0.7}
           >

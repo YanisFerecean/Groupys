@@ -1,6 +1,6 @@
 import { useAuth } from '@clerk/expo'
 import { useRouter } from 'expo-router'
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, type ReactNode } from 'react'
 import { Platform } from 'react-native'
 import { registerDeviceToken } from '@/lib/api'
 import {
@@ -30,6 +30,27 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const router = useRouter()
   const show = useNotificationBannerStore((s) => s.show)
   const registeredTokenRef = useRef<string | null>(null)
+  // Dedup so a single tap isn't handled by both the runtime listener and the
+  // cold-start (getLastNotificationResponseAsync) path.
+  const handledResponseRef = useRef<string | null>(null)
+
+  // Deep-link from a notification the user tapped. Safe to call from both the live
+  // response listener and the cold-start path; the ref guards against double navigation.
+  const handleNotificationResponse = useCallback(
+    (response: { notification: { request: { identifier?: string; content: { data?: unknown } } } } | null) => {
+      if (!response) return
+      const request = response.notification.request
+      const id = request.identifier ?? null
+      if (id && handledResponseRef.current === id) return
+      handledResponseRef.current = id
+      const data = request.content.data as Record<string, unknown> | undefined
+      const deeplink = readString(data, 'deeplink')
+      if (deeplink) {
+        router.push(deeplink as never)
+      }
+    },
+    [router],
+  )
 
   // Register the push token once the user is authenticated.
   useEffect(() => {
@@ -72,19 +93,27 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       })
     })
 
-    const responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data as Record<string, unknown> | undefined
-      const deeplink = readString(data, 'deeplink')
-      if (deeplink) {
-        router.push(deeplink as never)
-      }
-    })
+    const responseSub = Notifications.addNotificationResponseReceivedListener(handleNotificationResponse)
 
     return () => {
       receivedSub.remove()
       responseSub.remove()
     }
-  }, [router, show])
+  }, [handleNotificationResponse, show])
+
+  // Cold start: when the app was launched by tapping a notification (killed state), the
+  // response listener above never fires — pull the launching response and deep-link once.
+  useEffect(() => {
+    const Notifications = getNotificationsModule()
+    if (!Notifications || !isSignedIn) return
+    let cancelled = false
+    void Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (!cancelled) handleNotificationResponse(response)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [handleNotificationResponse, isSignedIn])
 
   return (
     <>

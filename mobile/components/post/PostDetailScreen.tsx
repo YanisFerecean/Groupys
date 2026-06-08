@@ -31,6 +31,7 @@ import { apiDelete, apiFetch, apiPost } from '@/lib/api'
 import { lexicalContentToMarkdown } from '@/lib/lexicalContent'
 import { normalizeMediaUrl } from '@/lib/media'
 import { communityDetailPath, publicProfilePath, resolveHomeTab } from '@/lib/profileRoutes'
+import { sharePost } from '@/lib/shareLinks'
 import { timeAgo } from '@/lib/timeAgo'
 import { Colors } from '@/constants/colors'
 import AuthImageWithToken from '@/components/ui/AuthImageWithToken'
@@ -491,81 +492,39 @@ export default function PostDetailScreen({ postId }: Props) {
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
       >
         {post ? (
-          <View className="mb-5">
+          <View className="mb-5" style={{ paddingTop: insets.top + 8 }}>
             <TouchableOpacity
-              activeOpacity={0.92}
+              activeOpacity={0.85}
               onPress={() => router.push(communityDetailPath(post.communityId, currentTab) as never)}
+              className="mx-5 flex-row items-center gap-3 rounded-2xl bg-surface-container-low px-4 py-3"
             >
-              <View
-                style={{ backgroundColor: communityColor, height: 280, paddingTop: insets.top + 56 }}
-                className="justify-end"
-              >
-                {community?.bannerUrl ? (
-                  <AuthImageWithToken
-                    uri={normalizeMediaUrl(community.bannerUrl)!}
-                    className="absolute"
-                    style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
-                  />
-                ) : null}
-                <View className="absolute inset-0 bg-black/35" />
-
-                <View className="px-5 pb-5 flex-row items-end gap-3">
-                  {community?.iconType === 'EMOJI' && community.iconEmoji ? (
-                    <View className="mb-1 h-16 w-16 items-center justify-center rounded-2xl bg-white/20">
-                      <Text className="text-3xl">{community.iconEmoji}</Text>
-                    </View>
-                  ) : community?.iconUrl ? (
-                    <AuthImageWithToken
-                      uri={normalizeMediaUrl(community.iconUrl)!}
-                      style={{ width: 64, height: 64, borderRadius: 16, marginBottom: 4 }}
-                    />
-                  ) : (
-                    <View className="mb-1 h-16 w-16 items-center justify-center rounded-2xl bg-white/20">
-                      <Ionicons name="people" size={26} color="#fff" />
-                    </View>
-                  )}
-
-                  <View className="flex-1">
-                    <Text className="text-3xl font-extrabold tracking-tight text-white" numberOfLines={2}>
-                      {community?.name ?? post.communityName}
-                    </Text>
-                    {community?.description ? (
-                      <Text className="mt-1 text-sm text-white/80" numberOfLines={2}>
-                        {community.description}
-                      </Text>
-                    ) : (
-                      <Text className="mt-1 text-sm text-white/80" numberOfLines={1}>
-                        Open community
-                      </Text>
-                    )}
-
-                    <View className="mt-3 flex-row flex-wrap items-center gap-4">
-                      {community ? (
-                        <View className="flex-row items-center gap-1">
-                          <Ionicons name="people" size={14} color="rgba(255,255,255,0.82)" />
-                          <Text className="text-xs font-semibold text-white/80">
-                            {community.memberCount} Members
-                          </Text>
-                        </View>
-                      ) : null}
-                      {community?.genre ? (
-                        <View className="flex-row items-center gap-1">
-                          <Ionicons name="musical-notes" size={14} color="rgba(255,255,255,0.82)" />
-                          <Text className="text-xs font-semibold text-white/80">{community.genre}</Text>
-                        </View>
-                      ) : null}
-                      {community?.country ? (
-                        <View className="flex-row items-center gap-1">
-                          <Ionicons name="location-outline" size={14} color="rgba(255,255,255,0.82)" />
-                          <Text className="text-xs font-semibold text-white/80">{community.country}</Text>
-                        </View>
-                      ) : null}
-                    </View>
-                  </View>
+              {community?.iconType === 'EMOJI' && community.iconEmoji ? (
+                <View
+                  className="items-center justify-center rounded-xl"
+                  style={{ width: 44, height: 44, backgroundColor: communityColor }}
+                >
+                  <Text className="text-2xl">{community.iconEmoji}</Text>
                 </View>
-              </View>
-            </TouchableOpacity>
+              ) : community?.iconUrl ? (
+                <AuthImageWithToken
+                  uri={normalizeMediaUrl(community.iconUrl)!}
+                  style={{ width: 44, height: 44, borderRadius: 12 }}
+                />
+              ) : (
+                <View
+                  className="items-center justify-center rounded-xl"
+                  style={{ width: 44, height: 44, backgroundColor: communityColor }}
+                >
+                  <Ionicons name="people" size={22} color="#fff" />
+                </View>
+              )}
 
+              <Text className="flex-1 text-lg font-extrabold tracking-tight text-on-surface" numberOfLines={1}>
+                {community?.name ?? post.communityName}
+              </Text>
+
+              <Ionicons name="chevron-forward" size={18} color={Colors.onSurfaceVariant} />
+            </TouchableOpacity>
           </View>
         ) : null}
 
@@ -597,56 +556,73 @@ export default function PostDetailScreen({ postId }: Props) {
               </View>
             </TouchableOpacity>
 
-            {isAuthor && (
-              useGlass ? (
-                <GlassView isInteractive style={{ borderRadius: 999, overflow: 'hidden' }}>
-                  <TouchableOpacity
-                    onPress={handleDelete}
-                    disabled={deleting}
-                    className="h-10 w-10 items-center justify-center"
-                    activeOpacity={0.7}
-                  >
-                    {deleting ? (
-                      <ActivityIndicator size="small" color="#dc2626" />
-                    ) : (
-                      <SymbolView name="trash" size={16} tintColor="#dc2626" />
-                    )}
-                  </TouchableOpacity>
-                </GlassView>
-              ) : (
-                <TouchableOpacity
-                  onPress={handleDelete}
-                  disabled={deleting}
-                  className="h-10 w-10 items-center justify-center rounded-full bg-surface-container-low"
-                  activeOpacity={0.7}
-                >
-                  {deleting ? (
-                    <ActivityIndicator size="small" color="#dc2626" />
-                  ) : (
-                    <Ionicons name="trash-outline" size={20} color="#dc2626" />
-                  )}
-                </TouchableOpacity>
-              )
-            )}
-
-            {!isAuthor && (
+            <View className="flex-row items-center gap-2">
               <TouchableOpacity
-                accessibilityLabel="Post options"
+                accessibilityLabel="Share post"
                 onPress={() =>
-                  showModerationMenu({
-                    targetType: 'POST',
-                    targetId: postId,
-                    userId: post.authorId,
-                    displayName: post.authorDisplayName || post.authorUsername,
-                    onBlocked: () => router.back(),
+                  void sharePost({
+                    postId,
+                    title: post.title,
+                    authorName: post.authorDisplayName || post.authorUsername,
                   })
                 }
                 className="h-10 w-10 items-center justify-center rounded-full bg-surface-container-low"
                 activeOpacity={0.7}
               >
-                <Ionicons name="ellipsis-horizontal" size={20} color={Colors.onSurfaceVariant} />
+                <Ionicons name="share-outline" size={20} color={Colors.onSurfaceVariant} />
               </TouchableOpacity>
-            )}
+
+              {isAuthor && (
+                useGlass ? (
+                  <GlassView isInteractive style={{ borderRadius: 999, overflow: 'hidden' }}>
+                    <TouchableOpacity
+                      onPress={handleDelete}
+                      disabled={deleting}
+                      className="h-10 w-10 items-center justify-center"
+                      activeOpacity={0.7}
+                    >
+                      {deleting ? (
+                        <ActivityIndicator size="small" color="#dc2626" />
+                      ) : (
+                        <SymbolView name="trash" size={16} tintColor="#dc2626" />
+                      )}
+                    </TouchableOpacity>
+                  </GlassView>
+                ) : (
+                  <TouchableOpacity
+                    onPress={handleDelete}
+                    disabled={deleting}
+                    className="h-10 w-10 items-center justify-center rounded-full bg-surface-container-low"
+                    activeOpacity={0.7}
+                  >
+                    {deleting ? (
+                      <ActivityIndicator size="small" color="#dc2626" />
+                    ) : (
+                      <Ionicons name="trash-outline" size={20} color="#dc2626" />
+                    )}
+                  </TouchableOpacity>
+                )
+              )}
+
+              {!isAuthor && (
+                <TouchableOpacity
+                  accessibilityLabel="Post options"
+                  onPress={() =>
+                    showModerationMenu({
+                      targetType: 'POST',
+                      targetId: postId,
+                      userId: post.authorId,
+                      displayName: post.authorDisplayName || post.authorUsername,
+                      onBlocked: () => router.back(),
+                    })
+                  }
+                  className="h-10 w-10 items-center justify-center rounded-full bg-surface-container-low"
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="ellipsis-horizontal" size={20} color={Colors.onSurfaceVariant} />
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
 
           {post.title?.trim() ? (

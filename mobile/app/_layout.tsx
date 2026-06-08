@@ -1,5 +1,6 @@
 import '@/global.css'
 import { useEffect } from 'react'
+import { Appearance } from 'react-native'
 import { ClerkProvider } from '@clerk/expo'
 import { tokenCache } from '@clerk/expo/token-cache'
 import { Slot } from 'expo-router'
@@ -12,6 +13,11 @@ import ErrorBoundary from '@/components/ErrorBoundary'
 import { useFonts, DMSans_400Regular, DMSans_500Medium, DMSans_700Bold } from '@expo-google-fonts/dm-sans'
 
 SplashScreen.preventAutoHideAsync()
+
+// The app ships light-only. Pin the native interface style at runtime so dynamic
+// surfaces (Liquid Glass / GlassView, system-material BlurViews, presented modals)
+// don't follow the device's dark-mode setting.
+Appearance.setColorScheme('light')
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!
 

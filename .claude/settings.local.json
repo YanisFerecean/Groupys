@@ -78,7 +78,17 @@
       "Bash(grep -r \"nginx\\\\|reverse.proxy\\\\|proxy_pass\" /Users/kyaw/Desktop/groupys-web-app --include=\"*.md\" --include=\"*.yaml\" --include=\"*.yml\" --include=\"*.conf\" ! -path \"*/node_modules/*\" ! -path \"*/.claude/worktrees/*\")",
       "Bash(grep -r \"localhost\\\\|127.0.0.1\\\\|proxy\\\\|nginx\\\\|reverse\" /Users/kyaw/Desktop/groupys-web-app --include=\"*.md\" ! -path \"*/node_modules/*\" ! -path \"*/.claude/worktrees/*\")",
       "Bash(grep -r \"APP_CORS_ORIGINS\\\\|groupys.app\\\\|api-\" /Users/kyaw/Desktop/groupys-web-app --include=\"*.ts\" --include=\"*.tsx\" --include=\"*.java\" --include=\"*.yml\" --include=\"*.yaml\" --include=\"*.md\" ! -path \"*/node_modules/*\" ! -path \"*/.claude/worktrees/*\")",
-      "Bash(echo \"=== deploy-web-prod build-args ===\" && grep -n \"build-args\\\\|NEXT_PUBLIC\\\\|APP_ENV\\\\|secrets:\\\\|args:\" .github/workflows/deploy-web-prod.yml | head -40 && echo \"=== compose groupys-web env ===\" && sed -n '/groupys-web:/,/groupys-api:/p' docker/docker-compose.prod.yaml)"
+      "Bash(echo \"=== deploy-web-prod build-args ===\" && grep -n \"build-args\\\\|NEXT_PUBLIC\\\\|APP_ENV\\\\|secrets:\\\\|args:\" .github/workflows/deploy-web-prod.yml | head -40 && echo \"=== compose groupys-web env ===\" && sed -n '/groupys-web:/,/groupys-api:/p' docker/docker-compose.prod.yaml)",
+      "Bash(git check-ignore *)",
+      "Bash(echo \"exit=$? \\(1=not ignored, good\\)\")",
+      "Bash(git add *)",
+      "Bash(git commit -m 'fix\\(ci\\): commit maven wrapper properties *)",
+      "Bash(docker run *)",
+      "Bash(docker rm *)",
+      "Bash(docker exec *)",
+      "Bash(gh secret *)",
+      "Bash(python3 -c \"import yaml,sys; yaml.safe_load\\(open\\('.github/workflows/deploy-backend-prod.yml'\\)\\); print\\('YAML OK'\\)\")",
+      "Bash(git commit -m 'fix\\(ci\\): guard minio creds and dump container logs on deploy failure *)"
     ]
   }
 }

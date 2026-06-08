@@ -59,6 +59,8 @@ export interface ProfileHeaderProps {
   followersCount?: number
   ratedAlbumsCount?: number
   onRatedAlbumsPress?: () => void
+  friendsCount?: number
+  onFriendsPress?: () => void
   onEditPress: () => void
   onAvatarPress?: () => void
   isUploadingAvatar?: boolean
@@ -74,6 +76,8 @@ export default function ProfileHeader({
   followersCount = 0,
   ratedAlbumsCount,
   onRatedAlbumsPress,
+  friendsCount,
+  onFriendsPress,
   onEditPress,
   onAvatarPress,
   isUploadingAvatar = false,
@@ -238,7 +242,6 @@ export default function ProfileHeader({
             <Text className="text-[15px] text-on-surface-variant font-medium">
               Joined {joinedDateFormatted}
             </Text>
-            <Ionicons name="chevron-forward" size={14} color={Colors.onSurfaceVariant} />
           </View>
         </View>
 
@@ -301,6 +304,53 @@ export default function ProfileHeader({
               </TouchableOpacity>
             </>
           )}
+
+          {typeof friendsCount === 'number' ? (
+            useGlass ? (
+              <GlassView isInteractive style={{ borderRadius: 999 }}>
+                <TouchableOpacity
+                  onPress={onFriendsPress}
+                  disabled={!onFriendsPress}
+                  activeOpacity={0.75}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    borderRadius: 999,
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    opacity: onFriendsPress ? 1 : 0.8,
+                  }}
+                >
+                  <Text className="text-[16px] font-bold text-on-surface">{friendsCount}</Text>
+                  <Text className="text-[16px] text-on-surface-variant">Friends</Text>
+                  <Ionicons name="chevron-forward" size={14} color={Colors.onSurfaceVariant} />
+                </TouchableOpacity>
+              </GlassView>
+            ) : (
+              <TouchableOpacity
+                onPress={onFriendsPress}
+                disabled={!onFriendsPress}
+                activeOpacity={0.75}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: Colors.outlineVariant,
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  backgroundColor: Colors.surfaceContainerLow,
+                  opacity: onFriendsPress ? 1 : 0.8,
+                }}
+              >
+                <Text className="text-[16px] font-bold text-on-surface">{friendsCount}</Text>
+                <Text className="text-[16px] text-on-surface-variant">Friends</Text>
+                <Ionicons name="chevron-forward" size={14} color={Colors.onSurfaceVariant} />
+              </TouchableOpacity>
+            )
+          ) : null}
         </View>
       </View>
     </View>

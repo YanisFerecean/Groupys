@@ -623,7 +623,9 @@ export async function createPost(
 }
 
 export async function fetchMyPosts(token: string): Promise<any[]> {
-  return apiFetch('/posts/mine', token)
+  // Per-user, frequently-changing data — must not be served from a shared/HTTP cache
+  // (a stale empty list is why own posts didn't show on prod). Matches fetchPostsByAuthor.
+  return apiFetch('/posts/mine', token, false)
 }
 
 export async function fetchPostsByAuthor(
@@ -1103,4 +1105,19 @@ export async function deleteAlbumRating(
   token: string | null,
 ): Promise<void> {
   return apiDelete(`/album-ratings/${encodeURIComponent(ratingId)}`, token)
+}
+
+// ── Friends ─────────────────────────────────────────────────────────────────
+
+export interface FriendRes {
+  friendshipId: string
+  userId: string
+  username: string
+  displayName: string | null
+  profileImage: string | null
+  status: string // "PENDING" | "ACCEPTED"
+}
+
+export async function fetchMyFriends(token: string | null): Promise<FriendRes[]> {
+  return apiFetch<FriendRes[]>('/friends', token, false)
 }

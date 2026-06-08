@@ -3,8 +3,14 @@
     "apps": [],
     "details": [
       {
-        "appID": "TEAM_ID.groupys.app",
-        "paths": ["/auth/*", "/invite/*"]
+        "appID": "4DNLHLX3RU",
+        "paths": [
+          "/auth/*",
+          "/invite/*",
+          "/profile/*",
+          "/discover/user/*",
+          "/discover/post/*"
+        ]
       }
     ]
   }

@@ -1,13 +1,10 @@
-import { BlurView } from 'expo-blur'
-import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import { Image } from 'expo-image'
-import { useRouter } from 'expo-router'
+import { useRouter, useSegments } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import {
   Animated,
   Easing,
   PanResponder,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -20,21 +17,27 @@ import { useNotificationBannerStore } from '@/stores/useNotificationBannerStore'
 const AUTO_DISMISS_MS = 4200
 
 /**
- * Minimal, on-brand in-app notification banner. Renders the top-of-queue notification with a
- * liquid-glass surface, animates in from the top, auto-dismisses, supports swipe-up to dismiss,
- * and deep-links on tap. Shown only while the app is foregrounded.
+ * Instagram-style in-app notification banner. Renders the top-of-queue notification on a solid
+ * (non-transparent) white card with a soft drop shadow, animates in from the top, auto-dismisses,
+ * supports swipe-up to dismiss, and deep-links on tap. Shown only while the app is foregrounded.
  */
 export default function InAppNotificationBanner() {
   const insets = useSafeAreaInsets()
   const router = useRouter()
+  const segments = useSegments()
   const current = useNotificationBannerStore((s) => s.current)
   const dismiss = useNotificationBannerStore((s) => s.dismiss)
+
+  // Suppress the banner while the user is inside a chat conversation (Instagram-style):
+  // route is .../chat/[conversationId].
+  const isOnChatScreen = useMemo(() => {
+    const idx = segments.lastIndexOf('chat')
+    return idx !== -1 && segments[idx + 1] === '[conversationId]'
+  }, [segments])
 
   const translateY = useRef(new Animated.Value(-160)).current
   const opacity = useRef(new Animated.Value(0)).current
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const canUseLiquidGlass = Platform.OS === 'ios' && isLiquidGlassAvailable()
 
   const animateOut = useCallback(
     (after?: () => void) => {
@@ -90,6 +93,12 @@ export default function InAppNotificationBanner() {
   useEffect(() => {
     if (!current) return
 
+    // On a chat conversation screen: drop the notification without showing the banner.
+    if (isOnChatScreen) {
+      dismiss()
+      return
+    }
+
     translateY.setValue(-160)
     opacity.setValue(0)
     Animated.parallel([
@@ -110,9 +119,9 @@ export default function InAppNotificationBanner() {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current)
     }
-  }, [current, handleDismiss, opacity, translateY])
+  }, [current, dismiss, isOnChatScreen, handleDismiss, opacity, translateY])
 
-  if (!current) return null
+  if (!current || isOnChatScreen) return null
 
   const handlePress = () => {
     const target = current.deeplink
@@ -152,13 +161,7 @@ export default function InAppNotificationBanner() {
       style={[styles.host, { top: insets.top + 6, opacity, transform: [{ translateY }] }]}
       {...panResponder.panHandlers}
     >
-      {canUseLiquidGlass ? (
-        <GlassView style={styles.surface}>{content}</GlassView>
-      ) : (
-        <BlurView tint="systemMaterial" intensity={88} style={[styles.surface, styles.surfaceFallback]}>
-          {content}
-        </BlurView>
-      )}
+      <View style={styles.surface}>{content}</View>
     </Animated.View>
   )
 }
@@ -171,13 +174,17 @@ const styles = StyleSheet.create({
     zIndex: 1000,
   },
   surface: {
-    borderRadius: 22,
-    overflow: 'hidden',
+    borderRadius: 18,
     borderCurve: 'continuous',
-  },
-  surfaceFallback: {
+    backgroundColor: Colors.surfaceContainerLowest,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0, 0, 0, 0.08)',
+    borderColor: 'rgba(0, 0, 0, 0.06)',
+    // Soft Instagram-style drop shadow (iOS) + elevation (Android)
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
+    elevation: 8,
   },
   row: {
     flexDirection: 'row',
@@ -187,9 +194,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: Colors.surfaceContainerHigh,
   },
   avatarFallback: {
@@ -206,13 +213,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
     color: Colors.onSurface,
+    letterSpacing: -0.2,
   },
   body: {
-    marginTop: 2,
+    marginTop: 1,
     fontSize: 13,
+    lineHeight: 17,
     color: Colors.onSurfaceVariant,
   },
 })

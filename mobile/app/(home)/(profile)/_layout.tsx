@@ -6,6 +6,7 @@ export default function ProfileLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="notifications" />
       <Stack.Screen name="rated-albums" />
+      <Stack.Screen name="friends" />
       <Stack.Screen name="edit-profile" options={{ presentation: 'formSheet', sheetGrabberVisible: true, sheetAllowedDetents: [0.75, 0.95], contentStyle: { backgroundColor: 'transparent' } }} />
       <Stack.Screen name="rating" options={{ presentation: 'formSheet', sheetGrabberVisible: true, sheetAllowedDetents: [0.75], contentStyle: { backgroundColor: 'transparent' } }} />
       <Stack.Screen name="artist-communities" options={{ presentation: 'formSheet', sheetGrabberVisible: true, sheetAllowedDetents: [0.75], contentStyle: { backgroundColor: 'transparent' } }} />

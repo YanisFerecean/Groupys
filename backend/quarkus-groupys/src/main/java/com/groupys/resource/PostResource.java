@@ -105,6 +105,15 @@ public class PostResource {
         return postService.getById(id, jwt.getSubject());
     }
 
+    /** Public, unauthenticated minimal post metadata for link previews (OpenGraph). */
+    @GET
+    @Path("/{id}/meta")
+    @PermitAll
+    @SecurityRequirement(name = "")
+    public com.groupys.dto.PostMetaDto getMeta(@PathParam("id") UUID id) {
+        return postService.getPublicMeta(id);
+    }
+
     @GET
     @Path("/community/{communityId}")
     public List<PostResDto> getByCommunity(

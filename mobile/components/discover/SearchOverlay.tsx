@@ -261,6 +261,7 @@ export default function SearchOverlay({ onClose, initialQuery = '' }: SearchOver
   const [playingId, setPlayingId] = useState<number | null>(null)
   const [loadingId, setLoadingId] = useState<number | null>(null)
   const soundRef = useRef<AudioPlayer | null>(null)
+  const isClosingRef = useRef(false)
   const abortRef = useRef<AbortController | null>(null)
 
   const fadeAnim = useRef(new Animated.Value(0)).current
@@ -448,12 +449,20 @@ export default function SearchOverlay({ onClose, initialQuery = '' }: SearchOver
     })
   }, [categoryFadeAnim, displayedResults, displayedResultsKey, results, resultsKey])
 
-  // Stop sound on unmount
+  // Stop sound on unmount (e.g. when the overlay is dismissed via the header X,
+  // which clears the route param and unmounts without calling handleClose).
+  // Pause before remove — releasing alone can leave iOS audio playing.
   useEffect(() => {
-    return () => { soundRef.current?.remove() }
+    return () => {
+      isClosingRef.current = true
+      soundRef.current?.pause()
+      soundRef.current?.remove()
+      soundRef.current = null
+    }
   }, [])
 
   const handleClose = useCallback(() => {
+    isClosingRef.current = true
     soundRef.current?.pause()
     soundRef.current?.remove()
     soundRef.current = null
@@ -480,6 +489,13 @@ export default function SearchOverlay({ onClose, initialQuery = '' }: SearchOver
     try {
       await setAudioModeAsync({ playsInSilentMode: true })
       const player = createAudioPlayer({ uri: track.preview })
+      // The overlay may have been dismissed while we awaited above — if so,
+      // tear the freshly created player down instead of letting it play orphaned.
+      if (isClosingRef.current) {
+        player.pause()
+        player.remove()
+        return
+      }
       player.addListener('playbackStatusUpdate', (status) => {
         if (status.didJustFinish) {
           setPlayingId(null)

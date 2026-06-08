@@ -205,6 +205,21 @@ export default function ChatConversationScreen() {
     ))?.id ?? null
   }, [messages, otherParticipant?.lastReadAt, user?.username])
 
+  // Group consecutive messages from the same sender within the same minute: only the
+  // newest message of a group (lowest index in this inverted list) shows the time/receipt.
+  const showTimeForIndex = useCallback(
+    (index: number) => {
+      const message = messages[index]
+      if (!message) return true
+      const newer = messages[index - 1] // chronologically newer neighbor (inverted list)
+      if (!newer) return true
+      if (newer.senderUsername !== message.senderUsername) return true
+      const bucket = (ts: string) => Math.floor(new Date(ts).getTime() / 60000)
+      return bucket(newer.createdAt) !== bucket(message.createdAt)
+    },
+    [messages],
+  )
+
   const encryptedActive = cryptoReady && hasPartnerKey
   const isPendingIncoming = conversation?.requestStatus === 'PENDING_INCOMING'
   const isPendingOutgoing = conversation?.requestStatus === 'PENDING_OUTGOING'
@@ -440,11 +455,12 @@ export default function ChatConversationScreen() {
               paddingTop: 12,
               paddingBottom: 12,
             }}
-            renderItem={({ item }) => (
+            renderItem={({ item, index }) => (
               <MessageBubble
                 message={item}
                 isMine={item.senderUsername === user?.username}
                 showSeen={item.id === lastSeenMessageId}
+                showTime={showTimeForIndex(index)}
                 onRetry={item.status === 'failed' && item.tempId
                   ? () => {
                       void resendMessage(item.tempId!, item.content)

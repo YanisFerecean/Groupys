@@ -27,6 +27,7 @@ import { ActivityIndicator, Animated, ScrollView, Text, TouchableOpacity, View }
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useUser } from '@clerk/expo'
 import { communityBasePath, homeTabRootPath, postBasePath, resolveHomeTab } from '@/lib/profileRoutes'
+import { shareProfile } from '@/lib/shareLinks'
 
 const DEFAULT_WIDGET_ORDER = ['topAlbums', 'currentlyListening', 'topSongs', 'topArtists'] as const
 type ProfileContentTab = 'widgets' | 'posts'
@@ -426,8 +427,31 @@ export default function PublicProfileScreen({ userId }: PublicProfileScreenProps
           right: 20,
           zIndex: 10,
           paddingTop: insets.top + 8,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 8,
         }}
       >
+        {useGlass ? (
+          <GlassView isInteractive style={{ borderRadius: 999, overflow: 'hidden' }}>
+            <TouchableOpacity
+              accessibilityLabel="Share profile"
+              onPress={() => void shareProfile({ username: backendUser.username, displayName })}
+              className="h-10 w-10 items-center justify-center rounded-full"
+            >
+              <Ionicons name="share-outline" size={20} color={Colors.onSurface} />
+            </TouchableOpacity>
+          </GlassView>
+        ) : (
+          <TouchableOpacity
+            accessibilityLabel="Share profile"
+            onPress={() => void shareProfile({ username: backendUser.username, displayName })}
+            className="h-10 w-10 items-center justify-center rounded-full bg-surface-container"
+          >
+            <Ionicons name="share-outline" size={20} color={Colors.onSurface} />
+          </TouchableOpacity>
+        )}
+
         {useGlass ? (
           <GlassView isInteractive style={{ borderRadius: 999, overflow: 'hidden' }}>
             <TouchableOpacity

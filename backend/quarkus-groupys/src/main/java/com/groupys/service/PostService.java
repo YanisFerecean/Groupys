@@ -218,6 +218,25 @@ public class PostService {
         return toDtoList(List.of(post), user).get(0);
     }
 
+    /** Minimal, public post fields for link previews (no auth, no sensitive data). */
+    public com.groupys.dto.PostMetaDto getPublicMeta(UUID postId) {
+        Post post = postRepository.findByIdOptional(postId)
+                .orElseThrow(() -> new NotFoundException("Post not found"));
+        String imageUrl = post.media.stream()
+                .filter(m -> m.type != null && m.type.startsWith("image/"))
+                .map(m -> m.url)
+                .findFirst()
+                .orElse(null);
+        return new com.groupys.dto.PostMetaDto(
+                post.id,
+                post.title,
+                imageUrl,
+                post.author != null ? post.author.username : null,
+                post.author != null ? post.author.displayName : null,
+                post.community != null ? post.community.name : null
+        );
+    }
+
     @Transactional
     @CacheInvalidateAll(cacheName = "feed")
     public PostResDto create(UUID communityId, String title, String content, List<PostMedia> mediaList, String clerkId) {
