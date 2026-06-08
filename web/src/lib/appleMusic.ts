@@ -31,6 +31,7 @@ export interface MusicTrack {
 }
 
 export interface MusicAlbum {
+  appleMusicId?: string;
   title: string;
   artist: string;
   coverUrl?: string;

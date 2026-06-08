@@ -38,7 +38,7 @@ export default function TrendingArtists() {
         <div className="text-center mb-12 md:mb-20">
           <h2 className="text-3xl font-bold mb-4">Trending Right Now</h2>
           <p className="text-on-surface-variant">
-            The most-listened artists on Last.fm this week.
+            The most-listened artists this week.
           </p>
         </div>
 

@@ -1,11 +1,9 @@
 const logos = [
   { name: "Spotify",       color: "#1ED760", src: "/logos/spotify.svg" },
   { name: "Apple Music",   color: "#FA233B", src: "/logos/applemusic.svg" },
-  { name: "Last.fm",       color: "#D51007", src: "/logos/lastdotfm.svg" },
   { name: "YouTube Music", color: "#FF0000", src: "/logos/youtubemusic.svg" },
   { name: "SoundCloud",    color: "#FF5500", src: "/logos/soundcloud.svg" },
   { name: "Tidal",         color: "#000000", src: "/logos/tidal.svg" },
-  { name: "Deezer",        color: "#FF0092", src: "/logos/deezer.svg" },
 ];
 
 // 4 copies so the strip is always wider than any viewport; animation moves exactly

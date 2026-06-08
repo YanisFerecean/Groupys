@@ -10,6 +10,7 @@ export interface ProfileCustomization {
   topArtists?: { id?: string; name: string; genre?: string; imageUrl?: string }[];
   topAlbums?: {
     id?: string;
+    appleMusicId?: string;
     title: string;
     artist: string;
     coverUrl?: string;

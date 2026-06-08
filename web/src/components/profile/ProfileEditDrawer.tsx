@@ -71,8 +71,6 @@ interface ProfileEditDrawerProps {
   onRemoveProfileImage: () => Promise<void>;
   isSaving: boolean;
   musicConnected?: boolean;
-  lastFmConnected?: boolean;
-  lastFmUsername?: string | null;
   initialTab?: "profile" | "customization" | "widgets";
 }
 
@@ -101,8 +99,6 @@ export default function ProfileEditDrawer({
   onRemoveProfileImage,
   isSaving,
   musicConnected,
-  lastFmConnected,
-  lastFmUsername,
   initialTab = "profile",
 }: ProfileEditDrawerProps) {
   const [activeTab, setActiveTab] = useState<string>(initialTab);
@@ -498,7 +494,7 @@ const setListeningFromSearch = (result: TrackResult) => {
       const albums = await fetchMusicTopAlbums(token);
       set(
         "topAlbums",
-        albums.map((a) => ({ title: a.title, artist: a.artist, coverUrl: a.coverUrl })),
+        albums.map((a) => ({ title: a.title, artist: a.artist, coverUrl: a.coverUrl, appleMusicId: a.appleMusicId })),
       );
       setSynced("topAlbums");
     } catch (err) {
@@ -821,7 +817,7 @@ const setListeningFromSearch = (result: TrackResult) => {
 
             {/* ── Widgets Tab ── */}
             <TabsContent value="widgets" className="space-y-5">
-              {lastFmConnected && (
+              {musicConnected && (
                 <button
                   type="button"
                   onClick={async () => {
@@ -838,20 +834,20 @@ const setListeningFromSearch = (result: TrackResult) => {
                         ...prev,
                         topArtists: artists.map((a) => ({ name: a.name, imageUrl: a.imageUrl })),
                         topSongs: tracks.map((t) => ({ title: t.title, artist: t.artist, coverUrl: t.coverUrl })),
-                        topAlbums: albums.map((a) => ({ title: a.title, artist: a.artist, coverUrl: a.coverUrl })),
+                        topAlbums: albums.map((a) => ({ title: a.title, artist: a.artist, coverUrl: a.coverUrl, appleMusicId: a.appleMusicId })),
                         musicSynced: { ...prev.musicSynced, topArtists: true, topSongs: true, topAlbums: true },
                       }));
                     } catch (err) {
-                      console.error("Failed to sync all from Last.FM:", err);
+                      console.error("Failed to sync all from Apple Music:", err);
                     } finally {
                       setSyncing(null);
                     }
                   }}
                   disabled={syncing !== null}
-                  className="w-full flex items-center justify-center gap-2.5 h-12 rounded-2xl border border-[#D51007]/30 bg-[#D51007]/5 text-[#D51007] hover:bg-[#D51007]/10 transition-colors font-semibold text-sm disabled:opacity-50"
+                  className="w-full flex items-center justify-center gap-2.5 h-12 rounded-2xl border border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 transition-colors font-semibold text-sm disabled:opacity-50"
                 >
-                  <span className="text-base font-black">♫</span>
-                  {syncing === "all" ? "Syncing all widgets..." : `Sync All from Last.FM${lastFmUsername ? ` (@${lastFmUsername})` : ""}`}
+                  <AppleMusicLogo size={18} />
+                  {syncing === "all" ? "Syncing all widgets..." : "Sync from Apple Music"}
                 </button>
               )}
 
@@ -931,17 +927,16 @@ const setListeningFromSearch = (result: TrackResult) => {
                       </button>
                     </div>
                   </div>
-                  {lastFmConnected && (
+                  {musicConnected && (
                     <Button
                       type="button"
                       variant="ghost"
                       size="xs"
-                      className="gap-1.5 rounded-full font-semibold"
-                      style={{ color: "#D51007" }}
+                      className="gap-1.5 rounded-full font-semibold text-primary"
                       onClick={syncSavedAlbums}
                       disabled={syncing !== null}
                     >
-                      <span className="text-sm font-black">♫</span>
+                      <AppleMusicLogo size={14} />
                       {syncing === "albums" ? "Syncing..." : "Sync"}
                     </Button>
                   )}
