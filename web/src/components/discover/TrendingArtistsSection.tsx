@@ -15,13 +15,7 @@ interface ChartArtist {
   listeners: number;
   playcount: number;
   summary: string;
-}
-
-function formatCount(n: number): string {
-  if (n >= 1_000_000)
-    return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, "")}k`;
-  return String(n);
+  genre?: string | null;
 }
 
 function ArtistBubble({ artist, onClick }: { artist: ChartArtist; onClick: () => void }) {
@@ -46,9 +40,11 @@ function ArtistBubble({ artist, onClick }: { artist: ChartArtist; onClick: () =>
       <p className="text-sm font-bold text-on-surface text-center truncate max-w-[7rem]">
         {artist.name}
       </p>
-      <p className="text-xs text-on-surface-variant/60">
-        {formatCount(artist.listeners)} listeners
-      </p>
+      {artist.genre && (
+        <p className="text-xs uppercase tracking-wide text-on-surface-variant/60 truncate max-w-[7rem]">
+          {artist.genre}
+        </p>
+      )}
     </button>
   );
 }

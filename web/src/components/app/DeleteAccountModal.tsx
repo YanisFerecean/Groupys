@@ -397,7 +397,7 @@ export default function DeleteAccountModal({
                   <p className="font-semibold text-on-surface mb-1">What happens when you delete your account:</p>
                   <div className="flex items-start gap-2 text-on-surface-variant">
                     <span className="material-symbols-outlined text-on-surface-variant/60 mt-0.5" style={{ fontSize: 16 }}>keep</span>
-                    <span><strong className="text-on-surface">Posts & comments</strong> remain visible under "Deleted User"</span>
+                    <span><strong className="text-on-surface">Posts & comments</strong> remain visible under &ldquo;Deleted User&rdquo;</span>
                   </div>
                   <div className="flex items-start gap-2 text-error/80">
                     <span className="material-symbols-outlined mt-0.5" style={{ fontSize: 16 }}>delete_forever</span>

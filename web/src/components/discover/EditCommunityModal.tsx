@@ -45,7 +45,7 @@ function resolveMediaUrl(url: string | null | undefined): string | null {
 export default function EditCommunityModal({ community, onClose, onSaved }: EditCommunityModalProps) {
   const { getToken } = useAuth();
   const iconInputRef = useRef<HTMLInputElement>(null);
-  const bannerInputRef = useRef<HTMLInputElement>(null);
+  const _bannerInputRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState(community.name);
   const [description, setDescription] = useState(community.description ?? "");
@@ -82,7 +82,7 @@ export default function EditCommunityModal({ community, onClose, onSaved }: Edit
     e.target.value = "";
   };
 
-  const handleBannerChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const _handleBannerChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (bannerFile && bannerPreview) URL.revokeObjectURL(bannerPreview);

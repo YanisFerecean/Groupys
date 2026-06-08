@@ -18,6 +18,7 @@ interface ArtistRes {
   listeners: number;
   playcount: number;
   summary: string;
+  genre?: string | null;
 }
 
 interface AlbumRes {
@@ -104,7 +105,9 @@ function ArtistRow({ artist, onPress }: { artist: ArtistRes; onPress: () => void
       )}
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-on-surface truncate">{artist.name}</p>
-        <p className="text-xs text-outline truncate">{formatCount(artist.listeners)} listeners</p>
+        {artist.genre && (
+          <p className="text-xs text-outline truncate">{artist.genre}</p>
+        )}
       </div>
       <span className="material-symbols-outlined text-on-surface/25 text-base">chevron_right</span>
     </button>
