@@ -124,6 +124,15 @@ public class ChatService {
                 throw new jakarta.ws.rs.BadRequestException(type + " payload requires a title");
             }
         }
+        if (MessageType.LYRIC.equals(type)) {
+            JsonNode lines = payload.path("lines");
+            if (!lines.isArray() || lines.isEmpty()) {
+                throw new jakarta.ws.rs.BadRequestException("LYRIC payload requires lines");
+            }
+        }
+        if (MessageType.TIMESTAMP.equals(type) && !payload.path("positionMs").isNumber()) {
+            throw new jakarta.ws.rs.BadRequestException("TIMESTAMP payload requires positionMs");
+        }
     }
 
     /** Parse the stored raw JSON payload into a JsonNode; null/blank → null, malformed → null. */

@@ -2,7 +2,7 @@
 ticket: 4.1
 title: Lyric snippet
 phase: Music types
-status: todo
+status: done
 priority: P3
 depends_on: [2.1]
 ---

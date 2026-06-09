@@ -71,12 +71,30 @@ export interface DedicationPayload extends TrackRef {
   note?: string
 }
 
+/** 1–4 lyric lines quoted from a track (ticket 4.1). */
+export interface LyricPayload {
+  type: 'LYRIC'
+  track: TrackRef
+  lines: string[]
+  startTimeMs?: number
+  endTimeMs?: number
+}
+
+/** "Listen from m:ss" deep link to a position in a track (ticket 4.2). */
+export interface TimestampPayload {
+  type: 'TIMESTAMP'
+  track: TrackRef
+  positionMs: number
+}
+
 export type MessagePayload =
   | TrackPayload
   | AlbumPayload
   | PlaylistPayload
   | TasteHandshakePayload
   | DedicationPayload
+  | LyricPayload
+  | TimestampPayload
 
 /** Narrow an unknown payload to a typed payload by its discriminant. */
 export function isTrackPayload(
@@ -107,4 +125,16 @@ export function isDedicationPayload(
   payload: Record<string, unknown> | null | undefined,
 ): payload is DedicationPayload & Record<string, unknown> {
   return !!payload && payload.type === 'DEDICATION' && typeof payload.title === 'string'
+}
+
+export function isLyricPayload(
+  payload: Record<string, unknown> | null | undefined,
+): payload is LyricPayload & Record<string, unknown> {
+  return !!payload && payload.type === 'LYRIC' && Array.isArray(payload.lines)
+}
+
+export function isTimestampPayload(
+  payload: Record<string, unknown> | null | undefined,
+): payload is TimestampPayload & Record<string, unknown> {
+  return !!payload && payload.type === 'TIMESTAMP' && typeof payload.positionMs === 'number'
 }

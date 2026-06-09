@@ -79,9 +79,11 @@ export default function ChatConversationScreen() {
   const [trackPickerOpen, setTrackPickerOpen] = useState(false)
   const [trackPickerQuery, setTrackPickerQuery] = useState('')
   // What the track picker selection feeds into.
-  const [pickerMode, setPickerMode] = useState<'send' | 'dedicate'>('send')
+  const [pickerMode, setPickerMode] = useState<'send' | 'dedicate' | 'lyric'>('send')
   // Dedication note flow (ticket 4.3).
   const [pendingDedication, setPendingDedication] = useState<TrackPayload | null>(null)
+  // Lyric entry flow (ticket 4.1).
+  const [pendingLyricTrack, setPendingLyricTrack] = useState<TrackPayload | null>(null)
   // Richer music shares (tickets 2.2 / 2.3).
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
   const [albumPickerOpen, setAlbumPickerOpen] = useState(false)
@@ -110,11 +112,23 @@ export default function ChatConversationScreen() {
     })
   }, [sendMessage])
 
-  // Track picker selection dispatch (send vs. dedicate flows).
+  const sendLyric = useCallback((track: TrackPayload, raw: string) => {
+    const lines = raw.split('\n').map(l => l.trim()).filter(Boolean).slice(0, 4)
+    if (lines.length === 0) return
+    const { type: _t, ...trackRef } = track
+    void sendMessage(`🎤 “${lines[0]}”`, {
+      messageType: 'LYRIC',
+      payload: { type: 'LYRIC', track: trackRef, lines } as unknown as Record<string, unknown>,
+    })
+  }, [sendMessage])
+
+  // Track picker selection dispatch (send / dedicate / lyric flows).
   const handleTrackPicked = useCallback((track: TrackPayload) => {
     setTrackPickerOpen(false)
     if (pickerMode === 'dedicate') {
       setPendingDedication(track)
+    } else if (pickerMode === 'lyric') {
+      setPendingLyricTrack(track)
     } else {
       sendTrack(track)
     }
@@ -658,6 +672,11 @@ export default function ChatConversationScreen() {
           setTrackPickerQuery('')
           setTrackPickerOpen(true)
         }}
+        onShareLyric={() => {
+          setPickerMode('lyric')
+          setTrackPickerQuery('')
+          setTrackPickerOpen(true)
+        }}
       />
 
       <TextPromptModal
@@ -671,6 +690,20 @@ export default function ChatConversationScreen() {
         onSubmit={(note) => {
           if (pendingDedication) sendDedication(pendingDedication, note)
           setPendingDedication(null)
+          setPickerMode('send')
+        }}
+      />
+
+      <TextPromptModal
+        visible={pendingLyricTrack !== null}
+        title="Paste up to 4 lyric lines"
+        placeholder={'Line 1\nLine 2'}
+        multiline
+        submitLabel="Send lyric"
+        onClose={() => setPendingLyricTrack(null)}
+        onSubmit={(text) => {
+          if (pendingLyricTrack) sendLyric(pendingLyricTrack, text)
+          setPendingLyricTrack(null)
           setPickerMode('send')
         }}
       />
