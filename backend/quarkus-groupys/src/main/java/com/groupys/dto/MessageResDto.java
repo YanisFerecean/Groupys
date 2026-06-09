@@ -3,6 +3,7 @@ package com.groupys.dto;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 public record MessageResDto(
@@ -18,5 +19,6 @@ public record MessageResDto(
         boolean isDeleted,
         UUID replyToId,
         ReplyStubDto replyTo,
+        List<MessageReactionDto> reactions,
         Instant createdAt
 ) {}

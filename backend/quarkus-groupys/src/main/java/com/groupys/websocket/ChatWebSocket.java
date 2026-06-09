@@ -142,6 +142,8 @@ public class ChatWebSocket {
             case "NOW_PLAYING_UPDATE"  -> handleNowPlayingUpdate(user, msg);
             case "NOW_PLAYING_REQUEST" -> handleNowPlayingRequest(connection, user);
             case "BLIND_GUESS"         -> handleBlindGuess(connection, user, msg);
+            case "REACTION_ADD"        -> handleReaction(connection, user, msg, true);
+            case "REACTION_REMOVE"     -> handleReaction(connection, user, msg, false);
             case "ROOM_JOIN"           -> handleRoomJoin(connection, user, msg);
             case "ROOM_STATE"          -> handleRoomState(user, msg);
             case "ROOM_LEAVE"          -> handleRoomLeave(user, msg);
@@ -380,6 +382,45 @@ public class ChatWebSocket {
             sendJson(connection, WebSocketMessage.messageNew(data));
         }
         LOG.infof("Sync: pushed %d missed message(s) to %s", missed.size(), user.username);
+    }
+
+    // -- Reactions (ticket 3.2) ------------------------------------------------
+
+    private void handleReaction(WebSocketConnection connection, User user, Map<String, Object> msg, boolean add) {
+        String messageIdStr = (String) msg.get("messageId");
+        String emoji = (String) msg.get("emoji");
+        if (messageIdStr == null || emoji == null) {
+            sendJson(connection, WebSocketMessage.error("messageId and emoji required"));
+            return;
+        }
+        UUID messageId;
+        try {
+            messageId = UUID.fromString(messageIdStr);
+        } catch (IllegalArgumentException e) {
+            sendJson(connection, WebSocketMessage.error("Invalid messageId"));
+            return;
+        }
+
+        MessageResDto updated;
+        try {
+            updated = add ? chatService.addReaction(messageId, user.clerkId, emoji)
+                          : chatService.removeReaction(messageId, user.clerkId, emoji);
+        } catch (jakarta.ws.rs.ForbiddenException e) {
+            sendJson(connection, WebSocketMessage.error("Not a participant in this conversation"));
+            return;
+        } catch (Exception e) {
+            LOG.errorf(e, "Failed to update reaction");
+            sendJson(connection, WebSocketMessage.error("Internal error"));
+            return;
+        }
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("messageId", messageId.toString());
+        payload.put("conversationId", updated.conversationId().toString());
+        payload.put("reactions", updated.reactions());
+        String json = toJson(new WebSocketMessage("REACTION_UPDATE", payload));
+        chatService.getParticipantClerkIds(updated.conversationId())
+                .forEach((pid, clerkId) -> presenceService.sendTo(clerkId, json));
     }
 
     // -- Listen Together (ticket 7.1) ------------------------------------------
@@ -643,6 +684,9 @@ public class ChatWebSocket {
         }
         if (m.replyTo() != null) {
             data.put("replyTo", m.replyTo());
+        }
+        if (m.reactions() != null && !m.reactions().isEmpty()) {
+            data.put("reactions", m.reactions());
         }
         data.put("createdAt", m.createdAt().toString());
         if (tempId != null && !tempId.isEmpty()) {

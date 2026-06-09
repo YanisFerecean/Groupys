@@ -2,7 +2,7 @@
 ticket: 3.2
 title: Reactions (emoji)
 phase: Parity
-status: todo
+status: done
 priority: P2
 depends_on: [0.1]
 ---

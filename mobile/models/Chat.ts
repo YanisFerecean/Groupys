@@ -48,6 +48,8 @@ export interface Message {
   isDeleted: boolean
   replyToId: string | null
   replyTo?: ReplyStub | null
+  /** Emoji reactions (ticket 3.2); clients aggregate counts + detect their own by userId. */
+  reactions?: { emoji: string; userId: string }[]
   createdAt: string
   tempId?: string
   status?: 'sending' | 'sent' | 'failed'

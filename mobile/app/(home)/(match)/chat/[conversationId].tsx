@@ -76,6 +76,7 @@ export default function ChatConversationScreen() {
     messages,
     resendMessage,
     sendMessage,
+    toggleReaction,
   } = useChatMessages(activeConversationId, otherParticipant?.username ?? null)
 
   // Track sharing (tickets 2.1 / 1.3 / 4.x).
@@ -689,6 +690,8 @@ export default function ChatConversationScreen() {
                 showTime={showTimeForIndex(index)}
                 onLongPress={() => setActionMessage(item)}
                 onQuotePress={scrollToMessage}
+                myUserId={user?.id}
+                onToggleReaction={toggleReaction}
                 onRetry={item.status === 'failed' && item.tempId
                   ? () => {
                       void resendMessage(item.tempId!, item.content)
@@ -848,6 +851,9 @@ export default function ChatConversationScreen() {
       <MessageActionSheet
         visible={actionMessage !== null}
         actions={messageActions}
+        onReact={(emoji) => {
+          if (actionMessage) toggleReaction(actionMessage.id, emoji)
+        }}
         onClose={() => setActionMessage(null)}
       />
     </KeyboardAvoidingView>

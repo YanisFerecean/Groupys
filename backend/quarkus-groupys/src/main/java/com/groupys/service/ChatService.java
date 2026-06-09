@@ -16,6 +16,7 @@ import com.groupys.repository.CommunityMemberRepository;
 import com.groupys.repository.ConversationRepository;
 import com.groupys.repository.FriendshipRepository;
 import com.groupys.repository.MessageRepository;
+import com.groupys.repository.MessageReactionRepository;
 import com.groupys.repository.UserBlockRepository;
 import com.groupys.repository.UserRepository;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -49,6 +50,7 @@ public class ChatService {
     private final RateLimitingService rateLimitingService;
     private final ObjectMapper objectMapper;
     private final CommunityMemberRepository communityMemberRepository;
+    private final MessageReactionRepository messageReactionRepository;
 
     @Inject
     public ChatService(
@@ -62,7 +64,8 @@ public class ChatService {
             ChatRedisStateService chatRedisStateService,
             RateLimitingService rateLimitingService,
             ObjectMapper objectMapper,
-            CommunityMemberRepository communityMemberRepository) {
+            CommunityMemberRepository communityMemberRepository,
+            MessageReactionRepository messageReactionRepository) {
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.userRepository = userRepository;
@@ -74,6 +77,7 @@ public class ChatService {
         this.rateLimitingService = rateLimitingService;
         this.objectMapper = objectMapper;
         this.communityMemberRepository = communityMemberRepository;
+        this.messageReactionRepository = messageReactionRepository;
     }
 
     /**
@@ -127,8 +131,52 @@ public class ChatService {
                 m.isDeleted,
                 m.replyToId,
                 buildReplyStub(m.replyToId),
+                loadReactions(m.id),
                 m.createdAt
         );
+    }
+
+    List<com.groupys.dto.MessageReactionDto> loadReactions(UUID messageId) {
+        return messageReactionRepository.findByMessage(messageId).stream()
+                .map(r -> new com.groupys.dto.MessageReactionDto(r.emoji, r.user.id))
+                .collect(Collectors.toList());
+    }
+
+    /** Add an emoji reaction (idempotent per user+emoji); returns the message dto. Ticket 3.2. */
+    @Transactional
+    public MessageResDto addReaction(UUID messageId, String clerkId, String emoji) {
+        User user = requireUserByClerkId(clerkId);
+        Message msg = messageRepository.findByIdOptional(messageId)
+                .orElseThrow(() -> new NotFoundException("Message not found"));
+        requireParticipant(msg.conversation.id, user.id);
+        if (emoji == null || emoji.isBlank() || emoji.length() > 16) {
+            throw new jakarta.ws.rs.BadRequestException("Invalid emoji");
+        }
+        if (messageReactionRepository.findOne(messageId, user.id, emoji) == null) {
+            com.groupys.model.MessageReaction reaction = new com.groupys.model.MessageReaction();
+            reaction.messageId = messageId;
+            reaction.user = user;
+            reaction.emoji = emoji;
+            messageReactionRepository.persist(reaction);
+        }
+        return toMessageDto(msg);
+    }
+
+    @Transactional
+    public MessageResDto removeReaction(UUID messageId, String clerkId, String emoji) {
+        User user = requireUserByClerkId(clerkId);
+        Message msg = messageRepository.findByIdOptional(messageId)
+                .orElseThrow(() -> new NotFoundException("Message not found"));
+        requireParticipant(msg.conversation.id, user.id);
+        com.groupys.model.MessageReaction existing = messageReactionRepository.findOne(messageId, user.id, emoji);
+        if (existing != null) {
+            messageReactionRepository.delete(existing);
+        }
+        return toMessageDto(msg);
+    }
+
+    public UUID conversationIdForMessage(UUID messageId) {
+        return messageRepository.findByIdOptional(messageId).map(m -> m.conversation.id).orElse(null);
     }
 
     /** Build a lightweight stub for a replied-to message (ticket 3.1); null if missing/deleted. */

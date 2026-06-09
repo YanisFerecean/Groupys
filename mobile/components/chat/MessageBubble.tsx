@@ -15,6 +15,10 @@ interface MessageBubbleProps {
   onLongPress?: () => void
   /** Tap the quoted reply preview → scroll to the original (ticket 3.1). */
   onQuotePress?: (messageId: string) => void
+  /** Current user id, to highlight own reactions (ticket 3.2). */
+  myUserId?: string
+  /** Tap a reaction chip → toggle (ticket 3.2). */
+  onToggleReaction?: (messageId: string, emoji: string) => void
 }
 
 export function MessageBubble({
@@ -25,7 +29,20 @@ export function MessageBubble({
   onRetry,
   onLongPress,
   onQuotePress,
+  myUserId,
+  onToggleReaction,
 }: MessageBubbleProps) {
+  // Aggregate reactions into {emoji, count, mine} chips (ticket 3.2).
+  const reactionChips = (() => {
+    const map = new Map<string, { count: number; mine: boolean }>()
+    for (const r of message.reactions ?? []) {
+      const entry = map.get(r.emoji) ?? { count: 0, mine: false }
+      entry.count += 1
+      if (r.userId === myUserId) entry.mine = true
+      map.set(r.emoji, entry)
+    }
+    return Array.from(map.entries()).map(([emoji, v]) => ({ emoji, ...v }))
+  })()
   const time = new Date(message.createdAt).toLocaleTimeString([], {
     hour: 'numeric',
     minute: '2-digit',
@@ -95,6 +112,24 @@ export function MessageBubble({
         </View>
       )}
       </Pressable>
+
+      {reactionChips.length > 0 ? (
+        <View className={`mt-1 flex-row flex-wrap gap-1 ${isMine ? 'justify-end' : 'justify-start'}`}>
+          {reactionChips.map(chip => (
+            <TouchableOpacity
+              key={chip.emoji}
+              onPress={() => onToggleReaction?.(message.id, chip.emoji)}
+              className="flex-row items-center gap-1 rounded-full px-2 py-0.5"
+              style={{ backgroundColor: chip.mine ? Colors.primaryContainer : Colors.surfaceContainerHigh }}
+            >
+              <Text style={{ fontSize: 12 }}>{chip.emoji}</Text>
+              <Text className="text-[11px] font-semibold" style={{ color: chip.mine ? Colors.onPrimary : Colors.onSurfaceVariant }}>
+                {chip.count}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : null}
 
       {showFooter ? (
       <View className={`mt-1 flex-row items-center gap-1.5 ${isMine ? 'justify-end' : 'justify-start'}`}>

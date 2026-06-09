@@ -158,6 +158,14 @@ export function useChatMessages(
           return [nextMessage, ...prev]
         })
       }),
+      chatWs.on('REACTION_UPDATE', (payload: { messageId: string; conversationId: string; reactions: { emoji: string; userId: string }[] }) => {
+        if (payload.conversationId !== conversationId) {
+          return
+        }
+        setMessages(prev => prev.map(m => (
+          m.id === payload.messageId ? { ...m, reactions: payload.reactions ?? [] } : m
+        )))
+      }),
       chatWs.on('MESSAGE_UPDATED', (payload: Message) => {
         if (payload.conversationId !== conversationId) {
           return
@@ -321,6 +329,24 @@ export function useChatMessages(
     }
   }, [applyOutgoingMessage, conversationId, encryptForUsername, otherUsername])
 
+  // Optimistically toggle my reaction on a message and sync over WS (ticket 3.2).
+  const toggleReaction = useCallback((messageId: string, emoji: string) => {
+    const myUserId = user?.id
+    if (!myUserId) return
+    let willAdd = true
+    setMessages(prev => prev.map(m => {
+      if (m.id !== messageId) return m
+      const existing = m.reactions ?? []
+      const mine = existing.some(r => r.emoji === emoji && r.userId === myUserId)
+      willAdd = !mine
+      const reactions = mine
+        ? existing.filter(r => !(r.emoji === emoji && r.userId === myUserId))
+        : [...existing, { emoji, userId: myUserId }]
+      return { ...m, reactions }
+    }))
+    chatWs.send({ type: willAdd ? 'REACTION_ADD' : 'REACTION_REMOVE', messageId, emoji })
+  }, [user?.id])
+
   return {
     messages,
     isLoading,
@@ -330,5 +356,6 @@ export function useChatMessages(
     loadMore,
     sendMessage,
     resendMessage,
+    toggleReaction,
   }
 }
