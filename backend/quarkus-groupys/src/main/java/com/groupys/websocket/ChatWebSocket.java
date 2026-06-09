@@ -6,6 +6,7 @@ import com.groupys.dto.MessageResDto;
 import com.groupys.model.User;
 import com.groupys.repository.UserRepository;
 import com.groupys.service.ChatService;
+import com.groupys.service.ListeningRoomService;
 import com.groupys.service.NotificationService;
 import com.groupys.service.PresenceService;
 import io.quarkus.arc.Arc;
@@ -53,6 +54,9 @@ public class ChatWebSocket {
 
     @Inject
     PresenceService presenceService;
+
+    @Inject
+    ListeningRoomService listeningRoomService;
 
     @Inject
     ChatService chatService;
@@ -138,6 +142,10 @@ public class ChatWebSocket {
             case "NOW_PLAYING_UPDATE"  -> handleNowPlayingUpdate(user, msg);
             case "NOW_PLAYING_REQUEST" -> handleNowPlayingRequest(connection, user);
             case "BLIND_GUESS"         -> handleBlindGuess(connection, user, msg);
+            case "ROOM_JOIN"           -> handleRoomJoin(connection, user, msg);
+            case "ROOM_STATE"          -> handleRoomState(user, msg);
+            case "ROOM_LEAVE"          -> handleRoomLeave(user, msg);
+            case "REACTION_FLOAT"      -> handleReactionFloat(user, msg);
             default -> sendJson(connection, WebSocketMessage.error("Unknown message type: " + type));
         }
     }
@@ -362,6 +370,99 @@ public class ChatWebSocket {
             sendJson(connection, WebSocketMessage.messageNew(data));
         }
         LOG.infof("Sync: pushed %d missed message(s) to %s", missed.size(), user.username);
+    }
+
+    // -- Listen Together (ticket 7.1) ------------------------------------------
+    // Only playback metadata (track ref / position / play-pause) is relayed — never audio.
+
+    private UUID parseConversationId(WebSocketConnection connection, Map<String, Object> msg) {
+        String convIdStr = (String) msg.get("conversationId");
+        if (convIdStr == null) return null;
+        try {
+            return UUID.fromString(convIdStr);
+        } catch (IllegalArgumentException e) {
+            if (connection != null) sendJson(connection, WebSocketMessage.error("Invalid conversationId"));
+            return null;
+        }
+    }
+
+    private boolean isParticipant(UUID conversationId, User user) {
+        return chatService.getParticipantClerkIds(conversationId).containsValue(user.clerkId);
+    }
+
+    private void relayToRoom(UUID conversationId, User sender, String json) {
+        chatService.getParticipantClerkIds(conversationId).forEach((pid, clerkId) -> {
+            if (!pid.equals(sender.id)) presenceService.sendTo(clerkId, json);
+        });
+    }
+
+    private void handleRoomJoin(WebSocketConnection connection, User user, Map<String, Object> msg) {
+        UUID conversationId = parseConversationId(connection, msg);
+        if (conversationId == null || !isParticipant(conversationId, user)) return;
+        listeningRoomService.join(conversationId.toString(), user.clerkId);
+
+        // Send current room state to the joiner so they can sync immediately.
+        ListeningRoomService.Room room = listeningRoomService.get(conversationId.toString());
+        if (room != null && room.track != null && room.hostClerkId != null) {
+            sendJson(connection, new WebSocketMessage("ROOM_STATE", roomStatePayload(conversationId, room)));
+        }
+    }
+
+    private void handleRoomState(User user, Map<String, Object> msg) {
+        UUID conversationId = parseConversationId(null, msg);
+        if (conversationId == null || !isParticipant(conversationId, user)) return;
+
+        Map<String, Object> track = (msg.get("track") instanceof Map<?, ?> raw) ? sanitizeTrack(raw) : null;
+        long positionMs = toLong(msg.get("positionMs"));
+        boolean isPlaying = Boolean.TRUE.equals(msg.get("isPlaying"));
+
+        listeningRoomService.updateState(conversationId.toString(), user.clerkId, user.id.toString(),
+                track, positionMs, isPlaying);
+
+        ListeningRoomService.Room room = listeningRoomService.get(conversationId.toString());
+        String json = toJson(new WebSocketMessage("ROOM_STATE", roomStatePayload(conversationId, room)));
+        relayToRoom(conversationId, user, json);
+    }
+
+    private void handleRoomLeave(User user, Map<String, Object> msg) {
+        UUID conversationId = parseConversationId(null, msg);
+        if (conversationId == null) return;
+        listeningRoomService.leave(conversationId.toString(), user.clerkId);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("conversationId", conversationId.toString());
+        payload.put("userId", user.id.toString());
+        relayToRoom(conversationId, user, toJson(new WebSocketMessage("ROOM_LEAVE", payload)));
+    }
+
+    private void handleReactionFloat(User user, Map<String, Object> msg) {
+        UUID conversationId = parseConversationId(null, msg);
+        if (conversationId == null || !isParticipant(conversationId, user)) return;
+        String emoji = (String) msg.get("emoji");
+        if (emoji == null || emoji.length() > 8) return;
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("conversationId", conversationId.toString());
+        payload.put("userId", user.id.toString());
+        payload.put("emoji", emoji);
+        relayToRoom(conversationId, user, toJson(new WebSocketMessage("REACTION_FLOAT", payload)));
+    }
+
+    private Map<String, Object> roomStatePayload(UUID conversationId, ListeningRoomService.Room room) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("conversationId", conversationId.toString());
+        payload.put("hostUserId", room.hostUserId);
+        payload.put("track", room.track);
+        payload.put("positionMs", room.positionMs);
+        payload.put("isPlaying", room.isPlaying);
+        payload.put("updatedAt", room.updatedAt);
+        return payload;
+    }
+
+    private long toLong(Object value) {
+        if (value instanceof Number n) return n.longValue();
+        if (value instanceof String s) {
+            try { return Long.parseLong(s); } catch (NumberFormatException e) { return 0L; }
+        }
+        return 0L;
     }
 
     // -- Blind listen (ticket 4.6) ---------------------------------------------

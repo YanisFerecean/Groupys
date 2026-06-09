@@ -24,7 +24,9 @@ import { MusicUpsellSheet } from '@/components/music/MusicUpsellSheet'
 import { MusicAttachSheet } from '@/components/chat/MusicAttachSheet'
 import { ChatActionsContext, type ChatActions } from '@/components/chat/ChatActionsContext'
 import { TextPromptModal } from '@/components/ui/TextPromptModal'
+import { ListenTogetherBar } from '@/components/chat/ListenTogetherBar'
 import { TypingIndicator } from '@/components/chat/TypingIndicator'
+import { useListenTogether } from '@/hooks/useListenTogether'
 import { useMusicGate } from '@/hooks/useMusicGate'
 import { fetchMusicCurrentlyPlaying } from '@/lib/api'
 import type { AlbumPayload, TrackPayload } from '@/models/ChatPayloads'
@@ -79,7 +81,8 @@ export default function ChatConversationScreen() {
   const [trackPickerOpen, setTrackPickerOpen] = useState(false)
   const [trackPickerQuery, setTrackPickerQuery] = useState('')
   // What the track picker selection feeds into.
-  const [pickerMode, setPickerMode] = useState<'send' | 'dedicate' | 'lyric' | 'timestamp' | 'blind'>('send')
+  const [pickerMode, setPickerMode] = useState<'send' | 'dedicate' | 'lyric' | 'timestamp' | 'blind' | 'listen'>('send')
+  const listenTogether = useListenTogether(activeConversationId)
   // Dedication note flow (ticket 4.3).
   const [pendingDedication, setPendingDedication] = useState<TrackPayload | null>(null)
   // Lyric entry flow (ticket 4.1).
@@ -163,10 +166,12 @@ export default function ChatConversationScreen() {
       setPendingTimestampTrack(track)
     } else if (pickerMode === 'blind') {
       sendBlindListen(track)
+    } else if (pickerMode === 'listen') {
+      listenTogether.startRoom(track)
     } else {
       sendTrack(track)
     }
-  }, [pickerMode, sendTrack, sendBlindListen])
+  }, [pickerMode, sendTrack, sendBlindListen, listenTogether])
 
   // Actions exposed to card renderers (ticket 5.1: taste-handshake CTAs).
   const otherUserId = otherParticipant?.userId
@@ -619,6 +624,17 @@ export default function ChatConversationScreen() {
             </View>
           ) : null}
 
+          {listenTogether.room ? (
+            <ListenTogetherBar
+              room={listenTogether.room}
+              reactions={listenTogether.reactions}
+              isPlaying={listenTogether.isPlaying}
+              progress={listenTogether.progress}
+              onLeave={listenTogether.leaveRoom}
+              onReact={listenTogether.sendReaction}
+            />
+          ) : null}
+
           <FlatList
             ref={listRef}
             inverted
@@ -721,6 +737,11 @@ export default function ChatConversationScreen() {
         }}
         onBlindListen={() => {
           setPickerMode('blind')
+          setTrackPickerQuery('')
+          setTrackPickerOpen(true)
+        }}
+        onListenTogether={() => {
+          setPickerMode('listen')
           setTrackPickerQuery('')
           setTrackPickerOpen(true)
         }}

@@ -2,7 +2,7 @@
 ticket: 7.1
 title: Listen Together (sync-play room)
 phase: Sync
-status: todo
+status: done
 priority: P4
 depends_on: [0.2]
 ---
@@ -27,3 +27,12 @@ depends_on: [0.2]
 - Two subscribed devices stay within ~1.5s of each other.
 - Non-subscribers get the preview-sync fallback or a clear upsell.
 - No audio is ever proxied.
+
+## Implementation note
+- WS protocol (ROOM_JOIN / ROOM_STATE host heartbeat ~2s / ROOM_LEAVE / REACTION_FLOAT) is
+  implemented server-side with an in-memory ListeningRoomService; **only** track ref + positionMs
+  + play/pause are relayed, never audio.
+- The app currently has no MusicKit full-catalog playback (only the free 30s preview player), so
+  Listen Together runs as the **preview-sync "lite room"** for everyone (explicitly permitted):
+  all participants play the same 30s preview, followers seek when drift > 1.5s. Full
+  subscription-stream sync drops in once native MusicKit playback exists — the protocol is ready.

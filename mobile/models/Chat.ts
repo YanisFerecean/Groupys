@@ -75,10 +75,13 @@ export interface WsOutbound {
   content?: string
   messageType?: string
   tempId?: string
-  /** Now-playing broadcast fields (ticket 1.1). */
-  track?: NowPlayingTrack | null
+  /** Now-playing / listen-together track fields (tickets 1.1 / 7.1). */
+  track?: NowPlayingTrack | Record<string, unknown> | null
   isPlaying?: boolean
   /** Blind-listen guess fields (ticket 4.6). */
   messageId?: string
   guess?: string
+  /** Listen-together room fields (ticket 7.1). */
+  positionMs?: number
+  emoji?: string
 }

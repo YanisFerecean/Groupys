@@ -82,6 +82,17 @@ export function pausePreview() {
   }
 }
 
+/** Seek the active preview to a position in seconds (used for listen-together drift correction). */
+export function seekPreview(seconds: number) {
+  if (player) {
+    try {
+      void player.seekTo(Math.max(0, Math.min(seconds, PREVIEW_LIMIT_SEC)))
+    } catch {
+      // ignore
+    }
+  }
+}
+
 /** Play (or resume) the 30s preview for the given track id + url. */
 export async function playPreview(id: string, url: string) {
   // Resume the same track without recreating the player.
@@ -137,6 +148,7 @@ export interface PreviewPlayer extends PreviewSnapshot {
   play: (id: string, url: string) => void
   pause: () => void
   stop: () => void
+  seek: (seconds: number) => void
 }
 
 /**
@@ -162,5 +174,6 @@ export function usePreviewPlayer(): PreviewPlayer {
     play: (id: string, url: string) => void playPreview(id, url),
     pause: pausePreview,
     stop: stopPreview,
+    seek: seekPreview,
   }
 }

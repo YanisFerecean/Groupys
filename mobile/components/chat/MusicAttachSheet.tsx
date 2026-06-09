@@ -15,6 +15,7 @@ interface MusicAttachSheetProps {
   onShareLyric?: () => void
   onDropTimestamp?: () => void
   onBlindListen?: () => void
+  onListenTogether?: () => void
 }
 
 /** Bottom-sheet menu for sharing richer music cards from the composer (tickets 2.2/2.3/4.x). */
@@ -27,6 +28,7 @@ export function MusicAttachSheet({
   onShareLyric,
   onDropTimestamp,
   onBlindListen,
+  onListenTogether,
 }: MusicAttachSheetProps) {
   const rows: { icon: IconName; label: string; onPress?: () => void }[] = [
     { icon: 'albums' as IconName, label: 'Share an album', onPress: onPickAlbum },
@@ -35,6 +37,7 @@ export function MusicAttachSheet({
     { icon: 'text' as IconName, label: 'Share a lyric', onPress: onShareLyric },
     { icon: 'time' as IconName, label: 'Drop a timestamp', onPress: onDropTimestamp },
     { icon: 'eye-off' as IconName, label: 'Blind listen', onPress: onBlindListen },
+    { icon: 'people' as IconName, label: 'Listen together', onPress: onListenTogether },
   ].filter(row => !!row.onPress)
 
   return (
