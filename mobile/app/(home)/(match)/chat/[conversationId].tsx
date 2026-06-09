@@ -91,6 +91,7 @@ export default function ChatConversationScreen() {
     searchConversationMessages,
     sendMessage,
     toggleReaction,
+    toggleTrackReaction,
     editMessage,
     deleteMessage,
     togglePin,
@@ -100,12 +101,13 @@ export default function ChatConversationScreen() {
   const [trackPickerOpen, setTrackPickerOpen] = useState(false)
   const [trackPickerQuery, setTrackPickerQuery] = useState('')
   // What the track picker selection feeds into.
-  const [pickerMode, setPickerMode] = useState<'send' | 'dedicate' | 'lyric' | 'timestamp' | 'blind' | 'listen'>('send')
+  const [pickerMode, setPickerMode] = useState<'send' | 'dedicate' | 'lyric' | 'timestamp' | 'blind' | 'listen' | 'reaction'>('send')
   const listenTogether = useListenTogether(activeConversationId)
   // Long-press action menu + reply target (ticket 3.1).
   const [actionMessage, setActionMessage] = useState<Message | null>(null)
   const [replyTarget, setReplyTarget] = useState<ReplyStub | null>(null)
   const [pendingEdit, setPendingEdit] = useState<Message | null>(null)
+  const [pendingTrackReactionMessageId, setPendingTrackReactionMessageId] = useState<string | null>(null)
   // Dedication note flow (ticket 4.3).
   const [pendingDedication, setPendingDedication] = useState<TrackPayload | null>(null)
   // Lyric entry flow (ticket 4.1).
@@ -272,7 +274,11 @@ export default function ChatConversationScreen() {
   // Track picker selection dispatch (send / dedicate / lyric / timestamp / blind flows).
   const handleTrackPicked = useCallback((track: TrackPayload) => {
     setTrackPickerOpen(false)
-    if (pickerMode === 'dedicate') {
+    if (pickerMode === 'reaction' && pendingTrackReactionMessageId) {
+      toggleTrackReaction(pendingTrackReactionMessageId, track)
+      setPendingTrackReactionMessageId(null)
+      setPickerMode('send')
+    } else if (pickerMode === 'dedicate') {
       setPendingDedication(track)
     } else if (pickerMode === 'lyric') {
       setPendingLyricTrack(track)
@@ -285,7 +291,7 @@ export default function ChatConversationScreen() {
     } else {
       sendTrack(track)
     }
-  }, [pickerMode, sendTrack, sendBlindListen, listenTogether])
+  }, [listenTogether, pendingTrackReactionMessageId, pickerMode, sendBlindListen, sendTrack, toggleTrackReaction])
 
   // Actions exposed to card renderers (ticket 5.1: taste-handshake CTAs).
   const otherUserId = otherParticipant?.userId
@@ -434,6 +440,16 @@ export default function ChatConversationScreen() {
         icon: 'arrow-undo',
         label: 'Reply',
         onPress: () => setReplyTarget(buildReplyStub(actionMessage)),
+      })
+      actions.push({
+        icon: 'musical-note',
+        label: 'React with a track',
+        onPress: () => {
+          setPendingTrackReactionMessageId(actionMessage.id)
+          setPickerMode('reaction')
+          setTrackPickerQuery('')
+          setTrackPickerOpen(true)
+        },
       })
       const isPinned = pins.some(pin => pin.id === actionMessage.id)
       actions.push({
@@ -974,7 +990,14 @@ export default function ChatConversationScreen() {
       <TrackPicker
         visible={trackPickerOpen}
         initialQuery={trackPickerQuery}
-        onClose={() => setTrackPickerOpen(false)}
+        previewOnly={pickerMode === 'reaction'}
+        onClose={() => {
+          setTrackPickerOpen(false)
+          if (pickerMode === 'reaction') {
+            setPendingTrackReactionMessageId(null)
+            setPickerMode('send')
+          }
+        }}
         onSelect={handleTrackPicked}
       />
 

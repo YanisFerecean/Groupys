@@ -19,7 +19,8 @@ public class MessageReactionRepository implements PanacheRepositoryBase<MessageR
         return find("messageId in ?1 order by createdAt", messageIds).list();
     }
 
-    public MessageReaction findOne(UUID messageId, UUID userId, String emoji) {
-        return find("messageId = ?1 and user.id = ?2 and emoji = ?3", messageId, userId, emoji).firstResult();
+    public MessageReaction findOne(UUID messageId, UUID userId, String type, String key) {
+        return find("messageId = ?1 and user.id = ?2 and reactionType = ?3 and reactionKey = ?4",
+                messageId, userId, type, key).firstResult();
     }
 }

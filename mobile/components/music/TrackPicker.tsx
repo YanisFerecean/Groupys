@@ -15,6 +15,8 @@ interface TrackPickerProps {
   onSelect: (track: TrackPayload) => void
   /** Seed the search box when opened (e.g. from a "Send a song by X" CTA). */
   initialQuery?: string
+  /** Require a public preview URL (e.g. track reactions must preview on tap). */
+  previewOnly?: boolean
 }
 
 function toTrackPayload(result: TrackSearchResult): TrackPayload {
@@ -33,7 +35,7 @@ function toTrackPayload(result: TrackSearchResult): TrackPayload {
  * Manual catalog search picker (ticket 0.2). Uses the developer-token-backed catalog search,
  * so it works for content creation even when the user has not connected Apple Music.
  */
-export function TrackPicker({ visible, onClose, onSelect, initialQuery }: TrackPickerProps) {
+export function TrackPicker({ visible, onClose, onSelect, initialQuery, previewOnly = false }: TrackPickerProps) {
   const { getToken } = useAuth()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<TrackSearchResult[]>([])
@@ -64,7 +66,7 @@ export function TrackPicker({ visible, onClose, onSelect, initialQuery }: TrackP
       try {
         const token = await getToken()
         const found = await searchTracks(trimmed, token, 15)
-        if (!cancelled) setResults(found)
+        if (!cancelled) setResults(previewOnly ? found.filter(track => !!track.preview) : found)
       } catch {
         if (!cancelled) setResults([])
       } finally {
@@ -76,7 +78,7 @@ export function TrackPicker({ visible, onClose, onSelect, initialQuery }: TrackP
       cancelled = true
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
-  }, [query, getToken])
+  }, [query, getToken, previewOnly])
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet">
@@ -123,7 +125,9 @@ export function TrackPicker({ visible, onClose, onSelect, initialQuery }: TrackP
             )}
             ListEmptyComponent={
               query.trim().length >= 2 ? (
-                <Text className="text-center text-on-surface-variant mt-8">No tracks found</Text>
+                <Text className="text-center text-on-surface-variant mt-8">
+                  {previewOnly ? 'No previewable tracks found' : 'No tracks found'}
+                </Text>
               ) : null
             }
           />

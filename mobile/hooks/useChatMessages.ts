@@ -3,7 +3,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { postMessage, fetchMessages, fetchPins, searchMessages } from '@/lib/chat-api'
 import { isEncrypted } from '@/lib/chat-crypto'
 import { chatWs } from '@/lib/chat-ws'
-import type { Message } from '@/models/Chat'
+import type { Message, MessageReaction } from '@/models/Chat'
+import type { TrackPayload } from '@/models/ChatPayloads'
 import { useChat } from '@/hooks/useChat'
 
 const PAGE_SIZE = 30
@@ -168,7 +169,7 @@ export function useChatMessages(
           return [nextMessage, ...prev]
         })
       }),
-      chatWs.on('REACTION_UPDATE', (payload: { messageId: string; conversationId: string; reactions: { emoji: string; userId: string }[] }) => {
+      chatWs.on('REACTION_UPDATE', (payload: { messageId: string; conversationId: string; reactions: MessageReaction[] }) => {
         if (payload.conversationId !== conversationId) {
           return
         }
@@ -416,14 +417,36 @@ export function useChatMessages(
     setMessages(prev => prev.map(m => {
       if (m.id !== messageId) return m
       const existing = m.reactions ?? []
-      const mine = existing.some(r => r.emoji === emoji && r.userId === myUserId)
+      const mine = existing.some(r => (r.type ?? 'emoji') === 'emoji' && r.emoji === emoji && r.userId === myUserId)
       willAdd = !mine
       const reactions = mine
-        ? existing.filter(r => !(r.emoji === emoji && r.userId === myUserId))
-        : [...existing, { emoji, userId: myUserId }]
+        ? existing.filter(r => !((r.type ?? 'emoji') === 'emoji' && r.emoji === emoji && r.userId === myUserId))
+        : [...existing, { type: 'emoji' as const, emoji, userId: myUserId }]
       return { ...m, reactions }
     }))
     chatWs.send({ type: willAdd ? 'REACTION_ADD' : 'REACTION_REMOVE', messageId, emoji })
+  }, [user?.id])
+
+  const toggleTrackReaction = useCallback((messageId: string, track: TrackPayload) => {
+    const myUserId = user?.id
+    if (!myUserId || !track.id || !track.previewUrl) return
+    let willAdd = true
+    setMessages(prev => prev.map(m => {
+      if (m.id !== messageId) return m
+      const existing = m.reactions ?? []
+      const mine = existing.some(r => r.type === 'track' && r.track?.id === track.id && r.userId === myUserId)
+      willAdd = !mine
+      const reactions = mine
+        ? existing.filter(r => !(r.type === 'track' && r.track?.id === track.id && r.userId === myUserId))
+        : [...existing, { type: 'track' as const, track, userId: myUserId }]
+      return { ...m, reactions }
+    }))
+    chatWs.send({
+      type: willAdd ? 'REACTION_TRACK_ADD' : 'REACTION_TRACK_REMOVE',
+      messageId,
+      track: willAdd ? track : undefined,
+      trackId: track.id,
+    })
   }, [user?.id])
 
   // Edit / delete own messages (ticket 3.3): optimistic + WS sync.
@@ -462,6 +485,7 @@ export function useChatMessages(
     sendMessage,
     resendMessage,
     toggleReaction,
+    toggleTrackReaction,
     editMessage,
     deleteMessage,
     togglePin,

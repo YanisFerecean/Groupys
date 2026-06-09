@@ -144,6 +144,8 @@ public class ChatWebSocket {
             case "BLIND_GUESS"         -> handleBlindGuess(connection, user, msg);
             case "REACTION_ADD"        -> handleReaction(connection, user, msg, true);
             case "REACTION_REMOVE"     -> handleReaction(connection, user, msg, false);
+            case "REACTION_TRACK_ADD"  -> handleTrackReaction(connection, user, msg, true);
+            case "REACTION_TRACK_REMOVE" -> handleTrackReaction(connection, user, msg, false);
             case "MESSAGE_EDIT"        -> handleMessageEdit(connection, user, msg);
             case "MESSAGE_DELETE"      -> handleMessageDelete(connection, user, msg);
             case "PIN_ADD"             -> handlePin(connection, user, msg, true);
@@ -507,6 +509,56 @@ public class ChatWebSocket {
             return;
         }
 
+        broadcastReactionUpdate(messageId, updated);
+    }
+
+    private void handleTrackReaction(WebSocketConnection connection, User user, Map<String, Object> msg, boolean add) {
+        String messageIdStr = (String) msg.get("messageId");
+        if (messageIdStr == null) {
+            sendJson(connection, WebSocketMessage.error("messageId required"));
+            return;
+        }
+        UUID messageId;
+        try {
+            messageId = UUID.fromString(messageIdStr);
+        } catch (IllegalArgumentException e) {
+            sendJson(connection, WebSocketMessage.error("Invalid messageId"));
+            return;
+        }
+
+        MessageResDto updated;
+        try {
+            if (add) {
+                Object track = msg.get("track");
+                if (track == null) {
+                    sendJson(connection, WebSocketMessage.error("track required"));
+                    return;
+                }
+                updated = chatService.addTrackReaction(messageId, user.clerkId, mapper.writeValueAsString(track));
+            } else {
+                String trackId = (String) msg.get("trackId");
+                if (trackId == null || trackId.isBlank()) {
+                    sendJson(connection, WebSocketMessage.error("trackId required"));
+                    return;
+                }
+                updated = chatService.removeTrackReaction(messageId, user.clerkId, trackId);
+            }
+        } catch (jakarta.ws.rs.ForbiddenException e) {
+            sendJson(connection, WebSocketMessage.error("Not a participant in this conversation"));
+            return;
+        } catch (jakarta.ws.rs.BadRequestException e) {
+            sendJson(connection, WebSocketMessage.error(e.getMessage()));
+            return;
+        } catch (Exception e) {
+            LOG.errorf(e, "Failed to update track reaction");
+            sendJson(connection, WebSocketMessage.error("Internal error"));
+            return;
+        }
+
+        broadcastReactionUpdate(messageId, updated);
+    }
+
+    private void broadcastReactionUpdate(UUID messageId, MessageResDto updated) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("messageId", messageId.toString());
         payload.put("conversationId", updated.conversationId().toString());

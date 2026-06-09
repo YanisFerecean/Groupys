@@ -199,7 +199,11 @@ public class ChatService {
 
     List<com.groupys.dto.MessageReactionDto> loadReactions(UUID messageId) {
         return messageReactionRepository.findByMessage(messageId).stream()
-                .map(r -> new com.groupys.dto.MessageReactionDto(r.emoji, r.user.id))
+                .map(r -> new com.groupys.dto.MessageReactionDto(
+                        r.reactionType,
+                        r.emoji,
+                        parsePayload(r.trackPayload),
+                        r.user.id))
                 .collect(Collectors.toList());
     }
 
@@ -213,10 +217,12 @@ public class ChatService {
         if (emoji == null || emoji.isBlank() || emoji.length() > 16) {
             throw new jakarta.ws.rs.BadRequestException("Invalid emoji");
         }
-        if (messageReactionRepository.findOne(messageId, user.id, emoji) == null) {
+        if (messageReactionRepository.findOne(messageId, user.id, "emoji", emoji) == null) {
             com.groupys.model.MessageReaction reaction = new com.groupys.model.MessageReaction();
             reaction.messageId = messageId;
             reaction.user = user;
+            reaction.reactionType = "emoji";
+            reaction.reactionKey = emoji;
             reaction.emoji = emoji;
             messageReactionRepository.persist(reaction);
         }
@@ -229,7 +235,63 @@ public class ChatService {
         Message msg = messageRepository.findByIdOptional(messageId)
                 .orElseThrow(() -> new NotFoundException("Message not found"));
         requireParticipant(msg.conversation.id, user.id);
-        com.groupys.model.MessageReaction existing = messageReactionRepository.findOne(messageId, user.id, emoji);
+        com.groupys.model.MessageReaction existing =
+                messageReactionRepository.findOne(messageId, user.id, "emoji", emoji);
+        if (existing != null) {
+            messageReactionRepository.delete(existing);
+        }
+        return toMessageDto(msg);
+    }
+
+    @Transactional
+    public MessageResDto addTrackReaction(UUID messageId, String clerkId, String payloadJson) {
+        User user = requireUserByClerkId(clerkId);
+        Message msg = messageRepository.findByIdOptional(messageId)
+                .orElseThrow(() -> new NotFoundException("Message not found"));
+        requireParticipant(msg.conversation.id, user.id);
+        if (payloadJson == null || payloadJson.isBlank() || payloadJson.length() > 8000) {
+            throw new BadRequestException("Track reaction requires a payload");
+        }
+
+        JsonNode track;
+        try {
+            track = objectMapper.readTree(payloadJson);
+        } catch (Exception e) {
+            throw new BadRequestException("Invalid track reaction payload");
+        }
+        validatePayloadShape(MessageType.TRACK, track);
+        String trackId = track.path("id").asText(null);
+        String previewUrl = track.path("previewUrl").asText(null);
+        if (!MessageType.TRACK.equalsIgnoreCase(track.path("type").asText(""))
+                || trackId == null || trackId.isBlank() || previewUrl == null
+                || (!previewUrl.startsWith("https://") && !previewUrl.startsWith("http://"))) {
+            throw new BadRequestException("Track reaction requires an id and public preview");
+        }
+
+        if (messageReactionRepository.findOne(messageId, user.id, "track", trackId) == null) {
+            com.groupys.model.MessageReaction reaction = new com.groupys.model.MessageReaction();
+            reaction.messageId = messageId;
+            reaction.user = user;
+            reaction.reactionType = "track";
+            reaction.reactionKey = trackId;
+            try {
+                reaction.trackPayload = objectMapper.writeValueAsString(track);
+            } catch (Exception e) {
+                throw new BadRequestException("Invalid track reaction payload");
+            }
+            messageReactionRepository.persist(reaction);
+        }
+        return toMessageDto(msg);
+    }
+
+    @Transactional
+    public MessageResDto removeTrackReaction(UUID messageId, String clerkId, String trackId) {
+        User user = requireUserByClerkId(clerkId);
+        Message msg = messageRepository.findByIdOptional(messageId)
+                .orElseThrow(() -> new NotFoundException("Message not found"));
+        requireParticipant(msg.conversation.id, user.id);
+        com.groupys.model.MessageReaction existing =
+                messageReactionRepository.findOne(messageId, user.id, "track", trackId);
         if (existing != null) {
             messageReactionRepository.delete(existing);
         }

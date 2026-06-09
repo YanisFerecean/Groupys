@@ -1,3 +1,5 @@
+import type { TrackPayload } from '@/models/ChatPayloads'
+
 export type ConversationRequestStatus =
   | 'ACCEPTED'
   | 'PENDING_INCOMING'
@@ -35,6 +37,13 @@ export interface ReplyStub {
   snippet: string
 }
 
+export interface MessageReaction {
+  type?: 'emoji' | 'track'
+  emoji?: string | null
+  track?: TrackPayload | null
+  userId: string
+}
+
 export interface Message {
   id: string
   conversationId: string
@@ -52,8 +61,8 @@ export interface Message {
   edited?: boolean
   replyToId: string | null
   replyTo?: ReplyStub | null
-  /** Emoji reactions (ticket 3.2); clients aggregate counts + detect their own by userId. */
-  reactions?: { emoji: string; userId: string }[]
+  /** Typed emoji / track reactions (tickets 3.2 / 4.5). */
+  reactions?: MessageReaction[]
   createdAt: string
   tempId?: string
   status?: 'sending' | 'sent' | 'failed'
@@ -97,6 +106,7 @@ export interface WsOutbound {
   isPlaying?: boolean
   /** Blind-listen guess fields (ticket 4.6). */
   messageId?: string
+  trackId?: string
   guess?: string
   /** Listen-together room fields (ticket 7.1). */
   positionMs?: number

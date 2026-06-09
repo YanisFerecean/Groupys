@@ -1,6 +1,8 @@
 package com.groupys.dto;
 
+import com.fasterxml.jackson.databind.JsonNode;
+
 import java.util.UUID;
 
-/** A single emoji reaction (ticket 3.2). Clients aggregate counts and detect their own. */
-public record MessageReactionDto(String emoji, UUID userId) {}
+/** A typed emoji or track reaction (tickets 3.2 / 4.5). */
+public record MessageReactionDto(String type, String emoji, JsonNode track, UUID userId) {}

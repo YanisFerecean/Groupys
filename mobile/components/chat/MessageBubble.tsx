@@ -3,6 +3,7 @@ import { Pressable, Text, TouchableOpacity, View } from 'react-native'
 import { Colors } from '@/constants/colors'
 import type { Message } from '@/models/Chat'
 import { getMessageRenderer, isTextType } from '@/components/chat/messageRenderers'
+import { TrackReactionChip } from '@/components/chat/TrackReactionChip'
 
 interface MessageBubbleProps {
   message: Message
@@ -39,12 +40,25 @@ export function MessageBubble({
   const reactionChips = (() => {
     const map = new Map<string, { count: number; mine: boolean }>()
     for (const r of message.reactions ?? []) {
+      if ((r.type ?? 'emoji') !== 'emoji' || !r.emoji) continue
       const entry = map.get(r.emoji) ?? { count: 0, mine: false }
       entry.count += 1
       if (r.userId === myUserId) entry.mine = true
       map.set(r.emoji, entry)
     }
     return Array.from(map.entries()).map(([emoji, v]) => ({ emoji, ...v }))
+  })()
+  const trackReactionChips = (() => {
+    const map = new Map<string, { track: NonNullable<NonNullable<Message['reactions']>[number]['track']>; count: number; mine: boolean }>()
+    for (const reaction of message.reactions ?? []) {
+      if (reaction.type !== 'track' || !reaction.track) continue
+      const key = reaction.track.id
+      const entry = map.get(key) ?? { track: reaction.track, count: 0, mine: false }
+      entry.count += 1
+      if (reaction.userId === myUserId) entry.mine = true
+      map.set(key, entry)
+    }
+    return Array.from(map.values())
   })()
   const time = new Date(message.createdAt).toLocaleTimeString([], {
     hour: 'numeric',
@@ -147,6 +161,19 @@ export function MessageBubble({
                 {chip.count}
               </Text>
             </TouchableOpacity>
+          ))}
+        </View>
+      ) : null}
+
+      {trackReactionChips.length > 0 ? (
+        <View className={`mt-1 flex-row flex-wrap gap-1 ${isMine ? 'justify-end' : 'justify-start'}`}>
+          {trackReactionChips.map(chip => (
+            <TrackReactionChip
+              key={chip.track.id}
+              track={chip.track}
+              count={chip.count}
+              mine={chip.mine}
+            />
           ))}
         </View>
       ) : null}
