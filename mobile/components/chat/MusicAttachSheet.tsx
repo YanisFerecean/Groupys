@@ -11,13 +11,30 @@ interface MusicAttachSheetProps {
   onClose: () => void
   onPickAlbum?: () => void
   onPickPlaylist?: () => void
+  onDedicate?: () => void
+  onShareLyric?: () => void
+  onDropTimestamp?: () => void
+  onBlindListen?: () => void
 }
 
-/** Bottom-sheet menu for sharing richer music cards from the composer (tickets 2.2/2.3). */
-export function MusicAttachSheet({ visible, onClose, onPickAlbum, onPickPlaylist }: MusicAttachSheetProps) {
+/** Bottom-sheet menu for sharing richer music cards from the composer (tickets 2.2/2.3/4.x). */
+export function MusicAttachSheet({
+  visible,
+  onClose,
+  onPickAlbum,
+  onPickPlaylist,
+  onDedicate,
+  onShareLyric,
+  onDropTimestamp,
+  onBlindListen,
+}: MusicAttachSheetProps) {
   const rows: { icon: IconName; label: string; onPress?: () => void }[] = [
     { icon: 'albums' as IconName, label: 'Share an album', onPress: onPickAlbum },
     { icon: 'list' as IconName, label: 'Share a playlist', onPress: onPickPlaylist },
+    { icon: 'heart' as IconName, label: 'Dedicate a song', onPress: onDedicate },
+    { icon: 'text' as IconName, label: 'Share a lyric', onPress: onShareLyric },
+    { icon: 'time' as IconName, label: 'Drop a timestamp', onPress: onDropTimestamp },
+    { icon: 'eye-off' as IconName, label: 'Blind listen', onPress: onBlindListen },
   ].filter(row => !!row.onPress)
 
   return (

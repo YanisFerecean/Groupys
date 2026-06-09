@@ -61,7 +61,22 @@ export interface TasteHandshakePayload {
   overlapScore: number
 }
 
-export type MessagePayload = TrackPayload | AlbumPayload | PlaylistPayload | TasteHandshakePayload
+/** Track fields without the discriminant — embedded inside richer music payloads. */
+export type TrackRef = Omit<TrackPayload, 'type'>
+
+/** A dedicated song = a track plus a heartfelt note (ticket 4.3). */
+export interface DedicationPayload extends TrackRef {
+  type: 'DEDICATION'
+  dedication: true
+  note?: string
+}
+
+export type MessagePayload =
+  | TrackPayload
+  | AlbumPayload
+  | PlaylistPayload
+  | TasteHandshakePayload
+  | DedicationPayload
 
 /** Narrow an unknown payload to a typed payload by its discriminant. */
 export function isTrackPayload(
@@ -86,4 +101,10 @@ export function isTasteHandshakePayload(
   payload: Record<string, unknown> | null | undefined,
 ): payload is TasteHandshakePayload & Record<string, unknown> {
   return !!payload && payload.type === 'TASTE_HANDSHAKE' && Array.isArray(payload.sharedArtists)
+}
+
+export function isDedicationPayload(
+  payload: Record<string, unknown> | null | undefined,
+): payload is DedicationPayload & Record<string, unknown> {
+  return !!payload && payload.type === 'DEDICATION' && typeof payload.title === 'string'
 }

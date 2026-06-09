@@ -23,6 +23,7 @@ import { AlbumPicker } from '@/components/music/AlbumPicker'
 import { MusicUpsellSheet } from '@/components/music/MusicUpsellSheet'
 import { MusicAttachSheet } from '@/components/chat/MusicAttachSheet'
 import { ChatActionsContext, type ChatActions } from '@/components/chat/ChatActionsContext'
+import { TextPromptModal } from '@/components/ui/TextPromptModal'
 import { TypingIndicator } from '@/components/chat/TypingIndicator'
 import { useMusicGate } from '@/hooks/useMusicGate'
 import { fetchMusicCurrentlyPlaying } from '@/lib/api'
@@ -74,9 +75,13 @@ export default function ChatConversationScreen() {
     sendMessage,
   } = useChatMessages(activeConversationId, otherParticipant?.username ?? null)
 
-  // Track sharing (tickets 2.1 / 1.3).
+  // Track sharing (tickets 2.1 / 1.3 / 4.x).
   const [trackPickerOpen, setTrackPickerOpen] = useState(false)
   const [trackPickerQuery, setTrackPickerQuery] = useState('')
+  // What the track picker selection feeds into.
+  const [pickerMode, setPickerMode] = useState<'send' | 'dedicate'>('send')
+  // Dedication note flow (ticket 4.3).
+  const [pendingDedication, setPendingDedication] = useState<TrackPayload | null>(null)
   // Richer music shares (tickets 2.2 / 2.3).
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
   const [albumPickerOpen, setAlbumPickerOpen] = useState(false)
@@ -96,10 +101,30 @@ export default function ChatConversationScreen() {
     })
   }, [sendMessage])
 
+  const sendDedication = useCallback((track: TrackPayload, note: string) => {
+    const label = track.artist ? `💝 ${track.title} — ${track.artist}` : `💝 ${track.title}`
+    const { type: _ignored, ...trackRef } = track
+    void sendMessage(label, {
+      messageType: 'DEDICATION',
+      payload: { type: 'DEDICATION', dedication: true, note: note || undefined, ...trackRef } as unknown as Record<string, unknown>,
+    })
+  }, [sendMessage])
+
+  // Track picker selection dispatch (send vs. dedicate flows).
+  const handleTrackPicked = useCallback((track: TrackPayload) => {
+    setTrackPickerOpen(false)
+    if (pickerMode === 'dedicate') {
+      setPendingDedication(track)
+    } else {
+      sendTrack(track)
+    }
+  }, [pickerMode, sendTrack])
+
   // Actions exposed to card renderers (ticket 5.1: taste-handshake CTAs).
   const otherUserId = otherParticipant?.userId
   const chatActions = useMemo<ChatActions>(() => ({
     openTrackPicker: (initialQuery?: string) => {
+      setPickerMode('send')
       setTrackPickerQuery(initialQuery ?? '')
       setTrackPickerOpen(true)
     },
@@ -109,6 +134,7 @@ export default function ChatConversationScreen() {
   }), [otherUserId, router])
 
   const handleMusicPress = useCallback(async () => {
+    setPickerMode('send')
     // Not connected → prompt to connect (manual picker is still reachable from the upsell flow).
     if (!musicGate.capability.connected) {
       musicGate.requireMusic('Share what you’re listening to')
@@ -620,16 +646,33 @@ export default function ChatConversationScreen() {
         visible={trackPickerOpen}
         initialQuery={trackPickerQuery}
         onClose={() => setTrackPickerOpen(false)}
-        onSelect={(track) => {
-          setTrackPickerOpen(false)
-          sendTrack(track)
-        }}
+        onSelect={handleTrackPicked}
       />
 
       <MusicAttachSheet
         visible={attachMenuOpen}
         onClose={() => setAttachMenuOpen(false)}
         onPickAlbum={() => setAlbumPickerOpen(true)}
+        onDedicate={() => {
+          setPickerMode('dedicate')
+          setTrackPickerQuery('')
+          setTrackPickerOpen(true)
+        }}
+      />
+
+      <TextPromptModal
+        visible={pendingDedication !== null}
+        title="Add a note (optional)"
+        placeholder="This made me think of you…"
+        multiline
+        allowEmpty
+        submitLabel="Dedicate"
+        onClose={() => setPendingDedication(null)}
+        onSubmit={(note) => {
+          if (pendingDedication) sendDedication(pendingDedication, note)
+          setPendingDedication(null)
+          setPickerMode('send')
+        }}
       />
 
       <AlbumPicker
