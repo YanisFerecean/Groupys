@@ -2,7 +2,7 @@
 ticket: 4.2
 title: Timestamp drop
 phase: Music types
-status: todo
+status: done
 priority: P3
 depends_on: [2.1]
 ---

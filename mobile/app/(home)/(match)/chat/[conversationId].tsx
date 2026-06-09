@@ -79,11 +79,13 @@ export default function ChatConversationScreen() {
   const [trackPickerOpen, setTrackPickerOpen] = useState(false)
   const [trackPickerQuery, setTrackPickerQuery] = useState('')
   // What the track picker selection feeds into.
-  const [pickerMode, setPickerMode] = useState<'send' | 'dedicate' | 'lyric'>('send')
+  const [pickerMode, setPickerMode] = useState<'send' | 'dedicate' | 'lyric' | 'timestamp'>('send')
   // Dedication note flow (ticket 4.3).
   const [pendingDedication, setPendingDedication] = useState<TrackPayload | null>(null)
   // Lyric entry flow (ticket 4.1).
   const [pendingLyricTrack, setPendingLyricTrack] = useState<TrackPayload | null>(null)
+  // Timestamp entry flow (ticket 4.2).
+  const [pendingTimestampTrack, setPendingTimestampTrack] = useState<TrackPayload | null>(null)
   // Richer music shares (tickets 2.2 / 2.3).
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
   const [albumPickerOpen, setAlbumPickerOpen] = useState(false)
@@ -122,13 +124,35 @@ export default function ChatConversationScreen() {
     })
   }, [sendMessage])
 
-  // Track picker selection dispatch (send / dedicate / lyric flows).
+  const sendTimestamp = useCallback((track: TrackPayload, raw: string) => {
+    // Accept "m:ss", "mm:ss", or plain seconds.
+    const parts = raw.split(':').map(p => parseInt(p.trim(), 10))
+    let seconds = 0
+    if (parts.length === 2 && parts.every(n => !Number.isNaN(n))) {
+      seconds = parts[0] * 60 + parts[1]
+    } else if (parts.length === 1 && !Number.isNaN(parts[0])) {
+      seconds = parts[0]
+    } else {
+      return
+    }
+    const positionMs = Math.max(0, seconds * 1000)
+    const { type: _t, ...trackRef } = track
+    const mmss = `${Math.floor(seconds / 60)}:${(seconds % 60).toString().padStart(2, '0')}`
+    void sendMessage(`⏱️ ${track.title} from ${mmss}`, {
+      messageType: 'TIMESTAMP',
+      payload: { type: 'TIMESTAMP', track: trackRef, positionMs } as unknown as Record<string, unknown>,
+    })
+  }, [sendMessage])
+
+  // Track picker selection dispatch (send / dedicate / lyric / timestamp flows).
   const handleTrackPicked = useCallback((track: TrackPayload) => {
     setTrackPickerOpen(false)
     if (pickerMode === 'dedicate') {
       setPendingDedication(track)
     } else if (pickerMode === 'lyric') {
       setPendingLyricTrack(track)
+    } else if (pickerMode === 'timestamp') {
+      setPendingTimestampTrack(track)
     } else {
       sendTrack(track)
     }
@@ -677,6 +701,11 @@ export default function ChatConversationScreen() {
           setTrackPickerQuery('')
           setTrackPickerOpen(true)
         }}
+        onDropTimestamp={() => {
+          setPickerMode('timestamp')
+          setTrackPickerQuery('')
+          setTrackPickerOpen(true)
+        }}
       />
 
       <TextPromptModal
@@ -704,6 +733,19 @@ export default function ChatConversationScreen() {
         onSubmit={(text) => {
           if (pendingLyricTrack) sendLyric(pendingLyricTrack, text)
           setPendingLyricTrack(null)
+          setPickerMode('send')
+        }}
+      />
+
+      <TextPromptModal
+        visible={pendingTimestampTrack !== null}
+        title="Start time (m:ss)"
+        placeholder="1:24"
+        submitLabel="Drop timestamp"
+        onClose={() => setPendingTimestampTrack(null)}
+        onSubmit={(text) => {
+          if (pendingTimestampTrack) sendTimestamp(pendingTimestampTrack, text)
+          setPendingTimestampTrack(null)
           setPickerMode('send')
         }}
       />

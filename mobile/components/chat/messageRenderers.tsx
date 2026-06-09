@@ -7,6 +7,7 @@ import { PlaylistCardMessage } from '@/components/music/PlaylistCardMessage'
 import { TasteHandshakeMessage } from '@/components/music/TasteHandshakeMessage'
 import { DedicationCardMessage } from '@/components/music/DedicationCardMessage'
 import { LyricCardMessage } from '@/components/music/LyricCardMessage'
+import { TimestampCardMessage } from '@/components/music/TimestampCardMessage'
 
 export interface MessageRendererProps {
   message: Message
@@ -25,6 +26,7 @@ export const messageRenderers: Record<string, ComponentType<MessageRendererProps
   TASTE_HANDSHAKE: TasteHandshakeMessage,
   DEDICATION: DedicationCardMessage,
   LYRIC: LyricCardMessage,
+  TIMESTAMP: TimestampCardMessage,
 }
 
 /** Returns the card renderer for a message type, or undefined for TEXT/unknown types. */
