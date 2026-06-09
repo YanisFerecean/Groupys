@@ -2,7 +2,7 @@
 ticket: 3.7
 title: Media (images) + link previews
 phase: Parity
-status: todo
+status: done
 priority: P2
 depends_on: [0.1]
 ---

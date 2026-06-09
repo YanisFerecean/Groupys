@@ -46,6 +46,8 @@ export interface Message {
   messageType: string
   /** Structured card payload for non-text message types (see models/ChatPayloads.ts). */
   payload?: Record<string, unknown> | null
+  /** Uploaded media reference for IMAGE messages. */
+  mediaUrl?: string | null
   isDeleted: boolean
   edited?: boolean
   replyToId: string | null
@@ -88,6 +90,7 @@ export interface WsOutbound {
   conversationId?: string
   content?: string
   messageType?: string
+  mediaUrl?: string
   tempId?: string
   /** Now-playing / listen-together track fields (tickets 1.1 / 7.1). */
   track?: NowPlayingTrack | Record<string, unknown> | null

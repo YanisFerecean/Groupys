@@ -97,6 +97,16 @@ export interface BlindListenPayload {
   guessText?: string
 }
 
+/** OpenGraph metadata for a pasted public URL (ticket 3.7). */
+export interface LinkPreviewPayload {
+  type: 'LINK_PREVIEW'
+  url: string
+  title: string
+  description?: string
+  imageUrl?: string
+  siteName?: string
+}
+
 export type MessagePayload =
   | TrackPayload
   | AlbumPayload
@@ -106,6 +116,7 @@ export type MessagePayload =
   | LyricPayload
   | TimestampPayload
   | BlindListenPayload
+  | LinkPreviewPayload
 
 /** Narrow an unknown payload to a typed payload by its discriminant. */
 export function isTrackPayload(
@@ -154,4 +165,13 @@ export function isBlindListenPayload(
   payload: Record<string, unknown> | null | undefined,
 ): payload is BlindListenPayload & Record<string, unknown> {
   return !!payload && payload.type === 'BLIND_LISTEN' && typeof payload.track === 'object'
+}
+
+export function isLinkPreviewPayload(
+  payload: Record<string, unknown> | null | undefined,
+): payload is LinkPreviewPayload & Record<string, unknown> {
+  return !!payload
+    && payload.type === 'LINK_PREVIEW'
+    && typeof payload.url === 'string'
+    && typeof payload.title === 'string'
 }

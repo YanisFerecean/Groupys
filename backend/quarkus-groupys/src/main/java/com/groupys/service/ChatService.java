@@ -179,6 +179,7 @@ public class ChatService {
                 m.content,
                 m.messageType,
                 parsePayload(m.payload),
+                m.mediaUrl,
                 m.isDeleted,
                 m.edited,
                 m.replyToId,
@@ -278,6 +279,12 @@ public class ChatService {
             String title = payload.path("track").path("title").asText(null);
             if (title == null || title.isBlank()) {
                 throw new jakarta.ws.rs.BadRequestException("BLIND_LISTEN payload requires a track title");
+            }
+        }
+        if (MessageType.LINK_PREVIEW.equals(type)) {
+            String url = payload.path("url").asText(null);
+            if (url == null || url.isBlank()) {
+                throw new jakarta.ws.rs.BadRequestException("LINK_PREVIEW payload requires a URL");
             }
         }
     }
@@ -539,7 +546,7 @@ public class ChatService {
 
     @Transactional
     public MessageResDto sendMessage(UUID conversationId, String clerkId, String content) {
-        return sendMessage(conversationId, clerkId, content, MessageType.TEXT, null, null);
+        return sendMessage(conversationId, clerkId, content, MessageType.TEXT, null, null, null);
     }
 
     @Transactional
@@ -551,6 +558,12 @@ public class ChatService {
     @Transactional
     public MessageResDto sendMessage(UUID conversationId, String clerkId, String content,
                                      String messageType, String payloadJson, UUID replyToId) {
+        return sendMessage(conversationId, clerkId, content, messageType, payloadJson, replyToId, null);
+    }
+
+    @Transactional
+    public MessageResDto sendMessage(UUID conversationId, String clerkId, String content,
+                                     String messageType, String payloadJson, UUID replyToId, String mediaUrl) {
         User sender = requireUserByClerkId(clerkId);
         rateLimitingService.checkRateLimit(sender.id, clerkId);
         requireParticipant(conversationId, sender.id);
@@ -605,8 +618,15 @@ public class ChatService {
             } catch (Exception e) {
                 throw new jakarta.ws.rs.BadRequestException("Invalid message payload JSON");
             }
-        } else if (structured) {
+        } else if (structured && !MessageType.IMAGE.equals(type)) {
             throw new jakarta.ws.rs.BadRequestException("Structured message requires a payload");
+        }
+        if (MessageType.IMAGE.equals(type)
+                && (mediaUrl == null || !mediaUrl.startsWith("/api/posts/media/"))) {
+            throw new jakarta.ws.rs.BadRequestException("IMAGE message requires uploaded media");
+        }
+        if (mediaUrl != null && mediaUrl.length() > 1000) {
+            throw new jakarta.ws.rs.BadRequestException("Media URL is too long");
         }
 
         Message msg = new Message();
@@ -615,6 +635,7 @@ public class ChatService {
         msg.content = content != null ? content.strip() : "";
         msg.messageType = type;
         msg.payload = normalizedPayload;
+        msg.mediaUrl = MessageType.IMAGE.equals(type) ? mediaUrl : null;
         // Thread reply only if the referenced message is in this conversation (ticket 3.1).
         if (replyToId != null) {
             messageRepository.findByIdOptional(replyToId)

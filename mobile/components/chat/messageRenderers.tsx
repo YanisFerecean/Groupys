@@ -9,6 +9,8 @@ import { DedicationCardMessage } from '@/components/music/DedicationCardMessage'
 import { LyricCardMessage } from '@/components/music/LyricCardMessage'
 import { TimestampCardMessage } from '@/components/music/TimestampCardMessage'
 import { BlindListenCardMessage } from '@/components/music/BlindListenCardMessage'
+import { ImageMessage } from '@/components/chat/ImageMessage'
+import { LinkPreviewMessage } from '@/components/chat/LinkPreviewMessage'
 
 export interface MessageRendererProps {
   message: Message
@@ -29,6 +31,8 @@ export const messageRenderers: Record<string, ComponentType<MessageRendererProps
   LYRIC: LyricCardMessage,
   TIMESTAMP: TimestampCardMessage,
   BLIND_LISTEN: BlindListenCardMessage,
+  IMAGE: ImageMessage,
+  LINK_PREVIEW: LinkPreviewMessage,
 }
 
 /** Returns the card renderer for a message type, or undefined for TEXT/unknown types. */

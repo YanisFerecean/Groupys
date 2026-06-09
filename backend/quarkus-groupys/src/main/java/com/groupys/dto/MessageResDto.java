@@ -16,6 +16,7 @@ public record MessageResDto(
         String content,
         String messageType,
         JsonNode payload,
+        String mediaUrl,
         boolean isDeleted,
         boolean edited,
         UUID replyToId,

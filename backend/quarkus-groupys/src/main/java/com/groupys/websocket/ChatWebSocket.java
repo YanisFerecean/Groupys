@@ -262,6 +262,7 @@ public class ChatWebSocket {
         String tempId = (String) msg.getOrDefault("tempId", "");
         String messageType = (String) msg.get("messageType");
         String replyToIdStr = (String) msg.get("replyToId");
+        String mediaUrl = (String) msg.get("mediaUrl");
         Object payloadObj = msg.get("payload");
 
         // Serialise the structured payload (if any) back to a raw JSON string for the service.
@@ -299,7 +300,7 @@ public class ChatWebSocket {
 
         MessageResDto saved;
         try {
-            saved = chatService.sendMessage(conversationId, sender.clerkId, content, messageType, payloadJson, replyToId);
+            saved = chatService.sendMessage(conversationId, sender.clerkId, content, messageType, payloadJson, replyToId, mediaUrl);
         } catch (jakarta.ws.rs.ForbiddenException e) {
             sendJson(connection, WebSocketMessage.error("Not a participant in this conversation"));
             return;
@@ -772,6 +773,9 @@ public class ChatWebSocket {
         data.put("edited", m.edited());
         if (m.payload() != null) {
             data.put("payload", m.payload());
+        }
+        if (m.mediaUrl() != null) {
+            data.put("mediaUrl", m.mediaUrl());
         }
         if (m.replyToId() != null) {
             data.put("replyToId", m.replyToId().toString());

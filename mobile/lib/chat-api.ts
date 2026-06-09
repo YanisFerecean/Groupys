@@ -2,6 +2,12 @@ import type { BackendUser } from '@/lib/api'
 import { apiRequest } from '@/lib/apiRequest'
 import type { Conversation, Message } from '@/models/Chat'
 
+export interface ResolvedLinkPreview {
+  messageType: string
+  fallbackText: string
+  payload: Record<string, unknown>
+}
+
 export async function fetchConversations(
   token: string | null,
   cursor?: string,
@@ -107,7 +113,12 @@ export async function postMessage(
   conversationId: string,
   content: string,
   token: string | null,
-  options?: { messageType?: string; payload?: Record<string, unknown> | null; replyToId?: string | null },
+  options?: {
+    messageType?: string
+    payload?: Record<string, unknown> | null
+    replyToId?: string | null
+    mediaUrl?: string | null
+  },
 ): Promise<Message> {
   return apiRequest<Message>(
     `/chat/conversations/${encodeURIComponent(conversationId)}/messages`,
@@ -119,8 +130,20 @@ export async function postMessage(
         messageType: options?.messageType,
         payload: options?.payload ?? undefined,
         replyToId: options?.replyToId ?? undefined,
+        mediaUrl: options?.mediaUrl ?? undefined,
       },
     },
+  )
+}
+
+export async function resolveLinkPreview(
+  url: string,
+  token: string | null,
+): Promise<ResolvedLinkPreview> {
+  const params = new URLSearchParams({ url })
+  return apiRequest<ResolvedLinkPreview>(
+    `/chat/link-preview?${params.toString()}`,
+    { token, cache: false },
   )
 }
 

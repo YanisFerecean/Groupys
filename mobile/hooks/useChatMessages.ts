@@ -298,6 +298,7 @@ export function useChatMessages(
     options?: {
       messageType?: string
       payload?: Record<string, unknown> | null
+      mediaUrl?: string | null
       replyTo?: import('@/models/Chat').ReplyStub | null
     },
   ) => {
@@ -307,6 +308,7 @@ export function useChatMessages(
 
     const messageType = options?.messageType ?? 'text'
     const payload = options?.payload ?? null
+    const mediaUrl = options?.mediaUrl ?? null
     const replyTo = options?.replyTo ?? null
     const replyToId = replyTo?.id ?? null
     // Only plain-text bodies are E2E-encrypted; structured card payloads travel as-is
@@ -324,6 +326,7 @@ export function useChatMessages(
       content,
       messageType,
       payload,
+      mediaUrl,
       isDeleted: false,
       replyToId,
       replyTo,
@@ -339,7 +342,12 @@ export function useChatMessages(
       const outbound = otherUsername && !isStructured
         ? await encryptForUsername(otherUsername, content)
         : content
-      const saved = await postMessage(conversationId, outbound, token, { messageType, payload, replyToId })
+      const saved = await postMessage(conversationId, outbound, token, {
+        messageType,
+        payload,
+        replyToId,
+        mediaUrl,
+      })
 
       setMessages(prev => prev.map(message => (
         message.tempId === tempId

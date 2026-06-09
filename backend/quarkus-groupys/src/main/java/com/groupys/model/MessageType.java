@@ -18,6 +18,8 @@ public final class MessageType {
     public static final String LYRIC = "LYRIC";
     public static final String TIMESTAMP = "TIMESTAMP";
     public static final String DEDICATION = "DEDICATION";
+    public static final String IMAGE = "IMAGE";
+    public static final String LINK_PREVIEW = "LINK_PREVIEW";
     public static final String VOICE = "VOICE";
     public static final String STICKER = "STICKER";
     public static final String NOW_PLAYING_SHARE = "NOW_PLAYING_SHARE";
@@ -26,7 +28,7 @@ public final class MessageType {
     public static final String SYSTEM = "SYSTEM";
 
     private static final Set<String> ALLOWED = Set.of(
-            TEXT, TRACK, ALBUM, PLAYLIST, LYRIC, TIMESTAMP, DEDICATION,
+            TEXT, TRACK, ALBUM, PLAYLIST, LYRIC, TIMESTAMP, DEDICATION, IMAGE, LINK_PREVIEW,
             VOICE, STICKER, NOW_PLAYING_SHARE, TASTE_HANDSHAKE, BLIND_LISTEN, SYSTEM
     );
 

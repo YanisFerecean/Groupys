@@ -1,6 +1,8 @@
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth, useUser } from '@clerk/expo'
 import { Image } from 'expo-image'
+import * as ImagePicker from 'expo-image-picker'
+import { UIImagePickerPreferredAssetRepresentationMode } from 'expo-image-picker'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -33,7 +35,8 @@ import { ConversationOptionsSheet } from '@/components/chat/ConversationOptionsS
 import { TypingIndicator } from '@/components/chat/TypingIndicator'
 import { useListenTogether } from '@/hooks/useListenTogether'
 import { useMusicGate } from '@/hooks/useMusicGate'
-import { fetchMusicCurrentlyPlaying } from '@/lib/api'
+import { apiPostMultipart, fetchMusicCurrentlyPlaying } from '@/lib/api'
+import { resolveLinkPreview } from '@/lib/chat-api'
 import type { AlbumPayload, TrackPayload } from '@/models/ChatPayloads'
 import { Colors } from '@/constants/colors'
 import { useChat } from '@/hooks/useChat'
@@ -109,6 +112,52 @@ export default function ChatConversationScreen() {
   // Richer music shares (tickets 2.2 / 2.3).
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
   const [albumPickerOpen, setAlbumPickerOpen] = useState(false)
+  const pickImage = useCallback(async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.8,
+        allowsEditing: false,
+        preferredAssetRepresentationMode: UIImagePickerPreferredAssetRepresentationMode.Compatible,
+      })
+      if (result.canceled || !result.assets[0]) return
+
+      const asset = result.assets[0]
+      const formData = new FormData()
+      formData.append('file', {
+        uri: asset.uri,
+        type: asset.mimeType ?? 'image/jpeg',
+        name: asset.fileName ?? `chat-image-${Date.now()}.jpg`,
+      } as unknown as Blob)
+      const token = await getToken()
+      const uploaded = await apiPostMultipart<{ url: string }>('/posts/media/upload', token, formData)
+      await sendMessage('Photo', { messageType: 'IMAGE', mediaUrl: uploaded.url })
+    } catch {
+      Alert.alert('Could not share photo', 'Try selecting the image again.')
+    }
+  }, [getToken, sendMessage])
+
+  const handleComposerSend = useCallback(async (content: string) => {
+    const replyTo = replyTarget
+    setReplyTarget(null)
+    const trimmed = content.trim()
+    if (/^https?:\/\/\S+$/i.test(trimmed)) {
+      try {
+        const token = await getToken()
+        const resolved = await resolveLinkPreview(trimmed, token)
+        await sendMessage(resolved.fallbackText, {
+          messageType: resolved.messageType,
+          payload: resolved.payload,
+          replyTo,
+        })
+        return
+      } catch {
+        // A URL without previewable metadata remains a normal encrypted text message.
+      }
+    }
+    await sendMessage(content, replyTo ? { replyTo } : undefined)
+  }, [getToken, replyTarget, sendMessage])
+
   const sendTrack = useCallback((track: TrackPayload) => {
     const label = track.artist ? `🎵 ${track.title} — ${track.artist}` : `🎵 ${track.title}`
     void sendMessage(label, {
@@ -857,8 +906,7 @@ export default function ChatConversationScreen() {
               replyTo={replyTarget}
               onCancelReply={() => setReplyTarget(null)}
               onSend={(content) => {
-                void sendMessage(content, replyTarget ? { replyTo: replyTarget } : undefined)
-                setReplyTarget(null)
+                void handleComposerSend(content)
               }}
               onMusicPress={() => {
                 void handleMusicPress()
@@ -885,6 +933,9 @@ export default function ChatConversationScreen() {
       <MusicAttachSheet
         visible={attachMenuOpen}
         onClose={() => setAttachMenuOpen(false)}
+        onPickImage={() => {
+          void pickImage()
+        }}
         onPickAlbum={() => setAlbumPickerOpen(true)}
         onDedicate={() => {
           setPickerMode('dedicate')

@@ -3,7 +3,9 @@ package com.groupys.resource;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.groupys.dto.ConversationResDto;
 import com.groupys.dto.MessageResDto;
+import com.groupys.dto.LinkPreviewResDto;
 import com.groupys.service.ChatService;
+import com.groupys.service.LinkPreviewService;
 import com.groupys.service.NotificationService;
 import com.groupys.service.PresenceService;
 import com.groupys.service.UserService;
@@ -33,6 +35,9 @@ public class ConversationResource {
 
     @Inject
     ChatService chatService;
+
+    @Inject
+    LinkPreviewService linkPreviewService;
 
     @Inject
     PresenceService presenceService;
@@ -131,7 +136,7 @@ public class ConversationResource {
             }
         }
         MessageResDto msg = chatService.sendMessage(
-                id, jwt.getSubject(), req.content(), req.messageType(), payloadJson, req.replyToId());
+                id, jwt.getSubject(), req.content(), req.messageType(), payloadJson, req.replyToId(), req.mediaUrl());
         pushMessageNew(msg, jwt.getSubject());
         return Response.status(Response.Status.CREATED).entity(msg).build();
     }
@@ -149,6 +154,9 @@ public class ConversationResource {
             data.put("messageType", msg.messageType());
             if (msg.payload() != null) {
                 data.put("payload", msg.payload());
+            }
+            if (msg.mediaUrl() != null) {
+                data.put("mediaUrl", msg.mediaUrl());
             }
             if (msg.replyToId() != null) {
                 data.put("replyToId", msg.replyToId().toString());
@@ -194,6 +202,12 @@ public class ConversationResource {
         return Response.noContent().build();
     }
 
+    @GET
+    @Path("/link-preview")
+    public LinkPreviewResDto resolveLinkPreview(@QueryParam("url") String url) {
+        return linkPreviewService.resolve(url);
+    }
+
     // ── E2E public keys ───────────────────────────────────────────────────────
 
     @GET
@@ -214,6 +228,6 @@ public class ConversationResource {
 
     public record StartConversationRequest(UUID targetUserId) {}
     public record MuteConversationRequest(Instant until) {}
-    public record SendMessageRequest(String content, String messageType, com.fasterxml.jackson.databind.JsonNode payload, UUID replyToId) {}
+    public record SendMessageRequest(String content, String messageType, com.fasterxml.jackson.databind.JsonNode payload, UUID replyToId, String mediaUrl) {}
     public record PublicKeyRequest(String publicKey) {}
 }
