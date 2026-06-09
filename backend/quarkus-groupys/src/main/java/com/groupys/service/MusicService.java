@@ -79,6 +79,43 @@ public class MusicService {
         user.appleMusicConnectedAt = Instant.now();
     }
 
+    /**
+     * Capability probe for the music gate (ticket 0.2). {@code connected} reflects a stored
+     * user token; {@code subscriptionActive} probes the storefront — any failure or undecryptable
+     * token reports {@code false} so the client degrades to preview-only.
+     */
+    public com.groupys.dto.MusicCapabilityResDto getCapability(String clerkId) {
+        User user = userRepository.findByClerkId(clerkId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        boolean connected = user.appleMusicUserToken != null && !user.appleMusicUserToken.isBlank();
+        if (!connected) {
+            return new com.groupys.dto.MusicCapabilityResDto(false, false);
+        }
+        String token;
+        try {
+            token = encryptionUtil.decrypt(user.appleMusicUserToken);
+        } catch (RuntimeException e) {
+            // Token present but unusable — treat as connected-but-preview-only (needs reconnect).
+            return new com.groupys.dto.MusicCapabilityResDto(true, false);
+        }
+        boolean active;
+        try {
+            active = probeSubscriptionActive(token);
+        } catch (Exception e) {
+            Log.debugf("Subscription probe failed: %s", e.getMessage());
+            active = false;
+        }
+        return new com.groupys.dto.MusicCapabilityResDto(true, active);
+    }
+
+    private boolean probeSubscriptionActive(String musicUserToken) {
+        String bearer = "Bearer " + developerTokenService.getDeveloperToken();
+        try (Response response = executeWithRetry(() ->
+                appleMusicApi.getMyStorefront(bearer, musicUserToken), "probe subscription")) {
+            return response.getStatus() == 200;
+        }
+    }
+
     @Transactional
     public void disconnect(String clerkId) {
         User user = userRepository.findByClerkId(clerkId)

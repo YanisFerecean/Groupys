@@ -49,6 +49,12 @@ public class MusicResource {
         return musicService.getDeveloperToken();
     }
 
+    @GET
+    @Path("/capability")
+    public com.groupys.dto.MusicCapabilityResDto capability() {
+        return musicService.getCapability(jwt.getSubject());
+    }
+
     @POST
     @Path("/connect")
     public DiscoverySyncResDto connect(@Valid MusicConnectReqDto dto) {

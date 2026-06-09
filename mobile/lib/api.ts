@@ -893,6 +893,17 @@ export async function getMusicDeveloperToken(
   return apiFetch<MusicDeveloperTokenRes>('/music/developer-token', token, false)
 }
 
+export interface MusicCapabilityRes {
+  connected: boolean
+  subscriptionActive: boolean
+}
+
+export async function getMusicCapability(
+  token: string | null,
+): Promise<MusicCapabilityRes> {
+  return apiFetch<MusicCapabilityRes>('/music/capability', token, false)
+}
+
 export async function connectMusic(
   token: string | null,
   musicUserToken: string,
