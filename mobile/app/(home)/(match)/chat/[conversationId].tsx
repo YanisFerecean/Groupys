@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons'
-import { useUser } from '@clerk/expo'
+import { useAuth, useUser } from '@clerk/expo'
 import { Image } from 'expo-image'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -18,7 +18,12 @@ import { MessageBubble } from '@/components/chat/MessageBubble'
 import { MessageComposer } from '@/components/chat/MessageComposer'
 import { NowPlayingPill } from '@/components/chat/NowPlayingPill'
 import { NowPlayingTrackSheet } from '@/components/music/NowPlayingTrackSheet'
+import { TrackPicker } from '@/components/music/TrackPicker'
+import { MusicUpsellSheet } from '@/components/music/MusicUpsellSheet'
 import { TypingIndicator } from '@/components/chat/TypingIndicator'
+import { useMusicGate } from '@/hooks/useMusicGate'
+import { fetchMusicCurrentlyPlaying } from '@/lib/api'
+import type { TrackPayload } from '@/models/ChatPayloads'
 import { Colors } from '@/constants/colors'
 import { useChat } from '@/hooks/useChat'
 import { useChatMessages } from '@/hooks/useChatMessages'
@@ -35,7 +40,9 @@ export default function ChatConversationScreen() {
   const router = useRouter()
   const params = useLocalSearchParams<{ conversationId?: string | string[] }>()
   const { user } = useUser()
+  const { getToken } = useAuth()
   const { showModerationMenu } = useModeration()
+  const musicGate = useMusicGate()
   const {
     acceptDirectRequest,
     conversations,
@@ -63,6 +70,42 @@ export default function ChatConversationScreen() {
     resendMessage,
     sendMessage,
   } = useChatMessages(activeConversationId, otherParticipant?.username ?? null)
+
+  // Track sharing (tickets 2.1 / 1.3).
+  const [trackPickerOpen, setTrackPickerOpen] = useState(false)
+  const sendTrack = useCallback((track: TrackPayload) => {
+    const label = track.artist ? `🎵 ${track.title} — ${track.artist}` : `🎵 ${track.title}`
+    void sendMessage(label, {
+      messageType: 'TRACK',
+      payload: track as unknown as Record<string, unknown>,
+    })
+  }, [sendMessage])
+
+  const handleMusicPress = useCallback(async () => {
+    // Not connected → prompt to connect (manual picker is still reachable from the upsell flow).
+    if (!musicGate.capability.connected) {
+      musicGate.requireMusic('Share what you’re listening to')
+      return
+    }
+    // Connected → share the current track instantly, else fall back to the manual picker.
+    try {
+      const token = await getToken()
+      const current = await fetchMusicCurrentlyPlaying(token)
+      if (current) {
+        sendTrack({
+          type: 'TRACK',
+          id: '',
+          title: current.title,
+          artist: current.artist,
+          artworkUrl: current.coverUrl ?? undefined,
+        })
+        return
+      }
+    } catch {
+      // fall through to the picker
+    }
+    setTrackPickerOpen(true)
+  }, [getToken, musicGate, sendTrack])
   const [typingUsers, setTypingUsers] = useState<Map<string, string>>(new Map())
   const [hasPartnerKey, setHasPartnerKey] = useState(false)
   const [isNearBottom, setIsNearBottom] = useState(true)
@@ -530,12 +573,8 @@ export default function ChatConversationScreen() {
               onSend={(content) => {
                 void sendMessage(content)
               }}
-              onSendTrack={(track) => {
-                const label = track.artist ? `🎵 ${track.title} — ${track.artist}` : `🎵 ${track.title}`
-                void sendMessage(label, {
-                  messageType: 'TRACK',
-                  payload: track as unknown as Record<string, unknown>,
-                })
+              onMusicPress={() => {
+                void handleMusicPress()
               }}
             />
           </View>
@@ -546,6 +585,22 @@ export default function ChatConversationScreen() {
         visible={nowPlayingSheetOpen}
         track={partnerTrack}
         onClose={() => setNowPlayingSheetOpen(false)}
+      />
+
+      <TrackPicker
+        visible={trackPickerOpen}
+        onClose={() => setTrackPickerOpen(false)}
+        onSelect={(track) => {
+          setTrackPickerOpen(false)
+          sendTrack(track)
+        }}
+      />
+
+      <MusicUpsellSheet
+        visible={musicGate.upsell.visible}
+        mode={musicGate.upsell.mode}
+        action={musicGate.upsell.action}
+        onClose={musicGate.closeUpsell}
       />
     </KeyboardAvoidingView>
   )

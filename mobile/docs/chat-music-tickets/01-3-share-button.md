@@ -2,7 +2,7 @@
 ticket: 1.3
 title: Now-playing share button in composer
 phase: Live status
-status: todo
+status: done
 priority: P1
 depends_on: [0.3, 2.1]
 ---
