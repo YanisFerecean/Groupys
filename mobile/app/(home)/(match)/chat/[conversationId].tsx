@@ -16,6 +16,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MessageBubble } from '@/components/chat/MessageBubble'
 import { MessageComposer } from '@/components/chat/MessageComposer'
+import { NowPlayingPill } from '@/components/chat/NowPlayingPill'
+import { NowPlayingTrackSheet } from '@/components/music/NowPlayingTrackSheet'
 import { TypingIndicator } from '@/components/chat/TypingIndicator'
 import { Colors } from '@/constants/colors'
 import { useChat } from '@/hooks/useChat'
@@ -41,6 +43,7 @@ export default function ChatConversationScreen() {
     denyDirectRequest,
     fetchConversationById,
     getPublicKeyForUsername,
+    getNowPlaying,
     isUserOnline,
     markConversationRead,
   } = useChat()
@@ -196,6 +199,12 @@ export default function ChatConversationScreen() {
   }, [isNearBottom, newestMessageKey, typingUsername])
 
   const headerTitle = otherParticipant?.displayName || otherParticipant?.username || 'Chat'
+  // Live now-playing pill (ticket 1.2): show only when the partner has a track and is playing.
+  const partnerNowPlaying = otherParticipant ? getNowPlaying(otherParticipant.userId) : null
+  const partnerTrack = partnerNowPlaying?.track && partnerNowPlaying.isPlaying
+    ? partnerNowPlaying.track
+    : null
+  const [nowPlayingSheetOpen, setNowPlayingSheetOpen] = useState(false)
   const lastSeenText = useMemo(() => {
     if (!otherParticipant?.lastSeenAt || isUserOnline(otherParticipant.userId)) {
       return null
@@ -348,6 +357,9 @@ export default function ChatConversationScreen() {
             ) : lastSeenText ? (
               <Text className="text-xs font-medium text-on-surface-variant">{lastSeenText}</Text>
             ) : null
+          ) : null}
+          {partnerTrack ? (
+            <NowPlayingPill track={partnerTrack} onPress={() => setNowPlayingSheetOpen(true)} />
           ) : null}
         </TouchableOpacity>
 
@@ -522,6 +534,12 @@ export default function ChatConversationScreen() {
           </View>
         </>
       )}
+
+      <NowPlayingTrackSheet
+        visible={nowPlayingSheetOpen}
+        track={partnerTrack}
+        onClose={() => setNowPlayingSheetOpen(false)}
+      />
     </KeyboardAvoidingView>
   )
 }

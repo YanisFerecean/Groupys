@@ -2,7 +2,7 @@
 ticket: 1.2
 title: Live status pill in chat header
 phase: Live status
-status: todo
+status: done
 priority: P1
 depends_on: [1.1, 0.3]
 ---
