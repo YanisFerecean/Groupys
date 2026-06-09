@@ -101,7 +101,16 @@ public class ConversationResource {
     @POST
     @Path("/conversations/{id}/messages")
     public Response sendMessage(@PathParam("id") UUID id, SendMessageRequest req) {
-        MessageResDto msg = chatService.sendMessage(id, jwt.getSubject(), req.content());
+        String payloadJson = null;
+        if (req.payload() != null) {
+            try {
+                payloadJson = objectMapper.writeValueAsString(req.payload());
+            } catch (Exception e) {
+                throw new BadRequestException("Invalid message payload");
+            }
+        }
+        MessageResDto msg = chatService.sendMessage(
+                id, jwt.getSubject(), req.content(), req.messageType(), payloadJson);
         pushMessageNew(msg, jwt.getSubject());
         return Response.status(Response.Status.CREATED).entity(msg).build();
     }
@@ -117,6 +126,9 @@ public class ConversationResource {
             data.put("senderProfileImage", msg.senderProfileImage());
             data.put("content", msg.content());
             data.put("messageType", msg.messageType());
+            if (msg.payload() != null) {
+                data.put("payload", msg.payload());
+            }
             data.put("createdAt", msg.createdAt().toString());
             String json = objectMapper.writeValueAsString(new WebSocketMessage("MESSAGE_NEW", data));
             String deeplink = "/(home)/(match)/chat/" + msg.conversationId();
@@ -172,6 +184,6 @@ public class ConversationResource {
     // ── Request records ───────────────────────────────────────────────────────
 
     public record StartConversationRequest(UUID targetUserId) {}
-    public record SendMessageRequest(String content) {}
+    public record SendMessageRequest(String content, String messageType, com.fasterxml.jackson.databind.JsonNode payload) {}
     public record PublicKeyRequest(String publicKey) {}
 }

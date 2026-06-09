@@ -2,6 +2,8 @@ package com.groupys.model;
 
 import jakarta.persistence.*;
 import org.hibernate.annotations.BatchSize;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -30,6 +32,11 @@ public class Message {
 
     @Column(name = "message_type", length = 20)
     public String messageType = "text";
+
+    /** Raw JSON card payload for structured message types (null for plain TEXT). */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "payload", columnDefinition = "jsonb")
+    public String payload;
 
     @Column(name = "media_url", length = 500)
     public String mediaUrl;

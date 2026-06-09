@@ -74,10 +74,19 @@ export async function postMessage(
   conversationId: string,
   content: string,
   token: string | null,
+  options?: { messageType?: string; payload?: Record<string, unknown> | null },
 ): Promise<Message> {
   return apiRequest<Message>(
     `/chat/conversations/${encodeURIComponent(conversationId)}/messages`,
-    { method: 'POST', token, body: { content } },
+    {
+      method: 'POST',
+      token,
+      body: {
+        content,
+        messageType: options?.messageType,
+        payload: options?.payload ?? undefined,
+      },
+    },
   )
 }
 

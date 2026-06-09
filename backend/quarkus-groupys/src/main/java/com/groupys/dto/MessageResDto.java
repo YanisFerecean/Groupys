@@ -1,5 +1,7 @@
 package com.groupys.dto;
 
+import com.fasterxml.jackson.databind.JsonNode;
+
 import java.time.Instant;
 import java.util.UUID;
 
@@ -12,6 +14,7 @@ public record MessageResDto(
         String senderProfileImage,
         String content,
         String messageType,
+        JsonNode payload,
         boolean isDeleted,
         UUID replyToId,
         Instant createdAt

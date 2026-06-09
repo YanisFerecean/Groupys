@@ -203,10 +203,19 @@ export function useChatMessages(
     }
   }, [conversationId, decryptPayload, hasMore, isLoadingMore, messages.length])
 
-  const sendMessage = useCallback(async (content: string) => {
+  const sendMessage = useCallback(async (
+    content: string,
+    options?: { messageType?: string; payload?: Record<string, unknown> | null },
+  ) => {
     if (!conversationId || !user?.username) {
       return
     }
+
+    const messageType = options?.messageType ?? 'text'
+    const payload = options?.payload ?? null
+    // Only plain-text bodies are E2E-encrypted; structured card payloads travel as-is
+    // (their content field is at most a short fallback label used for inbox previews).
+    const isStructured = messageType.toLowerCase() !== 'text'
 
     const tempId = Math.random().toString(36).slice(2)
     const optimistic: Message = {
@@ -217,7 +226,8 @@ export function useChatMessages(
       senderDisplayName: user.fullName ?? null,
       senderProfileImage: user.imageUrl ?? null,
       content,
-      messageType: 'text',
+      messageType,
+      payload,
       isDeleted: false,
       replyToId: null,
       createdAt: new Date().toISOString(),
@@ -229,10 +239,10 @@ export function useChatMessages(
 
     try {
       const token = await getTokenRef.current()
-      const outbound = otherUsername
+      const outbound = otherUsername && !isStructured
         ? await encryptForUsername(otherUsername, content)
         : content
-      const saved = await postMessage(conversationId, outbound, token)
+      const saved = await postMessage(conversationId, outbound, token, { messageType, payload })
 
       setMessages(prev => prev.map(message => (
         message.tempId === tempId

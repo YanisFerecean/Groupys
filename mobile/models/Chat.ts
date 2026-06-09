@@ -34,6 +34,8 @@ export interface Message {
   senderProfileImage: string | null
   content: string
   messageType: string
+  /** Structured card payload for non-text message types (see models/ChatPayloads.ts). */
+  payload?: Record<string, unknown> | null
   isDeleted: boolean
   replyToId: string | null
   createdAt: string
@@ -53,5 +55,6 @@ export interface WsOutbound {
   payload?: Record<string, unknown>
   conversationId?: string
   content?: string
+  messageType?: string
   tempId?: string
 }

@@ -1,5 +1,7 @@
 package com.groupys.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.groupys.config.PerformanceFeatureFlags;
 import com.groupys.dto.ConversationResDto;
 import com.groupys.dto.MessageResDto;
@@ -7,6 +9,7 @@ import com.groupys.dto.ParticipantDto;
 import com.groupys.model.Conversation;
 import com.groupys.model.ConversationParticipant;
 import com.groupys.model.Message;
+import com.groupys.model.MessageType;
 import com.groupys.model.User;
 import com.groupys.model.Friendship;
 import com.groupys.repository.ConversationRepository;
@@ -43,6 +46,7 @@ public class ChatService {
     private final PerformanceFeatureFlags flags;
     private final ChatRedisStateService chatRedisStateService;
     private final RateLimitingService rateLimitingService;
+    private final ObjectMapper objectMapper;
 
     @Inject
     public ChatService(
@@ -54,7 +58,8 @@ public class ChatService {
             DiscoveryService discoveryService,
             PerformanceFeatureFlags flags,
             ChatRedisStateService chatRedisStateService,
-            RateLimitingService rateLimitingService) {
+            RateLimitingService rateLimitingService,
+            ObjectMapper objectMapper) {
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.userRepository = userRepository;
@@ -64,6 +69,7 @@ public class ChatService {
         this.flags = flags;
         this.chatRedisStateService = chatRedisStateService;
         this.rateLimitingService = rateLimitingService;
+        this.objectMapper = objectMapper;
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -99,10 +105,23 @@ public class ChatService {
                 m.sender.profileImage,
                 m.content,
                 m.messageType,
+                parsePayload(m.payload),
                 m.isDeleted,
                 m.replyToId,
                 m.createdAt
         );
+    }
+
+    /** Parse the stored raw JSON payload into a JsonNode; null/blank → null, malformed → null. */
+    JsonNode parsePayload(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readTree(raw);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     String resolveRequestStatus(Conversation conversation, UUID currentUserId) {
@@ -319,6 +338,12 @@ public class ChatService {
 
     @Transactional
     public MessageResDto sendMessage(UUID conversationId, String clerkId, String content) {
+        return sendMessage(conversationId, clerkId, content, MessageType.TEXT, null);
+    }
+
+    @Transactional
+    public MessageResDto sendMessage(UUID conversationId, String clerkId, String content,
+                                     String messageType, String payloadJson) {
         User sender = requireUserByClerkId(clerkId);
         rateLimitingService.checkRateLimit(sender.id, clerkId);
         requireParticipant(conversationId, sender.id);
@@ -339,19 +364,43 @@ public class ChatService {
             throw new ForbiddenException("Cannot send messages in this conversation");
         }
 
-        // Validate content
-        if (content == null || content.isBlank()) {
+        // Validate message type against the known set.
+        String type = MessageType.normalize(messageType);
+        if (!MessageType.isValid(type)) {
+            throw new jakarta.ws.rs.BadRequestException("Unknown message type: " + messageType);
+        }
+
+        // Validate content. Plain text requires non-blank content; structured cards carry their
+        // meaning in the payload, so content may be empty (a short fallback label at most).
+        boolean structured = MessageType.isStructured(type);
+        if (!structured && (content == null || content.isBlank())) {
             throw new jakarta.ws.rs.BadRequestException("Message content cannot be empty");
         }
-        if (content.length() > 2000) {
+        if (content != null && content.length() > 2000) {
             throw new jakarta.ws.rs.BadRequestException("Message too long (max 2000 chars)");
+        }
+
+        // Validate payload JSON when present, and require it for structured types.
+        String normalizedPayload = null;
+        if (payloadJson != null && !payloadJson.isBlank()) {
+            if (payloadJson.length() > 16000) {
+                throw new jakarta.ws.rs.BadRequestException("Message payload too large");
+            }
+            try {
+                normalizedPayload = objectMapper.writeValueAsString(objectMapper.readTree(payloadJson));
+            } catch (Exception e) {
+                throw new jakarta.ws.rs.BadRequestException("Invalid message payload JSON");
+            }
+        } else if (structured) {
+            throw new jakarta.ws.rs.BadRequestException("Structured message requires a payload");
         }
 
         Message msg = new Message();
         msg.conversation = conv;
         msg.sender = sender;
-        msg.content = content.strip();
-        msg.messageType = "text";
+        msg.content = content != null ? content.strip() : "";
+        msg.messageType = type;
+        msg.payload = normalizedPayload;
         msg.createdAt = Instant.now(); // set before persist so DTO is populated without flush()
         messageRepository.persist(msg);
 

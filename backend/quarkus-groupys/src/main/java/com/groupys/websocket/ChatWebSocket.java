@@ -231,9 +231,22 @@ public class ChatWebSocket {
         String convIdStr = (String) msg.get("conversationId");
         String content = (String) msg.get("content");
         String tempId = (String) msg.getOrDefault("tempId", "");
+        String messageType = (String) msg.get("messageType");
+        Object payloadObj = msg.get("payload");
 
-        if (convIdStr == null || content == null) {
-            sendJson(connection, WebSocketMessage.error("conversationId and content required"));
+        // Serialise the structured payload (if any) back to a raw JSON string for the service.
+        String payloadJson = null;
+        if (payloadObj != null) {
+            try {
+                payloadJson = mapper.writeValueAsString(payloadObj);
+            } catch (Exception e) {
+                sendJson(connection, WebSocketMessage.error("Invalid message payload"));
+                return;
+            }
+        }
+
+        if (convIdStr == null || (content == null && payloadJson == null)) {
+            sendJson(connection, WebSocketMessage.error("conversationId and content/payload required"));
             return;
         }
 
@@ -247,7 +260,7 @@ public class ChatWebSocket {
 
         MessageResDto saved;
         try {
-            saved = chatService.sendMessage(conversationId, sender.clerkId, content);
+            saved = chatService.sendMessage(conversationId, sender.clerkId, content, messageType, payloadJson);
         } catch (jakarta.ws.rs.ForbiddenException e) {
             sendJson(connection, WebSocketMessage.error("Not a participant in this conversation"));
             return;
@@ -383,6 +396,9 @@ public class ChatWebSocket {
         // Sanitize message content to prevent XSS
         data.put("content", sanitizeForHtml(m.content()));
         data.put("messageType", m.messageType());
+        if (m.payload() != null) {
+            data.put("payload", m.payload());
+        }
         data.put("createdAt", m.createdAt().toString());
         if (tempId != null && !tempId.isEmpty()) {
             data.put("tempId", tempId);
