@@ -1,6 +1,8 @@
 import type { ProfileCustomization } from '@/models/ProfileCustomization'
 import type { DailySong } from '@/models/DailySong'
 import type { CommunityMemberResDto } from '@/models/CommunityMemberRes'
+import type { SongOfWeekPoll } from '@/models/SongOfWeek'
+import type { TrackPayload } from '@/models/ChatPayloads'
 import { ApiError, apiRequest } from '@/lib/apiRequest'
 import { API_URL } from '@/lib/config'
 import { getMusicErrorMessage } from '@/lib/musicErrors'
@@ -934,6 +936,42 @@ export async function fetchCommunityMembers(
     `/communities/${encodeURIComponent(communityId)}/members`,
     token,
     false,
+  )
+}
+
+/** Current weekly community track poll and pinned previous winner (ticket 6.4). */
+export async function fetchSongOfWeek(
+  communityId: string,
+  token: string | null,
+): Promise<SongOfWeekPoll> {
+  return apiFetch<SongOfWeekPoll>(
+    `/communities/${encodeURIComponent(communityId)}/song-of-week`,
+    token,
+    false,
+  )
+}
+
+export async function submitSongOfWeekCandidate(
+  communityId: string,
+  token: string | null,
+  track: TrackPayload,
+): Promise<SongOfWeekPoll> {
+  return apiPost<SongOfWeekPoll>(
+    `/communities/${encodeURIComponent(communityId)}/song-of-week/candidates`,
+    token,
+    track,
+  )
+}
+
+export async function toggleSongOfWeekVote(
+  communityId: string,
+  candidateId: string,
+  token: string | null,
+): Promise<SongOfWeekPoll> {
+  return apiPost<SongOfWeekPoll>(
+    `/communities/${encodeURIComponent(communityId)}/song-of-week/candidates/${encodeURIComponent(candidateId)}/vote`,
+    token,
+    {},
   )
 }
 

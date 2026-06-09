@@ -7,10 +7,14 @@ import com.groupys.dto.CommunityUpdateDto;
 import com.groupys.dto.MyCommunityResDto;
 import com.groupys.dto.TransferOwnerReqDto;
 import com.groupys.dto.UpdateMemberRoleDto;
+import com.groupys.dto.SongOfWeekPollDto;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.groupys.model.User;
 import com.groupys.repository.UserRepository;
 import com.groupys.service.CommunityService;
 import com.groupys.service.StorageService;
+import com.groupys.service.SongOfWeekService;
 import io.minio.GetObjectArgs;
 import io.minio.MinioClient;
 import io.minio.StatObjectArgs;
@@ -58,6 +62,12 @@ public class CommunityResource {
 
     @Inject
     UserRepository userRepository;
+
+    @Inject
+    SongOfWeekService songOfWeekService;
+
+    @Inject
+    ObjectMapper objectMapper;
 
     @GET
     public List<CommunityResDto> list() {
@@ -145,6 +155,32 @@ public class CommunityResource {
         body.put("owner", owner);
         body.put("role", role);
         return Response.ok(body).build();
+    }
+
+    @GET
+    @Path("/{id}/song-of-week")
+    public SongOfWeekPollDto getSongOfWeek(@PathParam("id") UUID id) {
+        return songOfWeekService.getPoll(id, jwt.getSubject());
+    }
+
+    @POST
+    @Path("/{id}/song-of-week/candidates")
+    public SongOfWeekPollDto submitSongOfWeekCandidate(@PathParam("id") UUID id, JsonNode track) {
+        try {
+            return songOfWeekService.submitCandidate(id, jwt.getSubject(), objectMapper.writeValueAsString(track));
+        } catch (WebApplicationException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BadRequestException("Invalid track");
+        }
+    }
+
+    @POST
+    @Path("/{id}/song-of-week/candidates/{candidateId}/vote")
+    public SongOfWeekPollDto voteSongOfWeek(
+            @PathParam("id") UUID id,
+            @PathParam("candidateId") UUID candidateId) {
+        return songOfWeekService.toggleVote(id, candidateId, jwt.getSubject());
     }
 
     @PUT

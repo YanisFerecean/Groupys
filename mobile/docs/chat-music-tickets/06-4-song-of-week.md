@@ -2,7 +2,7 @@
 ticket: 6.4
 title: Song of the week vote
 phase: Community
-status: todo
+status: done
 priority: P4
 depends_on: [3.2, 3.4]
 ---
