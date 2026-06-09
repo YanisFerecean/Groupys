@@ -10,6 +10,11 @@ interface PinnedMessageBarProps {
 }
 
 function pinLabel(message: Message): string {
+  if (message.messageType?.toUpperCase() === 'COLLAB_PLAYLIST') {
+    const title = typeof message.payload?.title === 'string' ? message.payload.title : 'Collaborative playlist'
+    const count = typeof message.payload?.trackCount === 'number' ? message.payload.trackCount : 0
+    return `${title} · ${count} ${count === 1 ? 'track' : 'tracks'}`
+  }
   if (message.content?.trim()) {
     return message.content.trim()
   }

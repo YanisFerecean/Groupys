@@ -7,6 +7,7 @@ import { useMusicGate } from '@/hooks/useMusicGate'
 import { usePreviewPlayer } from '@/hooks/usePreviewPlayer'
 import { isTrackPayload } from '@/models/ChatPayloads'
 import type { MessageRendererProps } from '@/components/chat/messageRenderers'
+import { useChatActions } from '@/components/chat/ChatActionsContext'
 
 function appleMusicLink(title: string, artist: string, explicit?: string): string {
   if (explicit && (explicit.startsWith('music://') || explicit.startsWith('http'))) {
@@ -23,6 +24,7 @@ export function TrackCardMessage({ message, isMine }: MessageRendererProps) {
   const payload = message.payload
   const preview = usePreviewPlayer()
   const { requireMusic, upsell, closeUpsell, capability } = useMusicGate()
+  const { addToCollabPlaylist } = useChatActions()
 
   if (!isTrackPayload(payload)) {
     return null
@@ -67,6 +69,14 @@ export function TrackCardMessage({ message, isMine }: MessageRendererProps) {
               disabled={!capability.canPlayFull}
               isMine={isMine}
             />
+            {hasPreview && addToCollabPlaylist ? (
+              <CardActionButton
+                icon="list"
+                label="Add to playlist"
+                onPress={() => addToCollabPlaylist(payload)}
+                isMine={isMine}
+              />
+            ) : null}
             <CardActionButton icon="open-outline" label="Open" onPress={handleOpen} isMine={isMine} />
           </>
         }

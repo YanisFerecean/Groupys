@@ -150,6 +150,7 @@ public class ChatWebSocket {
             case "MESSAGE_DELETE"      -> handleMessageDelete(connection, user, msg);
             case "PIN_ADD"             -> handlePin(connection, user, msg, true);
             case "PIN_REMOVE"          -> handlePin(connection, user, msg, false);
+            case "COLLAB_PLAYLIST_ADD" -> handleCollabPlaylistAdd(connection, user, msg);
             case "ROOM_JOIN"           -> handleRoomJoin(connection, user, msg);
             case "ROOM_STATE"          -> handleRoomState(user, msg);
             case "ROOM_LEAVE"          -> handleRoomLeave(user, msg);
@@ -468,7 +469,11 @@ public class ChatWebSocket {
             return;
         }
 
-        List<Map<String, Object>> pins = chatService.getPins(conversationId, user.clerkId).stream()
+        broadcastPins(conversationId, user.clerkId);
+    }
+
+    private void broadcastPins(UUID conversationId, String requestingClerkId) {
+        List<Map<String, Object>> pins = chatService.getPins(conversationId, requestingClerkId).stream()
                 .map(pin -> buildMessageData(pin, null))
                 .toList();
         Map<String, Object> payload = new LinkedHashMap<>();
@@ -477,6 +482,33 @@ public class ChatWebSocket {
         String json = toJson(new WebSocketMessage("PIN_UPDATE", payload));
         chatService.getParticipantClerkIds(conversationId)
                 .forEach((pid, clerkId) -> presenceService.sendTo(clerkId, json));
+    }
+
+    // -- Collaborative playlist (ticket 6.1) -----------------------------------
+
+    private void handleCollabPlaylistAdd(WebSocketConnection connection, User user, Map<String, Object> msg) {
+        UUID conversationId = parseConversationId(connection, msg);
+        Object track = msg.get("track");
+        if (conversationId == null || track == null) {
+            sendJson(connection, WebSocketMessage.error("conversationId and track required"));
+            return;
+        }
+
+        MessageResDto updated;
+        try {
+            updated = chatService.addTrackToCollabPlaylist(
+                    conversationId, user.clerkId, mapper.writeValueAsString(track));
+        } catch (jakarta.ws.rs.WebApplicationException e) {
+            sendJson(connection, WebSocketMessage.error(e.getMessage()));
+            return;
+        } catch (Exception e) {
+            LOG.errorf(e, "Failed to update collaborative playlist");
+            sendJson(connection, WebSocketMessage.error("Internal error"));
+            return;
+        }
+
+        broadcastMessageUpdated(updated);
+        broadcastPins(conversationId, user.clerkId);
     }
 
     // -- Reactions (ticket 3.2) ------------------------------------------------

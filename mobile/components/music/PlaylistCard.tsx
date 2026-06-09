@@ -48,7 +48,7 @@ export function PlaylistCard({ title, subtitle, artworkUrl, isMine = false, meta
           ) : null}
         </View>
       </View>
-      {actions ? <View className="flex-row items-center gap-2 px-3 pb-3 pt-1">{actions}</View> : null}
+      {actions ? <View className="flex-row flex-wrap items-center gap-2 px-3 pb-3 pt-1">{actions}</View> : null}
     </View>
   )
 }

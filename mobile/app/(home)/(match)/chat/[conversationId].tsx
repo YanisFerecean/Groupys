@@ -307,7 +307,12 @@ export default function ChatConversationScreen() {
     revealBlindListen: (messageId: string, guess: string) => {
       chatWs.send({ type: 'BLIND_GUESS', messageId, guess })
     },
-  }), [otherUserId, router])
+    addToCollabPlaylist: activeConversationId
+      ? (track: TrackPayload) => {
+          chatWs.send({ type: 'COLLAB_PLAYLIST_ADD', conversationId: activeConversationId, track })
+        }
+      : undefined,
+  }), [activeConversationId, otherUserId, router])
 
   const handleMusicPress = useCallback(async () => {
     setPickerMode('send')

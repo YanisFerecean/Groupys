@@ -13,6 +13,7 @@ import { ImageMessage } from '@/components/chat/ImageMessage'
 import { LinkPreviewMessage } from '@/components/chat/LinkPreviewMessage'
 import { VoiceMessage } from '@/components/chat/VoiceMessage'
 import { StickerMessage } from '@/components/chat/StickerMessage'
+import { CollabPlaylistCardMessage } from '@/components/music/CollabPlaylistCardMessage'
 
 export interface MessageRendererProps {
   message: Message
@@ -28,6 +29,7 @@ export const messageRenderers: Record<string, ComponentType<MessageRendererProps
   TRACK: TrackCardMessage,
   ALBUM: AlbumCardMessage,
   PLAYLIST: PlaylistCardMessage,
+  COLLAB_PLAYLIST: CollabPlaylistCardMessage,
   TASTE_HANDSHAKE: TasteHandshakeMessage,
   DEDICATION: DedicationCardMessage,
   LYRIC: LyricCardMessage,

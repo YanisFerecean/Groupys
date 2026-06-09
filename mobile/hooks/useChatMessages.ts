@@ -182,11 +182,17 @@ export function useChatMessages(
           return
         }
         // Replace an existing message in place (e.g. blind-listen reveal, ticket 4.6).
-        setMessages(prev => prev.map(existing => (
-          existing.id === payload.id
-            ? { ...existing, ...payload, status: existing.status }
-            : existing
-        )))
+        setMessages(prev => {
+          const existing = prev.find(message => message.id === payload.id)
+          if (!existing && payload.messageType?.toUpperCase() === 'COLLAB_PLAYLIST') {
+            return [payload, ...prev]
+          }
+          return prev.map(message => (
+            message.id === payload.id
+              ? { ...message, ...payload, status: message.status }
+              : message
+          ))
+        })
         if (payload.isDeleted) {
           setPins(prev => prev.filter(pin => pin.id !== payload.id))
         } else {

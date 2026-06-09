@@ -9,11 +9,15 @@ import com.groupys.dto.ParticipantDto;
 import com.groupys.model.Conversation;
 import com.groupys.model.ConversationParticipant;
 import com.groupys.model.ConversationPin;
+import com.groupys.model.CollabPlaylist;
+import com.groupys.model.CollabPlaylistTrack;
 import com.groupys.model.Message;
 import com.groupys.model.MessageType;
 import com.groupys.model.User;
 import com.groupys.model.Friendship;
 import com.groupys.repository.CommunityMemberRepository;
+import com.groupys.repository.CollabPlaylistRepository;
+import com.groupys.repository.CollabPlaylistTrackRepository;
 import com.groupys.repository.ConversationPinRepository;
 import com.groupys.repository.ConversationRepository;
 import com.groupys.repository.FriendshipRepository;
@@ -60,6 +64,8 @@ public class ChatService {
     private final CommunityMemberRepository communityMemberRepository;
     private final MessageReactionRepository messageReactionRepository;
     private final ConversationPinRepository conversationPinRepository;
+    private final CollabPlaylistRepository collabPlaylistRepository;
+    private final CollabPlaylistTrackRepository collabPlaylistTrackRepository;
     private final StickerCatalogService stickerCatalogService;
 
     @Inject
@@ -77,6 +83,8 @@ public class ChatService {
             CommunityMemberRepository communityMemberRepository,
             MessageReactionRepository messageReactionRepository,
             ConversationPinRepository conversationPinRepository,
+            CollabPlaylistRepository collabPlaylistRepository,
+            CollabPlaylistTrackRepository collabPlaylistTrackRepository,
             StickerCatalogService stickerCatalogService) {
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
@@ -91,6 +99,8 @@ public class ChatService {
         this.communityMemberRepository = communityMemberRepository;
         this.messageReactionRepository = messageReactionRepository;
         this.conversationPinRepository = conversationPinRepository;
+        this.collabPlaylistRepository = collabPlaylistRepository;
+        this.collabPlaylistTrackRepository = collabPlaylistTrackRepository;
         this.stickerCatalogService = stickerCatalogService;
     }
 
@@ -137,6 +147,125 @@ public class ChatService {
             conversationPinRepository.delete(pin);
         }
         return msg.conversation.id;
+    }
+
+    // ── Collaborative playlist (ticket 6.1) ───────────────────────────────────
+
+    /**
+     * Appends a public-preview track to the conversation's internal playlist and refreshes its
+     * server-owned pinned card. Tracks are idempotent by catalog id; no Apple audio is relayed.
+     */
+    @Transactional
+    public MessageResDto addTrackToCollabPlaylist(UUID conversationId, String clerkId, String payloadJson) {
+        User user = requireUserByClerkId(clerkId);
+        requireParticipant(conversationId, user.id);
+        Conversation conversation = conversationRepository.findByIdOptional(conversationId)
+                .orElseThrow(() -> new NotFoundException("Conversation not found"));
+        if (REQUEST_STATUS_PENDING.equals(conversation.requestStatus)) {
+            throw new ForbiddenException("Chat request must be accepted before adding tracks");
+        }
+
+        JsonNode track;
+        try {
+            track = objectMapper.readTree(payloadJson);
+        } catch (Exception e) {
+            throw new BadRequestException("Invalid track payload");
+        }
+        validatePayloadShape(MessageType.TRACK, track);
+        String trackId = track.path("id").asText(null);
+        String artist = track.path("artist").asText(null);
+        String previewUrl = track.path("previewUrl").asText(null);
+        if (!MessageType.TRACK.equalsIgnoreCase(track.path("type").asText(""))
+                || trackId == null || trackId.isBlank()
+                || artist == null || artist.isBlank()
+                || previewUrl == null
+                || (!previewUrl.startsWith("https://") && !previewUrl.startsWith("http://"))) {
+            throw new BadRequestException("Collaborative playlist tracks require an id, artist, and public preview");
+        }
+
+        CollabPlaylist playlist = collabPlaylistRepository.findByConversation(conversationId);
+        if (playlist == null) {
+            playlist = new CollabPlaylist();
+            playlist.conversation = conversation;
+            playlist.createdBy = user;
+            collabPlaylistRepository.persist(playlist);
+            collabPlaylistRepository.flush();
+        }
+
+        if (collabPlaylistTrackRepository.findOne(playlist.id, trackId) == null) {
+            CollabPlaylistTrack entry = new CollabPlaylistTrack();
+            entry.playlist = playlist;
+            entry.addedBy = user;
+            entry.trackKey = trackId;
+            entry.position = collabPlaylistTrackRepository.nextPosition(playlist.id);
+            try {
+                entry.trackPayload = objectMapper.writeValueAsString(track);
+            } catch (Exception e) {
+                throw new BadRequestException("Invalid track payload");
+            }
+            collabPlaylistTrackRepository.persist(entry);
+            collabPlaylistTrackRepository.flush();
+        }
+
+        List<CollabPlaylistTrack> tracks = collabPlaylistTrackRepository.findByPlaylist(playlist.id);
+        String cardPayload = buildCollabPlaylistPayload(playlist, tracks);
+        Message card = playlist.message;
+        if (card == null || card.isDeleted) {
+            card = new Message();
+            card.conversation = conversation;
+            card.sender = user;
+            card.content = "Collaborative playlist";
+            card.messageType = MessageType.COLLAB_PLAYLIST;
+            card.payload = cardPayload;
+            card.createdAt = Instant.now();
+            messageRepository.persist(card);
+            messageRepository.flush();
+            playlist.message = card;
+        } else {
+            card.content = "Collaborative playlist";
+            card.messageType = MessageType.COLLAB_PLAYLIST;
+            card.payload = cardPayload;
+            card.updatedAt = Instant.now();
+        }
+
+        if (conversationPinRepository.findOne(conversationId, card.id) == null) {
+            ConversationPin pin = new ConversationPin();
+            pin.conversationId = conversationId;
+            pin.messageId = card.id;
+            pin.pinnedBy = user;
+            conversationPinRepository.persist(pin);
+        }
+        return toMessageDto(card);
+    }
+
+    private String buildCollabPlaylistPayload(CollabPlaylist playlist, List<CollabPlaylistTrack> tracks) {
+        var payload = objectMapper.createObjectNode();
+        payload.put("type", MessageType.COLLAB_PLAYLIST);
+        payload.put("id", playlist.id.toString());
+        String groupName = playlist.conversation.groupName;
+        payload.put("title", groupName == null || groupName.isBlank() ? "Our playlist" : groupName + " playlist");
+        payload.put("curator", "Groupys thread");
+        payload.put("trackCount", tracks.size());
+
+        var previews = payload.putArray("previews");
+        for (int i = 0; i < tracks.size(); i++) {
+            JsonNode track = parsePayload(tracks.get(i).trackPayload);
+            if (track == null) continue;
+            if (i == 0 && track.hasNonNull("artworkUrl")) {
+                payload.put("artworkUrl", track.path("artworkUrl").asText());
+            }
+            if (previews.size() < 5 && track.hasNonNull("previewUrl")) {
+                var preview = previews.addObject();
+                preview.put("id", track.path("id").asText());
+                preview.put("title", track.path("title").asText());
+                preview.put("previewUrl", track.path("previewUrl").asText());
+            }
+        }
+        try {
+            return objectMapper.writeValueAsString(payload);
+        } catch (Exception e) {
+            throw new BadRequestException("Could not build collaborative playlist");
+        }
     }
 
     /**
@@ -330,7 +459,8 @@ public class ChatService {
             throw new jakarta.ws.rs.BadRequestException("Message payload must be a JSON object");
         }
         if (MessageType.TRACK.equals(type) || MessageType.ALBUM.equals(type)
-                || MessageType.PLAYLIST.equals(type) || MessageType.DEDICATION.equals(type)) {
+                || MessageType.PLAYLIST.equals(type) || MessageType.COLLAB_PLAYLIST.equals(type)
+                || MessageType.DEDICATION.equals(type)) {
             String title = payload.path("title").asText(null);
             if (title == null || title.isBlank()) {
                 throw new jakarta.ws.rs.BadRequestException(type + " payload requires a title");

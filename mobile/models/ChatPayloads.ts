@@ -53,6 +53,17 @@ export interface PlaylistPayload {
   previews?: PlaylistPreviewTrack[]
 }
 
+/** Server-built playlist shared and pinned inside a conversation (ticket 6.1). */
+export interface CollabPlaylistPayload {
+  type: 'COLLAB_PLAYLIST'
+  id: string
+  title: string
+  curator?: string
+  artworkUrl?: string
+  trackCount: number
+  previews?: PlaylistPreviewTrack[]
+}
+
 /** Auto-posted icebreaker on a new match (ticket 5.1). */
 export interface TasteHandshakePayload {
   type: 'TASTE_HANDSHAKE'
@@ -134,6 +145,7 @@ export type MessagePayload =
   | TrackPayload
   | AlbumPayload
   | PlaylistPayload
+  | CollabPlaylistPayload
   | TasteHandshakePayload
   | DedicationPayload
   | LyricPayload
@@ -160,6 +172,15 @@ export function isPlaylistPayload(
   payload: Record<string, unknown> | null | undefined,
 ): payload is PlaylistPayload & Record<string, unknown> {
   return !!payload && payload.type === 'PLAYLIST' && typeof payload.title === 'string'
+}
+
+export function isCollabPlaylistPayload(
+  payload: Record<string, unknown> | null | undefined,
+): payload is CollabPlaylistPayload & Record<string, unknown> {
+  return !!payload
+    && payload.type === 'COLLAB_PLAYLIST'
+    && typeof payload.title === 'string'
+    && typeof payload.trackCount === 'number'
 }
 
 export function isTasteHandshakePayload(

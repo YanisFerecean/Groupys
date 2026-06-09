@@ -2,7 +2,7 @@
 ticket: 6.1
 title: Collab playlist in community thread
 phase: Community
-status: todo
+status: done
 priority: P3
 depends_on: [3.4, 2.3]
 ---
