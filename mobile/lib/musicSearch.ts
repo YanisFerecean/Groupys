@@ -20,6 +20,15 @@ function pickAlbumCover(album: AlbumRes | null | undefined): string | undefined 
   return album?.coverMedium || album?.coverSmall
 }
 
+function uniqueById<T extends { id: number }>(items: T[]): T[] {
+  const seen = new Set<number>()
+  return items.filter(item => {
+    if (seen.has(item.id)) return false
+    seen.add(item.id)
+    return true
+  })
+}
+
 export async function searchTracks(
   query: string,
   token: string | null,
@@ -31,14 +40,14 @@ export async function searchTracks(
   )
 
 
-  return items.map((track) => ({
+  return uniqueById(items.map((track) => ({
     id: track.id,
     title: track.title,
     artist: track.artist?.name ?? '',
     album: track.album?.title ?? '',
     coverUrl: track.album.coverMedium,
     preview: track.preview,
-  }))
+  })))
 }
 
 export async function searchArtists(
@@ -51,11 +60,11 @@ export async function searchArtists(
     token,
   )
 
-  return items.map((artist) => ({
+  return uniqueById(items.map((artist) => ({
     id: artist.id,
     name: artist.name,
     imageUrl: pickArtistImage(artist),
-  }))
+  })))
 }
 
 export async function searchAlbums(
@@ -68,10 +77,10 @@ export async function searchAlbums(
     token,
   )
 
-  return items.map((album) => ({
+  return uniqueById(items.map((album) => ({
     id: album.id,
     title: album.title,
     artist: album.artist?.name ?? '',
     coverUrl: pickAlbumCover(album),
-  }))
+  })))
 }

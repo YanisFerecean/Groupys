@@ -55,6 +55,9 @@ export function useListenTogether(conversationId: string | null) {
   previewRef.current = preview
   const roomRef = useRef(room)
   roomRef.current = room
+  const partyRef = useRef(party)
+  partyRef.current = party
+  const wasRoomActiveRef = useRef(false)
   const lastSeekRef = useRef(0)
   const joinedPartyIdRef = useRef(joinedPartyId)
   joinedPartyIdRef.current = joinedPartyId
@@ -130,6 +133,17 @@ export function useListenTogether(conversationId: string | null) {
           chatWs.send({ type: 'ROOM_JOIN', conversationId })
         }
       }),
+      chatWs.on<{ conversationId: string }>('PARTY_END', (payload) => {
+        if (payload.conversationId !== conversationId) return
+        // Song finished → tear the party down everywhere. Followers also stop their room playback.
+        setParty(null)
+        setJoinedPartyId(null)
+        joinedPartyIdRef.current = null
+        if (!roomRef.current?.isHost) {
+          previewRef.current.stop()
+          setRoom(null)
+        }
+      }),
     ]
 
     chatWs.send({ type: 'PARTY_REQUEST', conversationId })
@@ -156,6 +170,25 @@ export function useListenTogether(conversationId: string | null) {
     const timer = setInterval(send, HEARTBEAT_MS)
     return () => clearInterval(timer)
   }, [conversationId, room?.isHost, room?.track])
+
+  // Host: when the room song finishes (preview auto-stops at the cap, or the host leaves), end an
+  // active party so the "Live now" bar clears for everyone instead of lingering.
+  useEffect(() => {
+    if (!room?.isHost) {
+      wasRoomActiveRef.current = false
+      return
+    }
+    if (preview.isActive(roomTrackId)) {
+      wasRoomActiveRef.current = true
+      return
+    }
+    if (wasRoomActiveRef.current) {
+      wasRoomActiveRef.current = false
+      if (conversationId && partyRef.current?.status === 'STARTED') {
+        chatWs.send({ type: 'PARTY_END', conversationId })
+      }
+    }
+  }, [room?.isHost, preview.activeId, conversationId, roomTrackId, preview])
 
   const startRoom = useCallback((track: TrackPayload) => {
     if (!conversationId || !track.previewUrl) return

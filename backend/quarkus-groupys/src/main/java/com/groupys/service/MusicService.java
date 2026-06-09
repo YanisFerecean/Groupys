@@ -84,11 +84,13 @@ public class MusicService {
      * user token; {@code subscriptionActive} probes the storefront — any failure or undecryptable
      * token reports {@code false} so the client degrades to preview-only.
      */
+    @Transactional
     public com.groupys.dto.MusicCapabilityResDto getCapability(String clerkId) {
         User user = userRepository.findByClerkId(clerkId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
         boolean connected = user.appleMusicUserToken != null && !user.appleMusicUserToken.isBlank();
         if (!connected) {
+            user.appleMusicSubscriptionActive = false;
             return new com.groupys.dto.MusicCapabilityResDto(false, false);
         }
         String token;
@@ -96,6 +98,7 @@ public class MusicService {
             token = encryptionUtil.decrypt(user.appleMusicUserToken);
         } catch (RuntimeException e) {
             // Token present but unusable — treat as connected-but-preview-only (needs reconnect).
+            user.appleMusicSubscriptionActive = false;
             return new com.groupys.dto.MusicCapabilityResDto(true, false);
         }
         boolean active;
@@ -105,6 +108,8 @@ public class MusicService {
             Log.debugf("Subscription probe failed: %s", e.getMessage());
             active = false;
         }
+        // Cache for peer-side gating (e.g. Listen Together needs both users subscribed).
+        user.appleMusicSubscriptionActive = active;
         return new com.groupys.dto.MusicCapabilityResDto(true, active);
     }
 
@@ -122,6 +127,7 @@ public class MusicService {
                 .orElseThrow(() -> new NotFoundException("User not found"));
         user.appleMusicUserToken = null;
         user.appleMusicConnectedAt = null;
+        user.appleMusicSubscriptionActive = false;
     }
 
     public List<MusicArtistResDto> getTopArtists(String clerkId) {

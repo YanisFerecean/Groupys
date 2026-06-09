@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons'
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { Keyboard, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { Colors } from '@/constants/colors'
 import { chatWs } from '@/lib/chat-ws'
 import type { ReplyStub } from '@/models/Chat'
@@ -22,6 +22,7 @@ interface MessageComposerProps {
   /** Active reply target (ticket 3.1); renders a preview bar above the input. */
   replyTo?: ReplyStub | null
   onCancelReply?: () => void
+  onVoiceNote?: () => void
 }
 
 const MAX_LENGTH = 2000
@@ -34,10 +35,21 @@ export function MessageComposer({
   onAttachPress,
   replyTo,
   onCancelReply,
+  onVoiceNote,
 }: MessageComposerProps) {
   const [content, setContent] = useState('')
   const [isTyping, setIsTyping] = useState(false)
+  const [keyboardVisible, setKeyboardVisible] = useState(false)
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardWillShow', () => setKeyboardVisible(true))
+    const hide = Keyboard.addListener('keyboardWillHide', () => setKeyboardVisible(false))
+    return () => {
+      show.remove()
+      hide.remove()
+    }
+  }, [])
 
   const stopTyping = useCallback(() => {
     if (!isTyping) {
@@ -98,119 +110,164 @@ export function MessageComposer({
   const remaining = MAX_LENGTH - content.length
 
   return (
-    <View className="border-t border-surface-container-high px-4 pb-2 pt-1" style={{ backgroundColor: '#f7f4ec' }}>
-      {replyTo ? (
-        <View className="mb-1.5 flex-row items-center gap-2 rounded-xl border-l-2 px-2.5 py-1.5" style={{ borderLeftColor: Colors.primary, backgroundColor: Colors.surfaceContainerHigh }}>
-          <View className="flex-1">
-            <Text className="text-[11px] font-bold text-primary" numberOfLines={1}>
-              Replying to {replyTo.senderDisplayName || replyTo.senderUsername}
-            </Text>
-            <Text className="text-[12px] text-on-surface-variant" numberOfLines={1}>{replyTo.snippet}</Text>
-          </View>
-          <TouchableOpacity onPress={onCancelReply} className="p-1">
-            <Ionicons name="close" size={18} color={Colors.onSurfaceVariant} />
-          </TouchableOpacity>
-        </View>
-      ) : null}
-      <View className="flex-row items-end gap-3">
-        {onAttachPress ? (
-          <TouchableOpacity
-            className="h-12 w-12 items-center justify-center rounded-full bg-surface-container-high"
-            disabled={disabled}
-            onPress={onAttachPress}
-            accessibilityLabel="Share music"
-            style={{ opacity: disabled ? 0.5 : 1 }}
-          >
-            <Ionicons name="add" size={24} color={Colors.primary} />
-          </TouchableOpacity>
-        ) : null}
-        {onMusicPress ? (
-          <TouchableOpacity
-            className="h-12 w-12 items-center justify-center rounded-full bg-surface-container-high"
-            disabled={disabled}
-            onPress={onMusicPress}
-            accessibilityLabel="Share a track"
-            style={{ opacity: disabled ? 0.5 : 1 }}
-          >
-            <Ionicons name="musical-notes" size={20} color={Colors.primary} />
-          </TouchableOpacity>
-        ) : null}
-        {GLASS ? (
-          <GlassView
-            glassEffectStyle="regular"
-            tintColor="rgba(255,255,255,0.7)"
-            style={{ flex: 1, borderRadius: 28, paddingHorizontal: 16, justifyContent: 'center', minHeight: 44 }}
-          >
-            <TextInput
-              editable={!disabled}
-              multiline
-              maxLength={MAX_LENGTH}
-              className="max-h-28 text-[15px]"
-              style={{ minHeight: 24, color: Colors.onSurface, paddingTop: 0, paddingBottom: 0 }}
-              placeholder="Message..."
-              placeholderTextColor={Colors.onSurfaceVariant}
-              value={content}
-              onChangeText={handleChange}
-            />
-            {remaining <= 160 ? (
-              <Text className={`mt-1 text-right text-[11px] font-medium ${remaining <= 25 ? 'text-primary' : 'text-on-surface-variant'}`}>
-                {remaining}
-              </Text>
-            ) : null}
-          </GlassView>
-        ) : (
-          <View className="flex-1 rounded-[28px] bg-surface-container px-4 py-2">
-            <TextInput
-              editable={!disabled}
-              multiline
-              maxLength={MAX_LENGTH}
-              className="max-h-28 text-[15px] text-on-surface"
-              placeholder="Message..."
-              placeholderTextColor={Colors.onSurfaceVariant}
-              value={content}
-              onChangeText={handleChange}
-            />
-            {remaining <= 160 ? (
-              <Text className={`mt-1 text-right text-[11px] font-medium ${remaining <= 25 ? 'text-primary' : 'text-on-surface-variant'}`}>
-                {remaining}
-              </Text>
-            ) : null}
-          </View>
-        )}
-
-        {GLASS ? (
-          <TouchableOpacity
-            disabled={!content.trim() || disabled}
-            onPress={handleSend}
-            activeOpacity={0.7}
-          >
+    <View style={{ backgroundColor: GLASS ? 'transparent' : '#f7f4ec' }}>
+      {GLASS ? (
+        <GlassView
+          glassEffectStyle="regular"
+          style={{ paddingHorizontal: 16, paddingBottom: keyboardVisible ? 8 : 20, paddingTop: 6 }}
+        >
+          {replyTo ? (
             <GlassView
-              glassEffectStyle="clear"
-              isInteractive
-              tintColor={content.trim() && !disabled ? Colors.primary : undefined}
-              style={{ width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' }}
+              tintColor={`${Colors.primary}22`}
+              style={{ marginBottom: 6, flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 14, borderLeftWidth: 2, borderLeftColor: Colors.primary, paddingHorizontal: 10, paddingVertical: 6 }}
             >
-              <Ionicons
-                name="arrow-up"
-                size={20}
-                color={content.trim() && !disabled ? Colors.onPrimary : Colors.onSurface}
-              />
+              <View style={{ flex: 1 }}>
+                <Text className="text-[11px] font-bold text-primary" numberOfLines={1}>
+                  Replying to {replyTo.senderDisplayName || replyTo.senderUsername}
+                </Text>
+                <Text className="text-[12px] text-on-surface-variant" numberOfLines={1}>{replyTo.snippet}</Text>
+              </View>
+              <TouchableOpacity onPress={onCancelReply} className="p-1">
+                <Ionicons name="close" size={18} color={Colors.onSurfaceVariant} />
+              </TouchableOpacity>
             </GlassView>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            className={`h-12 w-12 items-center justify-center rounded-full ${content.trim() && !disabled ? 'bg-primary' : 'bg-surface-container-high'}`}
-            disabled={!content.trim() || disabled}
-            onPress={handleSend}
-          >
-            <Ionicons
-              name="arrow-up"
-              size={20}
-              color={content.trim() && !disabled ? Colors.onPrimary : Colors.onSurfaceVariant}
-            />
-          </TouchableOpacity>
-        )}
-      </View>
+          ) : null}
+          <View className="flex-row items-end gap-3">
+            {onAttachPress ? (
+              <TouchableOpacity disabled={disabled} onPress={onAttachPress} activeOpacity={0.7} style={{ opacity: disabled ? 0.5 : 1 }}>
+                <GlassView isInteractive style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name="add" size={24} color={Colors.primary} />
+                </GlassView>
+              </TouchableOpacity>
+            ) : null}
+            {onMusicPress ? (
+              <TouchableOpacity disabled={disabled} onPress={onMusicPress} activeOpacity={0.7} style={{ opacity: disabled ? 0.5 : 1 }}>
+                <GlassView isInteractive style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name="musical-notes" size={20} color={Colors.primary} />
+                </GlassView>
+              </TouchableOpacity>
+            ) : null}
+            <GlassView
+              glassEffectStyle="regular"
+              tintColor="rgba(255,255,255,0.7)"
+              style={{ flex: 1, borderRadius: 28, paddingHorizontal: 16, justifyContent: 'center', minHeight: 44 }}
+            >
+              <TextInput
+                editable={!disabled}
+                multiline
+                maxLength={MAX_LENGTH}
+                className="max-h-28 text-[15px]"
+                style={{ minHeight: 24, color: Colors.onSurface, paddingTop: 0, paddingBottom: 0 }}
+                placeholder="Message..."
+                placeholderTextColor={Colors.onSurfaceVariant}
+                value={content}
+                onChangeText={handleChange}
+              />
+              {remaining <= 160 ? (
+                <Text className={`mt-1 text-right text-[11px] font-medium ${remaining <= 25 ? 'text-primary' : 'text-on-surface-variant'}`}>
+                  {remaining}
+                </Text>
+              ) : null}
+            </GlassView>
+            {content.trim() ? (
+              <TouchableOpacity disabled={disabled} onPress={handleSend} activeOpacity={0.7}>
+                <GlassView
+                  glassEffectStyle="clear"
+                  isInteractive
+                  tintColor={disabled ? undefined : Colors.primary}
+                  style={{ width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <Ionicons name="arrow-up" size={20} color={disabled ? Colors.onSurface : Colors.onPrimary} />
+                </GlassView>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity disabled={disabled} onPress={onVoiceNote} activeOpacity={0.7}>
+                <GlassView
+                  glassEffectStyle="clear"
+                  isInteractive
+                  style={{ width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <Ionicons name="mic" size={20} color={Colors.onSurface} />
+                </GlassView>
+              </TouchableOpacity>
+            )}
+          </View>
+        </GlassView>
+      ) : (
+        <View className="border-t border-surface-container-high px-4 pb-2 pt-1" style={{ backgroundColor: '#f7f4ec' }}>
+          {replyTo ? (
+            <View className="mb-1.5 flex-row items-center gap-2 rounded-xl border-l-2 px-2.5 py-1.5" style={{ borderLeftColor: Colors.primary, backgroundColor: Colors.surfaceContainerHigh }}>
+              <View className="flex-1">
+                <Text className="text-[11px] font-bold text-primary" numberOfLines={1}>
+                  Replying to {replyTo.senderDisplayName || replyTo.senderUsername}
+                </Text>
+                <Text className="text-[12px] text-on-surface-variant" numberOfLines={1}>{replyTo.snippet}</Text>
+              </View>
+              <TouchableOpacity onPress={onCancelReply} className="p-1">
+                <Ionicons name="close" size={18} color={Colors.onSurfaceVariant} />
+              </TouchableOpacity>
+            </View>
+          ) : null}
+          <View className="flex-row items-end gap-3">
+            {onAttachPress ? (
+              <TouchableOpacity
+                className="h-12 w-12 items-center justify-center rounded-full bg-surface-container-high"
+                disabled={disabled}
+                onPress={onAttachPress}
+                accessibilityLabel="Share music"
+                style={{ opacity: disabled ? 0.5 : 1 }}
+              >
+                <Ionicons name="add" size={24} color={Colors.primary} />
+              </TouchableOpacity>
+            ) : null}
+            {onMusicPress ? (
+              <TouchableOpacity
+                className="h-12 w-12 items-center justify-center rounded-full bg-surface-container-high"
+                disabled={disabled}
+                onPress={onMusicPress}
+                accessibilityLabel="Share a track"
+                style={{ opacity: disabled ? 0.5 : 1 }}
+              >
+                <Ionicons name="musical-notes" size={20} color={Colors.primary} />
+              </TouchableOpacity>
+            ) : null}
+            <View className="flex-1 rounded-[28px] bg-surface-container px-4 py-2">
+              <TextInput
+                editable={!disabled}
+                multiline
+                maxLength={MAX_LENGTH}
+                className="max-h-28 text-[15px] text-on-surface"
+                placeholder="Message..."
+                placeholderTextColor={Colors.onSurfaceVariant}
+                value={content}
+                onChangeText={handleChange}
+              />
+              {remaining <= 160 ? (
+                <Text className={`mt-1 text-right text-[11px] font-medium ${remaining <= 25 ? 'text-primary' : 'text-on-surface-variant'}`}>
+                  {remaining}
+                </Text>
+              ) : null}
+            </View>
+            {content.trim() ? (
+              <TouchableOpacity
+                className="h-12 w-12 items-center justify-center rounded-full bg-primary"
+                disabled={disabled}
+                onPress={handleSend}
+              >
+                <Ionicons name="arrow-up" size={20} color={disabled ? Colors.onSurfaceVariant : Colors.onPrimary} />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                className="h-12 w-12 items-center justify-center rounded-full bg-surface-container-high"
+                disabled={disabled}
+                onPress={onVoiceNote}
+              >
+                <Ionicons name="mic" size={20} color={Colors.onSurfaceVariant} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      )}
     </View>
   )
 }

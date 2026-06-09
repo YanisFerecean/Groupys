@@ -301,7 +301,8 @@ public class ChatService {
                 cp.user.displayName,
                 cp.user.profileImage,
                 cp.lastReadAt,
-                cp.user.lastSeenAt
+                cp.user.lastSeenAt,
+                cp.user.appleMusicSubscriptionActive
         );
     }
 
@@ -445,12 +446,18 @@ public class ChatService {
             snippet = "Deleted message";
         } else if (ref.content != null && !ref.content.isBlank()) {
             String c = ref.content.strip();
-            snippet = c.length() <= 80 ? c : c.substring(0, 80);
+            // E2E ciphertext must reach the client whole to be decryptable; only truncate plaintext.
+            snippet = (looksEncrypted(c) || c.length() <= 80) ? c : c.substring(0, 80);
         } else {
             snippet = MessageType.normalize(ref.messageType);
         }
         return new com.groupys.dto.ReplyStubDto(
                 ref.id, ref.sender.username, ref.sender.displayName, ref.messageType, snippet);
+    }
+
+    /** Heuristic for the E2E ciphertext envelope ({"v":1,"iv":…,"ct":…}) so we don't truncate it. */
+    private static boolean looksEncrypted(String c) {
+        return c.startsWith("{") && c.contains("\"v\":1") && c.contains("\"iv\"") && c.contains("\"ct\"");
     }
 
     /** Per-type payload shape validation (ticket 2.1). Keeps known card types well-formed. */

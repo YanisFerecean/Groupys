@@ -1,9 +1,14 @@
 import { Ionicons } from '@expo/vector-icons'
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import { Pressable, Text, TouchableOpacity, View } from 'react-native'
 import { Colors } from '@/constants/colors'
 import type { Message } from '@/models/Chat'
 import { getMessageRenderer, isTextType } from '@/components/chat/messageRenderers'
 import { TrackReactionChip } from '@/components/chat/TrackReactionChip'
+import { DecryptingPlaceholder } from '@/components/chat/DecryptingPlaceholder'
+import { isEncrypted } from '@/lib/chat-crypto'
+
+const GLASS = isLiquidGlassAvailable()
 
 interface MessageBubbleProps {
   message: Message
@@ -81,6 +86,83 @@ export function MessageBubble({
   const CardRenderer = (isText || message.isDeleted) ? undefined : getMessageRenderer(message.messageType)
   const isUnsupported = !isText && !CardRenderer
 
+  // Sent bubble: vibrant primary-tinted glass. Received: frosted neutral glass.
+  const sentTint = 'rgba(186, 0, 43, 0.55)'
+  const receivedTint = 'rgba(255, 255, 255, 0.18)'
+
+  const renderBubble = () => {
+    if (CardRenderer) {
+      return <CardRenderer message={message} isMine={isMine} />
+    }
+    if (isUnsupported) {
+      if (GLASS) {
+        return (
+          <GlassView
+            tintColor={isMine ? sentTint : receivedTint}
+            style={{ maxWidth: 290, borderRadius: 24, borderBottomRightRadius: isMine ? 6 : 24, borderBottomLeftRadius: isMine ? 24 : 6, paddingHorizontal: 16, paddingVertical: 12 }}
+          >
+            <Text className={`text-[13px] italic ${isMine ? 'text-on-primary' : 'text-on-surface-variant'}`}>
+              Unsupported message — update the app to view it.
+            </Text>
+          </GlassView>
+        )
+      }
+      return (
+        <View
+          className={`max-w-[82%] rounded-[24px] px-4 py-3 ${
+            isMine ? 'rounded-br-md bg-primary' : 'rounded-bl-md bg-surface-container'
+          }`}
+        >
+          <Text className={`text-[13px] italic ${isMine ? 'text-on-primary' : 'text-on-surface-variant'}`}>
+            Unsupported message — update the app to view it.
+          </Text>
+        </View>
+      )
+    }
+    // Normal text bubble
+    if (GLASS) {
+      return (
+        <GlassView
+          tintColor={isMine ? sentTint : receivedTint}
+          style={{ maxWidth: 290, borderRadius: 24, borderBottomRightRadius: isMine ? 6 : 24, borderBottomLeftRadius: isMine ? 24 : 6, paddingHorizontal: 16, paddingVertical: 12 }}
+        >
+          {message.isDeleted ? (
+            <Text className={`text-[14px] italic ${isMine ? 'text-on-primary/70' : 'text-on-surface-variant'}`}>
+              This message was deleted
+            </Text>
+          ) : isEncrypted(message.content) ? (
+            <DecryptingPlaceholder isMine={isMine} />
+          ) : (
+            <Text className={`text-[15px] leading-6 ${isMine ? 'text-white' : 'text-on-surface'}`}>
+              {message.content}
+            </Text>
+          )}
+        </GlassView>
+      )
+    }
+    return (
+      <View
+        className={`max-w-[82%] rounded-[24px] px-4 py-3 ${
+          isMine
+            ? 'rounded-br-md bg-primary'
+            : 'rounded-bl-md bg-surface-container'
+        }`}
+      >
+        {message.isDeleted ? (
+          <Text className={`text-[14px] italic ${isMine ? 'text-on-primary/70' : 'text-on-surface-variant'}`}>
+            This message was deleted
+          </Text>
+        ) : isEncrypted(message.content) ? (
+          <DecryptingPlaceholder isMine={isMine} />
+        ) : (
+          <Text className={`text-[15px] leading-6 ${isMine ? 'text-on-primary' : 'text-on-surface'}`}>
+            {message.content}
+          </Text>
+        )}
+      </View>
+    )
+  }
+
   return (
     <View
       className={`${showTime ? 'mb-3' : 'mb-0.5'} ${isMine ? 'items-end' : 'items-start'}`}
@@ -108,59 +190,46 @@ export function MessageBubble({
             {message.replyTo.senderDisplayName || message.replyTo.senderUsername}
           </Text>
           <Text className="text-[12px] text-on-surface-variant" numberOfLines={1}>
-            {message.replyTo.snippet}
+            {isEncrypted(message.replyTo.snippet) ? 'Decrypting…' : message.replyTo.snippet}
           </Text>
         </TouchableOpacity>
       ) : null}
 
       <Pressable onLongPress={onLongPress} delayLongPress={300}>
-      {CardRenderer ? (
-        <CardRenderer message={message} isMine={isMine} />
-      ) : isUnsupported ? (
-        <View
-          className={`max-w-[82%] rounded-[24px] px-4 py-3 ${
-            isMine ? 'rounded-br-md bg-primary' : 'rounded-bl-md bg-surface-container'
-          }`}
-        >
-          <Text className={`text-[13px] italic ${isMine ? 'text-on-primary' : 'text-on-surface-variant'}`}>
-            Unsupported message — update the app to view it.
-          </Text>
-        </View>
-      ) : (
-        <View
-          className={`max-w-[82%] rounded-[24px] px-4 py-3 ${
-            isMine
-              ? 'rounded-br-md bg-primary'
-              : 'rounded-bl-md bg-surface-container'
-          }`}
-        >
-          {message.isDeleted ? (
-            <Text className={`text-[14px] italic ${isMine ? 'text-on-primary/70' : 'text-on-surface-variant'}`}>
-              This message was deleted
-            </Text>
-          ) : (
-            <Text className={`text-[15px] leading-6 ${isMine ? 'text-on-primary' : 'text-on-surface'}`}>
-              {message.content}
-            </Text>
-          )}
-        </View>
-      )}
+        {renderBubble()}
       </Pressable>
 
       {reactionChips.length > 0 ? (
         <View className={`mt-1 flex-row flex-wrap gap-1 ${isMine ? 'justify-end' : 'justify-start'}`}>
           {reactionChips.map(chip => (
-            <TouchableOpacity
-              key={chip.emoji}
-              onPress={() => onToggleReaction?.(message.id, chip.emoji)}
-              className="flex-row items-center gap-1 rounded-full px-2 py-0.5"
-              style={{ backgroundColor: chip.mine ? Colors.primaryContainer : Colors.surfaceContainerHigh }}
-            >
-              <Text style={{ fontSize: 12 }}>{chip.emoji}</Text>
-              <Text className="text-[11px] font-semibold" style={{ color: chip.mine ? Colors.onPrimary : Colors.onSurfaceVariant }}>
-                {chip.count}
-              </Text>
-            </TouchableOpacity>
+            GLASS ? (
+              <TouchableOpacity
+                key={chip.emoji}
+                onPress={() => onToggleReaction?.(message.id, chip.emoji)}
+              >
+                <GlassView
+                  tintColor={chip.mine ? `${Colors.primary}55` : 'rgba(255,255,255,0.18)'}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 }}
+                >
+                  <Text style={{ fontSize: 12 }}>{chip.emoji}</Text>
+                  <Text className="text-[11px] font-semibold" style={{ color: chip.mine ? Colors.primary : Colors.onSurfaceVariant }}>
+                    {chip.count}
+                  </Text>
+                </GlassView>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                key={chip.emoji}
+                onPress={() => onToggleReaction?.(message.id, chip.emoji)}
+                className="flex-row items-center gap-1 rounded-full px-2 py-0.5"
+                style={{ backgroundColor: chip.mine ? Colors.primaryContainer : Colors.surfaceContainerHigh }}
+              >
+                <Text style={{ fontSize: 12 }}>{chip.emoji}</Text>
+                <Text className="text-[11px] font-semibold" style={{ color: chip.mine ? Colors.onPrimary : Colors.onSurfaceVariant }}>
+                  {chip.count}
+                </Text>
+              </TouchableOpacity>
+            )
           ))}
         </View>
       ) : null}

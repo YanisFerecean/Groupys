@@ -32,20 +32,28 @@ export function AlbumPicker({ visible, onClose, onSelect }: AlbumPickerProps) {
   const [results, setResults] = useState<AlbumSearchResult[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const getTokenRef = useRef(getToken)
+
+  useEffect(() => {
+    getTokenRef.current = getToken
+  }, [getToken])
 
   useEffect(() => {
     if (!visible) {
       setQuery('')
       setResults([])
+      setIsSearching(false)
     }
   }, [visible])
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (!visible) return
+
     const trimmed = query.trim()
     if (trimmed.length < 2) {
-      setResults([])
-      setIsSearching(false)
+      setResults(current => current.length === 0 ? current : [])
+      setIsSearching(current => current ? false : current)
       return
     }
 
@@ -53,7 +61,7 @@ export function AlbumPicker({ visible, onClose, onSelect }: AlbumPickerProps) {
     setIsSearching(true)
     debounceRef.current = setTimeout(async () => {
       try {
-        const token = await getToken()
+        const token = await getTokenRef.current()
         const found = await searchAlbums(trimmed, token, 15)
         if (!cancelled) setResults(found)
       } catch {
@@ -67,7 +75,7 @@ export function AlbumPicker({ visible, onClose, onSelect }: AlbumPickerProps) {
       cancelled = true
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
-  }, [query, getToken])
+  }, [query, visible])
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet">

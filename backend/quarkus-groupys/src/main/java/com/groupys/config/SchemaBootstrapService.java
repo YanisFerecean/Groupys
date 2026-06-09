@@ -41,6 +41,7 @@ public class SchemaBootstrapService {
             // Apple Music hard-cutover
             run(statement, "ALTER TABLE users ADD COLUMN IF NOT EXISTS apple_music_user_token varchar(1024)");
             run(statement, "ALTER TABLE users ADD COLUMN IF NOT EXISTS apple_music_connected_at timestamptz");
+            run(statement, "ALTER TABLE users ADD COLUMN IF NOT EXISTS apple_music_subscription_active boolean NOT NULL DEFAULT false");
 
             run(statement, "ALTER TABLE artists ADD COLUMN IF NOT EXISTS apple_music_id varchar(64)");
             run(statement, "CREATE UNIQUE INDEX IF NOT EXISTS idx_artists_apple_music_id ON artists (apple_music_id)");

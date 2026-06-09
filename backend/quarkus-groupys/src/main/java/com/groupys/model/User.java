@@ -69,6 +69,11 @@ public class User {
     @Column(name = "apple_music_connected_at")
     public Instant appleMusicConnectedAt;
 
+    /** Cached result of the last subscription probe (ticket 7.1). Refreshed on each capability
+     *  fetch and cleared on disconnect; lets peers gate full-playback features without a live probe. */
+    @Column(name = "apple_music_subscription_active", nullable = false)
+    public boolean appleMusicSubscriptionActive = false;
+
     @Column(name = "last_seen_at")
     public Instant lastSeenAt;
 

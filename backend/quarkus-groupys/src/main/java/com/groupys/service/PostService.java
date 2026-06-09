@@ -287,6 +287,20 @@ public class PostService {
         notificationService.notifyAll(memberIds, NotificationService.Type.COMMUNITY_POST, content);
     }
 
+    /** Notify a post's author that someone engaged with it (like, comment, …). Skips self-actions. */
+    void notifyPostAuthor(Post post, User actor, String action) {
+        if (post.author == null || actor == null || post.author.id.equals(actor.id)) {
+            return;
+        }
+        String name = actor.displayName != null && !actor.displayName.isBlank() ? actor.displayName : actor.username;
+        String preview = post.title != null && !post.title.isBlank() ? post.title : "your post";
+        String deeplink = "/(home)/(feed)/post/" + post.id;
+        NotificationService.Content content = NotificationService.Content
+                .of(name + " " + action, preview, deeplink)
+                .withImage(actor.profileImage);
+        notificationService.notify(post.author.id, NotificationService.Type.COMMUNITY_POST, content);
+    }
+
     @Transactional
     @CacheInvalidateAll(cacheName = "feed")
     public PostResDto react(UUID postId, String reactionType, String clerkId) {
@@ -301,6 +315,7 @@ public class PostService {
 
         var existing = postReactionRepository.findByPostAndUser(postId, user.id);
 
+        boolean likeAdded = false;
         if (existing.isPresent()) {
             PostReaction reaction = existing.get();
             String oldType = reaction.reactionType == null ? "" : reaction.reactionType.toLowerCase();
@@ -311,6 +326,7 @@ public class PostService {
                 reaction.reactionType = normalizedReaction;
                 applyPostReactionDelta(post, oldType, -1);
                 applyPostReactionDelta(post, normalizedReaction, 1);
+                likeAdded = "like".equals(normalizedReaction);
             }
         } else {
             PostReaction reaction = new PostReaction();
@@ -319,6 +335,12 @@ public class PostService {
             reaction.reactionType = normalizedReaction;
             postReactionRepository.persist(reaction);
             applyPostReactionDelta(post, normalizedReaction, 1);
+            likeAdded = "like".equals(normalizedReaction);
+        }
+
+        // Notify the author only when a like is newly applied — never on unlike or dislike.
+        if (likeAdded) {
+            notifyPostAuthor(post, user, "liked your post");
         }
 
         communityActivityEvent.fireAsync(new CommunityActivityEvent(post.community.id))

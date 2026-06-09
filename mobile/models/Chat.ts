@@ -12,6 +12,8 @@ export interface Participant {
   profileImage: string | null
   lastReadAt: string | null
   lastSeenAt: string | null
+  /** Whether this participant has an active Apple Music subscription; gates Listen Together. */
+  musicSubscriptionActive: boolean
 }
 
 export interface Conversation {

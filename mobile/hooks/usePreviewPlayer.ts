@@ -57,6 +57,7 @@ function teardownPlayer() {
   statusSub = null
   if (player) {
     try {
+      player.pause()
       player.remove()
     } catch {
       // already released

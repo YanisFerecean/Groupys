@@ -1,4 +1,8 @@
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import { Text, View } from 'react-native'
+import { Colors } from '@/constants/colors'
+
+const GLASS = isLiquidGlassAvailable()
 
 export function TypingIndicator({ username }: { username?: string | null }) {
   return (
@@ -8,11 +12,22 @@ export function TypingIndicator({ username }: { username?: string | null }) {
           {username} is typing...
         </Text>
       ) : null}
-      <View className="flex-row items-center gap-2 rounded-full bg-surface-container px-4 py-3">
-        <View className="h-2 w-2 rounded-full bg-on-surface-variant/60" />
-        <View className="h-2 w-2 rounded-full bg-on-surface-variant/60" />
-        <View className="h-2 w-2 rounded-full bg-on-surface-variant/60" />
-      </View>
+      {GLASS ? (
+        <GlassView
+          tintColor="rgba(255,255,255,0.18)"
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 12 }}
+        >
+          <View className="h-2 w-2 rounded-full" style={{ backgroundColor: Colors.onSurfaceVariant + '99' }} />
+          <View className="h-2 w-2 rounded-full" style={{ backgroundColor: Colors.onSurfaceVariant + '99' }} />
+          <View className="h-2 w-2 rounded-full" style={{ backgroundColor: Colors.onSurfaceVariant + '99' }} />
+        </GlassView>
+      ) : (
+        <View className="flex-row items-center gap-2 rounded-full bg-surface-container px-4 py-3">
+          <View className="h-2 w-2 rounded-full bg-on-surface-variant/60" />
+          <View className="h-2 w-2 rounded-full bg-on-surface-variant/60" />
+          <View className="h-2 w-2 rounded-full bg-on-surface-variant/60" />
+        </View>
+      )}
     </View>
   )
 }

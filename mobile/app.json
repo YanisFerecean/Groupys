@@ -94,12 +94,12 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/groupys-logo.png",
           "imageWidth": 300,
           "resizeMode": "contain",
-          "backgroundColor": "#ba002b",
+          "backgroundColor": "#ffffff",
           "dark": {
-            "backgroundColor": "#ba002b"
+            "backgroundColor": "#ffffff"
           }
         }
       ],

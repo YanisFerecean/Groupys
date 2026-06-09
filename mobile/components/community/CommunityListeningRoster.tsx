@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Image, ScrollView, Text, TouchableOpacity, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '@clerk/expo'
@@ -25,15 +25,20 @@ export function CommunityListeningRoster({ communityId }: CommunityListeningRost
   const { getNowPlaying } = useChat()
   const [members, setMembers] = useState<CommunityMemberResDto[]>([])
   const [viewing, setViewing] = useState<NowPlayingTrack | null>(null)
+  const getTokenRef = useRef(getToken)
+
+  useEffect(() => {
+    getTokenRef.current = getToken
+  }, [getToken])
 
   const load = useCallback(async () => {
     try {
-      const token = await getToken()
+      const token = await getTokenRef.current()
       setMembers(await fetchCommunityMembers(communityId, token))
     } catch (error) {
       logError('[roster] failed to load members', error)
     }
-  }, [communityId, getToken])
+  }, [communityId])
 
   useFocusEffect(useCallback(() => {
     void load()

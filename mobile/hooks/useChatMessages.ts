@@ -49,7 +49,8 @@ export function useChatMessages(
     }
 
     const unprocessed = messages.filter(
-      message => isEncrypted(message.content) && !decryptedCacheRef.current.has(message.id),
+      message => (isEncrypted(message.content) || (!!message.replyTo && isEncrypted(message.replyTo.snippet)))
+        && !decryptedCacheRef.current.has(message.id),
     )
     if (unprocessed.length === 0) {
       return
@@ -59,16 +60,31 @@ export function useChatMessages(
 
     void Promise.all(
       unprocessed.map(async (message) => {
-        const content = await decryptForUsername(otherUsername, message.content)
-        return { id: message.id, content }
+        const [content, snippet] = await Promise.all([
+          isEncrypted(message.content)
+            ? decryptForUsername(otherUsername, message.content)
+            : Promise.resolve(message.content),
+          message.replyTo && isEncrypted(message.replyTo.snippet)
+            ? decryptForUsername(otherUsername, message.replyTo.snippet)
+            : Promise.resolve(null),
+        ])
+        return { id: message.id, content, snippet }
       }),
     ).then((results) => {
       if (cancelled) return
+      const byId = new Map(results.map(r => [r.id, r]))
       results.forEach(r => decryptedCacheRef.current.set(r.id, r.content))
-      setMessages(prev => prev.map(m => ({
-        ...m,
-        content: decryptedCacheRef.current.get(m.id) ?? m.content,
-      })))
+      setMessages(prev => prev.map((m) => {
+        const r = byId.get(m.id)
+        if (!r) return m
+        return {
+          ...m,
+          content: r.content,
+          replyTo: m.replyTo && r.snippet != null
+            ? { ...m.replyTo, snippet: r.snippet.length <= 80 ? r.snippet : `${r.snippet.slice(0, 80)}…` }
+            : m.replyTo,
+        }
+      }))
     })
 
     return () => {
@@ -78,12 +94,28 @@ export function useChatMessages(
 
   const decryptPayload = useCallback(async (message: Message) => {
     const username = otherUsernameRef.current
-    if (!username || !isEncrypted(message.content)) {
+    if (!username) {
       return message
     }
 
-    const content = await decryptRef.current(username, message.content)
-    return { ...message, content }
+    // The reply preview's snippet is the referenced message's ciphertext, so it needs decrypting
+    // too — independently of this message's own content (e.g. an image reply to a text message).
+    const contentEncrypted = isEncrypted(message.content)
+    const snippetEncrypted = !!message.replyTo && isEncrypted(message.replyTo.snippet)
+    if (!contentEncrypted && !snippetEncrypted) {
+      return message
+    }
+
+    const [content, snippet] = await Promise.all([
+      contentEncrypted ? decryptRef.current(username, message.content) : Promise.resolve(message.content),
+      snippetEncrypted ? decryptRef.current(username, message.replyTo!.snippet) : Promise.resolve(null),
+    ])
+
+    const next: Message = { ...message, content }
+    if (snippetEncrypted && snippet != null && message.replyTo) {
+      next.replyTo = { ...message.replyTo, snippet: snippet.length <= 80 ? snippet : `${snippet.slice(0, 80)}…` }
+    }
+    return next
   }, [])
 
   useEffect(() => {

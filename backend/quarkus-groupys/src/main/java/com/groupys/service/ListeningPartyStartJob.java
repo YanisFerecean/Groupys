@@ -19,16 +19,19 @@ public class ListeningPartyStartJob {
     private final ListeningPartyService partyService;
     private final ChatService chatService;
     private final PresenceService presenceService;
+    private final NotificationService notificationService;
     private final ObjectMapper objectMapper;
 
     public ListeningPartyStartJob(
             ListeningPartyService partyService,
             ChatService chatService,
             PresenceService presenceService,
+            NotificationService notificationService,
             ObjectMapper objectMapper) {
         this.partyService = partyService;
         this.chatService = chatService;
         this.presenceService = presenceService;
+        this.notificationService = notificationService;
         this.objectMapper = objectMapper;
     }
 
@@ -40,10 +43,27 @@ public class ListeningPartyStartJob {
                         new WebSocketMessage("PARTY_START", payload(party)));
                 chatService.getParticipantClerkIds(party.conversationId())
                         .forEach((userId, clerkId) -> presenceService.sendTo(clerkId, json));
+                notifyStart(party);
             } catch (Exception e) {
                 LOG.warnf("Failed to broadcast party start %s: %s", party.id(), e.getMessage());
             }
         }
+    }
+
+    /** Push "starting now" to every participant except the host (whose client opens the room). */
+    private void notifyStart(ListeningPartyDto party) {
+        String trackTitle = party.track() != null ? party.track().path("title").asText(null) : null;
+        String body = trackTitle != null && !trackTitle.isBlank()
+                ? "\"" + trackTitle + "\" is starting now"
+                : "Your listening party is starting now";
+        String deeplink = "/(home)/(match)/chat/" + party.conversationId();
+        NotificationService.Content content = NotificationService.Content
+                .of("Listening party", body, deeplink);
+        chatService.getParticipantClerkIds(party.conversationId()).forEach((pid, clerkId) -> {
+            if (!pid.equals(party.hostUserId()) && !chatService.isConversationMuted(party.conversationId(), pid)) {
+                notificationService.notify(pid, NotificationService.Type.MESSAGE, content);
+            }
+        });
     }
 
     public static Map<String, Object> payload(ListeningPartyDto party) {

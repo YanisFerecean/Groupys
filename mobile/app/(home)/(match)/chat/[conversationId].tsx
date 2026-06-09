@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Text,
@@ -25,6 +24,7 @@ import { TrackPicker } from '@/components/music/TrackPicker'
 import { AlbumPicker } from '@/components/music/AlbumPicker'
 import { MusicUpsellSheet } from '@/components/music/MusicUpsellSheet'
 import { MusicAttachSheet } from '@/components/chat/MusicAttachSheet'
+import { ChatLoadingStatus } from '@/components/chat/ChatLoadingStatus'
 import { ChatActionsContext, type ChatActions } from '@/components/chat/ChatActionsContext'
 import { TextPromptModal } from '@/components/ui/TextPromptModal'
 import { ListenTogetherBar } from '@/components/chat/ListenTogetherBar'
@@ -34,13 +34,11 @@ import { PinnedMessageBar } from '@/components/chat/PinnedMessageBar'
 import { ChatSearchPanel } from '@/components/chat/ChatSearchPanel'
 import { ConversationOptionsSheet } from '@/components/chat/ConversationOptionsSheet'
 import { VoiceRecorderModal } from '@/components/chat/VoiceRecorderModal'
-import { StickerPicker } from '@/components/chat/StickerPicker'
-import { BeatPicker } from '@/components/chat/BeatPicker'
 import { TypingIndicator } from '@/components/chat/TypingIndicator'
 import { useListenTogether } from '@/hooks/useListenTogether'
 import { useMusicGate } from '@/hooks/useMusicGate'
 import { apiPostMultipart, fetchMusicCurrentlyPlaying } from '@/lib/api'
-import { resolveLinkPreview, type StickerCatalogItem } from '@/lib/chat-api'
+import { resolveLinkPreview } from '@/lib/chat-api'
 import type { AlbumPayload, TrackPayload, VoiceBedPayload } from '@/models/ChatPayloads'
 import { Colors } from '@/constants/colors'
 import { useChat } from '@/hooks/useChat'
@@ -50,6 +48,8 @@ import { logWarn } from '@/lib/logging'
 import { publicProfilePath } from '@/lib/profileRoutes'
 import { chatWs } from '@/lib/chat-ws'
 import { setActiveConversationId } from '@/lib/activeChat'
+import { stopAllRegisteredAudio } from '@/lib/audioBus'
+import { stopPreview } from '@/hooks/usePreviewPlayer'
 import { timeAgo } from '@/lib/timeAgo'
 import type { Message, ReplyStub } from '@/models/Chat'
 
@@ -120,9 +120,7 @@ export default function ChatConversationScreen() {
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
   const [albumPickerOpen, setAlbumPickerOpen] = useState(false)
   const [voiceRecorderOpen, setVoiceRecorderOpen] = useState(false)
-  const [beatPickerOpen, setBeatPickerOpen] = useState(false)
   const [pendingVoiceBed, setPendingVoiceBed] = useState<VoiceBedPayload | null>(null)
-  const [stickerPickerOpen, setStickerPickerOpen] = useState(false)
   const pickImage = useCallback(async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -196,19 +194,6 @@ export default function ChatConversationScreen() {
       Alert.alert('Could not send voice note', 'Try recording the voice note again.')
     }
   }, [getToken, sendMessage])
-
-  const sendSticker = useCallback((sticker: StickerCatalogItem) => {
-    setStickerPickerOpen(false)
-    void sendMessage(sticker.name, {
-      messageType: 'STICKER',
-      payload: {
-        type: 'STICKER',
-        stickerId: sticker.id,
-        url: sticker.url,
-        name: sticker.name,
-      },
-    })
-  }, [sendMessage])
 
   const sendTrack = useCallback((track: TrackPayload) => {
     const label = track.artist ? `🎵 ${track.title} — ${track.artist}` : `🎵 ${track.title}`
@@ -349,7 +334,6 @@ export default function ChatConversationScreen() {
   const [isNearBottom, setIsNearBottom] = useState(true)
   const [requestAction, setRequestAction] = useState<'accept' | 'deny' | null>(null)
   const [conversationLoadFailed, setConversationLoadFailed] = useState(false)
-  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false)
   const listRef = useRef<FlatList<Message>>(null)
   const isMountedRef = useRef(true)
   const [pendingScrollMessageId, setPendingScrollMessageId] = useState<string | null>(null)
@@ -486,19 +470,6 @@ export default function ChatConversationScreen() {
     return actions
   }, [actionMessage, buildReplyStub, deleteMessage, pins, togglePin, user?.username])
 
-  // While the keyboard is up, the KeyboardAvoidingView already lifts the composer past the
-  // home-indicator inset; keeping our own bottom inset on top of that doubles the gap.
-  useEffect(() => {
-    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
-    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
-    const showSub = Keyboard.addListener(showEvt, () => setIsKeyboardVisible(true))
-    const hideSub = Keyboard.addListener(hideEvt, () => setIsKeyboardVisible(false))
-    return () => {
-      showSub.remove()
-      hideSub.remove()
-    }
-  }, [])
-
   useEffect(() => {
     return () => {
       isMountedRef.current = false
@@ -509,7 +480,13 @@ export default function ChatConversationScreen() {
   useFocusEffect(
     useCallback(() => {
       setActiveConversationId(conversationId ?? null)
-      return () => setActiveConversationId(null)
+      return () => {
+        setActiveConversationId(null)
+        // Leaving the chat stops every player: the shared preview singleton (tracks, daily song,
+        // listen-together) and any registered per-message players (voice notes).
+        stopPreview()
+        stopAllRegisteredAudio()
+      }
     }, [conversationId]),
   )
 
@@ -663,13 +640,25 @@ export default function ChatConversationScreen() {
   const isPendingOutgoing = conversation?.requestStatus === 'PENDING_OUTGOING'
   const canMessage = conversation?.requestStatus === 'ACCEPTED'
   const showMessageListLoader = isLoading || isInitialLoadPending
+
+  // Listen Together syncs full-song playback, so both people need an active Apple Music
+  // subscription — the current user via canPlayFull, the partner via their cached subscription flag.
+  const selfCanPlayFull = musicGate.capability.canPlayFull
+  const peerHasSubscription = otherParticipant?.musicSubscriptionActive ?? false
+  const listenTogetherDisabled = !selfCanPlayFull || !peerHasSubscription
+  const partnerName = otherParticipant?.displayName ?? otherParticipant?.username ?? 'They'
+  const listenTogetherHint = !selfCanPlayFull
+    ? 'Listen Together needs an active Apple Music subscription to sync full songs.'
+    : !peerHasSubscription
+      ? `${partnerName} doesn’t have an active Apple Music subscription, so full songs can’t play in sync.`
+      : undefined
   const renderEmptyState = () => (
     <View
       className="flex-1 items-center justify-center px-10 py-10"
       style={{ transform: [{ scaleY: -1 }] }}
     >
       {showMessageListLoader ? (
-        <ActivityIndicator color={Colors.primary} />
+        <ChatLoadingStatus />
       ) : isPendingIncoming ? (
         <>
           <Ionicons name="mail-unread-outline" size={40} color={Colors.primary} />
@@ -979,7 +968,7 @@ export default function ChatConversationScreen() {
             showsVerticalScrollIndicator={false}
           />
 
-          <View style={{ paddingBottom: isKeyboardVisible ? 0 : insets.bottom }}>
+          <View style={{ paddingBottom: 0 }}>
             <MessageComposer
               conversationId={conversationId}
               disabled={!canMessage}
@@ -992,6 +981,10 @@ export default function ChatConversationScreen() {
                 void handleMusicPress()
               }}
               onAttachPress={() => setAttachMenuOpen(true)}
+              onVoiceNote={() => {
+                setPendingVoiceBed(null)
+                setVoiceRecorderOpen(true)
+              }}
             />
           </View>
         </>
@@ -1027,8 +1020,6 @@ export default function ChatConversationScreen() {
           setPendingVoiceBed(null)
           setVoiceRecorderOpen(true)
         }}
-        onVoiceBeat={() => setBeatPickerOpen(true)}
-        onSticker={() => setStickerPickerOpen(true)}
         onPickAlbum={() => setAlbumPickerOpen(true)}
         onDedicate={() => {
           setPickerMode('dedicate')
@@ -1055,6 +1046,8 @@ export default function ChatConversationScreen() {
           setTrackPickerQuery('')
           setTrackPickerOpen(true)
         }}
+        listenTogetherDisabled={listenTogetherDisabled}
+        listenTogetherHint={listenTogetherHint}
         onListeningParty={() => {
           setPickerMode('party')
           setTrackPickerQuery('')
@@ -1070,22 +1063,6 @@ export default function ChatConversationScreen() {
           setPendingVoiceBed(null)
         }}
         onSend={sendVoiceNote}
-      />
-
-      <BeatPicker
-        visible={beatPickerOpen}
-        onClose={() => setBeatPickerOpen(false)}
-        onSelect={(bed) => {
-          setBeatPickerOpen(false)
-          setPendingVoiceBed({ id: bed.id, title: bed.title, kind: bed.kind })
-          setVoiceRecorderOpen(true)
-        }}
-      />
-
-      <StickerPicker
-        visible={stickerPickerOpen}
-        onClose={() => setStickerPickerOpen(false)}
-        onSelect={sendSticker}
       />
 
       <TextPromptModal

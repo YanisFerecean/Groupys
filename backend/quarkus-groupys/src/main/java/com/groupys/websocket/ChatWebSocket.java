@@ -164,6 +164,7 @@ public class ChatWebSocket {
             case "PARTY_SCHEDULE"      -> handlePartySchedule(connection, user, msg);
             case "PARTY_REQUEST"       -> handlePartyRequest(connection, user, msg);
             case "PARTY_JOIN"          -> handlePartyJoin(connection, user, msg);
+            case "PARTY_END"           -> handlePartyEnd(connection, user, msg);
             default -> sendJson(connection, WebSocketMessage.error("Unknown message type: " + type));
         }
     }
@@ -339,13 +340,30 @@ public class ChatWebSocket {
             if (!pid.equals(sender.id)) {
                 presenceService.sendTo(participantClerkId, json);
                 NotificationService.Content pushContent = NotificationService.Content
-                        .of(senderName, "Sent you a message", deeplink)
+                        .of(senderName, messagePushBody(saved.messageType()), deeplink)
                         .withImage(saved.senderProfileImage());
                 if (!chatService.isConversationMuted(conversationId, pid)) {
                     notificationService.notify(pid, NotificationService.Type.MESSAGE, pushContent);
                 }
             }
         });
+    }
+
+    /** Friendly push body per message kind so a photo/voice/song reads as itself, not "a message". */
+    private static String messagePushBody(String messageType) {
+        return switch (com.groupys.model.MessageType.normalize(messageType)) {
+            case "IMAGE" -> "Sent you a photo";
+            case "VOICE" -> "Sent you a voice note";
+            case "TRACK", "NOW_PLAYING_SHARE" -> "Shared a song";
+            case "ALBUM" -> "Shared an album";
+            case "PLAYLIST", "COLLAB_PLAYLIST" -> "Shared a playlist";
+            case "DEDICATION" -> "Dedicated a song to you";
+            case "LYRIC" -> "Shared a lyric";
+            case "TIMESTAMP" -> "Shared a timestamp";
+            case "BLIND_LISTEN" -> "Sent you a blind listen";
+            case "STICKER" -> "Sent you a sticker";
+            default -> "Sent you a message";
+        };
     }
 
     private void handleTyping(User user, Map<String, Object> msg, boolean isTyping) {
@@ -717,6 +735,18 @@ public class ChatWebSocket {
             ListeningPartyDto party = listeningPartyService.schedule(
                     conversationId, user.clerkId, Instant.parse(startAtRaw), mapper.writeValueAsString(track));
             broadcastParty("PARTY_UPDATE", party);
+
+            String hostName = user.displayName != null && !user.displayName.isBlank()
+                    ? user.displayName : user.username;
+            String deeplink = "/(home)/(match)/chat/" + conversationId;
+            NotificationService.Content partyPush = NotificationService.Content
+                    .of(hostName, "Invited you to a listening party", deeplink)
+                    .withImage(user.profileImage);
+            chatService.getParticipantClerkIds(conversationId).forEach((pid, participantClerkId) -> {
+                if (!pid.equals(user.id) && !chatService.isConversationMuted(conversationId, pid)) {
+                    notificationService.notify(pid, NotificationService.Type.MESSAGE, partyPush);
+                }
+            });
         } catch (jakarta.ws.rs.WebApplicationException e) {
             sendJson(connection, WebSocketMessage.error(e.getMessage()));
         } catch (Exception e) {
@@ -751,6 +781,19 @@ public class ChatWebSocket {
             sendJson(connection, new WebSocketMessage(type, ListeningPartyStartJob.payload(party)));
         } catch (IllegalArgumentException e) {
             sendJson(connection, WebSocketMessage.error("Invalid partyId"));
+        } catch (jakarta.ws.rs.WebApplicationException e) {
+            sendJson(connection, WebSocketMessage.error(e.getMessage()));
+        }
+    }
+
+    private void handlePartyEnd(WebSocketConnection connection, User user, Map<String, Object> msg) {
+        UUID conversationId = parseConversationId(connection, msg);
+        if (conversationId == null) return;
+        try {
+            ListeningPartyDto party = listeningPartyService.endActive(conversationId, user.clerkId);
+            if (party != null) {
+                broadcastParty("PARTY_END", party);
+            }
         } catch (jakarta.ws.rs.WebApplicationException e) {
             sendJson(connection, WebSocketMessage.error(e.getMessage()));
         }

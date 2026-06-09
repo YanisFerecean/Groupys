@@ -45,6 +45,9 @@ public class CommentService {
     DiscoveryService discoveryService;
 
     @Inject
+    NotificationService notificationService;
+
+    @Inject
     PerformanceFeatureFlags flags;
 
     public List<CommentResDto> getByPost(UUID postId, String clerkId) {
@@ -136,8 +139,31 @@ public class CommentService {
         if (readModelWriteEnabled()) {
             post.commentCount = Math.max(0L, post.commentCount + 1L);
         }
+        notifyOnComment(post, comment.parentComment, author);
         discoveryService.refreshAfterCommunityActivity(post.community.id);
         return toDto(comment, null, 0L, 0L, List.of());
+    }
+
+    /** Push to the post author on a new comment, and to the parent author on a reply. Skips self. */
+    private void notifyOnComment(Post post, Comment parent, User actor) {
+        String name = actor.displayName != null && !actor.displayName.isBlank() ? actor.displayName : actor.username;
+        String deeplink = "/(home)/(feed)/post/" + post.id;
+        String preview = post.title != null && !post.title.isBlank() ? post.title : "your post";
+
+        User parentAuthor = parent != null ? parent.author : null;
+        if (parentAuthor != null && !parentAuthor.id.equals(actor.id)) {
+            notificationService.notify(parentAuthor.id, NotificationService.Type.COMMUNITY_POST,
+                    NotificationService.Content.of(name + " replied to your comment", preview, deeplink)
+                            .withImage(actor.profileImage));
+        }
+
+        // Notify the post author too, unless they are the actor or already pinged as the parent author.
+        if (post.author != null && !post.author.id.equals(actor.id)
+                && (parentAuthor == null || !parentAuthor.id.equals(post.author.id))) {
+            notificationService.notify(post.author.id, NotificationService.Type.COMMUNITY_POST,
+                    NotificationService.Content.of(name + " commented on your post", preview, deeplink)
+                            .withImage(actor.profileImage));
+        }
     }
 
     @Transactional
@@ -153,6 +179,7 @@ public class CommentService {
 
         var existing = commentReactionRepository.findByCommentAndUser(commentId, user.id);
 
+        boolean likeAdded = false;
         if (existing.isPresent()) {
             CommentReaction reaction = existing.get();
             String oldType = reaction.reactionType == null ? "" : reaction.reactionType.toLowerCase();
@@ -163,6 +190,7 @@ public class CommentService {
                 reaction.reactionType = normalizedReaction;
                 applyCommentReactionDelta(comment, oldType, -1);
                 applyCommentReactionDelta(comment, normalizedReaction, 1);
+                likeAdded = "like".equals(normalizedReaction);
             }
         } else {
             CommentReaction reaction = new CommentReaction();
@@ -171,6 +199,16 @@ public class CommentService {
             reaction.reactionType = normalizedReaction;
             commentReactionRepository.persist(reaction);
             applyCommentReactionDelta(comment, normalizedReaction, 1);
+            likeAdded = "like".equals(normalizedReaction);
+        }
+
+        // Notify the comment author only when a like is newly applied — never on unlike or dislike.
+        if (likeAdded && comment.author != null && !comment.author.id.equals(user.id)) {
+            String name = user.displayName != null && !user.displayName.isBlank() ? user.displayName : user.username;
+            String deeplink = "/(home)/(feed)/post/" + comment.post.id;
+            notificationService.notify(comment.author.id, NotificationService.Type.COMMUNITY_POST,
+                    NotificationService.Content.of(name + " liked your comment", comment.content, deeplink)
+                            .withImage(user.profileImage));
         }
 
         discoveryService.refreshAfterCommunityActivity(comment.post.community.id);

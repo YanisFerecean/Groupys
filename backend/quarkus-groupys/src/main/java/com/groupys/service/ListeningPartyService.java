@@ -82,6 +82,22 @@ public class ListeningPartyService {
         return toDto(party);
     }
 
+    /**
+     * Ends the current STARTED party when its song finishes. Only the host (whose playback drives
+     * the synced timeline) can end it. Returns the ended party, or {@code null} if there is nothing
+     * to end or the caller is not the host.
+     */
+    @Transactional
+    public ListeningPartyDto endActive(UUID conversationId, String clerkId) {
+        User user = requireParticipant(conversationId, clerkId);
+        ListeningParty party = partyRepository.findCurrent(conversationId);
+        if (party == null || !"STARTED".equals(party.status) || !party.host.id.equals(user.id)) {
+            return null;
+        }
+        party.status = "ENDED";
+        return toDto(party);
+    }
+
     @Transactional
     public List<ListeningPartyDto> startDueParties() {
         return partyRepository.findDue(Instant.now()).stream()
