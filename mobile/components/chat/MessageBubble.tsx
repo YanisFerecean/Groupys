@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { Text, TouchableOpacity, View } from 'react-native'
 import { Colors } from '@/constants/colors'
 import type { Message } from '@/models/Chat'
+import { getMessageRenderer, isTextType } from '@/components/chat/messageRenderers'
 
 interface MessageBubbleProps {
   message: Message
@@ -33,19 +34,42 @@ export function MessageBubble({
   // status, or is the last one the other user has read.
   const showFooter = showTime || hasPendingStatus || (isMine && showSeen)
 
+  // Delegate structured message types to the renderer registry (ticket 0.3). TEXT/SYSTEM keep
+  // the text bubble; a known card type renders its card; unknown types get a graceful fallback.
+  const isText = isTextType(message.messageType)
+  const CardRenderer = isText ? undefined : getMessageRenderer(message.messageType)
+  const isUnsupported = !isText && !CardRenderer
+
   return (
-    <View className={`${showTime ? 'mb-3' : 'mb-0.5'} ${isMine ? 'items-end' : 'items-start'}`}>
-      <View
-        className={`max-w-[82%] rounded-[24px] px-4 py-3 ${
-          isMine
-            ? 'rounded-br-md bg-primary'
-            : 'rounded-bl-md bg-surface-container'
-        } ${message.status === 'sending' ? 'opacity-70' : ''}`}
-      >
-        <Text className={`text-[15px] leading-6 ${isMine ? 'text-on-primary' : 'text-on-surface'}`}>
-          {message.content}
-        </Text>
-      </View>
+    <View
+      className={`${showTime ? 'mb-3' : 'mb-0.5'} ${isMine ? 'items-end' : 'items-start'}`}
+      style={message.status === 'sending' ? { opacity: 0.7 } : undefined}
+    >
+      {CardRenderer ? (
+        <CardRenderer message={message} isMine={isMine} />
+      ) : isUnsupported ? (
+        <View
+          className={`max-w-[82%] rounded-[24px] px-4 py-3 ${
+            isMine ? 'rounded-br-md bg-primary' : 'rounded-bl-md bg-surface-container'
+          }`}
+        >
+          <Text className={`text-[13px] italic ${isMine ? 'text-on-primary' : 'text-on-surface-variant'}`}>
+            Unsupported message — update the app to view it.
+          </Text>
+        </View>
+      ) : (
+        <View
+          className={`max-w-[82%] rounded-[24px] px-4 py-3 ${
+            isMine
+              ? 'rounded-br-md bg-primary'
+              : 'rounded-bl-md bg-surface-container'
+          }`}
+        >
+          <Text className={`text-[15px] leading-6 ${isMine ? 'text-on-primary' : 'text-on-surface'}`}>
+            {message.content}
+          </Text>
+        </View>
+      )}
 
       {showFooter ? (
       <View className={`mt-1 flex-row items-center gap-1.5 ${isMine ? 'justify-end' : 'justify-start'}`}>
