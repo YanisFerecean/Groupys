@@ -158,6 +158,17 @@ export function useChatMessages(
           return [nextMessage, ...prev]
         })
       }),
+      chatWs.on('MESSAGE_UPDATED', (payload: Message) => {
+        if (payload.conversationId !== conversationId) {
+          return
+        }
+        // Replace an existing message in place (e.g. blind-listen reveal, ticket 4.6).
+        setMessages(prev => prev.map(existing => (
+          existing.id === payload.id
+            ? { ...existing, ...payload, status: existing.status }
+            : existing
+        )))
+      }),
       chatWs.on('MESSAGE_ACK', (payload: { tempId: string; messageId: string; createdAt: string }) => {
         setMessages(prev => prev.map(message => (
           message.tempId === payload.tempId

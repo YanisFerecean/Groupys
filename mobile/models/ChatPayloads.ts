@@ -87,6 +87,16 @@ export interface TimestampPayload {
   positionMs: number
 }
 
+/** Guess-the-song game card (ticket 4.6). Art/metadata hidden until guessed. */
+export interface BlindListenPayload {
+  type: 'BLIND_LISTEN'
+  track: TrackRef
+  hidden: boolean
+  guessed: boolean
+  guessCorrect?: boolean
+  guessText?: string
+}
+
 export type MessagePayload =
   | TrackPayload
   | AlbumPayload
@@ -95,6 +105,7 @@ export type MessagePayload =
   | DedicationPayload
   | LyricPayload
   | TimestampPayload
+  | BlindListenPayload
 
 /** Narrow an unknown payload to a typed payload by its discriminant. */
 export function isTrackPayload(
@@ -137,4 +148,10 @@ export function isTimestampPayload(
   payload: Record<string, unknown> | null | undefined,
 ): payload is TimestampPayload & Record<string, unknown> {
   return !!payload && payload.type === 'TIMESTAMP' && typeof payload.positionMs === 'number'
+}
+
+export function isBlindListenPayload(
+  payload: Record<string, unknown> | null | undefined,
+): payload is BlindListenPayload & Record<string, unknown> {
+  return !!payload && payload.type === 'BLIND_LISTEN' && typeof payload.track === 'object'
 }

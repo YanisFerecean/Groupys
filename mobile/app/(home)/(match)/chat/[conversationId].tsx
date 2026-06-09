@@ -79,7 +79,7 @@ export default function ChatConversationScreen() {
   const [trackPickerOpen, setTrackPickerOpen] = useState(false)
   const [trackPickerQuery, setTrackPickerQuery] = useState('')
   // What the track picker selection feeds into.
-  const [pickerMode, setPickerMode] = useState<'send' | 'dedicate' | 'lyric' | 'timestamp'>('send')
+  const [pickerMode, setPickerMode] = useState<'send' | 'dedicate' | 'lyric' | 'timestamp' | 'blind'>('send')
   // Dedication note flow (ticket 4.3).
   const [pendingDedication, setPendingDedication] = useState<TrackPayload | null>(null)
   // Lyric entry flow (ticket 4.1).
@@ -144,7 +144,15 @@ export default function ChatConversationScreen() {
     })
   }, [sendMessage])
 
-  // Track picker selection dispatch (send / dedicate / lyric / timestamp flows).
+  const sendBlindListen = useCallback((track: TrackPayload) => {
+    const { type: _t, ...trackRef } = track
+    void sendMessage('🎧 Blind listen — guess the song', {
+      messageType: 'BLIND_LISTEN',
+      payload: { type: 'BLIND_LISTEN', track: trackRef, hidden: true, guessed: false } as unknown as Record<string, unknown>,
+    })
+  }, [sendMessage])
+
+  // Track picker selection dispatch (send / dedicate / lyric / timestamp / blind flows).
   const handleTrackPicked = useCallback((track: TrackPayload) => {
     setTrackPickerOpen(false)
     if (pickerMode === 'dedicate') {
@@ -153,10 +161,12 @@ export default function ChatConversationScreen() {
       setPendingLyricTrack(track)
     } else if (pickerMode === 'timestamp') {
       setPendingTimestampTrack(track)
+    } else if (pickerMode === 'blind') {
+      sendBlindListen(track)
     } else {
       sendTrack(track)
     }
-  }, [pickerMode, sendTrack])
+  }, [pickerMode, sendTrack, sendBlindListen])
 
   // Actions exposed to card renderers (ticket 5.1: taste-handshake CTAs).
   const otherUserId = otherParticipant?.userId
@@ -169,6 +179,9 @@ export default function ChatConversationScreen() {
     openPartnerProfile: otherUserId
       ? () => router.push(publicProfilePath(otherUserId, '(match)') as never)
       : undefined,
+    revealBlindListen: (messageId: string, guess: string) => {
+      chatWs.send({ type: 'BLIND_GUESS', messageId, guess })
+    },
   }), [otherUserId, router])
 
   const handleMusicPress = useCallback(async () => {
@@ -703,6 +716,11 @@ export default function ChatConversationScreen() {
         }}
         onDropTimestamp={() => {
           setPickerMode('timestamp')
+          setTrackPickerQuery('')
+          setTrackPickerOpen(true)
+        }}
+        onBlindListen={() => {
+          setPickerMode('blind')
           setTrackPickerQuery('')
           setTrackPickerOpen(true)
         }}

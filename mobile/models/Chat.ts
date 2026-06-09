@@ -78,4 +78,7 @@ export interface WsOutbound {
   /** Now-playing broadcast fields (ticket 1.1). */
   track?: NowPlayingTrack | null
   isPlaying?: boolean
+  /** Blind-listen guess fields (ticket 4.6). */
+  messageId?: string
+  guess?: string
 }

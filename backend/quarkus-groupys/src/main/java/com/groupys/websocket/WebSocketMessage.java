@@ -32,6 +32,11 @@ public record WebSocketMessage(
         return new WebSocketMessage("MESSAGE_NEW", messageData);
     }
 
+    /** A previously-sent message whose content/payload changed (e.g. blind-listen reveal, ticket 4.6). */
+    public static WebSocketMessage messageUpdated(Map<String, Object> messageData) {
+        return new WebSocketMessage("MESSAGE_UPDATED", messageData);
+    }
+
     public static WebSocketMessage messageAck(String tempId, UUID messageId, String createdAt) {
         return new WebSocketMessage("MESSAGE_ACK", Map.of(
                 "tempId", tempId != null ? tempId : "",

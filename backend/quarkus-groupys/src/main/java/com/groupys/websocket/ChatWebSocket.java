@@ -137,6 +137,7 @@ public class ChatWebSocket {
             case "SYNC"         -> handleSync(connection, user);
             case "NOW_PLAYING_UPDATE"  -> handleNowPlayingUpdate(user, msg);
             case "NOW_PLAYING_REQUEST" -> handleNowPlayingRequest(connection, user);
+            case "BLIND_GUESS"         -> handleBlindGuess(connection, user, msg);
             default -> sendJson(connection, WebSocketMessage.error("Unknown message type: " + type));
         }
     }
@@ -361,6 +362,44 @@ public class ChatWebSocket {
             sendJson(connection, WebSocketMessage.messageNew(data));
         }
         LOG.infof("Sync: pushed %d missed message(s) to %s", missed.size(), user.username);
+    }
+
+    // -- Blind listen (ticket 4.6) ---------------------------------------------
+
+    private void handleBlindGuess(WebSocketConnection connection, User user, Map<String, Object> msg) {
+        String messageIdStr = (String) msg.get("messageId");
+        String guess = (String) msg.get("guess");
+        if (messageIdStr == null) {
+            sendJson(connection, WebSocketMessage.error("messageId required"));
+            return;
+        }
+        UUID messageId;
+        try {
+            messageId = UUID.fromString(messageIdStr);
+        } catch (IllegalArgumentException e) {
+            sendJson(connection, WebSocketMessage.error("Invalid messageId"));
+            return;
+        }
+
+        MessageResDto updated;
+        try {
+            updated = chatService.revealBlindListen(messageId, user.clerkId, guess);
+        } catch (jakarta.ws.rs.ForbiddenException e) {
+            sendJson(connection, WebSocketMessage.error("Not a participant in this conversation"));
+            return;
+        } catch (jakarta.ws.rs.WebApplicationException e) {
+            sendJson(connection, WebSocketMessage.error(e.getMessage()));
+            return;
+        } catch (Exception e) {
+            LOG.errorf(e, "Failed to reveal blind listen");
+            sendJson(connection, WebSocketMessage.error("Internal error"));
+            return;
+        }
+
+        // Broadcast the revealed card to all participants (including the guesser) so both update.
+        String json = toJson(WebSocketMessage.messageUpdated(buildMessageData(updated, null)));
+        chatService.getParticipantClerkIds(updated.conversationId())
+                .forEach((pid, clerkId) -> presenceService.sendTo(clerkId, json));
     }
 
     // -- Now-playing (ticket 1.1) ----------------------------------------------

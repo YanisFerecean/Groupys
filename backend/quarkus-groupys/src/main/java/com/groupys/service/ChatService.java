@@ -133,6 +133,12 @@ public class ChatService {
         if (MessageType.TIMESTAMP.equals(type) && !payload.path("positionMs").isNumber()) {
             throw new jakarta.ws.rs.BadRequestException("TIMESTAMP payload requires positionMs");
         }
+        if (MessageType.BLIND_LISTEN.equals(type)) {
+            String title = payload.path("track").path("title").asText(null);
+            if (title == null || title.isBlank()) {
+                throw new jakarta.ws.rs.BadRequestException("BLIND_LISTEN payload requires a track title");
+            }
+        }
     }
 
     /** Parse the stored raw JSON payload into a JsonNode; null/blank → null, malformed → null. */
@@ -457,6 +463,60 @@ public class ChatService {
         }
 
         return toMessageDto(msg);
+    }
+
+    /**
+     * Reveal a BLIND_LISTEN card after a guess (ticket 4.6). Fuzzy-matches the guess against the
+     * track title/artist, flips the payload to revealed, and returns the updated message for
+     * broadcast. Idempotent once revealed.
+     */
+    @Transactional
+    public MessageResDto revealBlindListen(UUID messageId, String clerkId, String guess) {
+        User user = requireUserByClerkId(clerkId);
+        Message msg = messageRepository.findByIdOptional(messageId)
+                .orElseThrow(() -> new NotFoundException("Message not found"));
+        requireParticipant(msg.conversation.id, user.id);
+        if (!MessageType.BLIND_LISTEN.equals(MessageType.normalize(msg.messageType))) {
+            throw new jakarta.ws.rs.BadRequestException("Not a blind-listen message");
+        }
+
+        com.fasterxml.jackson.databind.node.ObjectNode payload;
+        try {
+            JsonNode parsed = objectMapper.readTree(msg.payload == null ? "{}" : msg.payload);
+            payload = parsed.isObject() ? (com.fasterxml.jackson.databind.node.ObjectNode) parsed
+                    : objectMapper.createObjectNode();
+        } catch (Exception e) {
+            payload = objectMapper.createObjectNode();
+        }
+
+        if (!payload.path("guessed").asBoolean(false)) {
+            JsonNode track = payload.path("track");
+            String title = track.path("title").asText("");
+            String artist = track.path("artist").asText("");
+            boolean correct = fuzzyMatches(guess, title) || fuzzyMatches(guess, artist);
+            payload.put("hidden", false);
+            payload.put("guessed", true);
+            payload.put("guessCorrect", correct);
+            payload.put("guessText", guess == null ? "" : guess.trim());
+            try {
+                msg.payload = objectMapper.writeValueAsString(payload);
+            } catch (Exception e) {
+                throw new jakarta.ws.rs.BadRequestException("Failed to update blind-listen payload");
+            }
+        }
+        return toMessageDto(msg);
+    }
+
+    private boolean fuzzyMatches(String guess, String target) {
+        if (guess == null || target == null) return false;
+        String g = normalizeLoose(guess);
+        String t = normalizeLoose(target);
+        if (g.isBlank() || t.isBlank()) return false;
+        return t.contains(g) || g.contains(t);
+    }
+
+    private String normalizeLoose(String s) {
+        return s.toLowerCase().replaceAll("[^a-z0-9]", "").trim();
     }
 
     @Transactional

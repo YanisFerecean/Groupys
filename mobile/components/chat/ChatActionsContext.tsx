@@ -10,6 +10,8 @@ export interface ChatActions {
   openTrackPicker?: (initialQuery?: string) => void
   /** Open the conversation partner's profile. */
   openPartnerProfile?: () => void
+  /** Submit a blind-listen guess for a message (ticket 4.6). */
+  revealBlindListen?: (messageId: string, guess: string) => void
 }
 
 export const ChatActionsContext = createContext<ChatActions>({})
