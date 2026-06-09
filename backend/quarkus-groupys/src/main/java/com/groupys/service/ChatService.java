@@ -506,6 +506,19 @@ public class ChatService {
                 .collect(Collectors.toList());
     }
 
+    public List<MessageResDto> searchMessages(UUID conversationId, String clerkId, String query, int limit) {
+        User user = requireUserByClerkId(clerkId);
+        requireParticipant(conversationId, user.id);
+        String normalized = query == null ? "" : query.trim();
+        if (normalized.length() < 2) {
+            return List.of();
+        }
+        return messageRepository.searchInConversation(conversationId, normalized, Math.min(Math.max(limit, 1), 50))
+                .stream()
+                .map(this::toMessageDto)
+                .collect(Collectors.toList());
+    }
+
     @Transactional
     public MessageResDto sendMessage(UUID conversationId, String clerkId, String content) {
         return sendMessage(conversationId, clerkId, content, MessageType.TEXT, null, null);

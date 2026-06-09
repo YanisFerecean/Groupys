@@ -1,6 +1,6 @@
 import { useAuth, useUser } from '@clerk/expo'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { postMessage, fetchMessages, fetchPins } from '@/lib/chat-api'
+import { postMessage, fetchMessages, fetchPins, searchMessages } from '@/lib/chat-api'
 import { isEncrypted } from '@/lib/chat-crypto'
 import { chatWs } from '@/lib/chat-ws'
 import type { Message } from '@/models/Chat'
@@ -275,6 +275,24 @@ export function useChatMessages(
     }
   }, [conversationId, decryptPayload, messages])
 
+  const searchConversationMessages = useCallback(async (query: string) => {
+    if (!conversationId) return []
+    const normalized = query.trim().toLocaleLowerCase()
+    if (normalized.length < 2) return []
+
+    const token = await getTokenRef.current()
+    const remote = await searchMessages(conversationId, query.trim(), token)
+    const decryptedRemote = await Promise.all(remote.map(decryptPayload))
+    // Recent E2E text is searchable after decryption even though the server cannot inspect it.
+    const local = messages.filter(message => (
+      `${message.content} ${JSON.stringify(message.payload ?? {})}`.toLocaleLowerCase().includes(normalized)
+    ))
+    const merged = [...local, ...decryptedRemote]
+    return merged.filter((message, index) => (
+      merged.findIndex(candidate => candidate.id === message.id) === index
+    ))
+  }, [conversationId, decryptPayload, messages])
+
   const sendMessage = useCallback(async (
     content: string,
     options?: {
@@ -432,6 +450,7 @@ export function useChatMessages(
     hasMore,
     loadMore,
     loadUntilMessage,
+    searchConversationMessages,
     sendMessage,
     resendMessage,
     toggleReaction,

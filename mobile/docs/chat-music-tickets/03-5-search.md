@@ -2,7 +2,7 @@
 ticket: 3.5
 title: In-chat search
 phase: Parity
-status: todo
+status: done
 priority: P3
 depends_on: [0.1]
 ---

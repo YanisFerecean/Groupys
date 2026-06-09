@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -28,6 +29,28 @@ public class MessageRepository implements PanacheRepositoryBase<Message, UUID> {
         ).setParameter("cid", conversationId)
          .setFirstResult(page * size)
          .setMaxResults(size)
+         .getResultList();
+    }
+
+    /** Search message content and structured-card JSON within one conversation (ticket 3.5). */
+    public List<Message> searchInConversation(UUID conversationId, String query, int limit) {
+        String pattern = "%" + query.toLowerCase(Locale.ROOT) + "%";
+        return getEntityManager().createNativeQuery(
+                """
+                SELECT m.*
+                FROM messages m
+                WHERE m.conversation_id = :cid
+                  AND m.is_deleted = false
+                  AND (
+                    lower(coalesce(m.content, '')) LIKE :pattern
+                    OR lower(coalesce(CAST(m.payload AS text), '')) LIKE :pattern
+                  )
+                ORDER BY m.created_at DESC
+                """,
+                Message.class
+        ).setParameter("cid", conversationId)
+         .setParameter("pattern", pattern)
+         .setMaxResults(limit)
          .getResultList();
     }
 

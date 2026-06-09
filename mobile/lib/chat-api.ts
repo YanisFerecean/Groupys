@@ -80,6 +80,18 @@ export async function fetchPins(
   )
 }
 
+export async function searchMessages(
+  conversationId: string,
+  query: string,
+  token: string | null,
+): Promise<Message[]> {
+  const params = new URLSearchParams({ q: query, limit: '50' })
+  return apiRequest<Message[]>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/search?${params.toString()}`,
+    { token, cache: false },
+  )
+}
+
 export async function postMessage(
   conversationId: string,
   content: string,

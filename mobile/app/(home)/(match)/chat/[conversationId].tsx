@@ -28,6 +28,7 @@ import { TextPromptModal } from '@/components/ui/TextPromptModal'
 import { ListenTogetherBar } from '@/components/chat/ListenTogetherBar'
 import { MessageActionSheet, type MessageAction } from '@/components/chat/MessageActionSheet'
 import { PinnedMessageBar } from '@/components/chat/PinnedMessageBar'
+import { ChatSearchPanel } from '@/components/chat/ChatSearchPanel'
 import { TypingIndicator } from '@/components/chat/TypingIndicator'
 import { useListenTogether } from '@/hooks/useListenTogether'
 import { useMusicGate } from '@/hooks/useMusicGate'
@@ -79,6 +80,7 @@ export default function ChatConversationScreen() {
     messages,
     pins,
     resendMessage,
+    searchConversationMessages,
     sendMessage,
     toggleReaction,
     editMessage,
@@ -237,6 +239,11 @@ export default function ChatConversationScreen() {
   const listRef = useRef<FlatList<Message>>(null)
   const isMountedRef = useRef(true)
   const [pendingScrollMessageId, setPendingScrollMessageId] = useState<string | null>(null)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<Message[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null)
 
   // Scroll to a message by id (reply quote or pinned-bar tap). Load older pages when needed.
   const scrollToMessage = useCallback((messageId: string) => {
@@ -266,6 +273,48 @@ export default function ChatConversationScreen() {
     })
     return () => cancelAnimationFrame(frame)
   }, [messages, pendingScrollMessageId])
+
+  useEffect(() => {
+    if (!searchOpen || !conversationId || searchQuery.trim().length < 2) {
+      setSearchResults([])
+      setIsSearching(false)
+      return
+    }
+
+    let cancelled = false
+    const timeout = setTimeout(() => {
+      setIsSearching(true)
+      void searchConversationMessages(searchQuery)
+        .then(results => {
+          if (!cancelled) setSearchResults(results)
+        })
+        .catch(error => {
+          console.error('[chat] failed to search messages', error)
+          if (!cancelled) setSearchResults([])
+        })
+        .finally(() => {
+          if (!cancelled) setIsSearching(false)
+        })
+    }, 300)
+
+    return () => {
+      cancelled = true
+      clearTimeout(timeout)
+    }
+  }, [conversationId, searchConversationMessages, searchOpen, searchQuery])
+
+  useEffect(() => {
+    if (!highlightedMessageId) return
+    const timeout = setTimeout(() => setHighlightedMessageId(null), 3000)
+    return () => clearTimeout(timeout)
+  }, [highlightedMessageId])
+
+  const handleSearchResultPress = useCallback((messageId: string) => {
+    setSearchOpen(false)
+    setSearchQuery('')
+    setHighlightedMessageId(messageId)
+    scrollToMessage(messageId)
+  }, [scrollToMessage])
 
   const buildReplyStub = useCallback((m: Message): ReplyStub => ({
     id: m.id,
@@ -607,6 +656,16 @@ export default function ChatConversationScreen() {
         {otherParticipant ? (
           <TouchableOpacity
             className="h-11 w-11 items-center justify-center rounded-full bg-surface-container"
+            accessibilityLabel="Search conversation"
+            onPress={() => setSearchOpen(true)}
+          >
+            <Ionicons name="search" size={20} color={Colors.onSurface} />
+          </TouchableOpacity>
+        ) : null}
+
+        {otherParticipant ? (
+          <TouchableOpacity
+            className="h-11 w-11 items-center justify-center rounded-full bg-surface-container"
             accessibilityLabel="Conversation options"
             onPress={() =>
               showModerationMenu({
@@ -624,6 +683,20 @@ export default function ChatConversationScreen() {
       </View>
 
       <PinnedMessageBar pins={pins} onPress={scrollToMessage} />
+
+      {searchOpen && conversation ? (
+        <ChatSearchPanel
+          query={searchQuery}
+          results={searchResults}
+          isSearching={isSearching}
+          onChangeQuery={setSearchQuery}
+          onClose={() => {
+            setSearchOpen(false)
+            setSearchQuery('')
+          }}
+          onResultPress={handleSearchResultPress}
+        />
+      ) : null}
 
       {!conversation ? (
         <View className="flex-1 items-center justify-center">
@@ -746,6 +819,7 @@ export default function ChatConversationScreen() {
                 onQuotePress={scrollToMessage}
                 myUserId={user?.id}
                 onToggleReaction={toggleReaction}
+                highlighted={item.id === highlightedMessageId}
                 onRetry={item.status === 'failed' && item.tempId
                   ? () => {
                       void resendMessage(item.tempId!, item.content)

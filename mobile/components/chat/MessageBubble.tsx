@@ -19,6 +19,8 @@ interface MessageBubbleProps {
   myUserId?: string
   /** Tap a reaction chip → toggle (ticket 3.2). */
   onToggleReaction?: (messageId: string, emoji: string) => void
+  /** Briefly emphasize a message jumped to from search (ticket 3.5). */
+  highlighted?: boolean
 }
 
 export function MessageBubble({
@@ -31,6 +33,7 @@ export function MessageBubble({
   onQuotePress,
   myUserId,
   onToggleReaction,
+  highlighted = false,
 }: MessageBubbleProps) {
   // Aggregate reactions into {emoji, count, mine} chips (ticket 3.2).
   const reactionChips = (() => {
@@ -67,7 +70,17 @@ export function MessageBubble({
   return (
     <View
       className={`${showTime ? 'mb-3' : 'mb-0.5'} ${isMine ? 'items-end' : 'items-start'}`}
-      style={message.status === 'sending' ? { opacity: 0.7 } : undefined}
+      style={[
+        message.status === 'sending' ? { opacity: 0.7 } : undefined,
+        highlighted
+          ? {
+              backgroundColor: Colors.primaryContainer,
+              borderRadius: 18,
+              paddingHorizontal: 6,
+              paddingVertical: 4,
+            }
+          : undefined,
+      ]}
     >
       {message.replyTo ? (
         <TouchableOpacity

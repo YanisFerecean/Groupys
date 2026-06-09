@@ -99,6 +99,15 @@ public class ConversationResource {
     }
 
     @GET
+    @Path("/conversations/{id}/messages/search")
+    public List<MessageResDto> searchMessages(
+            @PathParam("id") UUID id,
+            @QueryParam("q") String query,
+            @QueryParam("limit") @DefaultValue("50") int limit) {
+        return chatService.searchMessages(id, jwt.getSubject(), query, limit);
+    }
+
+    @GET
     @Path("/conversations/{id}/pins")
     public List<MessageResDto> getPins(@PathParam("id") UUID id) {
         return chatService.getPins(id, jwt.getSubject());
