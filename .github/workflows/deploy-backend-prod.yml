@@ -288,20 +288,36 @@ jobs:
               find "$backup_dir" -type f -name 'db-*.dump' -mtime +14 -delete
             }
 
+            # Rollback target is the last image that actually passed the health
+            # check (promote_healthy below), NOT whatever happened to be running
+            # before this deploy. The previously-running container can itself be
+            # broken — e.g. a stale image left behind by an earlier failed
+            # deploy whose DB has since advanced — and rolling back into it just
+            # reproduces the outage. A known-healthy tag breaks that cycle.
+            HEALTHY_API_IMAGE=groupys-api:healthy
+
+            promote_healthy() {
+              img=$(docker inspect -f '{{.Image}}' groupys-api 2>/dev/null || true)
+              if [ -n "$img" ]; then
+                docker image tag "$img" "$HEALTHY_API_IMAGE"
+                echo "Promoted current API image to last-known-healthy ($HEALTHY_API_IMAGE)."
+              fi
+            }
+
             rollback_api() {
-              if [ -z "$PREVIOUS_API_IMAGE_ID" ]; then
-                echo "No previous API image is available for rollback."
+              if ! docker image inspect "$HEALTHY_API_IMAGE" >/dev/null 2>&1; then
+                echo "No known-healthy API image is available for rollback."
                 return 1
               fi
 
-              echo "Rolling API back to $PREVIOUS_API_IMAGE ($PREVIOUS_API_IMAGE_ID)"
-              if ! env API_IMAGE="$ROLLBACK_API_IMAGE" $COMPOSE up -d --no-deps --pull never groupys-api; then
+              echo "Rolling API back to last known-healthy image ($HEALTHY_API_IMAGE)"
+              if ! env API_IMAGE="$HEALTHY_API_IMAGE" $COMPOSE up -d --no-deps --pull never groupys-api; then
                 echo "Rollback compose operation failed."
                 return 1
               fi
 
               if wait_for_api 45; then
-                sed -i "s|^API_IMAGE=.*|API_IMAGE=$ROLLBACK_API_IMAGE|" "$DEPLOY_PATH/docker/.env.api.prod"
+                sed -i "s|^API_IMAGE=.*|API_IMAGE=$HEALTHY_API_IMAGE|" "$DEPLOY_PATH/docker/.env.api.prod"
                 echo "Rollback completed; production API is healthy."
                 return 0
               fi
@@ -309,13 +325,6 @@ jobs:
               echo "Rollback image did not become healthy."
               return 1
             }
-
-            PREVIOUS_API_IMAGE=$(docker inspect -f '{{.Config.Image}}' groupys-api 2>/dev/null || true)
-            PREVIOUS_API_IMAGE_ID=$(docker inspect -f '{{.Image}}' groupys-api 2>/dev/null || true)
-            ROLLBACK_API_IMAGE=groupys-api:rollback
-            if [ -n "$PREVIOUS_API_IMAGE_ID" ]; then
-              docker image tag "$PREVIOUS_API_IMAGE_ID" "$ROLLBACK_API_IMAGE"
-            fi
 
             echo "$REGISTRY_PASSWORD" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
             backup_database
@@ -328,6 +337,7 @@ jobs:
             fi
 
             if wait_for_api 45; then
+              promote_healthy
               exit 0
             fi
 
