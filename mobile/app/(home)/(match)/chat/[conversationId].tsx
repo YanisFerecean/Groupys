@@ -19,11 +19,13 @@ import { MessageComposer } from '@/components/chat/MessageComposer'
 import { NowPlayingPill } from '@/components/chat/NowPlayingPill'
 import { NowPlayingTrackSheet } from '@/components/music/NowPlayingTrackSheet'
 import { TrackPicker } from '@/components/music/TrackPicker'
+import { AlbumPicker } from '@/components/music/AlbumPicker'
 import { MusicUpsellSheet } from '@/components/music/MusicUpsellSheet'
+import { MusicAttachSheet } from '@/components/chat/MusicAttachSheet'
 import { TypingIndicator } from '@/components/chat/TypingIndicator'
 import { useMusicGate } from '@/hooks/useMusicGate'
 import { fetchMusicCurrentlyPlaying } from '@/lib/api'
-import type { TrackPayload } from '@/models/ChatPayloads'
+import type { AlbumPayload, TrackPayload } from '@/models/ChatPayloads'
 import { Colors } from '@/constants/colors'
 import { useChat } from '@/hooks/useChat'
 import { useChatMessages } from '@/hooks/useChatMessages'
@@ -73,11 +75,22 @@ export default function ChatConversationScreen() {
 
   // Track sharing (tickets 2.1 / 1.3).
   const [trackPickerOpen, setTrackPickerOpen] = useState(false)
+  // Richer music shares (tickets 2.2 / 2.3).
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false)
+  const [albumPickerOpen, setAlbumPickerOpen] = useState(false)
   const sendTrack = useCallback((track: TrackPayload) => {
     const label = track.artist ? `🎵 ${track.title} — ${track.artist}` : `🎵 ${track.title}`
     void sendMessage(label, {
       messageType: 'TRACK',
       payload: track as unknown as Record<string, unknown>,
+    })
+  }, [sendMessage])
+
+  const sendAlbum = useCallback((album: AlbumPayload) => {
+    const label = `💿 ${album.title} — ${album.artist}`
+    void sendMessage(label, {
+      messageType: 'ALBUM',
+      payload: album as unknown as Record<string, unknown>,
     })
   }, [sendMessage])
 
@@ -576,6 +589,7 @@ export default function ChatConversationScreen() {
               onMusicPress={() => {
                 void handleMusicPress()
               }}
+              onAttachPress={() => setAttachMenuOpen(true)}
             />
           </View>
         </>
@@ -593,6 +607,21 @@ export default function ChatConversationScreen() {
         onSelect={(track) => {
           setTrackPickerOpen(false)
           sendTrack(track)
+        }}
+      />
+
+      <MusicAttachSheet
+        visible={attachMenuOpen}
+        onClose={() => setAttachMenuOpen(false)}
+        onPickAlbum={() => setAlbumPickerOpen(true)}
+      />
+
+      <AlbumPicker
+        visible={albumPickerOpen}
+        onClose={() => setAlbumPickerOpen(false)}
+        onSelect={(album) => {
+          setAlbumPickerOpen(false)
+          sendAlbum(album)
         }}
       />
 

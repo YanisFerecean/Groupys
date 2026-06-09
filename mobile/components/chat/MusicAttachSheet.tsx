@@ -1,0 +1,53 @@
+import { BlurView } from 'expo-blur'
+import { Ionicons } from '@expo/vector-icons'
+import { Modal, Text, TouchableOpacity, View } from 'react-native'
+
+import { Colors } from '@/constants/colors'
+
+type IconName = keyof typeof Ionicons.glyphMap
+
+interface MusicAttachSheetProps {
+  visible: boolean
+  onClose: () => void
+  onPickAlbum?: () => void
+  onPickPlaylist?: () => void
+}
+
+/** Bottom-sheet menu for sharing richer music cards from the composer (tickets 2.2/2.3). */
+export function MusicAttachSheet({ visible, onClose, onPickAlbum, onPickPlaylist }: MusicAttachSheetProps) {
+  const rows: { icon: IconName; label: string; onPress?: () => void }[] = [
+    { icon: 'albums' as IconName, label: 'Share an album', onPress: onPickAlbum },
+    { icon: 'list' as IconName, label: 'Share a playlist', onPress: onPickPlaylist },
+  ].filter(row => !!row.onPress)
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View className="flex-1 justify-end">
+        <BlurView tint="dark" intensity={40} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={onClose}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+        />
+        <View className="rounded-t-3xl px-5 pt-4 pb-8" style={{ backgroundColor: Colors.surface }}>
+          <View className="self-center mb-4 rounded-full" style={{ width: 36, height: 4, backgroundColor: Colors.outlineVariant }} />
+          {rows.map(row => (
+            <TouchableOpacity
+              key={row.label}
+              onPress={() => {
+                onClose()
+                row.onPress?.()
+              }}
+              className="flex-row items-center gap-3 py-3.5"
+            >
+              <View className="h-10 w-10 items-center justify-center rounded-full bg-surface-container-high">
+                <Ionicons name={row.icon} size={20} color={Colors.primary} />
+              </View>
+              <Text className="text-[15px] font-semibold text-on-surface">{row.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+    </Modal>
+  )
+}

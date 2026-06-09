@@ -16,6 +16,8 @@ interface MessageComposerProps {
    * prompts to connect — the parent decides. Button is shown only when provided.
    */
   onMusicPress?: () => void
+  /** Attach button handler for richer shares (album/playlist; tickets 2.2/2.3). */
+  onAttachPress?: () => void
 }
 
 const MAX_LENGTH = 2000
@@ -25,6 +27,7 @@ export function MessageComposer({
   disabled = false,
   onSend,
   onMusicPress,
+  onAttachPress,
 }: MessageComposerProps) {
   const [content, setContent] = useState('')
   const [isTyping, setIsTyping] = useState(false)
@@ -91,6 +94,17 @@ export function MessageComposer({
   return (
     <View className="border-t border-surface-container-high px-4 pb-2 pt-1" style={{ backgroundColor: '#f7f4ec' }}>
       <View className="flex-row items-end gap-3">
+        {onAttachPress ? (
+          <TouchableOpacity
+            className="h-12 w-12 items-center justify-center rounded-full bg-surface-container-high"
+            disabled={disabled}
+            onPress={onAttachPress}
+            accessibilityLabel="Share music"
+            style={{ opacity: disabled ? 0.5 : 1 }}
+          >
+            <Ionicons name="add" size={24} color={Colors.primary} />
+          </TouchableOpacity>
+        ) : null}
         {onMusicPress ? (
           <TouchableOpacity
             className="h-12 w-12 items-center justify-center rounded-full bg-surface-container-high"

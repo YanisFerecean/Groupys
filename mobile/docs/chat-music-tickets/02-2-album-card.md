@@ -2,7 +2,7 @@
 ticket: 2.2
 title: Album card message type
 phase: Cards
-status: todo
+status: done
 priority: P2
 depends_on: [2.1]
 ---

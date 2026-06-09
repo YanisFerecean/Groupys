@@ -117,10 +117,10 @@ public class ChatService {
         if (payload == null || !payload.isObject()) {
             throw new jakarta.ws.rs.BadRequestException("Message payload must be a JSON object");
         }
-        if (MessageType.TRACK.equals(type)) {
+        if (MessageType.TRACK.equals(type) || MessageType.ALBUM.equals(type) || MessageType.PLAYLIST.equals(type)) {
             String title = payload.path("title").asText(null);
             if (title == null || title.isBlank()) {
-                throw new jakarta.ws.rs.BadRequestException("TRACK payload requires a title");
+                throw new jakarta.ws.rs.BadRequestException(type + " payload requires a title");
             }
         }
     }
