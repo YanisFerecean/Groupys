@@ -2,7 +2,7 @@
 ticket: 2.3
 title: Playlist card message type
 phase: Cards
-status: todo
+status: done
 priority: P2
 depends_on: [2.1]
 ---
@@ -20,3 +20,10 @@ depends_on: [2.1]
 
 ## Acceptance
 - Playlist card renders, previews first tracks, saves when subscribed.
+
+## Implementation note
+- `PlaylistPayload` + `PLAYLIST` renderer deliver render / preview-cycling / gated-save / open.
+  Backend validates the payload shape. An in-chat playlist **picker** is deferred: there is no
+  playlist catalog-search source in the backend yet (only track/album/artist search exist), so
+  playlist messages are created from a playlist source/payload rather than a chat picker. The
+  renderer cycles `payload.previews[]` 30s previews via the shared preview player.

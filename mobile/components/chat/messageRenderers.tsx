@@ -3,6 +3,7 @@ import type { ComponentType } from 'react'
 import type { Message } from '@/models/Chat'
 import { TrackCardMessage } from '@/components/music/TrackCardMessage'
 import { AlbumCardMessage } from '@/components/music/AlbumCardMessage'
+import { PlaylistCardMessage } from '@/components/music/PlaylistCardMessage'
 
 export interface MessageRendererProps {
   message: Message
@@ -17,6 +18,7 @@ export interface MessageRendererProps {
 export const messageRenderers: Record<string, ComponentType<MessageRendererProps>> = {
   TRACK: TrackCardMessage,
   ALBUM: AlbumCardMessage,
+  PLAYLIST: PlaylistCardMessage,
 }
 
 /** Returns the card renderer for a message type, or undefined for TEXT/unknown types. */

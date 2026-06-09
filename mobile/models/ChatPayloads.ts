@@ -33,7 +33,27 @@ export interface AlbumPayload {
   appleMusicUrl?: string
 }
 
-export type MessagePayload = TrackPayload | AlbumPayload
+/** A preview entry inside a playlist card. */
+export interface PlaylistPreviewTrack {
+  id: string
+  title: string
+  previewUrl: string
+}
+
+/** A playlist shared as a card (ticket 2.3). */
+export interface PlaylistPayload {
+  type: 'PLAYLIST'
+  id: string
+  title: string
+  curator?: string
+  artworkUrl?: string
+  trackCount?: number
+  appleMusicUrl?: string
+  /** First N preview tracks the recipient can cycle through. */
+  previews?: PlaylistPreviewTrack[]
+}
+
+export type MessagePayload = TrackPayload | AlbumPayload | PlaylistPayload
 
 /** Narrow an unknown payload to a typed payload by its discriminant. */
 export function isTrackPayload(
@@ -46,4 +66,10 @@ export function isAlbumPayload(
   payload: Record<string, unknown> | null | undefined,
 ): payload is AlbumPayload & Record<string, unknown> {
   return !!payload && payload.type === 'ALBUM' && typeof payload.title === 'string'
+}
+
+export function isPlaylistPayload(
+  payload: Record<string, unknown> | null | undefined,
+): payload is PlaylistPayload & Record<string, unknown> {
+  return !!payload && payload.type === 'PLAYLIST' && typeof payload.title === 'string'
 }
