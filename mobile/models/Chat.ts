@@ -25,6 +25,15 @@ export interface Conversation {
   updatedAt: string | null
 }
 
+/** Lightweight reference to a replied-to message (ticket 3.1). */
+export interface ReplyStub {
+  id: string
+  senderUsername: string
+  senderDisplayName: string | null
+  messageType: string
+  snippet: string
+}
+
 export interface Message {
   id: string
   conversationId: string
@@ -38,6 +47,7 @@ export interface Message {
   payload?: Record<string, unknown> | null
   isDeleted: boolean
   replyToId: string | null
+  replyTo?: ReplyStub | null
   createdAt: string
   tempId?: string
   status?: 'sending' | 'sent' | 'failed'

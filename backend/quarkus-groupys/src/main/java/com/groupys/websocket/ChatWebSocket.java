@@ -255,6 +255,7 @@ public class ChatWebSocket {
         String content = (String) msg.get("content");
         String tempId = (String) msg.getOrDefault("tempId", "");
         String messageType = (String) msg.get("messageType");
+        String replyToIdStr = (String) msg.get("replyToId");
         Object payloadObj = msg.get("payload");
 
         // Serialise the structured payload (if any) back to a raw JSON string for the service.
@@ -281,9 +282,18 @@ public class ChatWebSocket {
             return;
         }
 
+        UUID replyToId = null;
+        if (replyToIdStr != null && !replyToIdStr.isBlank()) {
+            try {
+                replyToId = UUID.fromString(replyToIdStr);
+            } catch (IllegalArgumentException ignored) {
+                // ignore malformed reply id
+            }
+        }
+
         MessageResDto saved;
         try {
-            saved = chatService.sendMessage(conversationId, sender.clerkId, content, messageType, payloadJson);
+            saved = chatService.sendMessage(conversationId, sender.clerkId, content, messageType, payloadJson, replyToId);
         } catch (jakarta.ws.rs.ForbiddenException e) {
             sendJson(connection, WebSocketMessage.error("Not a participant in this conversation"));
             return;
@@ -627,6 +637,12 @@ public class ChatWebSocket {
         data.put("messageType", m.messageType());
         if (m.payload() != null) {
             data.put("payload", m.payload());
+        }
+        if (m.replyToId() != null) {
+            data.put("replyToId", m.replyToId().toString());
+        }
+        if (m.replyTo() != null) {
+            data.put("replyTo", m.replyTo());
         }
         data.put("createdAt", m.createdAt().toString());
         if (tempId != null && !tempId.isEmpty()) {

@@ -126,8 +126,31 @@ public class ChatService {
                 parsePayload(m.payload),
                 m.isDeleted,
                 m.replyToId,
+                buildReplyStub(m.replyToId),
                 m.createdAt
         );
+    }
+
+    /** Build a lightweight stub for a replied-to message (ticket 3.1); null if missing/deleted. */
+    com.groupys.dto.ReplyStubDto buildReplyStub(UUID replyToId) {
+        if (replyToId == null) {
+            return null;
+        }
+        Message ref = messageRepository.findByIdOptional(replyToId).orElse(null);
+        if (ref == null) {
+            return null;
+        }
+        String snippet;
+        if (ref.isDeleted) {
+            snippet = "Deleted message";
+        } else if (ref.content != null && !ref.content.isBlank()) {
+            String c = ref.content.strip();
+            snippet = c.length() <= 80 ? c : c.substring(0, 80);
+        } else {
+            snippet = MessageType.normalize(ref.messageType);
+        }
+        return new com.groupys.dto.ReplyStubDto(
+                ref.id, ref.sender.username, ref.sender.displayName, ref.messageType, snippet);
     }
 
     /** Per-type payload shape validation (ticket 2.1). Keeps known card types well-formed. */
@@ -385,12 +408,18 @@ public class ChatService {
 
     @Transactional
     public MessageResDto sendMessage(UUID conversationId, String clerkId, String content) {
-        return sendMessage(conversationId, clerkId, content, MessageType.TEXT, null);
+        return sendMessage(conversationId, clerkId, content, MessageType.TEXT, null, null);
     }
 
     @Transactional
     public MessageResDto sendMessage(UUID conversationId, String clerkId, String content,
                                      String messageType, String payloadJson) {
+        return sendMessage(conversationId, clerkId, content, messageType, payloadJson, null);
+    }
+
+    @Transactional
+    public MessageResDto sendMessage(UUID conversationId, String clerkId, String content,
+                                     String messageType, String payloadJson, UUID replyToId) {
         User sender = requireUserByClerkId(clerkId);
         rateLimitingService.checkRateLimit(sender.id, clerkId);
         requireParticipant(conversationId, sender.id);
@@ -455,6 +484,12 @@ public class ChatService {
         msg.content = content != null ? content.strip() : "";
         msg.messageType = type;
         msg.payload = normalizedPayload;
+        // Thread reply only if the referenced message is in this conversation (ticket 3.1).
+        if (replyToId != null) {
+            messageRepository.findByIdOptional(replyToId)
+                    .filter(ref -> ref.conversation.id.equals(conversationId))
+                    .ifPresent(ref -> msg.replyToId = replyToId);
+        }
         msg.createdAt = Instant.now(); // set before persist so DTO is populated without flush()
         messageRepository.persist(msg);
 

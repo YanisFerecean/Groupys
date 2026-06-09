@@ -17,5 +17,6 @@ public record MessageResDto(
         JsonNode payload,
         boolean isDeleted,
         UUID replyToId,
+        ReplyStubDto replyTo,
         Instant createdAt
 ) {}

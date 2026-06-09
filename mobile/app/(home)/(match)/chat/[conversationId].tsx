@@ -25,6 +25,7 @@ import { MusicAttachSheet } from '@/components/chat/MusicAttachSheet'
 import { ChatActionsContext, type ChatActions } from '@/components/chat/ChatActionsContext'
 import { TextPromptModal } from '@/components/ui/TextPromptModal'
 import { ListenTogetherBar } from '@/components/chat/ListenTogetherBar'
+import { MessageActionSheet, type MessageAction } from '@/components/chat/MessageActionSheet'
 import { TypingIndicator } from '@/components/chat/TypingIndicator'
 import { useListenTogether } from '@/hooks/useListenTogether'
 import { useMusicGate } from '@/hooks/useMusicGate'
@@ -39,7 +40,7 @@ import { publicProfilePath } from '@/lib/profileRoutes'
 import { chatWs } from '@/lib/chat-ws'
 import { setActiveConversationId } from '@/lib/activeChat'
 import { timeAgo } from '@/lib/timeAgo'
-import type { Message } from '@/models/Chat'
+import type { Message, ReplyStub } from '@/models/Chat'
 
 export default function ChatConversationScreen() {
   const insets = useSafeAreaInsets()
@@ -83,6 +84,9 @@ export default function ChatConversationScreen() {
   // What the track picker selection feeds into.
   const [pickerMode, setPickerMode] = useState<'send' | 'dedicate' | 'lyric' | 'timestamp' | 'blind' | 'listen'>('send')
   const listenTogether = useListenTogether(activeConversationId)
+  // Long-press action menu + reply target (ticket 3.1).
+  const [actionMessage, setActionMessage] = useState<Message | null>(null)
+  const [replyTarget, setReplyTarget] = useState<ReplyStub | null>(null)
   // Dedication note flow (ticket 4.3).
   const [pendingDedication, setPendingDedication] = useState<TrackPayload | null>(null)
   // Lyric entry flow (ticket 4.1).
@@ -223,6 +227,37 @@ export default function ChatConversationScreen() {
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false)
   const listRef = useRef<FlatList<Message>>(null)
   const isMountedRef = useRef(true)
+
+  // Scroll to a message by id (reply quote tap, ticket 3.1). List is inverted, so index works.
+  const scrollToMessage = useCallback((messageId: string) => {
+    const index = messages.findIndex(m => m.id === messageId)
+    if (index >= 0) {
+      try {
+        listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 })
+      } catch {
+        // index may be outside the rendered window; ignore
+      }
+    }
+  }, [messages])
+
+  const buildReplyStub = useCallback((m: Message): ReplyStub => ({
+    id: m.id,
+    senderUsername: m.senderUsername,
+    senderDisplayName: m.senderDisplayName,
+    messageType: m.messageType,
+    snippet: m.content && m.content.trim() ? m.content.trim().slice(0, 80) : m.messageType,
+  }), [])
+
+  const messageActions = useMemo<MessageAction[]>(() => {
+    if (!actionMessage) return []
+    return [
+      {
+        icon: 'arrow-undo',
+        label: 'Reply',
+        onPress: () => setReplyTarget(buildReplyStub(actionMessage)),
+      },
+    ]
+  }, [actionMessage, buildReplyStub])
 
   // While the keyboard is up, the KeyboardAvoidingView already lifts the composer past the
   // home-indicator inset; keeping our own bottom inset on top of that doubles the gap.
@@ -652,6 +687,8 @@ export default function ChatConversationScreen() {
                 isMine={item.senderUsername === user?.username}
                 showSeen={item.id === lastSeenMessageId}
                 showTime={showTimeForIndex(index)}
+                onLongPress={() => setActionMessage(item)}
+                onQuotePress={scrollToMessage}
                 onRetry={item.status === 'failed' && item.tempId
                   ? () => {
                       void resendMessage(item.tempId!, item.content)
@@ -691,8 +728,11 @@ export default function ChatConversationScreen() {
             <MessageComposer
               conversationId={conversationId}
               disabled={!canMessage}
+              replyTo={replyTarget}
+              onCancelReply={() => setReplyTarget(null)}
               onSend={(content) => {
-                void sendMessage(content)
+                void sendMessage(content, replyTarget ? { replyTo: replyTarget } : undefined)
+                setReplyTarget(null)
               }}
               onMusicPress={() => {
                 void handleMusicPress()
@@ -803,6 +843,12 @@ export default function ChatConversationScreen() {
         mode={musicGate.upsell.mode}
         action={musicGate.upsell.action}
         onClose={musicGate.closeUpsell}
+      />
+
+      <MessageActionSheet
+        visible={actionMessage !== null}
+        actions={messageActions}
+        onClose={() => setActionMessage(null)}
       />
     </KeyboardAvoidingView>
     </ChatActionsContext.Provider>

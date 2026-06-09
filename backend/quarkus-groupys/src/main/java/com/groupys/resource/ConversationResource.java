@@ -110,7 +110,7 @@ public class ConversationResource {
             }
         }
         MessageResDto msg = chatService.sendMessage(
-                id, jwt.getSubject(), req.content(), req.messageType(), payloadJson);
+                id, jwt.getSubject(), req.content(), req.messageType(), payloadJson, req.replyToId());
         pushMessageNew(msg, jwt.getSubject());
         return Response.status(Response.Status.CREATED).entity(msg).build();
     }
@@ -128,6 +128,12 @@ public class ConversationResource {
             data.put("messageType", msg.messageType());
             if (msg.payload() != null) {
                 data.put("payload", msg.payload());
+            }
+            if (msg.replyToId() != null) {
+                data.put("replyToId", msg.replyToId().toString());
+            }
+            if (msg.replyTo() != null) {
+                data.put("replyTo", msg.replyTo());
             }
             data.put("createdAt", msg.createdAt().toString());
             String json = objectMapper.writeValueAsString(new WebSocketMessage("MESSAGE_NEW", data));
@@ -184,6 +190,6 @@ public class ConversationResource {
     // ── Request records ───────────────────────────────────────────────────────
 
     public record StartConversationRequest(UUID targetUserId) {}
-    public record SendMessageRequest(String content, String messageType, com.fasterxml.jackson.databind.JsonNode payload) {}
+    public record SendMessageRequest(String content, String messageType, com.fasterxml.jackson.databind.JsonNode payload, UUID replyToId) {}
     public record PublicKeyRequest(String publicKey) {}
 }

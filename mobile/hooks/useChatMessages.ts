@@ -216,7 +216,11 @@ export function useChatMessages(
 
   const sendMessage = useCallback(async (
     content: string,
-    options?: { messageType?: string; payload?: Record<string, unknown> | null },
+    options?: {
+      messageType?: string
+      payload?: Record<string, unknown> | null
+      replyTo?: import('@/models/Chat').ReplyStub | null
+    },
   ) => {
     if (!conversationId || !user?.username) {
       return
@@ -224,6 +228,8 @@ export function useChatMessages(
 
     const messageType = options?.messageType ?? 'text'
     const payload = options?.payload ?? null
+    const replyTo = options?.replyTo ?? null
+    const replyToId = replyTo?.id ?? null
     // Only plain-text bodies are E2E-encrypted; structured card payloads travel as-is
     // (their content field is at most a short fallback label used for inbox previews).
     const isStructured = messageType.toLowerCase() !== 'text'
@@ -240,7 +246,8 @@ export function useChatMessages(
       messageType,
       payload,
       isDeleted: false,
-      replyToId: null,
+      replyToId,
+      replyTo,
       createdAt: new Date().toISOString(),
       tempId,
       status: 'sending',
@@ -253,7 +260,7 @@ export function useChatMessages(
       const outbound = otherUsername && !isStructured
         ? await encryptForUsername(otherUsername, content)
         : content
-      const saved = await postMessage(conversationId, outbound, token, { messageType, payload })
+      const saved = await postMessage(conversationId, outbound, token, { messageType, payload, replyToId })
 
       setMessages(prev => prev.map(message => (
         message.tempId === tempId
