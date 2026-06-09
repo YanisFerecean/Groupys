@@ -530,6 +530,13 @@ export default function ChatConversationScreen() {
               onSend={(content) => {
                 void sendMessage(content)
               }}
+              onSendTrack={(track) => {
+                const label = track.artist ? `🎵 ${track.title} — ${track.artist}` : `🎵 ${track.title}`
+                void sendMessage(label, {
+                  messageType: 'TRACK',
+                  payload: track as unknown as Record<string, unknown>,
+                })
+              }}
             />
           </View>
         </>

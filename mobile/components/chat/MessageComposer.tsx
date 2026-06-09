@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { Colors } from '@/constants/colors'
 import { chatWs } from '@/lib/chat-ws'
+import { TrackPicker } from '@/components/music/TrackPicker'
+import type { TrackPayload } from '@/models/ChatPayloads'
 
 const GLASS = isLiquidGlassAvailable()
 
@@ -11,6 +13,8 @@ interface MessageComposerProps {
   conversationId: string
   disabled?: boolean
   onSend: (content: string) => void | Promise<void>
+  /** Send a TRACK card message (ticket 2.1). */
+  onSendTrack?: (payload: TrackPayload) => void | Promise<void>
 }
 
 const MAX_LENGTH = 2000
@@ -19,9 +23,11 @@ export function MessageComposer({
   conversationId,
   disabled = false,
   onSend,
+  onSendTrack,
 }: MessageComposerProps) {
   const [content, setContent] = useState('')
   const [isTyping, setIsTyping] = useState(false)
+  const [pickerOpen, setPickerOpen] = useState(false)
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const stopTyping = useCallback(() => {
@@ -85,6 +91,17 @@ export function MessageComposer({
   return (
     <View className="border-t border-surface-container-high px-4 pb-2 pt-1" style={{ backgroundColor: '#f7f4ec' }}>
       <View className="flex-row items-end gap-3">
+        {onSendTrack ? (
+          <TouchableOpacity
+            className="h-12 w-12 items-center justify-center rounded-full bg-surface-container-high"
+            disabled={disabled}
+            onPress={() => setPickerOpen(true)}
+            accessibilityLabel="Share a track"
+            style={{ opacity: disabled ? 0.5 : 1 }}
+          >
+            <Ionicons name="musical-notes" size={20} color={Colors.primary} />
+          </TouchableOpacity>
+        ) : null}
         {GLASS ? (
           <GlassView
             glassEffectStyle="regular"
@@ -161,6 +178,17 @@ export function MessageComposer({
           </TouchableOpacity>
         )}
       </View>
+
+      {onSendTrack ? (
+        <TrackPicker
+          visible={pickerOpen}
+          onClose={() => setPickerOpen(false)}
+          onSelect={(track) => {
+            setPickerOpen(false)
+            void onSendTrack(track)
+          }}
+        />
+      ) : null}
     </View>
   )
 }

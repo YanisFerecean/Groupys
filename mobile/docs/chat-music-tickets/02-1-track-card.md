@@ -2,7 +2,7 @@
 ticket: 2.1
 title: Send & render Track card message type
 phase: Cards
-status: todo
+status: done
 priority: P1
 depends_on: [0.1, 0.3]
 ---

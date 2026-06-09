@@ -112,6 +112,19 @@ public class ChatService {
         );
     }
 
+    /** Per-type payload shape validation (ticket 2.1). Keeps known card types well-formed. */
+    void validatePayloadShape(String type, JsonNode payload) {
+        if (payload == null || !payload.isObject()) {
+            throw new jakarta.ws.rs.BadRequestException("Message payload must be a JSON object");
+        }
+        if (MessageType.TRACK.equals(type)) {
+            String title = payload.path("title").asText(null);
+            if (title == null || title.isBlank()) {
+                throw new jakarta.ws.rs.BadRequestException("TRACK payload requires a title");
+            }
+        }
+    }
+
     /** Parse the stored raw JSON payload into a JsonNode; null/blank → null, malformed → null. */
     JsonNode parsePayload(String raw) {
         if (raw == null || raw.isBlank()) {
@@ -386,8 +399,15 @@ public class ChatService {
             if (payloadJson.length() > 16000) {
                 throw new jakarta.ws.rs.BadRequestException("Message payload too large");
             }
+            JsonNode parsed;
             try {
-                normalizedPayload = objectMapper.writeValueAsString(objectMapper.readTree(payloadJson));
+                parsed = objectMapper.readTree(payloadJson);
+            } catch (Exception e) {
+                throw new jakarta.ws.rs.BadRequestException("Invalid message payload JSON");
+            }
+            validatePayloadShape(type, parsed);
+            try {
+                normalizedPayload = objectMapper.writeValueAsString(parsed);
             } catch (Exception e) {
                 throw new jakarta.ws.rs.BadRequestException("Invalid message payload JSON");
             }
