@@ -287,6 +287,21 @@ public class ChatService {
                 throw new jakarta.ws.rs.BadRequestException("LINK_PREVIEW payload requires a URL");
             }
         }
+        if (MessageType.VOICE.equals(type)) {
+            int durationMs = payload.path("durationMs").asInt(-1);
+            JsonNode peaks = payload.path("peaks");
+            if (durationMs < 1 || durationMs > 60000) {
+                throw new jakarta.ws.rs.BadRequestException("VOICE duration must be between 1 and 60000 ms");
+            }
+            if (!peaks.isArray() || peaks.isEmpty() || peaks.size() > 128) {
+                throw new jakarta.ws.rs.BadRequestException("VOICE payload requires waveform peaks");
+            }
+            for (JsonNode peak : peaks) {
+                if (!peak.isNumber() || peak.asDouble() < 0 || peak.asDouble() > 1) {
+                    throw new jakarta.ws.rs.BadRequestException("VOICE waveform peaks must be between 0 and 1");
+                }
+            }
+        }
     }
 
     /** Parse the stored raw JSON payload into a JsonNode; null/blank → null, malformed → null. */
@@ -621,9 +636,10 @@ public class ChatService {
         } else if (structured && !MessageType.IMAGE.equals(type)) {
             throw new jakarta.ws.rs.BadRequestException("Structured message requires a payload");
         }
-        if (MessageType.IMAGE.equals(type)
+        boolean carriesUploadedMedia = MessageType.IMAGE.equals(type) || MessageType.VOICE.equals(type);
+        if (carriesUploadedMedia
                 && (mediaUrl == null || !mediaUrl.startsWith("/api/posts/media/"))) {
-            throw new jakarta.ws.rs.BadRequestException("IMAGE message requires uploaded media");
+            throw new jakarta.ws.rs.BadRequestException(type + " message requires uploaded media");
         }
         if (mediaUrl != null && mediaUrl.length() > 1000) {
             throw new jakarta.ws.rs.BadRequestException("Media URL is too long");
@@ -635,7 +651,7 @@ public class ChatService {
         msg.content = content != null ? content.strip() : "";
         msg.messageType = type;
         msg.payload = normalizedPayload;
-        msg.mediaUrl = MessageType.IMAGE.equals(type) ? mediaUrl : null;
+        msg.mediaUrl = carriesUploadedMedia ? mediaUrl : null;
         // Thread reply only if the referenced message is in this conversation (ticket 3.1).
         if (replyToId != null) {
             messageRepository.findByIdOptional(replyToId)

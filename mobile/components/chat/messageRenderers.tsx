@@ -11,6 +11,7 @@ import { TimestampCardMessage } from '@/components/music/TimestampCardMessage'
 import { BlindListenCardMessage } from '@/components/music/BlindListenCardMessage'
 import { ImageMessage } from '@/components/chat/ImageMessage'
 import { LinkPreviewMessage } from '@/components/chat/LinkPreviewMessage'
+import { VoiceMessage } from '@/components/chat/VoiceMessage'
 
 export interface MessageRendererProps {
   message: Message
@@ -33,6 +34,7 @@ export const messageRenderers: Record<string, ComponentType<MessageRendererProps
   BLIND_LISTEN: BlindListenCardMessage,
   IMAGE: ImageMessage,
   LINK_PREVIEW: LinkPreviewMessage,
+  VOICE: VoiceMessage,
 }
 
 /** Returns the card renderer for a message type, or undefined for TEXT/unknown types. */

@@ -107,6 +107,13 @@ export interface LinkPreviewPayload {
   siteName?: string
 }
 
+/** Uploaded voice note metadata and compact waveform (ticket 3.8). */
+export interface VoicePayload {
+  type: 'VOICE'
+  durationMs: number
+  peaks: number[]
+}
+
 export type MessagePayload =
   | TrackPayload
   | AlbumPayload
@@ -117,6 +124,7 @@ export type MessagePayload =
   | TimestampPayload
   | BlindListenPayload
   | LinkPreviewPayload
+  | VoicePayload
 
 /** Narrow an unknown payload to a typed payload by its discriminant. */
 export function isTrackPayload(
@@ -174,4 +182,13 @@ export function isLinkPreviewPayload(
     && payload.type === 'LINK_PREVIEW'
     && typeof payload.url === 'string'
     && typeof payload.title === 'string'
+}
+
+export function isVoicePayload(
+  payload: Record<string, unknown> | null | undefined,
+): payload is VoicePayload & Record<string, unknown> {
+  return !!payload
+    && payload.type === 'VOICE'
+    && typeof payload.durationMs === 'number'
+    && Array.isArray(payload.peaks)
 }

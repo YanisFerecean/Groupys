@@ -32,6 +32,7 @@ import { MessageActionSheet, type MessageAction } from '@/components/chat/Messag
 import { PinnedMessageBar } from '@/components/chat/PinnedMessageBar'
 import { ChatSearchPanel } from '@/components/chat/ChatSearchPanel'
 import { ConversationOptionsSheet } from '@/components/chat/ConversationOptionsSheet'
+import { VoiceRecorderModal } from '@/components/chat/VoiceRecorderModal'
 import { TypingIndicator } from '@/components/chat/TypingIndicator'
 import { useListenTogether } from '@/hooks/useListenTogether'
 import { useMusicGate } from '@/hooks/useMusicGate'
@@ -112,6 +113,7 @@ export default function ChatConversationScreen() {
   // Richer music shares (tickets 2.2 / 2.3).
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
   const [albumPickerOpen, setAlbumPickerOpen] = useState(false)
+  const [voiceRecorderOpen, setVoiceRecorderOpen] = useState(false)
   const pickImage = useCallback(async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -157,6 +159,29 @@ export default function ChatConversationScreen() {
     }
     await sendMessage(content, replyTo ? { replyTo } : undefined)
   }, [getToken, replyTarget, sendMessage])
+
+  const sendVoiceNote = useCallback(async (uri: string, durationMs: number, peaks: number[]) => {
+    try {
+      const extension = uri.split('.').pop()?.split('?')[0]?.toLowerCase()
+      const mimeType = extension === 'webm'
+        ? 'audio/webm'
+        : extension === '3gp'
+          ? 'audio/3gpp'
+          : 'audio/mp4'
+      const fileName = `voice-note-${Date.now()}.${extension || 'm4a'}`
+      const formData = new FormData()
+      formData.append('file', { uri, type: mimeType, name: fileName } as unknown as Blob)
+      const token = await getToken()
+      const uploaded = await apiPostMultipart<{ url: string }>('/posts/media/upload', token, formData)
+      await sendMessage('Voice note', {
+        messageType: 'VOICE',
+        mediaUrl: uploaded.url,
+        payload: { type: 'VOICE', durationMs, peaks },
+      })
+    } catch {
+      Alert.alert('Could not send voice note', 'Try recording the voice note again.')
+    }
+  }, [getToken, sendMessage])
 
   const sendTrack = useCallback((track: TrackPayload) => {
     const label = track.artist ? `🎵 ${track.title} — ${track.artist}` : `🎵 ${track.title}`
@@ -936,6 +961,7 @@ export default function ChatConversationScreen() {
         onPickImage={() => {
           void pickImage()
         }}
+        onVoiceNote={() => setVoiceRecorderOpen(true)}
         onPickAlbum={() => setAlbumPickerOpen(true)}
         onDedicate={() => {
           setPickerMode('dedicate')
@@ -962,6 +988,12 @@ export default function ChatConversationScreen() {
           setTrackPickerQuery('')
           setTrackPickerOpen(true)
         }}
+      />
+
+      <VoiceRecorderModal
+        visible={voiceRecorderOpen}
+        onClose={() => setVoiceRecorderOpen(false)}
+        onSend={sendVoiceNote}
       />
 
       <TextPromptModal
