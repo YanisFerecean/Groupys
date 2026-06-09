@@ -1,4 +1,5 @@
 import type { ProfileCustomization } from '@/models/ProfileCustomization'
+import type { DailySong } from '@/models/DailySong'
 import { ApiError, apiRequest } from '@/lib/apiRequest'
 import { API_URL } from '@/lib/config'
 import { getMusicErrorMessage } from '@/lib/musicErrors'
@@ -905,6 +906,22 @@ export async function setShareNowPlaying(
   enabled: boolean,
 ): Promise<BackendUser> {
   return apiPut<BackendUser>('/users/me/now-playing-sharing', token, { enabled })
+}
+
+// ── Daily song (ticket 5.2) ──────────────────────────────────────────────────
+export async function postDailySong(
+  token: string | null,
+  track: Record<string, unknown>,
+): Promise<DailySong> {
+  return apiPost<DailySong>('/daily-song', token, track)
+}
+
+export async function fetchDailySongFeed(token: string | null): Promise<DailySong[]> {
+  return apiFetch<DailySong[]>('/daily-song/feed', token, false)
+}
+
+export async function deleteDailySong(token: string | null): Promise<void> {
+  await apiDelete('/daily-song', token)
 }
 
 export async function getMusicCapability(

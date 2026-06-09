@@ -2,7 +2,7 @@
 ticket: 5.2
 title: Daily song (ephemeral status)
 phase: Social
-status: todo
+status: done
 priority: P3
 depends_on: [0.3]
 ---

@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import { ConversationListItem } from '@/components/chat/ConversationListItem'
+import { DailySongTray } from '@/components/chat/DailySongTray'
 import { Colors } from '@/constants/colors'
 import { useChat } from '@/hooks/useChat'
 import { isEncrypted } from '@/lib/chat-crypto'
@@ -244,6 +245,7 @@ export default function ChatInboxScreen() {
         maxToRenderPerBatch={CONVERSATION_RENDER_BATCH}
         windowSize={9}
         removeClippedSubviews
+        ListHeaderComponent={<DailySongTray />}
         renderItem={({ item }) => {
           const otherParticipant = item.participants.find(
             participant => participant.username !== user?.username,
