@@ -2,7 +2,7 @@
 ticket: 4.4
 title: Voice note over beat
 phase: Music types
-status: todo
+status: done
 priority: P3
 depends_on: [3.8]
 ---

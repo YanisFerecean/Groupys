@@ -112,6 +112,14 @@ export interface VoicePayload {
   type: 'VOICE'
   durationMs: number
   peaks: number[]
+  /** Bundled royalty-free backing mixed locally on playback (ticket 4.4). */
+  bed?: VoiceBedPayload
+}
+
+export interface VoiceBedPayload {
+  id: string
+  title: string
+  kind: 'BUNDLED'
 }
 
 /** Server-catalog sticker message (ticket 3.9). */

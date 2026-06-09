@@ -4,6 +4,7 @@ import {
   RecordingPresets,
   requestRecordingPermissionsAsync,
   setAudioModeAsync,
+  useAudioPlayer,
   useAudioRecorder,
   useAudioRecorderState,
 } from 'expo-audio'
@@ -11,11 +12,14 @@ import { useEffect, useRef, useState } from 'react'
 import { Alert, Modal, Text, TouchableOpacity, View } from 'react-native'
 
 import { Colors } from '@/constants/colors'
+import { getVoiceBedSource } from '@/lib/voiceBeds'
+import type { VoiceBedPayload } from '@/models/ChatPayloads'
 
 interface VoiceRecorderModalProps {
   visible: boolean
+  bed?: VoiceBedPayload | null
   onClose: () => void
-  onSend: (uri: string, durationMs: number, peaks: number[]) => void | Promise<void>
+  onSend: (uri: string, durationMs: number, peaks: number[], bed?: VoiceBedPayload) => void | Promise<void>
 }
 
 const MAX_DURATION_MS = 60000
@@ -43,14 +47,21 @@ function compactPeaks(peaks: number[]): number[] {
 }
 
 /** Records a capped voice note and captures metering samples for its waveform (ticket 3.8). */
-export function VoiceRecorderModal({ visible, onClose, onSend }: VoiceRecorderModalProps) {
+export function VoiceRecorderModal({ visible, bed, onClose, onSend }: VoiceRecorderModalProps) {
   const recorder = useAudioRecorder({ ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true })
   const recorderState = useAudioRecorderState(recorder, 100)
+  const bedPlayer = useAudioPlayer(getVoiceBedSource(bed?.id))
   const [recordedUri, setRecordedUri] = useState<string | null>(null)
   const [durationMs, setDurationMs] = useState(0)
   const [peaks, setPeaks] = useState<number[]>([])
   const lastPeakAtRef = useRef(0)
   const wasRecordingRef = useRef(false)
+
+  useEffect(() => {
+    if (!bed) return
+    bedPlayer.loop = true
+    bedPlayer.volume = 0.18
+  }, [bed, bedPlayer])
 
   useEffect(() => {
     if (!visible) {
@@ -77,9 +88,10 @@ export function VoiceRecorderModal({ visible, onClose, onSend }: VoiceRecorderMo
     if (wasRecordingRef.current && recorderState.url) {
       wasRecordingRef.current = false
       setRecordedUri(recorderState.url)
+      if (bed) bedPlayer.pause()
       void setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true })
     }
-  }, [recorderState.durationMillis, recorderState.isRecording, recorderState.metering, recorderState.url, visible])
+  }, [bed, bedPlayer, recorderState.durationMillis, recorderState.isRecording, recorderState.metering, recorderState.url, visible])
 
   const startRecording = async () => {
     try {
@@ -95,6 +107,10 @@ export function VoiceRecorderModal({ visible, onClose, onSend }: VoiceRecorderMo
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true })
       await recorder.prepareToRecordAsync()
       recorder.record({ forDuration: MAX_DURATION_MS / 1000 })
+      if (bed) {
+        await bedPlayer.seekTo(0)
+        bedPlayer.play()
+      }
     } catch {
       Alert.alert('Could not record', 'Check microphone access and try again.')
     }
@@ -104,6 +120,7 @@ export function VoiceRecorderModal({ visible, onClose, onSend }: VoiceRecorderMo
     const finalDuration = Math.min(recorderState.durationMillis, MAX_DURATION_MS)
     try {
       await recorder.stop()
+      if (bed) bedPlayer.pause()
       setDurationMs(finalDuration)
       setRecordedUri(recorder.uri)
       await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true })
@@ -116,6 +133,7 @@ export function VoiceRecorderModal({ visible, onClose, onSend }: VoiceRecorderMo
     if (recorderState.isRecording) {
       void recorder.stop()
     }
+    if (bed) bedPlayer.pause()
     void setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true })
     onClose()
   }
@@ -129,8 +147,12 @@ export function VoiceRecorderModal({ visible, onClose, onSend }: VoiceRecorderMo
         <TouchableOpacity activeOpacity={1} onPress={close} style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />
         <View className="rounded-t-3xl bg-surface px-5 pb-8 pt-4">
           <View className="mb-4 h-1 w-9 self-center rounded-full" style={{ backgroundColor: Colors.outlineVariant }} />
-          <Text className="text-base font-bold text-on-surface">Voice note</Text>
-          <Text className="mt-1 text-[13px] text-on-surface-variant">Record up to 1 minute.</Text>
+          <Text className="text-base font-bold text-on-surface">
+            {bed ? `Voice over ${bed.title}` : 'Voice note'}
+          </Text>
+          <Text className="mt-1 text-[13px] text-on-surface-variant">
+            {bed ? 'The bundled beat plays softly while you record.' : 'Record up to 1 minute.'}
+          </Text>
 
           <View className="mt-6 h-20 flex-row items-center justify-center gap-1 rounded-2xl bg-surface-container px-3">
             {waveform.slice(-48).map((peak, index) => (
@@ -155,7 +177,7 @@ export function VoiceRecorderModal({ visible, onClose, onSend }: VoiceRecorderMo
             {recordedUri && durationMs > 0 ? (
               <TouchableOpacity
                 onPress={() => {
-                  void onSend(recordedUri, Math.max(1, durationMs), waveform)
+                  void onSend(recordedUri, Math.max(1, durationMs), waveform, bed ?? undefined)
                   onClose()
                 }}
                 className="h-16 w-16 items-center justify-center rounded-full bg-tertiary"

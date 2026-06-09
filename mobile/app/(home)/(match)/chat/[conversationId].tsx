@@ -34,12 +34,13 @@ import { ChatSearchPanel } from '@/components/chat/ChatSearchPanel'
 import { ConversationOptionsSheet } from '@/components/chat/ConversationOptionsSheet'
 import { VoiceRecorderModal } from '@/components/chat/VoiceRecorderModal'
 import { StickerPicker } from '@/components/chat/StickerPicker'
+import { BeatPicker } from '@/components/chat/BeatPicker'
 import { TypingIndicator } from '@/components/chat/TypingIndicator'
 import { useListenTogether } from '@/hooks/useListenTogether'
 import { useMusicGate } from '@/hooks/useMusicGate'
 import { apiPostMultipart, fetchMusicCurrentlyPlaying } from '@/lib/api'
 import { resolveLinkPreview, type StickerCatalogItem } from '@/lib/chat-api'
-import type { AlbumPayload, TrackPayload } from '@/models/ChatPayloads'
+import type { AlbumPayload, TrackPayload, VoiceBedPayload } from '@/models/ChatPayloads'
 import { Colors } from '@/constants/colors'
 import { useChat } from '@/hooks/useChat'
 import { useChatMessages } from '@/hooks/useChatMessages'
@@ -115,6 +116,8 @@ export default function ChatConversationScreen() {
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
   const [albumPickerOpen, setAlbumPickerOpen] = useState(false)
   const [voiceRecorderOpen, setVoiceRecorderOpen] = useState(false)
+  const [beatPickerOpen, setBeatPickerOpen] = useState(false)
+  const [pendingVoiceBed, setPendingVoiceBed] = useState<VoiceBedPayload | null>(null)
   const [stickerPickerOpen, setStickerPickerOpen] = useState(false)
   const pickImage = useCallback(async () => {
     try {
@@ -162,7 +165,12 @@ export default function ChatConversationScreen() {
     await sendMessage(content, replyTo ? { replyTo } : undefined)
   }, [getToken, replyTarget, sendMessage])
 
-  const sendVoiceNote = useCallback(async (uri: string, durationMs: number, peaks: number[]) => {
+  const sendVoiceNote = useCallback(async (
+    uri: string,
+    durationMs: number,
+    peaks: number[],
+    bed?: VoiceBedPayload,
+  ) => {
     try {
       const extension = uri.split('.').pop()?.split('?')[0]?.toLowerCase()
       const mimeType = extension === 'webm'
@@ -178,7 +186,7 @@ export default function ChatConversationScreen() {
       await sendMessage('Voice note', {
         messageType: 'VOICE',
         mediaUrl: uploaded.url,
-        payload: { type: 'VOICE', durationMs, peaks },
+        payload: { type: 'VOICE', durationMs, peaks, bed },
       })
     } catch {
       Alert.alert('Could not send voice note', 'Try recording the voice note again.')
@@ -976,7 +984,11 @@ export default function ChatConversationScreen() {
         onPickImage={() => {
           void pickImage()
         }}
-        onVoiceNote={() => setVoiceRecorderOpen(true)}
+        onVoiceNote={() => {
+          setPendingVoiceBed(null)
+          setVoiceRecorderOpen(true)
+        }}
+        onVoiceBeat={() => setBeatPickerOpen(true)}
         onSticker={() => setStickerPickerOpen(true)}
         onPickAlbum={() => setAlbumPickerOpen(true)}
         onDedicate={() => {
@@ -1008,8 +1020,22 @@ export default function ChatConversationScreen() {
 
       <VoiceRecorderModal
         visible={voiceRecorderOpen}
-        onClose={() => setVoiceRecorderOpen(false)}
+        bed={pendingVoiceBed}
+        onClose={() => {
+          setVoiceRecorderOpen(false)
+          setPendingVoiceBed(null)
+        }}
         onSend={sendVoiceNote}
+      />
+
+      <BeatPicker
+        visible={beatPickerOpen}
+        onClose={() => setBeatPickerOpen(false)}
+        onSelect={(bed) => {
+          setBeatPickerOpen(false)
+          setPendingVoiceBed({ id: bed.id, title: bed.title, kind: bed.kind })
+          setVoiceRecorderOpen(true)
+        }}
       />
 
       <StickerPicker

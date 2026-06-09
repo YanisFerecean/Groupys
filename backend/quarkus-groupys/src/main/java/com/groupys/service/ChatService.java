@@ -41,6 +41,11 @@ public class ChatService {
     private static final String REQUEST_STATUS_PENDING = "PENDING";
     private static final String REQUEST_STATUS_PENDING_INCOMING = "PENDING_INCOMING";
     private static final String REQUEST_STATUS_PENDING_OUTGOING = "PENDING_OUTGOING";
+    private static final Map<String, String> VOICE_BEDS = Map.of(
+            "pulse", "Pulse",
+            "neon", "Neon",
+            "drift", "Drift"
+    );
 
     private final ConversationRepository conversationRepository;
     private final MessageRepository messageRepository;
@@ -302,6 +307,15 @@ public class ChatService {
             for (JsonNode peak : peaks) {
                 if (!peak.isNumber() || peak.asDouble() < 0 || peak.asDouble() > 1) {
                     throw new jakarta.ws.rs.BadRequestException("VOICE waveform peaks must be between 0 and 1");
+                }
+            }
+            JsonNode bed = payload.path("bed");
+            if (!bed.isMissingNode() && !bed.isNull()) {
+                String bedId = bed.path("id").asText(null);
+                String kind = bed.path("kind").asText(null);
+                String title = bed.path("title").asText(null);
+                if (!"BUNDLED".equals(kind) || !java.util.Objects.equals(VOICE_BEDS.get(bedId), title)) {
+                    throw new jakarta.ws.rs.BadRequestException("Unknown voice-note backing bed");
                 }
             }
         }
