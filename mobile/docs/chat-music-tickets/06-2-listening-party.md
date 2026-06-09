@@ -2,7 +2,7 @@
 ticket: 6.2
 title: Listening party (scheduled group sync)
 phase: Community
-status: todo
+status: done
 priority: P4
 depends_on: [7.1]
 ---

@@ -28,6 +28,7 @@ import { MusicAttachSheet } from '@/components/chat/MusicAttachSheet'
 import { ChatActionsContext, type ChatActions } from '@/components/chat/ChatActionsContext'
 import { TextPromptModal } from '@/components/ui/TextPromptModal'
 import { ListenTogetherBar } from '@/components/chat/ListenTogetherBar'
+import { ListeningPartyBar } from '@/components/chat/ListeningPartyBar'
 import { MessageActionSheet, type MessageAction } from '@/components/chat/MessageActionSheet'
 import { PinnedMessageBar } from '@/components/chat/PinnedMessageBar'
 import { ChatSearchPanel } from '@/components/chat/ChatSearchPanel'
@@ -101,7 +102,7 @@ export default function ChatConversationScreen() {
   const [trackPickerOpen, setTrackPickerOpen] = useState(false)
   const [trackPickerQuery, setTrackPickerQuery] = useState('')
   // What the track picker selection feeds into.
-  const [pickerMode, setPickerMode] = useState<'send' | 'dedicate' | 'lyric' | 'timestamp' | 'blind' | 'listen' | 'reaction'>('send')
+  const [pickerMode, setPickerMode] = useState<'send' | 'dedicate' | 'lyric' | 'timestamp' | 'blind' | 'listen' | 'reaction' | 'party'>('send')
   const listenTogether = useListenTogether(activeConversationId)
   // Long-press action menu + reply target (ticket 3.1).
   const [actionMessage, setActionMessage] = useState<Message | null>(null)
@@ -114,6 +115,7 @@ export default function ChatConversationScreen() {
   const [pendingLyricTrack, setPendingLyricTrack] = useState<TrackPayload | null>(null)
   // Timestamp entry flow (ticket 4.2).
   const [pendingTimestampTrack, setPendingTimestampTrack] = useState<TrackPayload | null>(null)
+  const [pendingPartyTrack, setPendingPartyTrack] = useState<TrackPayload | null>(null)
   // Richer music shares (tickets 2.2 / 2.3).
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
   const [albumPickerOpen, setAlbumPickerOpen] = useState(false)
@@ -288,6 +290,8 @@ export default function ChatConversationScreen() {
       sendBlindListen(track)
     } else if (pickerMode === 'listen') {
       listenTogether.startRoom(track)
+    } else if (pickerMode === 'party') {
+      setPendingPartyTrack(track)
     } else {
       sendTrack(track)
     }
@@ -910,6 +914,13 @@ export default function ChatConversationScreen() {
               onReact={listenTogether.sendReaction}
             />
           ) : null}
+          {!listenTogether.room && listenTogether.party ? (
+            <ListeningPartyBar
+              party={listenTogether.party}
+              joined={listenTogether.joinedParty}
+              onJoin={listenTogether.joinParty}
+            />
+          ) : null}
 
           <FlatList
             ref={listRef}
@@ -995,7 +1006,7 @@ export default function ChatConversationScreen() {
       <TrackPicker
         visible={trackPickerOpen}
         initialQuery={trackPickerQuery}
-        previewOnly={pickerMode === 'reaction'}
+        previewOnly={pickerMode === 'reaction' || pickerMode === 'listen' || pickerMode === 'party'}
         onClose={() => {
           setTrackPickerOpen(false)
           if (pickerMode === 'reaction') {
@@ -1044,6 +1055,11 @@ export default function ChatConversationScreen() {
           setTrackPickerQuery('')
           setTrackPickerOpen(true)
         }}
+        onListeningParty={() => {
+          setPickerMode('party')
+          setTrackPickerQuery('')
+          setTrackPickerOpen(true)
+        }}
       />
 
       <VoiceRecorderModal
@@ -1083,6 +1099,28 @@ export default function ChatConversationScreen() {
         onSubmit={(note) => {
           if (pendingDedication) sendDedication(pendingDedication, note)
           setPendingDedication(null)
+          setPickerMode('send')
+        }}
+      />
+
+      <TextPromptModal
+        visible={pendingPartyTrack !== null}
+        title="Party starts in how many minutes?"
+        placeholder="5"
+        initialValue="5"
+        submitLabel="Schedule party"
+        onClose={() => {
+          setPendingPartyTrack(null)
+          setPickerMode('send')
+        }}
+        onSubmit={(text) => {
+          const minutes = Number.parseInt(text, 10)
+          if (!pendingPartyTrack || !Number.isFinite(minutes) || minutes < 1 || minutes > 43200) {
+            Alert.alert('Listening party', 'Choose a start time between 1 minute and 30 days.')
+            return
+          }
+          listenTogether.scheduleParty(pendingPartyTrack, new Date(Date.now() + minutes * 60_000))
+          setPendingPartyTrack(null)
           setPickerMode('send')
         }}
       />

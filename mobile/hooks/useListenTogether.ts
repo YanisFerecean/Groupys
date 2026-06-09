@@ -1,3 +1,4 @@
+import { useUser } from '@clerk/expo'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { chatWs } from '@/lib/chat-ws'
@@ -19,6 +20,16 @@ export interface ListenTogetherRoom {
   isPlaying: boolean
 }
 
+export interface ListeningParty {
+  id: string
+  conversationId: string
+  hostUserId: string
+  hostClerkId: string
+  startAt: string
+  track: TrackPayload
+  status: 'SCHEDULED' | 'STARTED'
+}
+
 interface RoomStateEvent {
   conversationId: string
   hostUserId: string
@@ -33,15 +44,21 @@ interface RoomStateEvent {
  * which is permitted for everyone; followers correct drift toward the host position.
  */
 export function useListenTogether(conversationId: string | null) {
+  const { user } = useUser()
   const preview = usePreviewPlayer()
   const [room, setRoom] = useState<ListenTogetherRoom | null>(null)
   const [reactions, setReactions] = useState<FloatingReaction[]>([])
+  const [party, setParty] = useState<ListeningParty | null>(null)
+  const [joinedPartyId, setJoinedPartyId] = useState<string | null>(null)
 
   const previewRef = useRef(preview)
   previewRef.current = preview
   const roomRef = useRef(room)
   roomRef.current = room
   const lastSeekRef = useRef(0)
+  const joinedPartyIdRef = useRef(joinedPartyId)
+  joinedPartyIdRef.current = joinedPartyId
+  const startRoomRef = useRef<(track: TrackPayload) => void>(() => {})
 
   const roomTrackId = conversationId ? `room:${conversationId}` : 'room'
 
@@ -95,10 +112,29 @@ export function useListenTogether(conversationId: string | null) {
         setReactions(prev => [...prev, { id, emoji: payload.emoji }])
         setTimeout(() => setReactions(prev => prev.filter(r => r.id !== id)), 2500)
       }),
+      chatWs.on<ListeningParty>('PARTY_UPDATE', (payload) => {
+        if (payload.conversationId !== conversationId) return
+        setParty(payload)
+        if (payload.hostClerkId === user?.id) {
+          setJoinedPartyId(payload.id)
+        }
+      }),
+      chatWs.on<ListeningParty>('PARTY_START', (payload) => {
+        if (payload.conversationId !== conversationId) return
+        setParty({ ...payload, status: 'STARTED' })
+        const isHost = payload.hostClerkId === user?.id
+        if (!isHost && joinedPartyIdRef.current !== payload.id) return
+        if (isHost) {
+          startRoomRef.current(payload.track)
+        } else {
+          chatWs.send({ type: 'ROOM_JOIN', conversationId })
+        }
+      }),
     ]
 
+    chatWs.send({ type: 'PARTY_REQUEST', conversationId })
     return () => unsubs.forEach(u => u())
-  }, [conversationId, roomTrackId])
+  }, [conversationId, roomTrackId, user?.id])
 
   // Host heartbeat: broadcast position + play state (~2s) while hosting.
   useEffect(() => {
@@ -128,6 +164,24 @@ export function useListenTogether(conversationId: string | null) {
     chatWs.send({ type: 'ROOM_JOIN', conversationId })
     preview.play(roomTrackId, track.previewUrl)
   }, [conversationId, preview, roomTrackId])
+  startRoomRef.current = startRoom
+
+  const scheduleParty = useCallback((track: TrackPayload, startAt: Date) => {
+    if (!conversationId || !track.previewUrl) return
+    chatWs.send({
+      type: 'PARTY_SCHEDULE',
+      conversationId,
+      startAt: startAt.toISOString(),
+      track,
+    })
+  }, [conversationId])
+
+  const joinParty = useCallback(() => {
+    if (!party) return
+    setJoinedPartyId(party.id)
+    joinedPartyIdRef.current = party.id
+    chatWs.send({ type: 'PARTY_JOIN', partyId: party.id })
+  }, [party])
 
   const leaveRoom = useCallback(() => {
     if (conversationId) chatWs.send({ type: 'ROOM_LEAVE', conversationId })
@@ -146,5 +200,17 @@ export function useListenTogether(conversationId: string | null) {
   const isActive = room ? preview.isActive(roomTrackId) : false
   const progress = isActive && preview.durationSec > 0 ? preview.positionSec / preview.durationSec : 0
 
-  return { room, reactions, startRoom, leaveRoom, sendReaction, isPlaying: isActive && preview.isPlaying, progress }
+  return {
+    room,
+    reactions,
+    party,
+    joinedParty: party != null && joinedPartyId === party.id,
+    startRoom,
+    scheduleParty,
+    joinParty,
+    leaveRoom,
+    sendReaction,
+    isPlaying: isActive && preview.isPlaying,
+    progress,
+  }
 }

@@ -2,11 +2,14 @@ package com.groupys.websocket;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.groupys.dto.ListeningPartyDto;
 import com.groupys.dto.MessageResDto;
 import com.groupys.model.User;
 import com.groupys.repository.UserRepository;
 import com.groupys.service.ChatService;
 import com.groupys.service.ListeningRoomService;
+import com.groupys.service.ListeningPartyService;
+import com.groupys.service.ListeningPartyStartJob;
 import com.groupys.service.NotificationService;
 import com.groupys.service.PresenceService;
 import io.quarkus.arc.Arc;
@@ -57,6 +60,9 @@ public class ChatWebSocket {
 
     @Inject
     ListeningRoomService listeningRoomService;
+
+    @Inject
+    ListeningPartyService listeningPartyService;
 
     @Inject
     ChatService chatService;
@@ -155,6 +161,9 @@ public class ChatWebSocket {
             case "ROOM_STATE"          -> handleRoomState(user, msg);
             case "ROOM_LEAVE"          -> handleRoomLeave(user, msg);
             case "REACTION_FLOAT"      -> handleReactionFloat(user, msg);
+            case "PARTY_SCHEDULE"      -> handlePartySchedule(connection, user, msg);
+            case "PARTY_REQUEST"       -> handlePartyRequest(connection, user, msg);
+            case "PARTY_JOIN"          -> handlePartyJoin(connection, user, msg);
             default -> sendJson(connection, WebSocketMessage.error("Unknown message type: " + type));
         }
     }
@@ -691,6 +700,66 @@ public class ChatWebSocket {
             try { return Long.parseLong(s); } catch (NumberFormatException e) { return 0L; }
         }
         return 0L;
+    }
+
+    // -- Listening party (ticket 6.2) -----------------------------------------
+    // Parties schedule entry into the position-only preview-sync room; audio is never relayed.
+
+    private void handlePartySchedule(WebSocketConnection connection, User user, Map<String, Object> msg) {
+        UUID conversationId = parseConversationId(connection, msg);
+        String startAtRaw = (String) msg.get("startAt");
+        Object track = msg.get("track");
+        if (conversationId == null || startAtRaw == null || track == null) {
+            sendJson(connection, WebSocketMessage.error("conversationId, startAt, and track required"));
+            return;
+        }
+        try {
+            ListeningPartyDto party = listeningPartyService.schedule(
+                    conversationId, user.clerkId, Instant.parse(startAtRaw), mapper.writeValueAsString(track));
+            broadcastParty("PARTY_UPDATE", party);
+        } catch (jakarta.ws.rs.WebApplicationException e) {
+            sendJson(connection, WebSocketMessage.error(e.getMessage()));
+        } catch (Exception e) {
+            LOG.errorf(e, "Failed to schedule listening party");
+            sendJson(connection, WebSocketMessage.error("Invalid listening party"));
+        }
+    }
+
+    private void handlePartyRequest(WebSocketConnection connection, User user, Map<String, Object> msg) {
+        UUID conversationId = parseConversationId(connection, msg);
+        if (conversationId == null) return;
+        try {
+            ListeningPartyDto party = listeningPartyService.getCurrent(conversationId, user.clerkId);
+            if (party != null) {
+                String type = "STARTED".equals(party.status()) ? "PARTY_START" : "PARTY_UPDATE";
+                sendJson(connection, new WebSocketMessage(type, ListeningPartyStartJob.payload(party)));
+            }
+        } catch (jakarta.ws.rs.WebApplicationException e) {
+            sendJson(connection, WebSocketMessage.error(e.getMessage()));
+        }
+    }
+
+    private void handlePartyJoin(WebSocketConnection connection, User user, Map<String, Object> msg) {
+        String partyIdRaw = (String) msg.get("partyId");
+        if (partyIdRaw == null) {
+            sendJson(connection, WebSocketMessage.error("partyId required"));
+            return;
+        }
+        try {
+            ListeningPartyDto party = listeningPartyService.requireParty(UUID.fromString(partyIdRaw), user.clerkId);
+            String type = "STARTED".equals(party.status()) ? "PARTY_START" : "PARTY_UPDATE";
+            sendJson(connection, new WebSocketMessage(type, ListeningPartyStartJob.payload(party)));
+        } catch (IllegalArgumentException e) {
+            sendJson(connection, WebSocketMessage.error("Invalid partyId"));
+        } catch (jakarta.ws.rs.WebApplicationException e) {
+            sendJson(connection, WebSocketMessage.error(e.getMessage()));
+        }
+    }
+
+    private void broadcastParty(String type, ListeningPartyDto party) {
+        String json = toJson(new WebSocketMessage(type, ListeningPartyStartJob.payload(party)));
+        chatService.getParticipantClerkIds(party.conversationId())
+                .forEach((userId, clerkId) -> presenceService.sendTo(clerkId, json));
     }
 
     // -- Blind listen (ticket 4.6) ---------------------------------------------
