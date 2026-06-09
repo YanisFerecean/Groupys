@@ -3,7 +3,7 @@ import { useAuth } from '@clerk/expo'
 
 import { fetchMusicCurrentlyPlaying } from '@/lib/api'
 import { chatWs } from '@/lib/chat-ws'
-import type { NowPlayingTrack } from '@/models/Chat'
+import type { NowPlayingState, NowPlayingTrack } from '@/models/Chat'
 
 const POLL_MS = 25_000
 
@@ -14,14 +14,22 @@ const POLL_MS = 25_000
  * when the track/state changes. The server enforces the privacy + connection gate, so this is a
  * best-effort publisher. Never relays audio — only metadata.
  */
-export function useNowPlayingBroadcaster(enabled: boolean) {
+export function useNowPlayingBroadcaster(
+  enabled: boolean,
+  onChange?: (state: NowPlayingState) => void,
+) {
   const { getToken } = useAuth()
   const getTokenRef = useRef(getToken)
+  const onChangeRef = useRef(onChange)
   const lastKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
     getTokenRef.current = getToken
   }, [getToken])
+
+  useEffect(() => {
+    onChangeRef.current = onChange
+  }, [onChange])
 
   useEffect(() => {
     if (!enabled) {
@@ -47,6 +55,7 @@ export function useNowPlayingBroadcaster(enabled: boolean) {
         if (key !== lastKeyRef.current) {
           lastKeyRef.current = key
           chatWs.send({ type: 'NOW_PLAYING_UPDATE', track, isPlaying })
+          onChangeRef.current?.({ track, isPlaying })
         }
       } catch {
         // Offline / not connected / token expired — skip this tick.

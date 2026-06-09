@@ -2,7 +2,7 @@
 ticket: 1.4
 title: Ambient match banner
 phase: Live status
-status: todo
+status: done
 priority: P2
 depends_on: [1.1]
 ---

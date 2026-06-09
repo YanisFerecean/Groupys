@@ -33,6 +33,7 @@ import {
 import { chatWs } from '@/lib/chat-ws'
 import { useMusicCapability } from '@/hooks/useMusicCapability'
 import { useNowPlayingBroadcaster } from '@/hooks/useNowPlayingBroadcaster'
+import { useNotificationBannerStore } from '@/stores/useNotificationBannerStore'
 import type {
   Conversation,
   Message,
@@ -96,7 +97,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   // Publish our own now-playing while connected; the server enforces the privacy gate (ticket 1.1).
   const musicCapability = useMusicCapability()
-  useNowPlayingBroadcaster(musicCapability.canShareNowPlaying)
+  const [myNowPlaying, setMyNowPlaying] = useState<NowPlayingState | null>(null)
+  useNowPlayingBroadcaster(musicCapability.canShareNowPlaying, setMyNowPlaying)
+  // Ambient match (ticket 1.4): keys already announced this listening streak.
+  const announcedAmbientRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     getTokenRef.current = getToken
@@ -354,6 +358,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setHasMore(false)
       setOnlineUsers(new Set())
       setNowPlayingByUser(new Map())
+      setMyNowPlaying(null)
+      announcedAmbientRef.current = new Set()
       publicKeyCacheRef.current.clear()
       setKeyPair(null)
       setCryptoReady(false)
@@ -534,6 +540,35 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       unsubs.forEach(unsub => unsub())
     }
   }, [fetchConversationById])
+
+  // Ambient match banner (ticket 1.4): fire once per shared listening streak when our live track
+  // matches a partner's. Cleared when either side stops, so a later re-match fires again.
+  useEffect(() => {
+    const norm = (value?: string | null) => (value ?? '').trim().toLowerCase()
+    const myTrack = myNowPlaying?.isPlaying ? myNowPlaying.track : null
+    const myKey = myTrack ? `${norm(myTrack.title)}|${norm(myTrack.artist)}` : null
+
+    const currentMatches = new Set<string>()
+    if (myKey) {
+      nowPlayingByUser.forEach((state, userId) => {
+        if (!state.isPlaying || !state.track) return
+        const partnerKey = `${norm(state.track.title)}|${norm(state.track.artist)}`
+        if (partnerKey !== myKey) return
+
+        const matchKey = `${userId}::${myKey}`
+        currentMatches.add(matchKey)
+        if (!announcedAmbientRef.current.has(matchKey)) {
+          useNotificationBannerStore.getState().show({
+            id: `ambient-${matchKey}`,
+            title: "You're both vibing 🎶",
+            body: `You're both listening to ${myTrack!.title} right now`,
+            type: 'AMBIENT_MATCH',
+          })
+        }
+      })
+    }
+    announcedAmbientRef.current = currentMatches
+  }, [myNowPlaying, nowPlayingByUser])
 
   const totalUnread = useMemo(
     () => conversations.reduce((sum, conversation) => sum + conversation.unreadCount, 0),
