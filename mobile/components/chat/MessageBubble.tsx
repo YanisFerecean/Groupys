@@ -87,7 +87,7 @@ export function MessageBubble({
   const isUnsupported = !isText && !CardRenderer
 
   // Sent bubble: vibrant primary-tinted glass. Received: frosted neutral glass.
-  const sentTint = 'rgba(186, 0, 43, 0.55)'
+  const sentTint = 'rgba(186, 0, 43, 0.92)'
   const receivedTint = 'rgba(255, 255, 255, 0.18)'
 
   const renderBubble = () => {

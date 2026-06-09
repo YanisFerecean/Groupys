@@ -51,7 +51,7 @@ export function VoiceMessage({ message, isMine }: MessageRendererProps) {
   const progress = durationSec > 0 ? Math.min(1, status.currentTime / durationSec) : 0
   const currentLabel = status.currentTime > 0 ? status.currentTime : durationSec
 
-  const sentTint = 'rgba(186, 0, 43, 0.55)'
+  const sentTint = 'rgba(186, 0, 43, 0.92)'
   const receivedTint = 'rgba(255, 255, 255, 0.18)'
 
   const inner = (
