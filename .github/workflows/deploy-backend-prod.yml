@@ -250,25 +250,90 @@ jobs:
               done
             }
 
+            wait_for_api() {
+              attempts="${1:-45}"
+              for i in $(seq 1 "$attempts"); do
+                if docker exec groupys-api sh -lc "curl -fsS http://127.0.0.1:8080/api/q/health/ready >/dev/null 2>&1"; then
+                  echo "Backend healthy at /api/q/health/ready"
+                  return 0
+                fi
+                echo "Waiting for API startup... ($i/$attempts)"
+                sleep 2
+              done
+              return 1
+            }
+
+            backup_database() {
+              if ! docker inspect groupys-db >/dev/null 2>&1; then
+                echo "No existing database container; skipping pre-deploy backup."
+                return 0
+              fi
+
+              backup_dir="$DEPLOY_PATH/backups/postgres"
+              backup_file="$backup_dir/db-$(date -u +%Y%m%dT%H%M%SZ).dump"
+              backup_tmp="$backup_file.tmp"
+              mkdir -p "$backup_dir"
+
+              echo "Creating pre-deploy database backup: $backup_file"
+              if docker exec groupys-db sh -lc 'exec pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "$backup_tmp" &&
+                [ -s "$backup_tmp" ] &&
+                docker exec -i groupys-db sh -lc 'exec pg_restore --list' < "$backup_tmp" >/dev/null; then
+                mv "$backup_tmp" "$backup_file"
+              else
+                rm -f "$backup_tmp"
+                echo "Database backup failed; refusing to deploy."
+                return 1
+              fi
+
+              find "$backup_dir" -type f -name 'db-*.dump' -mtime +14 -delete
+            }
+
+            rollback_api() {
+              if [ -z "$PREVIOUS_API_IMAGE_ID" ]; then
+                echo "No previous API image is available for rollback."
+                return 1
+              fi
+
+              echo "Rolling API back to $PREVIOUS_API_IMAGE ($PREVIOUS_API_IMAGE_ID)"
+              if ! env API_IMAGE="$ROLLBACK_API_IMAGE" $COMPOSE up -d --no-deps --pull never groupys-api; then
+                echo "Rollback compose operation failed."
+                return 1
+              fi
+
+              if wait_for_api 45; then
+                sed -i "s|^API_IMAGE=.*|API_IMAGE=$ROLLBACK_API_IMAGE|" "$DEPLOY_PATH/docker/.env.api.prod"
+                echo "Rollback completed; production API is healthy."
+                return 0
+              fi
+
+              echo "Rollback image did not become healthy."
+              return 1
+            }
+
+            PREVIOUS_API_IMAGE=$(docker inspect -f '{{.Config.Image}}' groupys-api 2>/dev/null || true)
+            PREVIOUS_API_IMAGE_ID=$(docker inspect -f '{{.Image}}' groupys-api 2>/dev/null || true)
+            ROLLBACK_API_IMAGE=groupys-api:rollback
+            if [ -n "$PREVIOUS_API_IMAGE_ID" ]; then
+              docker image tag "$PREVIOUS_API_IMAGE_ID" "$ROLLBACK_API_IMAGE"
+            fi
+
             echo "$REGISTRY_PASSWORD" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
+            backup_database
             $COMPOSE pull groupys-api
             if ! $COMPOSE up -d groupys-db groupys-minio groupys-redis groupys-api; then
               echo "Compose failed to bring the stack up."
               dump_diagnostics
+              rollback_api || true
               exit 1
             fi
 
-            for i in $(seq 1 45); do
-              if docker exec groupys-api sh -lc "curl -fsS http://127.0.0.1:8080/api/q/health/ready >/dev/null 2>&1"; then
-                echo "Backend healthy at /api/q/health/ready"
-                exit 0
-              fi
-              echo "Waiting for API startup... ($i/45)"
-              sleep 2
-            done
+            if wait_for_api 45; then
+              exit 0
+            fi
 
             echo "API did not become healthy"
             dump_diagnostics
+            rollback_api || true
             exit 1
 
       - name: Deploy summary
