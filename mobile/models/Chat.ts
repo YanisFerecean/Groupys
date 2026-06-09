@@ -46,6 +46,7 @@ export interface Message {
   /** Structured card payload for non-text message types (see models/ChatPayloads.ts). */
   payload?: Record<string, unknown> | null
   isDeleted: boolean
+  edited?: boolean
   replyToId: string | null
   replyTo?: ReplyStub | null
   /** Emoji reactions (ticket 3.2); clients aggregate counts + detect their own by userId. */

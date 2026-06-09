@@ -129,6 +129,7 @@ public class ChatService {
                 m.messageType,
                 parsePayload(m.payload),
                 m.isDeleted,
+                m.edited,
                 m.replyToId,
                 buildReplyStub(m.replyToId),
                 loadReactions(m.id),
@@ -622,6 +623,12 @@ public class ChatService {
 
     @Transactional
     public void deleteMessage(UUID messageId, String clerkId) {
+        deleteMessageAndReturn(messageId, clerkId);
+    }
+
+    /** Soft-delete own message and return the updated dto for broadcast (ticket 3.3). */
+    @Transactional
+    public MessageResDto deleteMessageAndReturn(UUID messageId, String clerkId) {
         User user = requireUserByClerkId(clerkId);
         Message msg = messageRepository.findByIdOptional(messageId)
                 .orElseThrow(() -> new NotFoundException("Message not found"));
@@ -632,6 +639,36 @@ public class ChatService {
         if (readModelWriteEnabled()) {
             recomputeConversationReadModel(msg.conversation.id);
         }
+        return toMessageDto(msg);
+    }
+
+    /** Edit own TEXT message; sets the edited flag (ticket 3.3). */
+    @Transactional
+    public MessageResDto editMessage(UUID messageId, String clerkId, String content) {
+        User user = requireUserByClerkId(clerkId);
+        Message msg = messageRepository.findByIdOptional(messageId)
+                .orElseThrow(() -> new NotFoundException("Message not found"));
+        if (!msg.sender.id.equals(user.id)) {
+            throw new ForbiddenException("Cannot edit another user's message");
+        }
+        if (msg.isDeleted) {
+            throw new jakarta.ws.rs.BadRequestException("Cannot edit a deleted message");
+        }
+        if (!MessageType.TEXT.equals(MessageType.normalize(msg.messageType))) {
+            throw new jakarta.ws.rs.BadRequestException("Only text messages can be edited");
+        }
+        if (content == null || content.isBlank()) {
+            throw new jakarta.ws.rs.BadRequestException("Message content cannot be empty");
+        }
+        if (content.length() > 2000) {
+            throw new jakarta.ws.rs.BadRequestException("Message too long (max 2000 chars)");
+        }
+        msg.content = content.strip();
+        msg.edited = true;
+        if (readModelWriteEnabled()) {
+            recomputeConversationReadModel(msg.conversation.id);
+        }
+        return toMessageDto(msg);
     }
 
     @Transactional

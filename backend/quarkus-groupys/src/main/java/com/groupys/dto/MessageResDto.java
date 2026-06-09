@@ -17,6 +17,7 @@ public record MessageResDto(
         String messageType,
         JsonNode payload,
         boolean isDeleted,
+        boolean edited,
         UUID replyToId,
         ReplyStubDto replyTo,
         List<MessageReactionDto> reactions,

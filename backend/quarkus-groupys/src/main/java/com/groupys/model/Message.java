@@ -47,6 +47,10 @@ public class Message {
     @Column(name = "is_deleted")
     public boolean isDeleted = false;
 
+    /** True once the message has been edited (TEXT only, ticket 3.3). */
+    @Column(name = "edited")
+    public boolean edited = false;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     public Instant createdAt;
 

@@ -2,7 +2,7 @@
 ticket: 3.3
 title: Edit / delete
 phase: Parity
-status: todo
+status: done
 priority: P2
 depends_on: [0.1]
 ---

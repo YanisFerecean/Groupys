@@ -59,8 +59,9 @@ export function MessageBubble({
 
   // Delegate structured message types to the renderer registry (ticket 0.3). TEXT/SYSTEM keep
   // the text bubble; a known card type renders its card; unknown types get a graceful fallback.
-  const isText = isTextType(message.messageType)
-  const CardRenderer = isText ? undefined : getMessageRenderer(message.messageType)
+  // Deleted messages always show a tombstone (ticket 3.3).
+  const isText = isTextType(message.messageType) || message.isDeleted
+  const CardRenderer = (isText || message.isDeleted) ? undefined : getMessageRenderer(message.messageType)
   const isUnsupported = !isText && !CardRenderer
 
   return (
@@ -106,9 +107,15 @@ export function MessageBubble({
               : 'rounded-bl-md bg-surface-container'
           }`}
         >
-          <Text className={`text-[15px] leading-6 ${isMine ? 'text-on-primary' : 'text-on-surface'}`}>
-            {message.content}
-          </Text>
+          {message.isDeleted ? (
+            <Text className={`text-[14px] italic ${isMine ? 'text-on-primary/70' : 'text-on-surface-variant'}`}>
+              This message was deleted
+            </Text>
+          ) : (
+            <Text className={`text-[15px] leading-6 ${isMine ? 'text-on-primary' : 'text-on-surface'}`}>
+              {message.content}
+            </Text>
+          )}
         </View>
       )}
       </Pressable>
@@ -135,6 +142,9 @@ export function MessageBubble({
       <View className={`mt-1 flex-row items-center gap-1.5 ${isMine ? 'justify-end' : 'justify-start'}`}>
         {showTime ? (
           <Text className="text-[11px] font-medium text-on-surface-variant">{time}</Text>
+        ) : null}
+        {message.edited && !message.isDeleted ? (
+          <Text className="text-[11px] font-medium text-on-surface-variant">edited</Text>
         ) : null}
         {isSending && isMine ? (
           <Text className="text-[11px] font-medium text-on-surface-variant">Sending...</Text>

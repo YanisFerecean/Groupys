@@ -144,6 +144,8 @@ public class ChatWebSocket {
             case "BLIND_GUESS"         -> handleBlindGuess(connection, user, msg);
             case "REACTION_ADD"        -> handleReaction(connection, user, msg, true);
             case "REACTION_REMOVE"     -> handleReaction(connection, user, msg, false);
+            case "MESSAGE_EDIT"        -> handleMessageEdit(connection, user, msg);
+            case "MESSAGE_DELETE"      -> handleMessageDelete(connection, user, msg);
             case "ROOM_JOIN"           -> handleRoomJoin(connection, user, msg);
             case "ROOM_STATE"          -> handleRoomState(user, msg);
             case "ROOM_LEAVE"          -> handleRoomLeave(user, msg);
@@ -382,6 +384,61 @@ public class ChatWebSocket {
             sendJson(connection, WebSocketMessage.messageNew(data));
         }
         LOG.infof("Sync: pushed %d missed message(s) to %s", missed.size(), user.username);
+    }
+
+    // -- Edit / delete (ticket 3.3) --------------------------------------------
+
+    private void handleMessageEdit(WebSocketConnection connection, User user, Map<String, Object> msg) {
+        UUID messageId = parseMessageId(connection, msg);
+        if (messageId == null) return;
+        String content = (String) msg.get("content");
+        MessageResDto updated;
+        try {
+            updated = chatService.editMessage(messageId, user.clerkId, content);
+        } catch (jakarta.ws.rs.WebApplicationException e) {
+            sendJson(connection, WebSocketMessage.error(e.getMessage()));
+            return;
+        } catch (Exception e) {
+            sendJson(connection, WebSocketMessage.error("Internal error"));
+            return;
+        }
+        broadcastMessageUpdated(updated);
+    }
+
+    private void handleMessageDelete(WebSocketConnection connection, User user, Map<String, Object> msg) {
+        UUID messageId = parseMessageId(connection, msg);
+        if (messageId == null) return;
+        MessageResDto updated;
+        try {
+            updated = chatService.deleteMessageAndReturn(messageId, user.clerkId);
+        } catch (jakarta.ws.rs.WebApplicationException e) {
+            sendJson(connection, WebSocketMessage.error(e.getMessage()));
+            return;
+        } catch (Exception e) {
+            sendJson(connection, WebSocketMessage.error("Internal error"));
+            return;
+        }
+        broadcastMessageUpdated(updated);
+    }
+
+    private UUID parseMessageId(WebSocketConnection connection, Map<String, Object> msg) {
+        String idStr = (String) msg.get("messageId");
+        if (idStr == null) {
+            sendJson(connection, WebSocketMessage.error("messageId required"));
+            return null;
+        }
+        try {
+            return UUID.fromString(idStr);
+        } catch (IllegalArgumentException e) {
+            sendJson(connection, WebSocketMessage.error("Invalid messageId"));
+            return null;
+        }
+    }
+
+    private void broadcastMessageUpdated(MessageResDto updated) {
+        String json = toJson(WebSocketMessage.messageUpdated(buildMessageData(updated, null)));
+        chatService.getParticipantClerkIds(updated.conversationId())
+                .forEach((pid, clerkId) -> presenceService.sendTo(clerkId, json));
     }
 
     // -- Reactions (ticket 3.2) ------------------------------------------------
@@ -676,6 +733,8 @@ public class ChatWebSocket {
         // Sanitize message content to prevent XSS
         data.put("content", sanitizeForHtml(m.content()));
         data.put("messageType", m.messageType());
+        data.put("isDeleted", m.isDeleted());
+        data.put("edited", m.edited());
         if (m.payload() != null) {
             data.put("payload", m.payload());
         }

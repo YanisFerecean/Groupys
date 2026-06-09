@@ -5,6 +5,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
@@ -77,6 +78,8 @@ export default function ChatConversationScreen() {
     resendMessage,
     sendMessage,
     toggleReaction,
+    editMessage,
+    deleteMessage,
   } = useChatMessages(activeConversationId, otherParticipant?.username ?? null)
 
   // Track sharing (tickets 2.1 / 1.3 / 4.x).
@@ -88,6 +91,7 @@ export default function ChatConversationScreen() {
   // Long-press action menu + reply target (ticket 3.1).
   const [actionMessage, setActionMessage] = useState<Message | null>(null)
   const [replyTarget, setReplyTarget] = useState<ReplyStub | null>(null)
+  const [pendingEdit, setPendingEdit] = useState<Message | null>(null)
   // Dedication note flow (ticket 4.3).
   const [pendingDedication, setPendingDedication] = useState<TrackPayload | null>(null)
   // Lyric entry flow (ticket 4.1).
@@ -251,14 +255,34 @@ export default function ChatConversationScreen() {
 
   const messageActions = useMemo<MessageAction[]>(() => {
     if (!actionMessage) return []
-    return [
-      {
+    const mine = actionMessage.senderUsername === user?.username
+    const isTextMsg = (actionMessage.messageType || 'text').toLowerCase() === 'text'
+    const actions: MessageAction[] = []
+    if (!actionMessage.isDeleted) {
+      actions.push({
         icon: 'arrow-undo',
         label: 'Reply',
         onPress: () => setReplyTarget(buildReplyStub(actionMessage)),
-      },
-    ]
-  }, [actionMessage, buildReplyStub])
+      })
+    }
+    if (mine && isTextMsg && !actionMessage.isDeleted) {
+      actions.push({ icon: 'create', label: 'Edit', onPress: () => setPendingEdit(actionMessage) })
+    }
+    if (mine && !actionMessage.isDeleted) {
+      actions.push({
+        icon: 'trash',
+        label: 'Delete',
+        destructive: true,
+        onPress: () => {
+          Alert.alert('Delete message?', 'This cannot be undone.', [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Delete', style: 'destructive', onPress: () => deleteMessage(actionMessage.id) },
+          ])
+        },
+      })
+    }
+    return actions
+  }, [actionMessage, buildReplyStub, deleteMessage, user?.username])
 
   // While the keyboard is up, the KeyboardAvoidingView already lifts the composer past the
   // home-indicator inset; keeping our own bottom inset on top of that doubles the gap.
@@ -855,6 +879,19 @@ export default function ChatConversationScreen() {
           if (actionMessage) toggleReaction(actionMessage.id, emoji)
         }}
         onClose={() => setActionMessage(null)}
+      />
+
+      <TextPromptModal
+        visible={pendingEdit !== null}
+        title="Edit message"
+        initialValue={pendingEdit?.content ?? ''}
+        multiline
+        submitLabel="Save"
+        onClose={() => setPendingEdit(null)}
+        onSubmit={(text) => {
+          if (pendingEdit) editMessage(pendingEdit.id, text)
+          setPendingEdit(null)
+        }}
       />
     </KeyboardAvoidingView>
     </ChatActionsContext.Provider>

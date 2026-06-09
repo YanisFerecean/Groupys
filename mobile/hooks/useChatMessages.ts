@@ -347,6 +347,19 @@ export function useChatMessages(
     chatWs.send({ type: willAdd ? 'REACTION_ADD' : 'REACTION_REMOVE', messageId, emoji })
   }, [user?.id])
 
+  // Edit / delete own messages (ticket 3.3): optimistic + WS sync.
+  const editMessage = useCallback((messageId: string, content: string) => {
+    const trimmed = content.trim()
+    if (!trimmed) return
+    setMessages(prev => prev.map(m => (m.id === messageId ? { ...m, content: trimmed, edited: true } : m)))
+    chatWs.send({ type: 'MESSAGE_EDIT', messageId, content: trimmed })
+  }, [])
+
+  const deleteMessage = useCallback((messageId: string) => {
+    setMessages(prev => prev.map(m => (m.id === messageId ? { ...m, isDeleted: true } : m)))
+    chatWs.send({ type: 'MESSAGE_DELETE', messageId })
+  }, [])
+
   return {
     messages,
     isLoading,
@@ -357,5 +370,7 @@ export function useChatMessages(
     sendMessage,
     resendMessage,
     toggleReaction,
+    editMessage,
+    deleteMessage,
   }
 }
