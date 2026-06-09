@@ -185,6 +185,15 @@ public class UserResource {
         return userService.update(id, dto);
     }
 
+    /** Toggle now-playing presence sharing for the current user (ticket 1.1). */
+    @PUT
+    @Path("/me/now-playing-sharing")
+    public UserResDto setShareNowPlaying(NowPlayingSharingDto dto) {
+        return userService.setShareNowPlaying(jwt.getSubject(), dto != null && Boolean.TRUE.equals(dto.enabled()));
+    }
+
+    public record NowPlayingSharingDto(Boolean enabled) {}
+
     @POST
     @Path("/{id: [0-9a-fA-F\\-]{36}}/follow")
     @Operation(summary = "Follow user", description = "Follow another user by their ID")

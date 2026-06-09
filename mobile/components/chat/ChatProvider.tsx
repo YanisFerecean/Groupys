@@ -31,9 +31,15 @@ import {
   type ChatKeyPair,
 } from '@/lib/chat-crypto'
 import { chatWs } from '@/lib/chat-ws'
-import { getActiveConversationId } from '@/lib/activeChat'
-import { useNotificationBannerStore } from '@/stores/useNotificationBannerStore'
-import type { Conversation, Message, PresenceStatus } from '@/models/Chat'
+import { useMusicCapability } from '@/hooks/useMusicCapability'
+import { useNowPlayingBroadcaster } from '@/hooks/useNowPlayingBroadcaster'
+import type {
+  Conversation,
+  Message,
+  NowPlayingMessage,
+  NowPlayingState,
+  PresenceStatus,
+} from '@/models/Chat'
 
 const PAGE_SIZE = 20
 
@@ -65,6 +71,8 @@ interface ChatContextValue {
   upsertConversation: (conversation: Conversation, moveToTop?: boolean) => void
   applyOutgoingMessage: (message: Message, preview?: string) => void
   isUserOnline: (userId: string) => boolean
+  /** Now-playing presence by userId (ticket 1.1); track null means stopped/withdrawn. */
+  getNowPlaying: (userId: string) => NowPlayingState | null
   getPublicKeyForUsername: (username: string) => Promise<string | null>
   encryptForUsername: (username: string, plaintext: string) => Promise<string>
   decryptForUsername: (username: string, content: string) => Promise<string>
@@ -82,8 +90,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(true)
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set())
+  const [nowPlayingByUser, setNowPlayingByUser] = useState<Map<string, NowPlayingState>>(new Map())
   const [keyPair, setKeyPair] = useState<ChatKeyPair | null>(null)
   const [cryptoReady, setCryptoReady] = useState(false)
+
+  // Publish our own now-playing while connected; the server enforces the privacy gate (ticket 1.1).
+  const musicCapability = useMusicCapability()
+  useNowPlayingBroadcaster(musicCapability.canShareNowPlaying)
 
   useEffect(() => {
     getTokenRef.current = getToken
@@ -330,11 +343,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const isUserOnline = useCallback((userId: string) => onlineUsers.has(userId), [onlineUsers])
 
+  const getNowPlaying = useCallback(
+    (userId: string) => nowPlayingByUser.get(userId) ?? null,
+    [nowPlayingByUser],
+  )
+
   useEffect(() => {
     if (!isLoaded || !isSignedIn) {
       setConversations([])
       setHasMore(false)
       setOnlineUsers(new Set())
+      setNowPlayingByUser(new Map())
       publicKeyCacheRef.current.clear()
       setKeyPair(null)
       setCryptoReady(false)
@@ -416,21 +435,30 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           }
           return next
         })
-      }),
-      chatWs.on('MESSAGE_NEW', (payload: Message) => {
-        // In-app banner for incoming messages (the backend skips the sender). Driven by the
-        // websocket, so it works without APNs — e.g. in the simulator. Suppressed for the chat
-        // you're already viewing.
-        if (getActiveConversationId() !== payload.conversationId) {
-          useNotificationBannerStore.getState().show({
-            id: payload.id ?? `${payload.conversationId}:${payload.createdAt}`,
-            title: payload.senderDisplayName?.trim() || payload.senderUsername || 'Groupys',
-            body: payload.content,
-            imageUrl: payload.senderProfileImage ?? undefined,
-            deeplink: `/(home)/(match)/chat/${payload.conversationId}`,
-            type: 'message',
+        // A user going offline implies their now-playing is no longer current.
+        if (payload.status === 'offline') {
+          setNowPlayingByUser(prev => {
+            if (!prev.has(payload.userId)) return prev
+            const next = new Map(prev)
+            next.delete(payload.userId)
+            return next
           })
         }
+      }),
+      chatWs.on('NOW_PLAYING', (payload: NowPlayingMessage) => {
+        setNowPlayingByUser(prev => {
+          const next = new Map(prev)
+          if (!payload.track) {
+            next.delete(payload.userId)
+          } else {
+            next.set(payload.userId, { track: payload.track, isPlaying: payload.isPlaying })
+          }
+          return next
+        })
+      }),
+      chatWs.on('MESSAGE_NEW', (payload: Message) => {
+        // No in-app banner here: the message-content banner is intentionally removed so only the
+        // push notification ("Sent you a message") surfaces. We still update the conversation list.
         setConversations(prev => {
           const next = [...prev]
           const index = next.findIndex(conversation => conversation.id === payload.conversationId)
@@ -499,6 +527,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       }),
     ]
 
+    // Ask partners for their last-known now-playing (queued until authenticated, ticket 1.1).
+    chatWs.send({ type: 'NOW_PLAYING_REQUEST' })
+
     return () => {
       unsubs.forEach(unsub => unsub())
     }
@@ -527,6 +558,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     upsertConversation,
     applyOutgoingMessage,
     isUserOnline,
+    getNowPlaying,
     getPublicKeyForUsername,
     encryptForUsername,
     decryptForUsername,
@@ -548,6 +580,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     upsertConversation,
     applyOutgoingMessage,
     isUserOnline,
+    getNowPlaying,
     getPublicKeyForUsername,
     encryptForUsername,
     decryptForUsername,

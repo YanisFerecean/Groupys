@@ -1,12 +1,12 @@
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth, useUser } from '@clerk/expo'
 import { useRouter } from 'expo-router'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ActivityIndicator, Alert, ScrollView, Switch, Text, TouchableOpacity, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as WebBrowser from 'expo-web-browser'
 import { Colors } from '@/constants/colors'
-import { deleteMyAccount } from '@/lib/api'
+import { deleteMyAccount, fetchUserByClerkId, setShareNowPlaying } from '@/lib/api'
 import { logError, logWarn } from '@/lib/logging'
 import { PRIVACY_POLICY_URL, TERMS_OF_SERVICE_URL } from '@/constants/legal'
 
@@ -20,8 +20,42 @@ export default function SettingsScreen() {
   const [showHistory, setShowHistory] = useState(true)
   const [showTopArtists, setShowTopArtists] = useState(true)
   const [showMutual, setShowMutual] = useState(false)
+  const [shareNowPlaying, setShareNowPlayingState] = useState(true)
   const [isSigningOut, setIsSigningOut] = useState(false)
   const [isDeletingAccount, setIsDeletingAccount] = useState(false)
+
+  // Load the persisted now-playing sharing preference (ticket 1.1).
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      if (!user?.id) return
+      try {
+        const token = await getToken()
+        const me = await fetchUserByClerkId(user.id, token)
+        if (!cancelled && me) {
+          setShareNowPlayingState(me.shareNowPlaying ?? true)
+        }
+      } catch (error) {
+        logWarn('[settings] failed to load now-playing preference', error)
+      }
+    }
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [getToken, user?.id])
+
+  async function handleToggleShareNowPlaying(value: boolean) {
+    setShareNowPlayingState(value)
+    try {
+      const token = await getToken()
+      await setShareNowPlaying(token, value)
+    } catch (error) {
+      logError('[settings] failed to update now-playing preference', error)
+      setShareNowPlayingState(!value) // revert on failure
+      Alert.alert('Settings', 'Could not update that setting. Please try again.')
+    }
+  }
 
   async function handleSignOut() {
     setIsSigningOut(true)
@@ -167,6 +201,12 @@ export default function SettingsScreen() {
               label="Show Mutual Connections"
               value={showMutual}
               onToggle={setShowMutual}
+            />
+            <ToggleRow
+              icon="musical-notes"
+              label="Share what I'm listening to"
+              value={shareNowPlaying}
+              onToggle={handleToggleShareNowPlaying}
             />
           </View>
         </View>

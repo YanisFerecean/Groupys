@@ -4,6 +4,7 @@ import io.quarkus.websockets.next.WebSocketConnection;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -14,6 +15,21 @@ import java.util.concurrent.ConcurrentHashMap;
 public class PresenceService {
 
     private final ConcurrentHashMap<String, WebSocketConnection> activeSessions = new ConcurrentHashMap<>();
+
+    /** Last-known now-playing payload per clerkId, so a freshly opened chat can request it (ticket 1.1). */
+    private final ConcurrentHashMap<String, Map<String, Object>> nowPlaying = new ConcurrentHashMap<>();
+
+    public void setNowPlaying(String clerkId, Map<String, Object> payload) {
+        nowPlaying.put(clerkId, payload);
+    }
+
+    public Map<String, Object> getNowPlaying(String clerkId) {
+        return nowPlaying.get(clerkId);
+    }
+
+    public void clearNowPlaying(String clerkId) {
+        nowPlaying.remove(clerkId);
+    }
 
     public void register(String clerkId, WebSocketConnection connection) {
         WebSocketConnection old = activeSessions.put(clerkId, connection);

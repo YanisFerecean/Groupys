@@ -29,6 +29,7 @@ public record UserResDto(
         String tasteSummaryText,
         boolean recommendationOptOut,
         boolean discoveryVisible,
+        boolean shareNowPlaying,
         long followerCount,
         long followingCount
 ) {

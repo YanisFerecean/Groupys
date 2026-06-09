@@ -45,6 +45,11 @@ public class ChatWebSocket {
     private static final ScheduledExecutorService authTimeoutScheduler =
             Executors.newSingleThreadScheduledExecutor();
 
+    // Now-playing broadcast throttle (ticket 1.1): one fan-out per user per window unless the track changes.
+    private static final long NOW_PLAYING_THROTTLE_MS = 5000;
+    private static final ConcurrentHashMap<UUID, Long> lastNowPlayingMs = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<UUID, String> lastNowPlayingKey = new ConcurrentHashMap<>();
+
 
     @Inject
     PresenceService presenceService;
@@ -130,6 +135,8 @@ public class ChatWebSocket {
             case "TYPING_STOP"  -> handleTyping(user, msg, false);
             case "READ_RECEIPT" -> handleReadReceipt(user, msg);
             case "SYNC"         -> handleSync(connection, user);
+            case "NOW_PLAYING_UPDATE"  -> handleNowPlayingUpdate(user, msg);
+            case "NOW_PLAYING_REQUEST" -> handleNowPlayingRequest(connection, user);
             default -> sendJson(connection, WebSocketMessage.error("Unknown message type: " + type));
         }
     }
@@ -156,6 +163,13 @@ public class ChatWebSocket {
                     try {
                         Arc.container().instance(ChatWebSocket.class).get().updateLastSeen(user.id);
                         broadcastPresence(user, false);
+                        // Withdraw now-playing presence when the user goes fully offline (ticket 1.1).
+                        if (presenceService.getNowPlaying(clerkId) != null) {
+                            presenceService.clearNowPlaying(clerkId);
+                            broadcastNowPlaying(user, null, false);
+                        }
+                        lastNowPlayingMs.remove(user.id);
+                        lastNowPlayingKey.remove(user.id);
                     } catch (Exception e) {
                         LOG.warnf("Failed to update lastSeenAt for %s: %s", clerkId, e.getMessage());
                     }
@@ -347,6 +361,81 @@ public class ChatWebSocket {
             sendJson(connection, WebSocketMessage.messageNew(data));
         }
         LOG.infof("Sync: pushed %d missed message(s) to %s", missed.size(), user.username);
+    }
+
+    // -- Now-playing (ticket 1.1) ----------------------------------------------
+
+    private void handleNowPlayingUpdate(User user, Map<String, Object> msg) {
+        // Privacy + capability gate: must opt-in and have a connected Apple Music account.
+        boolean canShare = user.shareNowPlaying
+                && user.appleMusicUserToken != null && !user.appleMusicUserToken.isBlank();
+        if (!canShare) {
+            // Withdraw any previously broadcast now-playing.
+            if (presenceService.getNowPlaying(user.clerkId) != null) {
+                presenceService.clearNowPlaying(user.clerkId);
+                broadcastNowPlaying(user, null, false);
+            }
+            lastNowPlayingMs.remove(user.id);
+            lastNowPlayingKey.remove(user.id);
+            return;
+        }
+
+        Map<String, Object> track = (msg.get("track") instanceof Map<?, ?> raw) ? sanitizeTrack(raw) : null;
+        boolean isPlaying = Boolean.TRUE.equals(msg.get("isPlaying"));
+
+        String key = (track != null ? track.get("id") + "|" + track.get("title") : "null") + "|" + isPlaying;
+        long now = System.currentTimeMillis();
+        boolean changed = !key.equals(lastNowPlayingKey.get(user.id));
+        Long prevMs = lastNowPlayingMs.get(user.id);
+        if (!changed && prevMs != null && now - prevMs < NOW_PLAYING_THROTTLE_MS) {
+            return; // throttle rapid identical updates
+        }
+        lastNowPlayingMs.put(user.id, now);
+        lastNowPlayingKey.put(user.id, key);
+
+        Map<String, Object> stored = new LinkedHashMap<>();
+        stored.put("userId", user.id.toString());
+        stored.put("track", track);
+        stored.put("isPlaying", isPlaying);
+        presenceService.setNowPlaying(user.clerkId, stored);
+
+        broadcastNowPlaying(user, track, isPlaying);
+    }
+
+    private void handleNowPlayingRequest(WebSocketConnection connection, User user) {
+        for (String partnerClerkId : chatService.getConversationPartnerClerkIds(user.clerkId)) {
+            Map<String, Object> stored = presenceService.getNowPlaying(partnerClerkId);
+            if (stored == null) continue;
+            String userId = (String) stored.get("userId");
+            @SuppressWarnings("unchecked")
+            Map<String, Object> track = (Map<String, Object>) stored.get("track");
+            boolean isPlaying = Boolean.TRUE.equals(stored.get("isPlaying"));
+            sendJson(connection, WebSocketMessage.nowPlaying(userId, track, isPlaying));
+        }
+    }
+
+    private void broadcastNowPlaying(User user, Map<String, Object> track, boolean isPlaying) {
+        String json = toJson(WebSocketMessage.nowPlaying(user.id.toString(), track, isPlaying));
+        chatService.getConversationPartnerClerkIds(user.clerkId)
+                .forEach(clerkId -> presenceService.sendTo(clerkId, json));
+    }
+
+    private Map<String, Object> sanitizeTrack(Map<?, ?> raw) {
+        String title = sanitizeForHtml(asString(raw.get("title")));
+        if (title == null || title.isBlank()) {
+            return null; // a track with no title is meaningless
+        }
+        Map<String, Object> track = new LinkedHashMap<>();
+        track.put("id", asString(raw.get("id")));
+        track.put("title", title);
+        track.put("artist", sanitizeForHtml(asString(raw.get("artist"))));
+        track.put("album", sanitizeForHtml(asString(raw.get("album"))));
+        track.put("artworkUrl", asString(raw.get("artworkUrl")));
+        return track;
+    }
+
+    private String asString(Object value) {
+        return value == null ? null : String.valueOf(value);
     }
 
     // -- Helpers ---------------------------------------------------------------

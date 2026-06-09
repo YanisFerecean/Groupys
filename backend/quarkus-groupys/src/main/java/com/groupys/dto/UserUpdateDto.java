@@ -21,6 +21,7 @@ public record UserUpdateDto(
         String location,
         String tasteSummaryText,
         Boolean recommendationOptOut,
-        Boolean discoveryVisible
+        Boolean discoveryVisible,
+        Boolean shareNowPlaying
 ) {
 }

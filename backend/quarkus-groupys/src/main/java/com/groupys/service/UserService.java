@@ -155,6 +155,9 @@ public class UserService {
         if (dto.discoveryVisible() != null) {
             user.discoveryVisible = dto.discoveryVisible();
         }
+        if (dto.shareNowPlaying() != null) {
+            user.shareNowPlaying = dto.shareNowPlaying();
+        }
         final UUID userId = user.id;
         CompletableFuture.runAsync(() -> {
             try {
@@ -163,6 +166,15 @@ public class UserService {
                 Log.warnf(e, "Background discovery refresh failed for user %s", userId);
             }
         });
+        return mapUser(user);
+    }
+
+    /** Toggle now-playing presence sharing for the current user (ticket 1.1). */
+    @Transactional
+    public UserResDto setShareNowPlaying(String clerkId, boolean enabled) {
+        User user = userRepository.findByClerkId(clerkId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        user.shareNowPlaying = enabled;
         return mapUser(user);
     }
 

@@ -90,6 +90,11 @@ public class User {
     @ColumnDefault("true")
     public boolean discoveryVisible = true;
 
+    /** Whether to broadcast now-playing presence to conversation partners (ticket 1.1). */
+    @Column(name = "share_now_playing", nullable = false)
+    @ColumnDefault("true")
+    public boolean shareNowPlaying = true;
+
     @Column(name = "date_joined", nullable = false, updatable = false)
     public Instant dateJoined;
 

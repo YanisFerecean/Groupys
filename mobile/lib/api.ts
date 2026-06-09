@@ -42,6 +42,7 @@ export interface BackendUser {
   website?: string | null
   jobTitle?: string | null
   location?: string | null
+  shareNowPlaying?: boolean
   followerCount?: number
   followingCount?: number
 }
@@ -896,6 +897,14 @@ export async function getMusicDeveloperToken(
 export interface MusicCapabilityRes {
   connected: boolean
   subscriptionActive: boolean
+}
+
+/** Toggle now-playing presence sharing (ticket 1.1). */
+export async function setShareNowPlaying(
+  token: string | null,
+  enabled: boolean,
+): Promise<BackendUser> {
+  return apiPut<BackendUser>('/users/me/now-playing-sharing', token, { enabled })
 }
 
 export async function getMusicCapability(

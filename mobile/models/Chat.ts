@@ -45,6 +45,24 @@ export interface Message {
 
 export type PresenceStatus = 'online' | 'offline'
 
+/** A user's currently-playing track, broadcast as presence (ticket 1.1). */
+export interface NowPlayingTrack {
+  id?: string | null
+  title: string
+  artist?: string | null
+  album?: string | null
+  artworkUrl?: string | null
+}
+
+export interface NowPlayingState {
+  track: NowPlayingTrack | null
+  isPlaying: boolean
+}
+
+export interface NowPlayingMessage extends NowPlayingState {
+  userId: string
+}
+
 export interface WsInbound {
   type: string
   payload: Record<string, unknown>
@@ -57,4 +75,7 @@ export interface WsOutbound {
   content?: string
   messageType?: string
   tempId?: string
+  /** Now-playing broadcast fields (ticket 1.1). */
+  track?: NowPlayingTrack | null
+  isPlaying?: boolean
 }

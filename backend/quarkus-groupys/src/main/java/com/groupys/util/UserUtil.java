@@ -31,6 +31,7 @@ public final class UserUtil {
                 user.tasteSummaryText,
                 user.recommendationOptOut,
                 user.discoveryVisible,
+                user.shareNowPlaying,
                 followerCount,
                 followingCount);
     }

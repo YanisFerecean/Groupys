@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Text,
@@ -64,8 +65,22 @@ export default function ChatConversationScreen() {
   const [isNearBottom, setIsNearBottom] = useState(true)
   const [requestAction, setRequestAction] = useState<'accept' | 'deny' | null>(null)
   const [conversationLoadFailed, setConversationLoadFailed] = useState(false)
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false)
   const listRef = useRef<FlatList<Message>>(null)
   const isMountedRef = useRef(true)
+
+  // While the keyboard is up, the KeyboardAvoidingView already lifts the composer past the
+  // home-indicator inset; keeping our own bottom inset on top of that doubles the gap.
+  useEffect(() => {
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
+    const showSub = Keyboard.addListener(showEvt, () => setIsKeyboardVisible(true))
+    const hideSub = Keyboard.addListener(hideEvt, () => setIsKeyboardVisible(false))
+    return () => {
+      showSub.remove()
+      hideSub.remove()
+    }
+  }, [])
 
   useEffect(() => {
     return () => {
@@ -274,8 +289,8 @@ export default function ChatConversationScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View
-        className="flex-row items-center gap-3 border-b border-surface-container-high bg-surface px-4 pb-3"
-        style={{ paddingTop: insets.top + 8 }}
+        className="flex-row items-center gap-3 border-b border-surface-container-high bg-surface px-4 pb-2"
+        style={{ paddingTop: insets.top + 2 }}
       >
         <TouchableOpacity
           className="h-11 w-11 items-center justify-center rounded-full bg-surface-container"
@@ -496,7 +511,7 @@ export default function ChatConversationScreen() {
             showsVerticalScrollIndicator={false}
           />
 
-          <View style={{ paddingBottom: insets.bottom }}>
+          <View style={{ paddingBottom: isKeyboardVisible ? 0 : insets.bottom }}>
             <MessageComposer
               conversationId={conversationId}
               disabled={!canMessage}

@@ -57,6 +57,18 @@ public record WebSocketMessage(
         ));
     }
 
+    /**
+     * Now-playing presence (ticket 1.1). {@code track} may be null (stopped/withdrawn).
+     * Uses a HashMap because {@code Map.of} rejects null values.
+     */
+    public static WebSocketMessage nowPlaying(String userId, Map<String, Object> track, boolean isPlaying) {
+        Map<String, Object> payload = new java.util.HashMap<>();
+        payload.put("userId", userId);
+        payload.put("track", track);
+        payload.put("isPlaying", isPlaying);
+        return new WebSocketMessage("NOW_PLAYING", payload);
+    }
+
     public static WebSocketMessage authOk() {
         return new WebSocketMessage("AUTH_OK", Map.of());
     }
