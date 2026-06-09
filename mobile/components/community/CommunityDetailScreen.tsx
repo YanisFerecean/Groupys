@@ -17,6 +17,7 @@ import { Colors } from '@/constants/colors'
 import FeedPostCard from '@/components/feed/FeedPostCard'
 import { useAuthToken } from '@/hooks/useAuthToken'
 import EditCommunityModal from '@/components/community/EditCommunityModal'
+import { CommunityListeningRoster } from '@/components/community/CommunityListeningRoster'
 import AuthImageWithToken from '@/components/ui/AuthImageWithToken'
 import { homeTabRootPath } from '@/lib/profileRoutes'
 import type { CommunityResDto } from '@/models/CommunityRes'
@@ -298,6 +299,9 @@ export default function CommunityDetailScreen({ communityId, postRoute, communit
             )}
           </View>
         </View>
+
+        {/* Listening now (ticket 6.3) */}
+        <CommunityListeningRoster communityId={communityId} />
 
         {/* Posts */}
         <View className="pt-6">

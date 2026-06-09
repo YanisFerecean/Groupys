@@ -12,6 +12,7 @@ import com.groupys.model.Message;
 import com.groupys.model.MessageType;
 import com.groupys.model.User;
 import com.groupys.model.Friendship;
+import com.groupys.repository.CommunityMemberRepository;
 import com.groupys.repository.ConversationRepository;
 import com.groupys.repository.FriendshipRepository;
 import com.groupys.repository.MessageRepository;
@@ -47,6 +48,7 @@ public class ChatService {
     private final ChatRedisStateService chatRedisStateService;
     private final RateLimitingService rateLimitingService;
     private final ObjectMapper objectMapper;
+    private final CommunityMemberRepository communityMemberRepository;
 
     @Inject
     public ChatService(
@@ -59,7 +61,8 @@ public class ChatService {
             PerformanceFeatureFlags flags,
             ChatRedisStateService chatRedisStateService,
             RateLimitingService rateLimitingService,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            CommunityMemberRepository communityMemberRepository) {
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.userRepository = userRepository;
@@ -70,6 +73,21 @@ public class ChatService {
         this.chatRedisStateService = chatRedisStateService;
         this.rateLimitingService = rateLimitingService;
         this.objectMapper = objectMapper;
+        this.communityMemberRepository = communityMemberRepository;
+    }
+
+    /**
+     * Audience for now-playing presence (tickets 1.1 + 6.3): conversation partners plus everyone
+     * who shares a community with the user. Returns their clerkIds (excluding the user).
+     */
+    public List<String> getNowPlayingAudienceClerkIds(String clerkId) {
+        User user = requireUserByClerkId(clerkId);
+        java.util.Set<UUID> ids = new java.util.HashSet<>(
+                conversationRepository.findAllConversationPartnerIds(user.id));
+        ids.addAll(communityMemberRepository.findCoMemberUserIds(user.id));
+        ids.remove(user.id);
+        if (ids.isEmpty()) return List.of();
+        return new java.util.ArrayList<>(userRepository.findClerkIdsByUserIds(new java.util.ArrayList<>(ids)).values());
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

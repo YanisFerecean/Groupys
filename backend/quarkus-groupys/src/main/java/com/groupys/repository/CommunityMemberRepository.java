@@ -31,6 +31,16 @@ public class CommunityMemberRepository implements PanacheRepositoryBase<Communit
             "WHERE cm.user.id = ?1", userId).list();
     }
 
+    /** Distinct user ids of everyone who shares at least one community with the given user (ticket 6.3). */
+    public List<UUID> findCoMemberUserIds(UUID userId) {
+        return getEntityManager().createQuery(
+                "SELECT DISTINCT cm2.user.id FROM CommunityMember cm1 " +
+                "JOIN CommunityMember cm2 ON cm1.community.id = cm2.community.id " +
+                "WHERE cm1.user.id = :uid AND cm2.user.id <> :uid", UUID.class)
+                .setParameter("uid", userId)
+                .getResultList();
+    }
+
     public List<CommunityMember> findByUserLimited(UUID userId, int limit) {
         return find("user.id = ?1 order by joinedAt desc", userId)
                 .page(0, limit)

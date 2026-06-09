@@ -2,7 +2,7 @@
 ticket: 6.3
 title: Now-playing roster (community)
 phase: Community
-status: todo
+status: done
 priority: P4
 depends_on: [1.1]
 ---

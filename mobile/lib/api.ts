@@ -1,5 +1,6 @@
 import type { ProfileCustomization } from '@/models/ProfileCustomization'
 import type { DailySong } from '@/models/DailySong'
+import type { CommunityMemberResDto } from '@/models/CommunityMemberRes'
 import { ApiError, apiRequest } from '@/lib/apiRequest'
 import { API_URL } from '@/lib/config'
 import { getMusicErrorMessage } from '@/lib/musicErrors'
@@ -922,6 +923,18 @@ export async function fetchDailySongFeed(token: string | null): Promise<DailySon
 
 export async function deleteDailySong(token: string | null): Promise<void> {
   await apiDelete('/daily-song', token)
+}
+
+/** Community members (ticket 6.3). */
+export async function fetchCommunityMembers(
+  communityId: string,
+  token: string | null,
+): Promise<CommunityMemberResDto[]> {
+  return apiFetch<CommunityMemberResDto[]>(
+    `/communities/${encodeURIComponent(communityId)}/members`,
+    token,
+    false,
+  )
 }
 
 export async function getMusicCapability(

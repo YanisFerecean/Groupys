@@ -442,7 +442,7 @@ public class ChatWebSocket {
     }
 
     private void handleNowPlayingRequest(WebSocketConnection connection, User user) {
-        for (String partnerClerkId : chatService.getConversationPartnerClerkIds(user.clerkId)) {
+        for (String partnerClerkId : chatService.getNowPlayingAudienceClerkIds(user.clerkId)) {
             Map<String, Object> stored = presenceService.getNowPlaying(partnerClerkId);
             if (stored == null) continue;
             String userId = (String) stored.get("userId");
@@ -455,7 +455,7 @@ public class ChatWebSocket {
 
     private void broadcastNowPlaying(User user, Map<String, Object> track, boolean isPlaying) {
         String json = toJson(WebSocketMessage.nowPlaying(user.id.toString(), track, isPlaying));
-        chatService.getConversationPartnerClerkIds(user.clerkId)
+        chatService.getNowPlayingAudienceClerkIds(user.clerkId)
                 .forEach(clerkId -> presenceService.sendTo(clerkId, json));
     }
 
