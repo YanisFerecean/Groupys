@@ -2,7 +2,7 @@
 ticket: 5.1
 title: Taste handshake icebreaker
 phase: Social
-status: todo
+status: done
 priority: P1
 depends_on: [0.1]
 ---

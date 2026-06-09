@@ -39,6 +39,7 @@ public class MatchService {
     private final PerformanceFeatureFlags flags;
     private final DiscoveryRedisCacheService redisCacheService;
     private final NotificationService notificationService;
+    private final TasteHandshakeService tasteHandshakeService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -55,7 +56,8 @@ public class MatchService {
             DiscoveryService discoveryService,
             PerformanceFeatureFlags flags,
             DiscoveryRedisCacheService redisCacheService,
-            NotificationService notificationService) {
+            NotificationService notificationService,
+            TasteHandshakeService tasteHandshakeService) {
         this.userRepository = userRepository;
         this.userLikeRepository = userLikeRepository;
         this.userMatchRepository = userMatchRepository;
@@ -68,6 +70,7 @@ public class MatchService {
         this.flags = flags;
         this.redisCacheService = redisCacheService;
         this.notificationService = notificationService;
+        this.tasteHandshakeService = tasteHandshakeService;
     }
 
     // ── Like ──────────────────────────────────────────────────────────────────
@@ -128,6 +131,7 @@ public class MatchService {
         return userMatchRepository.findByUsers(userA.id, userB.id)
                 .map(existing -> {
                     Conversation conversation = ensureMatchConversation(existing, userA, userB);
+                    tasteHandshakeService.ensureForConversation(conversation, userA, userB);
                     return new LikeResponseDto(true, existing.id, conversation != null ? conversation.id : null);
                 })
                 .orElseGet(() -> {
@@ -139,6 +143,7 @@ public class MatchService {
                     userMatchRepository.persist(match);
 
                     Conversation conv = ensureMatchConversation(match, userA, userB);
+                    tasteHandshakeService.ensureForConversation(conv, userA, userB);
 
                     // Push MATCH_NEW to both parties via WebSocket (real-time, in-app)
                     sendMatchEvent(liker, target, match.id, conv.id);

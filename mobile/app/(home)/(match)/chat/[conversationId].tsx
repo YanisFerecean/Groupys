@@ -22,6 +22,7 @@ import { TrackPicker } from '@/components/music/TrackPicker'
 import { AlbumPicker } from '@/components/music/AlbumPicker'
 import { MusicUpsellSheet } from '@/components/music/MusicUpsellSheet'
 import { MusicAttachSheet } from '@/components/chat/MusicAttachSheet'
+import { ChatActionsContext, type ChatActions } from '@/components/chat/ChatActionsContext'
 import { TypingIndicator } from '@/components/chat/TypingIndicator'
 import { useMusicGate } from '@/hooks/useMusicGate'
 import { fetchMusicCurrentlyPlaying } from '@/lib/api'
@@ -75,6 +76,7 @@ export default function ChatConversationScreen() {
 
   // Track sharing (tickets 2.1 / 1.3).
   const [trackPickerOpen, setTrackPickerOpen] = useState(false)
+  const [trackPickerQuery, setTrackPickerQuery] = useState('')
   // Richer music shares (tickets 2.2 / 2.3).
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
   const [albumPickerOpen, setAlbumPickerOpen] = useState(false)
@@ -93,6 +95,18 @@ export default function ChatConversationScreen() {
       payload: album as unknown as Record<string, unknown>,
     })
   }, [sendMessage])
+
+  // Actions exposed to card renderers (ticket 5.1: taste-handshake CTAs).
+  const otherUserId = otherParticipant?.userId
+  const chatActions = useMemo<ChatActions>(() => ({
+    openTrackPicker: (initialQuery?: string) => {
+      setTrackPickerQuery(initialQuery ?? '')
+      setTrackPickerOpen(true)
+    },
+    openPartnerProfile: otherUserId
+      ? () => router.push(publicProfilePath(otherUserId, '(match)') as never)
+      : undefined,
+  }), [otherUserId, router])
 
   const handleMusicPress = useCallback(async () => {
     // Not connected → prompt to connect (manual picker is still reachable from the upsell flow).
@@ -349,6 +363,7 @@ export default function ChatConversationScreen() {
   }
 
   return (
+    <ChatActionsContext.Provider value={chatActions}>
     <KeyboardAvoidingView
       className="flex-1 bg-surface"
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -603,6 +618,7 @@ export default function ChatConversationScreen() {
 
       <TrackPicker
         visible={trackPickerOpen}
+        initialQuery={trackPickerQuery}
         onClose={() => setTrackPickerOpen(false)}
         onSelect={(track) => {
           setTrackPickerOpen(false)
@@ -632,5 +648,6 @@ export default function ChatConversationScreen() {
         onClose={musicGate.closeUpsell}
       />
     </KeyboardAvoidingView>
+    </ChatActionsContext.Provider>
   )
 }

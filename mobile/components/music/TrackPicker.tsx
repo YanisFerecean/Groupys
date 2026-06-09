@@ -13,6 +13,8 @@ interface TrackPickerProps {
   visible: boolean
   onClose: () => void
   onSelect: (track: TrackPayload) => void
+  /** Seed the search box when opened (e.g. from a "Send a song by X" CTA). */
+  initialQuery?: string
 }
 
 function toTrackPayload(result: TrackSearchResult): TrackPayload {
@@ -31,7 +33,7 @@ function toTrackPayload(result: TrackSearchResult): TrackPayload {
  * Manual catalog search picker (ticket 0.2). Uses the developer-token-backed catalog search,
  * so it works for content creation even when the user has not connected Apple Music.
  */
-export function TrackPicker({ visible, onClose, onSelect }: TrackPickerProps) {
+export function TrackPicker({ visible, onClose, onSelect, initialQuery }: TrackPickerProps) {
   const { getToken } = useAuth()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<TrackSearchResult[]>([])
@@ -39,11 +41,13 @@ export function TrackPicker({ visible, onClose, onSelect }: TrackPickerProps) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    if (!visible) {
+    if (visible) {
+      setQuery(initialQuery ?? '')
+    } else {
       setQuery('')
       setResults([])
     }
-  }, [visible])
+  }, [visible, initialQuery])
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)

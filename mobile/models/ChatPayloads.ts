@@ -53,7 +53,15 @@ export interface PlaylistPayload {
   previews?: PlaylistPreviewTrack[]
 }
 
-export type MessagePayload = TrackPayload | AlbumPayload | PlaylistPayload
+/** Auto-posted icebreaker on a new match (ticket 5.1). */
+export interface TasteHandshakePayload {
+  type: 'TASTE_HANDSHAKE'
+  sharedArtists: string[]
+  sharedGenres: string[]
+  overlapScore: number
+}
+
+export type MessagePayload = TrackPayload | AlbumPayload | PlaylistPayload | TasteHandshakePayload
 
 /** Narrow an unknown payload to a typed payload by its discriminant. */
 export function isTrackPayload(
@@ -72,4 +80,10 @@ export function isPlaylistPayload(
   payload: Record<string, unknown> | null | undefined,
 ): payload is PlaylistPayload & Record<string, unknown> {
   return !!payload && payload.type === 'PLAYLIST' && typeof payload.title === 'string'
+}
+
+export function isTasteHandshakePayload(
+  payload: Record<string, unknown> | null | undefined,
+): payload is TasteHandshakePayload & Record<string, unknown> {
+  return !!payload && payload.type === 'TASTE_HANDSHAKE' && Array.isArray(payload.sharedArtists)
 }

@@ -14,6 +14,12 @@ import java.util.UUID;
 @ApplicationScoped
 public class MessageRepository implements PanacheRepositoryBase<Message, UUID> {
 
+    /** True if a (non-deleted) message of the given type already exists in the conversation. */
+    public boolean existsByConversationAndType(UUID conversationId, String messageType) {
+        return count("conversation.id = ?1 and messageType = ?2 and isDeleted = false",
+                conversationId, messageType) > 0;
+    }
+
     public List<Message> findByConversation(UUID conversationId, int page, int size) {
         return getEntityManager().createQuery(
                 "SELECT m FROM Message m WHERE m.conversation.id = :cid AND m.isDeleted = false " +
