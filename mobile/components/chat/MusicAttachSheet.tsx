@@ -1,6 +1,6 @@
 import { BlurView } from 'expo-blur'
 import { Ionicons } from '@expo/vector-icons'
-import { Modal, Text, TouchableOpacity, View } from 'react-native'
+import { Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native'
 
 import { Colors } from '@/constants/colors'
 
@@ -11,6 +11,7 @@ interface MusicAttachSheetProps {
   onClose: () => void
   onPickImage?: () => void
   onVoiceNote?: () => void
+  onSticker?: () => void
   onPickAlbum?: () => void
   onPickPlaylist?: () => void
   onDedicate?: () => void
@@ -26,6 +27,7 @@ export function MusicAttachSheet({
   onClose,
   onPickImage,
   onVoiceNote,
+  onSticker,
   onPickAlbum,
   onPickPlaylist,
   onDedicate,
@@ -37,6 +39,7 @@ export function MusicAttachSheet({
   const rows: { icon: IconName; label: string; onPress?: () => void }[] = [
     { icon: 'image' as IconName, label: 'Share a photo', onPress: onPickImage },
     { icon: 'mic' as IconName, label: 'Record a voice note', onPress: onVoiceNote },
+    { icon: 'happy' as IconName, label: 'Send a sticker', onPress: onSticker },
     { icon: 'albums' as IconName, label: 'Share an album', onPress: onPickAlbum },
     { icon: 'list' as IconName, label: 'Share a playlist', onPress: onPickPlaylist },
     { icon: 'heart' as IconName, label: 'Dedicate a song', onPress: onDedicate },
@@ -57,21 +60,23 @@ export function MusicAttachSheet({
         />
         <View className="rounded-t-3xl px-5 pt-4 pb-8" style={{ backgroundColor: Colors.surface }}>
           <View className="self-center mb-4 rounded-full" style={{ width: 36, height: 4, backgroundColor: Colors.outlineVariant }} />
-          {rows.map(row => (
-            <TouchableOpacity
-              key={row.label}
-              onPress={() => {
-                onClose()
-                row.onPress?.()
-              }}
-              className="flex-row items-center gap-3 py-3.5"
-            >
-              <View className="h-10 w-10 items-center justify-center rounded-full bg-surface-container-high">
-                <Ionicons name={row.icon} size={20} color={Colors.primary} />
-              </View>
-              <Text className="text-[15px] font-semibold text-on-surface">{row.label}</Text>
-            </TouchableOpacity>
-          ))}
+          <ScrollView style={{ maxHeight: 520 }} showsVerticalScrollIndicator={false}>
+            {rows.map(row => (
+              <TouchableOpacity
+                key={row.label}
+                onPress={() => {
+                  onClose()
+                  row.onPress?.()
+                }}
+                className="flex-row items-center gap-3 py-3.5"
+              >
+                <View className="h-10 w-10 items-center justify-center rounded-full bg-surface-container-high">
+                  <Ionicons name={row.icon} size={20} color={Colors.primary} />
+                </View>
+                <Text className="text-[15px] font-semibold text-on-surface">{row.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
       </View>
     </Modal>

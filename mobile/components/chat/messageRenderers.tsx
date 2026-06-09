@@ -12,6 +12,7 @@ import { BlindListenCardMessage } from '@/components/music/BlindListenCardMessag
 import { ImageMessage } from '@/components/chat/ImageMessage'
 import { LinkPreviewMessage } from '@/components/chat/LinkPreviewMessage'
 import { VoiceMessage } from '@/components/chat/VoiceMessage'
+import { StickerMessage } from '@/components/chat/StickerMessage'
 
 export interface MessageRendererProps {
   message: Message
@@ -35,6 +36,7 @@ export const messageRenderers: Record<string, ComponentType<MessageRendererProps
   IMAGE: ImageMessage,
   LINK_PREVIEW: LinkPreviewMessage,
   VOICE: VoiceMessage,
+  STICKER: StickerMessage,
 }
 
 /** Returns the card renderer for a message type, or undefined for TEXT/unknown types. */

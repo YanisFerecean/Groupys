@@ -4,8 +4,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.groupys.dto.ConversationResDto;
 import com.groupys.dto.MessageResDto;
 import com.groupys.dto.LinkPreviewResDto;
+import com.groupys.dto.StickerResDto;
 import com.groupys.service.ChatService;
 import com.groupys.service.LinkPreviewService;
+import com.groupys.service.StickerCatalogService;
 import com.groupys.service.NotificationService;
 import com.groupys.service.PresenceService;
 import com.groupys.service.UserService;
@@ -38,6 +40,9 @@ public class ConversationResource {
 
     @Inject
     LinkPreviewService linkPreviewService;
+
+    @Inject
+    StickerCatalogService stickerCatalogService;
 
     @Inject
     PresenceService presenceService;
@@ -206,6 +211,12 @@ public class ConversationResource {
     @Path("/link-preview")
     public LinkPreviewResDto resolveLinkPreview(@QueryParam("url") String url) {
         return linkPreviewService.resolve(url);
+    }
+
+    @GET
+    @Path("/stickers")
+    public List<StickerResDto> listStickers() {
+        return stickerCatalogService.list();
     }
 
     // ── E2E public keys ───────────────────────────────────────────────────────

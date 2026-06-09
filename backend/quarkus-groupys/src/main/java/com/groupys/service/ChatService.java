@@ -55,6 +55,7 @@ public class ChatService {
     private final CommunityMemberRepository communityMemberRepository;
     private final MessageReactionRepository messageReactionRepository;
     private final ConversationPinRepository conversationPinRepository;
+    private final StickerCatalogService stickerCatalogService;
 
     @Inject
     public ChatService(
@@ -70,7 +71,8 @@ public class ChatService {
             ObjectMapper objectMapper,
             CommunityMemberRepository communityMemberRepository,
             MessageReactionRepository messageReactionRepository,
-            ConversationPinRepository conversationPinRepository) {
+            ConversationPinRepository conversationPinRepository,
+            StickerCatalogService stickerCatalogService) {
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.userRepository = userRepository;
@@ -84,6 +86,7 @@ public class ChatService {
         this.communityMemberRepository = communityMemberRepository;
         this.messageReactionRepository = messageReactionRepository;
         this.conversationPinRepository = conversationPinRepository;
+        this.stickerCatalogService = stickerCatalogService;
     }
 
     // ── Pins (ticket 3.4) ───────────────────────────────────────────────────────
@@ -300,6 +303,13 @@ public class ChatService {
                 if (!peak.isNumber() || peak.asDouble() < 0 || peak.asDouble() > 1) {
                     throw new jakarta.ws.rs.BadRequestException("VOICE waveform peaks must be between 0 and 1");
                 }
+            }
+        }
+        if (MessageType.STICKER.equals(type)) {
+            String stickerId = payload.path("stickerId").asText(null);
+            String url = payload.path("url").asText(null);
+            if (stickerId == null || url == null || !stickerCatalogService.isAllowed(stickerId, url)) {
+                throw new jakarta.ws.rs.BadRequestException("Unknown sticker");
             }
         }
     }

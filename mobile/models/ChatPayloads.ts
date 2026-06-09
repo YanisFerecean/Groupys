@@ -114,6 +114,14 @@ export interface VoicePayload {
   peaks: number[]
 }
 
+/** Server-catalog sticker message (ticket 3.9). */
+export interface StickerPayload {
+  type: 'STICKER'
+  stickerId: string
+  url: string
+  name?: string
+}
+
 export type MessagePayload =
   | TrackPayload
   | AlbumPayload
@@ -125,6 +133,7 @@ export type MessagePayload =
   | BlindListenPayload
   | LinkPreviewPayload
   | VoicePayload
+  | StickerPayload
 
 /** Narrow an unknown payload to a typed payload by its discriminant. */
 export function isTrackPayload(
@@ -191,4 +200,13 @@ export function isVoicePayload(
     && payload.type === 'VOICE'
     && typeof payload.durationMs === 'number'
     && Array.isArray(payload.peaks)
+}
+
+export function isStickerPayload(
+  payload: Record<string, unknown> | null | undefined,
+): payload is StickerPayload & Record<string, unknown> {
+  return !!payload
+    && payload.type === 'STICKER'
+    && typeof payload.stickerId === 'string'
+    && typeof payload.url === 'string'
 }

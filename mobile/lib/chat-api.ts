@@ -8,6 +8,13 @@ export interface ResolvedLinkPreview {
   payload: Record<string, unknown>
 }
 
+export interface StickerCatalogItem {
+  id: string
+  packId: string
+  url: string
+  name: string
+}
+
 export async function fetchConversations(
   token: string | null,
   cursor?: string,
@@ -145,6 +152,10 @@ export async function resolveLinkPreview(
     `/chat/link-preview?${params.toString()}`,
     { token, cache: false },
   )
+}
+
+export async function fetchStickers(token: string | null): Promise<StickerCatalogItem[]> {
+  return apiRequest<StickerCatalogItem[]>('/chat/stickers', { token, cache: true })
 }
 
 export async function markRead(

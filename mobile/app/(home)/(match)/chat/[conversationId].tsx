@@ -33,11 +33,12 @@ import { PinnedMessageBar } from '@/components/chat/PinnedMessageBar'
 import { ChatSearchPanel } from '@/components/chat/ChatSearchPanel'
 import { ConversationOptionsSheet } from '@/components/chat/ConversationOptionsSheet'
 import { VoiceRecorderModal } from '@/components/chat/VoiceRecorderModal'
+import { StickerPicker } from '@/components/chat/StickerPicker'
 import { TypingIndicator } from '@/components/chat/TypingIndicator'
 import { useListenTogether } from '@/hooks/useListenTogether'
 import { useMusicGate } from '@/hooks/useMusicGate'
 import { apiPostMultipart, fetchMusicCurrentlyPlaying } from '@/lib/api'
-import { resolveLinkPreview } from '@/lib/chat-api'
+import { resolveLinkPreview, type StickerCatalogItem } from '@/lib/chat-api'
 import type { AlbumPayload, TrackPayload } from '@/models/ChatPayloads'
 import { Colors } from '@/constants/colors'
 import { useChat } from '@/hooks/useChat'
@@ -114,6 +115,7 @@ export default function ChatConversationScreen() {
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
   const [albumPickerOpen, setAlbumPickerOpen] = useState(false)
   const [voiceRecorderOpen, setVoiceRecorderOpen] = useState(false)
+  const [stickerPickerOpen, setStickerPickerOpen] = useState(false)
   const pickImage = useCallback(async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -182,6 +184,19 @@ export default function ChatConversationScreen() {
       Alert.alert('Could not send voice note', 'Try recording the voice note again.')
     }
   }, [getToken, sendMessage])
+
+  const sendSticker = useCallback((sticker: StickerCatalogItem) => {
+    setStickerPickerOpen(false)
+    void sendMessage(sticker.name, {
+      messageType: 'STICKER',
+      payload: {
+        type: 'STICKER',
+        stickerId: sticker.id,
+        url: sticker.url,
+        name: sticker.name,
+      },
+    })
+  }, [sendMessage])
 
   const sendTrack = useCallback((track: TrackPayload) => {
     const label = track.artist ? `🎵 ${track.title} — ${track.artist}` : `🎵 ${track.title}`
@@ -962,6 +977,7 @@ export default function ChatConversationScreen() {
           void pickImage()
         }}
         onVoiceNote={() => setVoiceRecorderOpen(true)}
+        onSticker={() => setStickerPickerOpen(true)}
         onPickAlbum={() => setAlbumPickerOpen(true)}
         onDedicate={() => {
           setPickerMode('dedicate')
@@ -994,6 +1010,12 @@ export default function ChatConversationScreen() {
         visible={voiceRecorderOpen}
         onClose={() => setVoiceRecorderOpen(false)}
         onSend={sendVoiceNote}
+      />
+
+      <StickerPicker
+        visible={stickerPickerOpen}
+        onClose={() => setStickerPickerOpen(false)}
+        onSelect={sendSticker}
       />
 
       <TextPromptModal
