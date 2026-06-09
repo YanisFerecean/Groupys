@@ -328,7 +328,9 @@ public class ChatWebSocket {
                 NotificationService.Content pushContent = NotificationService.Content
                         .of(senderName, "Sent you a message", deeplink)
                         .withImage(saved.senderProfileImage());
-                notificationService.notify(pid, NotificationService.Type.MESSAGE, pushContent);
+                if (!chatService.isConversationMuted(conversationId, pid)) {
+                    notificationService.notify(pid, NotificationService.Type.MESSAGE, pushContent);
+                }
             }
         });
     }

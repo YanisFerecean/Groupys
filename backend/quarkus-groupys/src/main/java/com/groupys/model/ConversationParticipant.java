@@ -36,6 +36,10 @@ public class ConversationParticipant {
     @Column(name = "unread_count", nullable = false)
     public int unreadCount;
 
+    /** Suppress message notifications for this participant until this instant (ticket 3.6). */
+    @Column(name = "muted_until")
+    public Instant mutedUntil;
+
     @PrePersist
     void onCreate() {
         joinedAt = Instant.now();

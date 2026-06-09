@@ -31,6 +31,7 @@ export const ConversationListItem = memo(function ConversationListItem({
 
   const avatarUrl = conversation.isGroup ? null : otherParticipant?.profileImage
   const initial = displayName.charAt(0).toUpperCase()
+  const isMuted = Boolean(conversation.mutedUntil && new Date(conversation.mutedUntil) > new Date())
 
   const rowContent = (
     <>
@@ -96,6 +97,9 @@ export const ConversationListItem = memo(function ConversationListItem({
           >
             {preview ?? conversation.lastMessage ?? 'Start a conversation...'}
           </Text>
+          {isMuted ? (
+            <Ionicons name="notifications-off-outline" size={15} color={Colors.onSurfaceVariant} />
+          ) : null}
           {useGlass ? (
             <GlassView style={{ borderRadius: 999, overflow: 'hidden' }} isInteractive>
               <View className="h-8 w-8 items-center justify-center rounded-full">

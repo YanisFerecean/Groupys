@@ -2,7 +2,7 @@
 ticket: 3.6
 title: Mute conversation
 phase: Parity
-status: todo
+status: done
 priority: P3
 depends_on: []
 ---

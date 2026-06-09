@@ -54,6 +54,17 @@ export async function denyConversationRequest(
   )
 }
 
+export async function setConversationMute(
+  conversationId: string,
+  until: string | null,
+  token: string | null,
+): Promise<Conversation> {
+  return apiRequest<Conversation>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/mute`,
+    { method: 'PUT', token, body: { until } },
+  )
+}
+
 export async function fetchMessages(
   conversationId: string,
   page: number,

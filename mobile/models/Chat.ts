@@ -21,6 +21,7 @@ export interface Conversation {
   lastMessage: string | null
   lastMessageAt: string | null
   unreadCount: number
+  mutedUntil: string | null
   createdAt: string
   updatedAt: string | null
 }

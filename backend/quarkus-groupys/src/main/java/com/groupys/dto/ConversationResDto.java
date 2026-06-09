@@ -13,6 +13,7 @@ public record ConversationResDto(
         String lastMessage,
         Instant lastMessageAt,
         long unreadCount,
+        Instant mutedUntil,
         Instant createdAt,
         Instant updatedAt
 ) {}

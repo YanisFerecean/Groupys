@@ -342,6 +342,7 @@ public class ChatService {
                 latestMessage,
                 latestAt,
                 unread,
+                myParticipant != null ? myParticipant.mutedUntil : null,
                 c.createdAt,
                 c.updatedAt
         );
@@ -378,16 +379,16 @@ public class ChatService {
                 .map(c -> {
                     Message latest = latestMap.get(c.id);
                     long unread = unreadMap.getOrDefault(c.id, 0L);
+                    ConversationParticipant mine = c.participants.stream()
+                            .filter(cp -> cp.user.id.equals(userId))
+                            .findFirst()
+                            .orElse(null);
                     String lastMessage = c.lastMessagePreview;
                     Instant lastMessageAt = c.lastMessageAt;
                     if (!readModelReadEnabled()) {
                         lastMessage = latest != null ? latest.content : null;
                         lastMessageAt = latest != null ? latest.createdAt : null;
                     } else {
-                        ConversationParticipant mine = c.participants.stream()
-                                .filter(cp -> cp.user.id.equals(userId))
-                                .findFirst()
-                                .orElse(null);
                         unread = mine != null ? Math.max(0L, mine.unreadCount) : 0L;
                     }
                     List<ParticipantDto> participants = c.participants.stream()
@@ -396,7 +397,9 @@ public class ChatService {
                             c.id, c.isGroup, c.groupName, participants, resolveRequestStatus(c, userId),
                             lastMessage,
                             lastMessageAt,
-                            unread, c.createdAt, c.updatedAt
+                            unread,
+                            mine != null ? mine.mutedUntil : null,
+                            c.createdAt, c.updatedAt
                     );
                 })
                 .collect(Collectors.toList());
@@ -408,6 +411,21 @@ public class ChatService {
         Conversation c = conversationRepository.findByIdOptional(conversationId)
                 .orElseThrow(() -> new NotFoundException("Conversation not found"));
         return toConversationDto(c, user.id);
+    }
+
+    @Transactional
+    public ConversationResDto setConversationMute(UUID conversationId, String clerkId, Instant until) {
+        User user = requireUserByClerkId(clerkId);
+        ConversationParticipant participant = conversationRepository.findParticipant(conversationId, user.id)
+                .orElseThrow(() -> new ForbiddenException("Not a participant in this conversation"));
+        participant.mutedUntil = until != null && until.isAfter(Instant.now()) ? until : null;
+        return toConversationDto(participant.conversation, user.id);
+    }
+
+    public boolean isConversationMuted(UUID conversationId, UUID userId) {
+        return conversationRepository.findParticipant(conversationId, userId)
+                .map(participant -> participant.mutedUntil != null && participant.mutedUntil.isAfter(Instant.now()))
+                .orElse(false);
     }
 
     @Transactional

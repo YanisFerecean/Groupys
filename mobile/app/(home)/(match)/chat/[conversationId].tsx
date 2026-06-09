@@ -29,6 +29,7 @@ import { ListenTogetherBar } from '@/components/chat/ListenTogetherBar'
 import { MessageActionSheet, type MessageAction } from '@/components/chat/MessageActionSheet'
 import { PinnedMessageBar } from '@/components/chat/PinnedMessageBar'
 import { ChatSearchPanel } from '@/components/chat/ChatSearchPanel'
+import { ConversationOptionsSheet } from '@/components/chat/ConversationOptionsSheet'
 import { TypingIndicator } from '@/components/chat/TypingIndicator'
 import { useListenTogether } from '@/hooks/useListenTogether'
 import { useMusicGate } from '@/hooks/useMusicGate'
@@ -63,6 +64,7 @@ export default function ChatConversationScreen() {
     getNowPlaying,
     isUserOnline,
     markConversationRead,
+    setConversationMute,
   } = useChat()
   const conversationId = Array.isArray(params.conversationId)
     ? params.conversationId[0]
@@ -244,6 +246,7 @@ export default function ChatConversationScreen() {
   const [searchResults, setSearchResults] = useState<Message[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null)
+  const [conversationOptionsOpen, setConversationOptionsOpen] = useState(false)
 
   // Scroll to a message by id (reply quote or pinned-bar tap). Load older pages when needed.
   const scrollToMessage = useCallback((messageId: string) => {
@@ -667,15 +670,7 @@ export default function ChatConversationScreen() {
           <TouchableOpacity
             className="h-11 w-11 items-center justify-center rounded-full bg-surface-container"
             accessibilityLabel="Conversation options"
-            onPress={() =>
-              showModerationMenu({
-                targetType: 'USER',
-                targetId: otherParticipant.userId,
-                userId: otherParticipant.userId,
-                displayName: headerTitle,
-                onBlocked: () => router.replace('/(home)/(match)/chat'),
-              })
-            }
+            onPress={() => setConversationOptionsOpen(true)}
           >
             <Ionicons name="ellipsis-horizontal" size={22} color={Colors.onSurface} />
           </TouchableOpacity>
@@ -983,6 +978,27 @@ export default function ChatConversationScreen() {
           if (actionMessage) toggleReaction(actionMessage.id, emoji)
         }}
         onClose={() => setActionMessage(null)}
+      />
+
+      <ConversationOptionsSheet
+        visible={conversationOptionsOpen}
+        muted={Boolean(conversation?.mutedUntil && new Date(conversation.mutedUntil) > new Date())}
+        onClose={() => setConversationOptionsOpen(false)}
+        onMuteUntil={(until) => {
+          if (conversationId) {
+            void setConversationMute(conversationId, until)
+          }
+        }}
+        onSafety={() => {
+          if (!otherParticipant) return
+          showModerationMenu({
+            targetType: 'USER',
+            targetId: otherParticipant.userId,
+            userId: otherParticipant.userId,
+            displayName: headerTitle,
+            onBlocked: () => router.replace('/(home)/(match)/chat'),
+          })
+        }}
       />
 
       <TextPromptModal

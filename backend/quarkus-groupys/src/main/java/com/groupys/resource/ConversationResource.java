@@ -87,6 +87,12 @@ public class ConversationResource {
         return Response.noContent().build();
     }
 
+    @PUT
+    @Path("/conversations/{id}/mute")
+    public ConversationResDto setConversationMute(@PathParam("id") UUID id, MuteConversationRequest req) {
+        return chatService.setConversationMute(id, jwt.getSubject(), req != null ? req.until() : null);
+    }
+
     // ── Messages ──────────────────────────────────────────────────────────────
 
     @GET
@@ -165,7 +171,9 @@ public class ConversationResource {
                 NotificationService.Content content = NotificationService.Content
                         .of(senderName, "Sent you a message", deeplink)
                         .withImage(msg.senderProfileImage());
-                notificationService.notify(userId, NotificationService.Type.MESSAGE, content);
+                if (!chatService.isConversationMuted(msg.conversationId(), userId)) {
+                    notificationService.notify(userId, NotificationService.Type.MESSAGE, content);
+                }
             });
         } catch (Exception e) {
             // WS/push are best-effort — message is already saved
@@ -205,6 +213,7 @@ public class ConversationResource {
     // ── Request records ───────────────────────────────────────────────────────
 
     public record StartConversationRequest(UUID targetUserId) {}
+    public record MuteConversationRequest(Instant until) {}
     public record SendMessageRequest(String content, String messageType, com.fasterxml.jackson.databind.JsonNode payload, UUID replyToId) {}
     public record PublicKeyRequest(String publicKey) {}
 }

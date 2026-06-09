@@ -19,6 +19,7 @@ import {
   fetchPublicKey as fetchRemotePublicKey,
   markRead,
   searchUsers,
+  setConversationMute as updateConversationMute,
   startConversation,
   uploadPublicKey,
 } from '@/lib/chat-api'
@@ -69,6 +70,7 @@ interface ChatContextValue {
   denyDirectRequest: (conversationId: string) => Promise<void>
   searchChatUsers: (query: string, limit?: number) => Promise<BackendUser[]>
   markConversationRead: (conversationId: string) => Promise<void>
+  setConversationMute: (conversationId: string, until: string | null) => Promise<void>
   upsertConversation: (conversation: Conversation, moveToTop?: boolean) => void
   applyOutgoingMessage: (message: Message, preview?: string) => void
   isUserOnline: (userId: string) => boolean
@@ -260,6 +262,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       console.error('[chat] failed to mark conversation read', error)
     }
   }, [])
+
+  const setConversationMute = useCallback(async (conversationId: string, until: string | null) => {
+    const token = await getTokenRef.current()
+    const updated = await updateConversationMute(conversationId, until, token)
+    upsertConversation(updated, false)
+  }, [upsertConversation])
 
   const applyOutgoingMessage = useCallback((message: Message, preview: string = message.content) => {
     setConversations(prev => {
@@ -590,6 +598,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     denyDirectRequest,
     searchChatUsers,
     markConversationRead,
+    setConversationMute,
     upsertConversation,
     applyOutgoingMessage,
     isUserOnline,
@@ -612,6 +621,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     denyDirectRequest,
     searchChatUsers,
     markConversationRead,
+    setConversationMute,
     upsertConversation,
     applyOutgoingMessage,
     isUserOnline,
