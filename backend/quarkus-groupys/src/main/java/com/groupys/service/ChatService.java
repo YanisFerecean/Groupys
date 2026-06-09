@@ -8,11 +8,13 @@ import com.groupys.dto.MessageResDto;
 import com.groupys.dto.ParticipantDto;
 import com.groupys.model.Conversation;
 import com.groupys.model.ConversationParticipant;
+import com.groupys.model.ConversationPin;
 import com.groupys.model.Message;
 import com.groupys.model.MessageType;
 import com.groupys.model.User;
 import com.groupys.model.Friendship;
 import com.groupys.repository.CommunityMemberRepository;
+import com.groupys.repository.ConversationPinRepository;
 import com.groupys.repository.ConversationRepository;
 import com.groupys.repository.FriendshipRepository;
 import com.groupys.repository.MessageRepository;
@@ -22,6 +24,7 @@ import com.groupys.repository.UserRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.ForbiddenException;
 import jakarta.ws.rs.NotFoundException;
 
@@ -51,6 +54,7 @@ public class ChatService {
     private final ObjectMapper objectMapper;
     private final CommunityMemberRepository communityMemberRepository;
     private final MessageReactionRepository messageReactionRepository;
+    private final ConversationPinRepository conversationPinRepository;
 
     @Inject
     public ChatService(
@@ -65,7 +69,8 @@ public class ChatService {
             RateLimitingService rateLimitingService,
             ObjectMapper objectMapper,
             CommunityMemberRepository communityMemberRepository,
-            MessageReactionRepository messageReactionRepository) {
+            MessageReactionRepository messageReactionRepository,
+            ConversationPinRepository conversationPinRepository) {
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.userRepository = userRepository;
@@ -78,6 +83,52 @@ public class ChatService {
         this.objectMapper = objectMapper;
         this.communityMemberRepository = communityMemberRepository;
         this.messageReactionRepository = messageReactionRepository;
+        this.conversationPinRepository = conversationPinRepository;
+    }
+
+    // ── Pins (ticket 3.4) ───────────────────────────────────────────────────────
+
+    public List<MessageResDto> getPins(UUID conversationId, String clerkId) {
+        User user = requireUserByClerkId(clerkId);
+        requireParticipant(conversationId, user.id);
+        return conversationPinRepository.findByConversation(conversationId).stream()
+                .map(pin -> messageRepository.findByIdOptional(pin.messageId).orElse(null))
+                .filter(java.util.Objects::nonNull)
+                .filter(m -> !m.isDeleted)
+                .map(this::toMessageDto)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public MessageResDto pinMessage(UUID messageId, String clerkId) {
+        User user = requireUserByClerkId(clerkId);
+        Message msg = messageRepository.findByIdOptional(messageId)
+                .orElseThrow(() -> new NotFoundException("Message not found"));
+        requireParticipant(msg.conversation.id, user.id);
+        if (msg.isDeleted) {
+            throw new BadRequestException("Deleted messages cannot be pinned");
+        }
+        if (conversationPinRepository.findOne(msg.conversation.id, messageId) == null) {
+            ConversationPin pin = new ConversationPin();
+            pin.conversationId = msg.conversation.id;
+            pin.messageId = messageId;
+            pin.pinnedBy = user;
+            conversationPinRepository.persist(pin);
+        }
+        return toMessageDto(msg);
+    }
+
+    @Transactional
+    public UUID unpinMessage(UUID messageId, String clerkId) {
+        User user = requireUserByClerkId(clerkId);
+        Message msg = messageRepository.findByIdOptional(messageId)
+                .orElseThrow(() -> new NotFoundException("Message not found"));
+        requireParticipant(msg.conversation.id, user.id);
+        ConversationPin pin = conversationPinRepository.findOne(msg.conversation.id, messageId);
+        if (pin != null) {
+            conversationPinRepository.delete(pin);
+        }
+        return msg.conversation.id;
     }
 
     /**

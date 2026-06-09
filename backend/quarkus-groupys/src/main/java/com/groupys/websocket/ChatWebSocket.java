@@ -146,6 +146,8 @@ public class ChatWebSocket {
             case "REACTION_REMOVE"     -> handleReaction(connection, user, msg, false);
             case "MESSAGE_EDIT"        -> handleMessageEdit(connection, user, msg);
             case "MESSAGE_DELETE"      -> handleMessageDelete(connection, user, msg);
+            case "PIN_ADD"             -> handlePin(connection, user, msg, true);
+            case "PIN_REMOVE"          -> handlePin(connection, user, msg, false);
             case "ROOM_JOIN"           -> handleRoomJoin(connection, user, msg);
             case "ROOM_STATE"          -> handleRoomState(user, msg);
             case "ROOM_LEAVE"          -> handleRoomLeave(user, msg);
@@ -438,6 +440,37 @@ public class ChatWebSocket {
     private void broadcastMessageUpdated(MessageResDto updated) {
         String json = toJson(WebSocketMessage.messageUpdated(buildMessageData(updated, null)));
         chatService.getParticipantClerkIds(updated.conversationId())
+                .forEach((pid, clerkId) -> presenceService.sendTo(clerkId, json));
+    }
+
+    // -- Pins (ticket 3.4) -----------------------------------------------------
+
+    private void handlePin(WebSocketConnection connection, User user, Map<String, Object> msg, boolean add) {
+        UUID messageId = parseMessageId(connection, msg);
+        if (messageId == null) return;
+
+        UUID conversationId;
+        try {
+            conversationId = add
+                    ? chatService.pinMessage(messageId, user.clerkId).conversationId()
+                    : chatService.unpinMessage(messageId, user.clerkId);
+        } catch (jakarta.ws.rs.WebApplicationException e) {
+            sendJson(connection, WebSocketMessage.error(e.getMessage()));
+            return;
+        } catch (Exception e) {
+            LOG.errorf(e, "Failed to update pin");
+            sendJson(connection, WebSocketMessage.error("Internal error"));
+            return;
+        }
+
+        List<Map<String, Object>> pins = chatService.getPins(conversationId, user.clerkId).stream()
+                .map(pin -> buildMessageData(pin, null))
+                .toList();
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("conversationId", conversationId.toString());
+        payload.put("pins", pins);
+        String json = toJson(new WebSocketMessage("PIN_UPDATE", payload));
+        chatService.getParticipantClerkIds(conversationId)
                 .forEach((pid, clerkId) -> presenceService.sendTo(clerkId, json));
     }
 

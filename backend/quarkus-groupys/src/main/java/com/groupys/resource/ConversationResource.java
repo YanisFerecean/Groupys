@@ -98,6 +98,12 @@ public class ConversationResource {
         return chatService.getMessages(id, jwt.getSubject(), page, Math.min(size, 50));
     }
 
+    @GET
+    @Path("/conversations/{id}/pins")
+    public List<MessageResDto> getPins(@PathParam("id") UUID id) {
+        return chatService.getPins(id, jwt.getSubject());
+    }
+
     @POST
     @Path("/conversations/{id}/messages")
     public Response sendMessage(@PathParam("id") UUID id, SendMessageRequest req) {

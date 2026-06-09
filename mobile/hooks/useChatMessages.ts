@@ -1,6 +1,6 @@
 import { useAuth, useUser } from '@clerk/expo'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { postMessage, fetchMessages } from '@/lib/chat-api'
+import { postMessage, fetchMessages, fetchPins } from '@/lib/chat-api'
 import { isEncrypted } from '@/lib/chat-crypto'
 import { chatWs } from '@/lib/chat-ws'
 import type { Message } from '@/models/Chat'
@@ -16,6 +16,7 @@ export function useChatMessages(
   const { user } = useUser()
   const { applyOutgoingMessage, cryptoReady, decryptForUsername, encryptForUsername } = useChat()
   const [messages, setMessages] = useState<Message[]>([])
+  const [pins, setPins] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(true)
@@ -87,6 +88,7 @@ export function useChatMessages(
   useEffect(() => {
     if (!conversationId) {
       setMessages([])
+      setPins([])
       setHasMore(true)
       setLoadedConversationId(null)
       return
@@ -95,6 +97,7 @@ export function useChatMessages(
     let cancelled = false
     const activeConversationId = conversationId
     setMessages([])
+    setPins([])
     setHasMore(true)
     setLoadedConversationId(null)
 
@@ -102,10 +105,17 @@ export function useChatMessages(
       setIsLoading(true)
       try {
         const token = await getTokenRef.current()
-        const loaded = await fetchMessages(activeConversationId, 0, PAGE_SIZE, token)
-        const decrypted = await Promise.all(loaded.map(decryptPayload))
+        const [loaded, loadedPins] = await Promise.all([
+          fetchMessages(activeConversationId, 0, PAGE_SIZE, token),
+          fetchPins(activeConversationId, token),
+        ])
+        const [decrypted, decryptedPins] = await Promise.all([
+          Promise.all(loaded.map(decryptPayload)),
+          Promise.all(loadedPins.map(decryptPayload)),
+        ])
         if (!cancelled) {
           setMessages(decrypted)
+          setPins(decryptedPins)
           setHasMore(loaded.length === PAGE_SIZE)
           setLoadedConversationId(activeConversationId)
         }
@@ -176,6 +186,18 @@ export function useChatMessages(
             ? { ...existing, ...payload, status: existing.status }
             : existing
         )))
+        if (payload.isDeleted) {
+          setPins(prev => prev.filter(pin => pin.id !== payload.id))
+        } else {
+          setPins(prev => prev.map(pin => (pin.id === payload.id ? { ...pin, ...payload } : pin)))
+        }
+      }),
+      chatWs.on('PIN_UPDATE', async (payload: { conversationId: string; pins: Message[] }) => {
+        if (payload.conversationId !== conversationId) {
+          return
+        }
+        const decrypted = await Promise.all((payload.pins ?? []).map(decryptPayload))
+        setPins(decrypted)
       }),
       chatWs.on('MESSAGE_ACK', (payload: { tempId: string; messageId: string; createdAt: string }) => {
         setMessages(prev => prev.map(message => (
@@ -221,6 +243,37 @@ export function useChatMessages(
       setIsLoadingMore(false)
     }
   }, [conversationId, decryptPayload, hasMore, isLoadingMore, messages.length])
+
+  const loadUntilMessage = useCallback(async (messageId: string) => {
+    if (!conversationId || messages.some(message => message.id === messageId)) {
+      return true
+    }
+
+    let page = Math.floor(messages.length / PAGE_SIZE)
+    let accumulated = messages
+    try {
+      while (true) {
+        const token = await getTokenRef.current()
+        const loaded = await fetchMessages(conversationId, page, PAGE_SIZE, token)
+        const decrypted = await Promise.all(loaded.map(decryptPayload))
+        const existingIds = new Set(accumulated.map(message => message.id))
+        accumulated = [
+          ...accumulated,
+          ...decrypted.filter(message => !existingIds.has(message.id)),
+        ]
+        if (accumulated.some(message => message.id === messageId) || loaded.length < PAGE_SIZE) {
+          break
+        }
+        page += 1
+      }
+      setMessages(accumulated)
+      setHasMore(accumulated.length % PAGE_SIZE === 0)
+      return accumulated.some(message => message.id === messageId)
+    } catch (error) {
+      console.error('[chat] failed to load pinned message', error)
+      return false
+    }
+  }, [conversationId, decryptPayload, messages])
 
   const sendMessage = useCallback(async (
     content: string,
@@ -360,17 +413,30 @@ export function useChatMessages(
     chatWs.send({ type: 'MESSAGE_DELETE', messageId })
   }, [])
 
+  const togglePin = useCallback((message: Message) => {
+    const isPinned = pins.some(pin => pin.id === message.id)
+    setPins(prev => (
+      isPinned
+        ? prev.filter(pin => pin.id !== message.id)
+        : [message, ...prev]
+    ))
+    chatWs.send({ type: isPinned ? 'PIN_REMOVE' : 'PIN_ADD', messageId: message.id })
+  }, [pins])
+
   return {
     messages,
+    pins,
     isLoading,
     isInitialLoadPending: Boolean(conversationId) && loadedConversationId !== conversationId,
     isLoadingMore,
     hasMore,
     loadMore,
+    loadUntilMessage,
     sendMessage,
     resendMessage,
     toggleReaction,
     editMessage,
     deleteMessage,
+    togglePin,
   }
 }

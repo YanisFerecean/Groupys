@@ -2,7 +2,7 @@
 ticket: 3.4
 title: Pinned messages
 phase: Parity
-status: todo
+status: done
 priority: P2
 depends_on: [0.1]
 ---

@@ -27,6 +27,7 @@ import { ChatActionsContext, type ChatActions } from '@/components/chat/ChatActi
 import { TextPromptModal } from '@/components/ui/TextPromptModal'
 import { ListenTogetherBar } from '@/components/chat/ListenTogetherBar'
 import { MessageActionSheet, type MessageAction } from '@/components/chat/MessageActionSheet'
+import { PinnedMessageBar } from '@/components/chat/PinnedMessageBar'
 import { TypingIndicator } from '@/components/chat/TypingIndicator'
 import { useListenTogether } from '@/hooks/useListenTogether'
 import { useMusicGate } from '@/hooks/useMusicGate'
@@ -74,12 +75,15 @@ export default function ChatConversationScreen() {
     isInitialLoadPending,
     isLoadingMore,
     loadMore,
+    loadUntilMessage,
     messages,
+    pins,
     resendMessage,
     sendMessage,
     toggleReaction,
     editMessage,
     deleteMessage,
+    togglePin,
   } = useChatMessages(activeConversationId, otherParticipant?.username ?? null)
 
   // Track sharing (tickets 2.1 / 1.3 / 4.x).
@@ -232,8 +236,9 @@ export default function ChatConversationScreen() {
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false)
   const listRef = useRef<FlatList<Message>>(null)
   const isMountedRef = useRef(true)
+  const [pendingScrollMessageId, setPendingScrollMessageId] = useState<string | null>(null)
 
-  // Scroll to a message by id (reply quote tap, ticket 3.1). List is inverted, so index works.
+  // Scroll to a message by id (reply quote or pinned-bar tap). Load older pages when needed.
   const scrollToMessage = useCallback((messageId: string) => {
     const index = messages.findIndex(m => m.id === messageId)
     if (index >= 0) {
@@ -242,8 +247,25 @@ export default function ChatConversationScreen() {
       } catch {
         // index may be outside the rendered window; ignore
       }
+      return
     }
-  }, [messages])
+    void loadUntilMessage(messageId).then((found) => {
+      if (found) {
+        setPendingScrollMessageId(messageId)
+      }
+    })
+  }, [loadUntilMessage, messages])
+
+  useEffect(() => {
+    if (!pendingScrollMessageId) return
+    const index = messages.findIndex(message => message.id === pendingScrollMessageId)
+    if (index < 0) return
+    const frame = requestAnimationFrame(() => {
+      listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 })
+      setPendingScrollMessageId(null)
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [messages, pendingScrollMessageId])
 
   const buildReplyStub = useCallback((m: Message): ReplyStub => ({
     id: m.id,
@@ -264,6 +286,12 @@ export default function ChatConversationScreen() {
         label: 'Reply',
         onPress: () => setReplyTarget(buildReplyStub(actionMessage)),
       })
+      const isPinned = pins.some(pin => pin.id === actionMessage.id)
+      actions.push({
+        icon: isPinned ? 'pin-outline' : 'pin',
+        label: isPinned ? 'Unpin' : 'Pin',
+        onPress: () => togglePin(actionMessage),
+      })
     }
     if (mine && isTextMsg && !actionMessage.isDeleted) {
       actions.push({ icon: 'create', label: 'Edit', onPress: () => setPendingEdit(actionMessage) })
@@ -282,7 +310,7 @@ export default function ChatConversationScreen() {
       })
     }
     return actions
-  }, [actionMessage, buildReplyStub, deleteMessage, user?.username])
+  }, [actionMessage, buildReplyStub, deleteMessage, pins, togglePin, user?.username])
 
   // While the keyboard is up, the KeyboardAvoidingView already lifts the composer past the
   // home-indicator inset; keeping our own bottom inset on top of that doubles the gap.
@@ -594,6 +622,8 @@ export default function ChatConversationScreen() {
           </TouchableOpacity>
         ) : null}
       </View>
+
+      <PinnedMessageBar pins={pins} onPress={scrollToMessage} />
 
       {!conversation ? (
         <View className="flex-1 items-center justify-center">

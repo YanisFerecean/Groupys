@@ -70,6 +70,16 @@ export async function fetchMessages(
   )
 }
 
+export async function fetchPins(
+  conversationId: string,
+  token: string | null,
+): Promise<Message[]> {
+  return apiRequest<Message[]>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/pins`,
+    { token, cache: false },
+  )
+}
+
 export async function postMessage(
   conversationId: string,
   content: string,
