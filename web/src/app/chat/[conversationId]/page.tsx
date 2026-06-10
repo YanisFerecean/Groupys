@@ -22,6 +22,7 @@ import {
   HelpCircle,
   ListMusic,
   Radio,
+  CalendarClock,
 } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { toast } from "sonner";
@@ -42,9 +43,12 @@ import { PinnedMessageBar } from "@/components/chat/PinnedMessageBar";
 import { MessageActionHandlers } from "@/components/chat/MessageActions";
 import { NowPlayingPill } from "@/components/chat/NowPlayingPill";
 import { ListenTogetherBar } from "@/components/chat/ListenTogetherBar";
+import { PartyBanner } from "@/components/chat/PartyBanner";
+import { PartyScheduleModal } from "@/components/music/PartyScheduleModal";
 import { usePresence } from "@/hooks/usePresence";
 import { useNowPlaying } from "@/hooks/useNowPlaying";
 import { useListenTogether } from "@/hooks/useListenTogether";
+import { useListeningParty } from "@/hooks/useListeningParty";
 import { useCrypto } from "@/hooks/useCrypto";
 import { chatWs } from "@/lib/ws";
 import { fetchPublicKey, uploadMedia } from "@/lib/chat-api";
@@ -221,6 +225,8 @@ export default function ConversationPage() {
     conversationId,
     backendUserId
   );
+  const { party, schedule: scheduleParty, join: joinParty, end: endParty } = useListeningParty(conversationId);
+  const [partyTrack, setPartyTrack] = useState<TrackPayload | null>(null);
 
   // Compute "last seen X ago" outside render to avoid Date.now() purity violation
   const [lastSeenText, setLastSeenText] = useState<string | null>(null);
@@ -349,7 +355,8 @@ export default function ConversationPage() {
     | { mode: "reaction"; message: Message }
     | { mode: "compose"; kind: ComposeKind | "blind" }
     | { mode: "collab" }
-    | { mode: "listen" };
+    | { mode: "listen" }
+    | { mode: "party" };
   const [musicSheetOpen, setMusicSheetOpen] = useState(false);
   const [musicPicker, setMusicPicker] = useState<PickerState | null>(null);
   const [detail, setDetail] = useState<{ kind: ComposeKind; track: TrackPayload } | null>(null);
@@ -368,6 +375,8 @@ export default function ConversationPage() {
       } else if (picker.mode === "listen") {
         if (track.previewUrl) startRoom(track);
         else toast.error("This track has no preview to listen together");
+      } else if (picker.mode === "party") {
+        setPartyTrack(track);
       } else if (picker.mode === "compose") {
         if (picker.kind === "blind") {
           sendStructured(
@@ -511,6 +520,12 @@ export default function ConversationPage() {
         icon: <Radio className="w-6 h-6" />,
         onClick: () => setMusicPicker({ mode: "listen" }),
       },
+      {
+        key: "party",
+        label: "Listening party",
+        icon: <CalendarClock className="w-6 h-6" />,
+        onClick: () => setMusicPicker({ mode: "party" }),
+      },
     ],
     []
   );
@@ -637,6 +652,8 @@ export default function ConversationPage() {
               ? "Add to playlist"
               : musicPicker.mode === "listen"
               ? "Start listening together"
+              : musicPicker.mode === "party"
+              ? "Pick a song for the party"
               : musicPicker.mode === "compose"
               ? "Pick a song"
               : "Share music"
@@ -656,6 +673,20 @@ export default function ConversationPage() {
           onSubmit={handleComposeSubmit}
         />
       )}
+
+      {partyTrack && (
+        <PartyScheduleModal
+          track={partyTrack}
+          onClose={() => setPartyTrack(null)}
+          onSchedule={(startAt) => {
+            scheduleParty(partyTrack, startAt);
+            setPartyTrack(null);
+          }}
+        />
+      )}
+
+      {/* Scheduled listening party */}
+      <PartyBanner party={party} onJoin={joinParty} onDismiss={endParty} />
 
       {/* Listen Together session */}
       <ListenTogetherBar room={room} onToggle={togglePlay} onJoin={joinRoom} onLeave={leaveRoom} />
