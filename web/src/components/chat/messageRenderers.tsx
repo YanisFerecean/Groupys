@@ -7,6 +7,7 @@ import {
   isDedicationPayload,
   isLyricPayload,
   isPlaylistPayload,
+  isTasteHandshakePayload,
   isTimestampPayload,
   isTrackPayload,
 } from "@/types/chat";
@@ -20,6 +21,7 @@ import { LyricCard } from "@/components/music/LyricCard";
 import { TimestampCard } from "@/components/music/TimestampCard";
 import { BlindListenCard } from "@/components/music/BlindListenCard";
 import { CollabPlaylistCard } from "@/components/music/CollabPlaylistCard";
+import { TasteHandshakeCard } from "@/components/music/TasteHandshakeCard";
 
 /**
  * Result of rendering a message's *content* (the bit inside the bubble column).
@@ -139,6 +141,12 @@ export function renderMessageContent(message: Message, ctx: RenderCtx): RenderRe
           ),
           bare: true,
         };
+      }
+      break;
+
+    case "TASTE_HANDSHAKE":
+      if (isTasteHandshakePayload(message.payload)) {
+        return { node: <TasteHandshakeCard payload={message.payload} />, bare: true };
       }
       break;
   }
