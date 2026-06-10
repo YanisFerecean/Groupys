@@ -4,18 +4,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { Bell, ChevronLeft, Info, Lock, Check, X, Search, ImageIcon, Mic } from "lucide-react";
+import { Bell, ChevronLeft, Info, Lock, Check, X, Search, ImageIcon, Mic, Music } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { toast } from "sonner";
 import { useUserStore } from "@/store/userStore";
 import { useMessages } from "@/hooks/useMessages";
-import { Message } from "@/types/chat";
+import { Message, TrackPayload, AlbumPayload } from "@/types/chat";
 import { useConversations } from "@/hooks/useConversations";
 import { usePins } from "@/hooks/usePins";
 import { MessageThread } from "@/components/chat/MessageThread";
 import { MessageInput, AttachmentAction } from "@/components/chat/MessageInput";
 import { MessageSearch } from "@/components/chat/MessageSearch";
 import { VoiceRecorderModal } from "@/components/chat/VoiceRecorderModal";
+import { MusicPickerModal } from "@/components/music/MusicPickerModal";
 import { PinnedMessageBar } from "@/components/chat/PinnedMessageBar";
 import { MessageActionHandlers } from "@/components/chat/MessageActions";
 import { usePresence } from "@/hooks/usePresence";
@@ -82,6 +83,7 @@ export default function ConversationPage() {
     editMessage,
     deleteMessage,
     toggleReaction,
+    toggleTrackReaction,
     rateLimitError,
     isDecrypting,
   } = useMessages(conversationId, decryptFn, encryptFn);
@@ -237,6 +239,7 @@ export default function ConversationPage() {
           .then(() => toast.success("Copied to clipboard"))
           .catch(() => toast.error("Couldn't copy"));
       },
+      onTrackReact: (m) => setMusicPicker({ mode: "reaction", message: m }),
       isPinned,
     };
   }, [backendUserId, toggleReaction, deleteMessage, togglePin, isPinned]);
@@ -302,6 +305,51 @@ export default function ConversationPage() {
     [backendUserId, backendUsername, getToken, sendStructured]
   );
 
+  // ── Music sharing / reactions ──────────────────────────────────────────────
+  // `musicPicker` holds why the picker is open: to share into the chat, or to
+  // attach a track reaction to a specific message.
+  const [musicPicker, setMusicPicker] = useState<{ mode: "share" | "reaction"; message?: Message } | null>(
+    null
+  );
+
+  const handlePickTrack = useCallback(
+    (track: TrackPayload) => {
+      if (!backendUserId) return;
+      if (musicPicker?.mode === "reaction" && musicPicker.message) {
+        toggleTrackReaction(musicPicker.message.id, track, backendUserId);
+      } else {
+        sendStructured(
+          {
+            messageType: "TRACK",
+            contentLabel: `🎵 ${track.title} — ${track.artist}`,
+            payload: track as unknown as Record<string, unknown>,
+          },
+          backendUserId,
+          backendUsername ?? "me"
+        );
+      }
+      setMusicPicker(null);
+    },
+    [backendUserId, backendUsername, musicPicker, sendStructured, toggleTrackReaction]
+  );
+
+  const handlePickAlbum = useCallback(
+    (album: AlbumPayload) => {
+      if (!backendUserId) return;
+      sendStructured(
+        {
+          messageType: "ALBUM",
+          contentLabel: `💿 ${album.title} — ${album.artist}`,
+          payload: album as unknown as Record<string, unknown>,
+        },
+        backendUserId,
+        backendUsername ?? "me"
+      );
+      setMusicPicker(null);
+    },
+    [backendUserId, backendUsername, sendStructured]
+  );
+
   const attachments = useMemo<AttachmentAction[]>(
     () => [
       {
@@ -315,6 +363,12 @@ export default function ConversationPage() {
         label: "Voice note",
         icon: <Mic className="w-5 h-5" />,
         onClick: () => setVoiceOpen(true),
+      },
+      {
+        key: "music",
+        label: "Music",
+        icon: <Music className="w-5 h-5" />,
+        onClick: () => setMusicPicker({ mode: "share" }),
       },
     ],
     []
@@ -422,6 +476,16 @@ export default function ConversationPage() {
 
       {voiceOpen && (
         <VoiceRecorderModal onClose={() => setVoiceOpen(false)} onSend={handleSendVoice} />
+      )}
+
+      {musicPicker && (
+        <MusicPickerModal
+          title={musicPicker.mode === "reaction" ? "React with a song" : "Share music"}
+          previewOnly={musicPicker.mode === "reaction"}
+          onClose={() => setMusicPicker(null)}
+          onPickTrack={handlePickTrack}
+          onPickAlbum={musicPicker.mode === "share" ? handlePickAlbum : undefined}
+        />
       )}
 
       {/* Pinned messages */}
