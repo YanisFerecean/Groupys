@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
 import { Message } from "@/types/chat";
 import { ImageMessage } from "./ImageMessage";
+import { VoiceMessage } from "./VoiceMessage";
 
 /**
  * Result of rendering a message's *content* (the bit inside the bubble column).
@@ -25,7 +26,7 @@ function TextContent({ message }: { message: Message }) {
 }
 
 /** Renders the type-specific body of a message. Card renderers are added per-feature. */
-export function renderMessageContent(message: Message, _ctx: RenderCtx): RenderResult {
+export function renderMessageContent(message: Message, ctx: RenderCtx): RenderResult {
   const type = (message.messageType || "TEXT").toUpperCase();
 
   switch (type) {
@@ -36,7 +37,10 @@ export function renderMessageContent(message: Message, _ctx: RenderCtx): RenderR
     case "IMAGE":
       return { node: <ImageMessage message={message} />, bare: true };
 
-    // Voice / music card renderers are registered in their own phases.
+    case "VOICE":
+      return { node: <VoiceMessage message={message} isMine={ctx.isMine} />, bare: true };
+
+    // Music card renderers are registered in their own phases.
 
     default:
       // Unknown / not-yet-supported type: fall back to the text label so the

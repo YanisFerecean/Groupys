@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { Bell, ChevronLeft, Info, Lock, Check, X, Search, ImageIcon } from "lucide-react";
+import { Bell, ChevronLeft, Info, Lock, Check, X, Search, ImageIcon, Mic } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { toast } from "sonner";
 import { useUserStore } from "@/store/userStore";
@@ -15,6 +15,7 @@ import { usePins } from "@/hooks/usePins";
 import { MessageThread } from "@/components/chat/MessageThread";
 import { MessageInput, AttachmentAction } from "@/components/chat/MessageInput";
 import { MessageSearch } from "@/components/chat/MessageSearch";
+import { VoiceRecorderModal } from "@/components/chat/VoiceRecorderModal";
 import { PinnedMessageBar } from "@/components/chat/PinnedMessageBar";
 import { MessageActionHandlers } from "@/components/chat/MessageActions";
 import { usePresence } from "@/hooks/usePresence";
@@ -271,6 +272,36 @@ export default function ConversationPage() {
     [backendUserId, backendUsername, getToken, sendStructured]
   );
 
+  // ── Voice memos ────────────────────────────────────────────────────────────
+  const [voiceOpen, setVoiceOpen] = useState(false);
+
+  const handleSendVoice = useCallback(
+    (blob: Blob, durationMs: number, peaks: number[]) => {
+      if (!backendUserId) return;
+      const send = (async () => {
+        const token = await getToken();
+        const file = new File([blob], "voice.webm", { type: blob.type || "audio/webm" });
+        const { url } = await uploadMedia(file, token);
+        await sendStructured(
+          {
+            messageType: "VOICE",
+            contentLabel: "🎙 Voice message",
+            mediaUrl: url,
+            payload: { type: "VOICE", durationMs, peaks },
+          },
+          backendUserId,
+          backendUsername ?? "me"
+        );
+      })();
+      toast.promise(send, {
+        loading: "Sending voice note…",
+        success: "Voice note sent",
+        error: "Couldn't send voice note",
+      });
+    },
+    [backendUserId, backendUsername, getToken, sendStructured]
+  );
+
   const attachments = useMemo<AttachmentAction[]>(
     () => [
       {
@@ -278,6 +309,12 @@ export default function ConversationPage() {
         label: "Photo",
         icon: <ImageIcon className="w-5 h-5" />,
         onClick: () => photoInputRef.current?.click(),
+      },
+      {
+        key: "voice",
+        label: "Voice note",
+        icon: <Mic className="w-5 h-5" />,
+        onClick: () => setVoiceOpen(true),
       },
     ],
     []
@@ -382,6 +419,10 @@ export default function ConversationPage() {
         className="hidden"
         onChange={handlePhotoSelected}
       />
+
+      {voiceOpen && (
+        <VoiceRecorderModal onClose={() => setVoiceOpen(false)} onSend={handleSendVoice} />
+      )}
 
       {/* Pinned messages */}
       <PinnedMessageBar pins={pins} onJump={scrollToMessage} onUnpin={unpin} />
