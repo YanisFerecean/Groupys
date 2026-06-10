@@ -4,7 +4,23 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { Bell, ChevronLeft, Info, Lock, Check, X, Search, ImageIcon, Mic, Music } from "lucide-react";
+import {
+  Bell,
+  ChevronLeft,
+  Info,
+  Lock,
+  Check,
+  X,
+  Search,
+  ImageIcon,
+  Mic,
+  Music,
+  Disc3,
+  Heart,
+  Quote,
+  Clock,
+  HelpCircle,
+} from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { toast } from "sonner";
 import { useUserStore } from "@/store/userStore";
@@ -17,6 +33,9 @@ import { MessageInput, AttachmentAction } from "@/components/chat/MessageInput";
 import { MessageSearch } from "@/components/chat/MessageSearch";
 import { VoiceRecorderModal } from "@/components/chat/VoiceRecorderModal";
 import { MusicPickerModal } from "@/components/music/MusicPickerModal";
+import { MusicAttachSheet } from "@/components/music/MusicAttachSheet";
+import { MusicDetailModal, ComposeKind, ComposeResult } from "@/components/music/MusicDetailModal";
+import { toTrackRef } from "@/lib/trackRef";
 import { PinnedMessageBar } from "@/components/chat/PinnedMessageBar";
 import { MessageActionHandlers } from "@/components/chat/MessageActions";
 import { NowPlayingPill } from "@/components/chat/NowPlayingPill";
@@ -314,18 +333,45 @@ export default function ConversationPage() {
     [backendUserId, backendUsername, getToken, sendStructured]
   );
 
-  // ── Music sharing / reactions ──────────────────────────────────────────────
-  // `musicPicker` holds why the picker is open: to share into the chat, or to
-  // attach a track reaction to a specific message.
-  const [musicPicker, setMusicPicker] = useState<{ mode: "share" | "reaction"; message?: Message } | null>(
-    null
-  );
+  // ── Music sharing / reactions / composition ────────────────────────────────
+  // `musicPicker` holds why the picker is open: share a card, attach a track
+  // reaction, or pick a track to compose a richer card (dedication/lyric/…).
+  type PickerState =
+    | { mode: "share" }
+    | { mode: "reaction"; message: Message }
+    | { mode: "compose"; kind: ComposeKind | "blind" };
+  const [musicSheetOpen, setMusicSheetOpen] = useState(false);
+  const [musicPicker, setMusicPicker] = useState<PickerState | null>(null);
+  const [detail, setDetail] = useState<{ kind: ComposeKind; track: TrackPayload } | null>(null);
 
   const handlePickTrack = useCallback(
     (track: TrackPayload) => {
       if (!backendUserId) return;
-      if (musicPicker?.mode === "reaction" && musicPicker.message) {
-        toggleTrackReaction(musicPicker.message.id, track, backendUserId);
+      const picker = musicPicker;
+      setMusicPicker(null);
+      if (!picker) return;
+
+      if (picker.mode === "reaction") {
+        toggleTrackReaction(picker.message.id, track, backendUserId);
+      } else if (picker.mode === "compose") {
+        if (picker.kind === "blind") {
+          sendStructured(
+            {
+              messageType: "BLIND_LISTEN",
+              contentLabel: "🙈 Guess the song",
+              payload: {
+                type: "BLIND_LISTEN",
+                track: toTrackRef(track) as unknown as Record<string, unknown>,
+                hidden: true,
+                guessed: false,
+              },
+            },
+            backendUserId,
+            backendUsername ?? "me"
+          );
+        } else {
+          setDetail({ kind: picker.kind, track });
+        }
       } else {
         sendStructured(
           {
@@ -337,9 +383,21 @@ export default function ConversationPage() {
           backendUsername ?? "me"
         );
       }
-      setMusicPicker(null);
     },
     [backendUserId, backendUsername, musicPicker, sendStructured, toggleTrackReaction]
+  );
+
+  const handleComposeSubmit = useCallback(
+    (result: ComposeResult) => {
+      if (!backendUserId) return;
+      sendStructured(
+        { messageType: result.messageType, contentLabel: result.label, payload: result.payload },
+        backendUserId,
+        backendUsername ?? "me"
+      );
+      setDetail(null);
+    },
+    [backendUserId, backendUsername, sendStructured]
   );
 
   const handlePickAlbum = useCallback(
@@ -377,7 +435,43 @@ export default function ConversationPage() {
         key: "music",
         label: "Music",
         icon: <Music className="w-5 h-5" />,
+        onClick: () => setMusicSheetOpen(true),
+      },
+    ],
+    []
+  );
+
+  const musicActions = useMemo<AttachmentAction[]>(
+    () => [
+      {
+        key: "song",
+        label: "Share song / album",
+        icon: <Disc3 className="w-6 h-6" />,
         onClick: () => setMusicPicker({ mode: "share" }),
+      },
+      {
+        key: "dedication",
+        label: "Dedication",
+        icon: <Heart className="w-6 h-6" />,
+        onClick: () => setMusicPicker({ mode: "compose", kind: "dedication" }),
+      },
+      {
+        key: "lyric",
+        label: "Lyrics",
+        icon: <Quote className="w-6 h-6" />,
+        onClick: () => setMusicPicker({ mode: "compose", kind: "lyric" }),
+      },
+      {
+        key: "timestamp",
+        label: "A moment",
+        icon: <Clock className="w-6 h-6" />,
+        onClick: () => setMusicPicker({ mode: "compose", kind: "timestamp" }),
+      },
+      {
+        key: "blind",
+        label: "Guess the song",
+        icon: <HelpCircle className="w-6 h-6" />,
+        onClick: () => setMusicPicker({ mode: "compose", kind: "blind" }),
       },
     ],
     []
@@ -492,13 +586,32 @@ export default function ConversationPage() {
         <VoiceRecorderModal onClose={() => setVoiceOpen(false)} onSend={handleSendVoice} />
       )}
 
+      {musicSheetOpen && (
+        <MusicAttachSheet actions={musicActions} onClose={() => setMusicSheetOpen(false)} />
+      )}
+
       {musicPicker && (
         <MusicPickerModal
-          title={musicPicker.mode === "reaction" ? "React with a song" : "Share music"}
+          title={
+            musicPicker.mode === "reaction"
+              ? "React with a song"
+              : musicPicker.mode === "compose"
+              ? "Pick a song"
+              : "Share music"
+          }
           previewOnly={musicPicker.mode === "reaction"}
           onClose={() => setMusicPicker(null)}
           onPickTrack={handlePickTrack}
           onPickAlbum={musicPicker.mode === "share" ? handlePickAlbum : undefined}
+        />
+      )}
+
+      {detail && (
+        <MusicDetailModal
+          kind={detail.kind}
+          track={detail.track}
+          onClose={() => setDetail(null)}
+          onSubmit={handleComposeSubmit}
         />
       )}
 

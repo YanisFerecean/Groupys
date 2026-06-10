@@ -1,10 +1,21 @@
 import { ReactNode } from "react";
-import { Message, isAlbumPayload, isPlaylistPayload, isTrackPayload } from "@/types/chat";
+import {
+  Message,
+  isAlbumPayload,
+  isDedicationPayload,
+  isLyricPayload,
+  isPlaylistPayload,
+  isTimestampPayload,
+  isTrackPayload,
+} from "@/types/chat";
 import { ImageMessage } from "./ImageMessage";
 import { VoiceMessage } from "./VoiceMessage";
 import { TrackCard } from "@/components/music/TrackCard";
 import { AlbumCard } from "@/components/music/AlbumCard";
 import { PlaylistCard } from "@/components/music/PlaylistCard";
+import { DedicationCard } from "@/components/music/DedicationCard";
+import { LyricCard } from "@/components/music/LyricCard";
+import { TimestampCard } from "@/components/music/TimestampCard";
 
 /**
  * Result of rendering a message's *content* (the bit inside the bubble column).
@@ -70,6 +81,24 @@ export function renderMessageContent(message: Message, ctx: RenderCtx): RenderRe
           ),
           bare: true,
         };
+      }
+      break;
+
+    case "DEDICATION":
+      if (isDedicationPayload(message.payload)) {
+        return { node: <DedicationCard payload={message.payload} />, bare: true };
+      }
+      break;
+
+    case "LYRIC":
+      if (isLyricPayload(message.payload)) {
+        return { node: <LyricCard payload={message.payload} />, bare: true };
+      }
+      break;
+
+    case "TIMESTAMP":
+      if (isTimestampPayload(message.payload)) {
+        return { node: <TimestampCard payload={message.payload} />, bare: true };
       }
       break;
   }
