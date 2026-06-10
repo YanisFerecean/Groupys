@@ -21,6 +21,7 @@ import {
   Clock,
   HelpCircle,
   ListMusic,
+  Radio,
 } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { toast } from "sonner";
@@ -40,8 +41,10 @@ import { toTrackRef } from "@/lib/trackRef";
 import { PinnedMessageBar } from "@/components/chat/PinnedMessageBar";
 import { MessageActionHandlers } from "@/components/chat/MessageActions";
 import { NowPlayingPill } from "@/components/chat/NowPlayingPill";
+import { ListenTogetherBar } from "@/components/chat/ListenTogetherBar";
 import { usePresence } from "@/hooks/usePresence";
 import { useNowPlaying } from "@/hooks/useNowPlaying";
+import { useListenTogether } from "@/hooks/useListenTogether";
 import { useCrypto } from "@/hooks/useCrypto";
 import { chatWs } from "@/lib/ws";
 import { fetchPublicKey, uploadMedia } from "@/lib/chat-api";
@@ -214,6 +217,10 @@ export default function ConversationPage() {
   }, [conversation, backendUserId]);
 
   const { partnerNowPlaying } = useNowPlaying(otherUserId);
+  const { room, startRoom, togglePlay, joinRoom, leaveRoom } = useListenTogether(
+    conversationId,
+    backendUserId
+  );
 
   // Compute "last seen X ago" outside render to avoid Date.now() purity violation
   const [lastSeenText, setLastSeenText] = useState<string | null>(null);
@@ -341,7 +348,8 @@ export default function ConversationPage() {
     | { mode: "share" }
     | { mode: "reaction"; message: Message }
     | { mode: "compose"; kind: ComposeKind | "blind" }
-    | { mode: "collab" };
+    | { mode: "collab" }
+    | { mode: "listen" };
   const [musicSheetOpen, setMusicSheetOpen] = useState(false);
   const [musicPicker, setMusicPicker] = useState<PickerState | null>(null);
   const [detail, setDetail] = useState<{ kind: ComposeKind; track: TrackPayload } | null>(null);
@@ -357,6 +365,9 @@ export default function ConversationPage() {
         toggleTrackReaction(picker.message.id, track, backendUserId);
       } else if (picker.mode === "collab") {
         if (conversationId) chatWs.send({ type: "COLLAB_PLAYLIST_ADD", conversationId, track });
+      } else if (picker.mode === "listen") {
+        if (track.previewUrl) startRoom(track);
+        else toast.error("This track has no preview to listen together");
       } else if (picker.mode === "compose") {
         if (picker.kind === "blind") {
           sendStructured(
@@ -388,7 +399,7 @@ export default function ConversationPage() {
         );
       }
     },
-    [backendUserId, backendUsername, conversationId, musicPicker, sendStructured, toggleTrackReaction]
+    [backendUserId, backendUsername, conversationId, musicPicker, sendStructured, toggleTrackReaction, startRoom]
   );
 
   const handleComposeSubmit = useCallback(
@@ -493,6 +504,12 @@ export default function ConversationPage() {
         label: "Collab playlist",
         icon: <ListMusic className="w-6 h-6" />,
         onClick: () => setMusicPicker({ mode: "collab" }),
+      },
+      {
+        key: "listen",
+        label: "Listen together",
+        icon: <Radio className="w-6 h-6" />,
+        onClick: () => setMusicPicker({ mode: "listen" }),
       },
     ],
     []
@@ -618,11 +635,13 @@ export default function ConversationPage() {
               ? "React with a song"
               : musicPicker.mode === "collab"
               ? "Add to playlist"
+              : musicPicker.mode === "listen"
+              ? "Start listening together"
               : musicPicker.mode === "compose"
               ? "Pick a song"
               : "Share music"
           }
-          previewOnly={musicPicker.mode === "reaction"}
+          previewOnly={musicPicker.mode === "reaction" || musicPicker.mode === "listen"}
           onClose={() => setMusicPicker(null)}
           onPickTrack={handlePickTrack}
           onPickAlbum={musicPicker.mode === "share" ? handlePickAlbum : undefined}
@@ -637,6 +656,9 @@ export default function ConversationPage() {
           onSubmit={handleComposeSubmit}
         />
       )}
+
+      {/* Listen Together session */}
+      <ListenTogetherBar room={room} onToggle={togglePlay} onJoin={joinRoom} onLeave={leaveRoom} />
 
       {/* Pinned messages */}
       <PinnedMessageBar pins={pins} onJump={scrollToMessage} onUnpin={unpin} />
