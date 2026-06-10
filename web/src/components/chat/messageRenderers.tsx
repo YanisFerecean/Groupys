@@ -3,6 +3,7 @@ import {
   Message,
   isAlbumPayload,
   isBlindListenPayload,
+  isCollabPlaylistPayload,
   isDedicationPayload,
   isLyricPayload,
   isPlaylistPayload,
@@ -18,6 +19,7 @@ import { DedicationCard } from "@/components/music/DedicationCard";
 import { LyricCard } from "@/components/music/LyricCard";
 import { TimestampCard } from "@/components/music/TimestampCard";
 import { BlindListenCard } from "@/components/music/BlindListenCard";
+import { CollabPlaylistCard } from "@/components/music/CollabPlaylistCard";
 
 /**
  * Result of rendering a message's *content* (the bit inside the bubble column).
@@ -119,6 +121,20 @@ export function renderMessageContent(message: Message, ctx: RenderCtx): RenderRe
               payload={message.payload}
               isMine={ctx.isMine}
               onGuess={ctx.onBlindGuess}
+            />
+          ),
+          bare: true,
+        };
+      }
+      break;
+
+    case "COLLAB_PLAYLIST":
+      if (isCollabPlaylistPayload(message.payload)) {
+        return {
+          node: (
+            <CollabPlaylistCard
+              payload={message.payload}
+              onAdd={ctx.onCollabAdd ? () => ctx.onCollabAdd!(message.id) : undefined}
             />
           ),
           bare: true,

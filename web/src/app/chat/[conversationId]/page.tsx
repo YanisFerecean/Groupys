@@ -20,6 +20,7 @@ import {
   Quote,
   Clock,
   HelpCircle,
+  ListMusic,
 } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { toast } from "sonner";
@@ -339,7 +340,8 @@ export default function ConversationPage() {
   type PickerState =
     | { mode: "share" }
     | { mode: "reaction"; message: Message }
-    | { mode: "compose"; kind: ComposeKind | "blind" };
+    | { mode: "compose"; kind: ComposeKind | "blind" }
+    | { mode: "collab" };
   const [musicSheetOpen, setMusicSheetOpen] = useState(false);
   const [musicPicker, setMusicPicker] = useState<PickerState | null>(null);
   const [detail, setDetail] = useState<{ kind: ComposeKind; track: TrackPayload } | null>(null);
@@ -353,6 +355,8 @@ export default function ConversationPage() {
 
       if (picker.mode === "reaction") {
         toggleTrackReaction(picker.message.id, track, backendUserId);
+      } else if (picker.mode === "collab") {
+        if (conversationId) chatWs.send({ type: "COLLAB_PLAYLIST_ADD", conversationId, track });
       } else if (picker.mode === "compose") {
         if (picker.kind === "blind") {
           sendStructured(
@@ -384,7 +388,7 @@ export default function ConversationPage() {
         );
       }
     },
-    [backendUserId, backendUsername, musicPicker, sendStructured, toggleTrackReaction]
+    [backendUserId, backendUsername, conversationId, musicPicker, sendStructured, toggleTrackReaction]
   );
 
   const handleComposeSubmit = useCallback(
@@ -406,6 +410,7 @@ export default function ConversationPage() {
     () => ({
       onBlindGuess: (messageId: string, guess: string) =>
         chatWs.send({ type: "BLIND_GUESS", messageId, guess }),
+      onCollabAdd: () => setMusicPicker({ mode: "collab" }),
     }),
     []
   );
@@ -482,6 +487,12 @@ export default function ConversationPage() {
         label: "Guess the song",
         icon: <HelpCircle className="w-6 h-6" />,
         onClick: () => setMusicPicker({ mode: "compose", kind: "blind" }),
+      },
+      {
+        key: "collab",
+        label: "Collab playlist",
+        icon: <ListMusic className="w-6 h-6" />,
+        onClick: () => setMusicPicker({ mode: "collab" }),
       },
     ],
     []
@@ -605,6 +616,8 @@ export default function ConversationPage() {
           title={
             musicPicker.mode === "reaction"
               ? "React with a song"
+              : musicPicker.mode === "collab"
+              ? "Add to playlist"
               : musicPicker.mode === "compose"
               ? "Pick a song"
               : "Share music"
