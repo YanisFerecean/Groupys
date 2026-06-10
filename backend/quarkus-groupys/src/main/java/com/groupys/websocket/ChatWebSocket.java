@@ -667,7 +667,7 @@ public class ChatWebSocket {
         UUID conversationId = parseConversationId(null, msg);
         if (conversationId == null || !isParticipant(conversationId, user)) return;
 
-        Map<String, Object> track = (msg.get("track") instanceof Map<?, ?> raw) ? sanitizeTrack(raw) : null;
+        Map<String, Object> track = (msg.get("track") instanceof Map<?, ?> raw) ? sanitizeRoomTrack(raw) : null;
         long positionMs = toLong(msg.get("positionMs"));
         boolean isPlaying = Boolean.TRUE.equals(msg.get("isPlaying"));
 
@@ -911,6 +911,18 @@ public class ChatWebSocket {
         track.put("artist", sanitizeForHtml(asString(raw.get("artist"))));
         track.put("album", sanitizeForHtml(asString(raw.get("album"))));
         track.put("artworkUrl", asString(raw.get("artworkUrl")));
+        return track;
+    }
+
+    /**
+     * Room track sanitizer: same fields as {@link #sanitizeTrack}, but preserves {@code previewUrl}.
+     * Followers gate playback on the preview URL, so dropping it (as now-playing does) leaves every
+     * non-host silent — they receive ROOM_STATE but have no audio source to sync to.
+     */
+    private Map<String, Object> sanitizeRoomTrack(Map<?, ?> raw) {
+        Map<String, Object> track = sanitizeTrack(raw);
+        if (track == null) return null;
+        track.put("previewUrl", asString(raw.get("previewUrl")));
         return track;
     }
 

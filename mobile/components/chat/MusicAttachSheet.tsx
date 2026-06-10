@@ -1,7 +1,8 @@
 import { BlurView } from 'expo-blur'
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import { Ionicons } from '@expo/vector-icons'
-import { Alert, Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native'
+import { useRef } from 'react'
+import { Alert, Modal, Platform, ScrollView, Text, TouchableOpacity, View } from 'react-native'
 
 import { Colors } from '@/constants/colors'
 
@@ -64,17 +65,34 @@ export function MusicAttachSheet({
     { icon: 'calendar' as IconName, label: 'Schedule a listening party', onPress: onListeningParty },
   ].filter(row => !!row.onPress)
 
+  // Actions that present a native view controller (image picker, etc.) cannot be launched while
+  // this modal is still animating out — iOS silently drops the presentation. Defer to onDismiss so
+  // the action runs only after the sheet is fully gone. (Android has no onDismiss and isn't affected,
+  // so it fires the action immediately.)
+  const pendingAction = useRef<(() => void) | null>(null)
+
   const handleRowPress = (row: { onPress?: () => void; disabled?: boolean; sublabel?: string; label: string }) => {
     if (row.disabled) {
       Alert.alert(row.label, row.sublabel ?? 'This is not available right now.')
+      return
+    }
+    if (Platform.OS === 'ios') {
+      pendingAction.current = row.onPress ?? null
+      onClose()
       return
     }
     onClose()
     row.onPress?.()
   }
 
+  const handleDismiss = () => {
+    const action = pendingAction.current
+    pendingAction.current = null
+    action?.()
+  }
+
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} onDismiss={handleDismiss}>
       <View className="flex-1 justify-end">
         <BlurView tint="dark" intensity={40} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
         <TouchableOpacity
