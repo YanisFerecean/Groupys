@@ -55,3 +55,14 @@ export function messagePreview(input: Pick<Message, "messageType" | "content"> |
   const label = (snippet || "").trim() || TYPE_LABEL[type] || "Message";
   return icon ? `${icon} ${label}` : label;
 }
+
+/** Builds a lightweight reply reference from a full message (for optimistic sends). */
+export function messageToReplyStub(m: Message): ReplyStub {
+  return {
+    id: m.id,
+    senderUsername: m.senderUsername,
+    senderDisplayName: m.senderDisplayName,
+    messageType: m.messageType,
+    snippet: messagePreview(m),
+  };
+}

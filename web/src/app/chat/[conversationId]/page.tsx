@@ -6,16 +6,22 @@ import Link from "next/link";
 import Image from "next/image";
 import { Bell, ChevronLeft, Info, Lock, Check, X } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
+import { toast } from "sonner";
 import { useUserStore } from "@/store/userStore";
 import { useMessages } from "@/hooks/useMessages";
 import { Message } from "@/types/chat";
 import { useConversations } from "@/hooks/useConversations";
+import { usePins } from "@/hooks/usePins";
 import { MessageThread } from "@/components/chat/MessageThread";
 import { MessageInput } from "@/components/chat/MessageInput";
+import { PinnedMessageBar } from "@/components/chat/PinnedMessageBar";
+import { MessageActionHandlers } from "@/components/chat/MessageActions";
 import { usePresence } from "@/hooks/usePresence";
 import { useCrypto } from "@/hooks/useCrypto";
 import { chatWs } from "@/lib/ws";
 import { fetchPublicKey } from "@/lib/chat-api";
+import { messageToReplyStub } from "@/lib/messagePreview";
+import { scrollToMessage } from "@/lib/scrollToMessage";
 
 export default function ConversationPage() {
   const params = useParams();
@@ -62,11 +68,25 @@ export default function ConversationPage() {
 
   const isInitialLoadRef = useRef(true);
 
-  const { messages, isLoading, hasMore, loadMore, sendMessage, resendMessage, rateLimitError, isDecrypting } = useMessages(
-    conversationId,
-    decryptFn,
-    encryptFn
-  );
+  const {
+    messages,
+    isLoading,
+    hasMore,
+    loadMore,
+    sendMessage,
+    resendMessage,
+    editMessage,
+    deleteMessage,
+    toggleReaction,
+    rateLimitError,
+    isDecrypting,
+  } = useMessages(conversationId, decryptFn, encryptFn);
+
+  const { pins, togglePin, unpin, isPinned } = usePins(conversationId, decryptFn);
+
+  // Reply / edit composer state
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [editingMessage, setEditingMessage] = useState<Message | null>(null);
 
   useEffect(() => {
     if (!isLoading) isInitialLoadRef.current = false;
@@ -179,8 +199,42 @@ export default function ConversationPage() {
 
   const handleSend = useCallback((content: string) => {
     if (!backendUserId) return;
-    sendMessage(content, backendUserId, backendUsername ?? "me");
-  }, [backendUserId, backendUsername, sendMessage]);
+    const reply = replyingTo
+      ? { replyToId: replyingTo.id, replyTo: messageToReplyStub(replyingTo) }
+      : undefined;
+    sendMessage(content, backendUserId, backendUsername ?? "me", reply);
+    setReplyingTo(null);
+  }, [backendUserId, backendUsername, sendMessage, replyingTo]);
+
+  const handleSubmitEdit = useCallback((content: string) => {
+    if (editingMessage) editMessage(editingMessage.id, content);
+    setEditingMessage(null);
+  }, [editingMessage, editMessage]);
+
+  // Per-message actions surfaced by the hover toolbar.
+  const actions = useMemo<MessageActionHandlers | undefined>(() => {
+    if (!backendUserId) return undefined;
+    return {
+      onReply: (m) => {
+        setEditingMessage(null);
+        setReplyingTo(m);
+      },
+      onReactEmoji: (m, emoji) => toggleReaction(m.id, emoji, backendUserId),
+      onEdit: (m) => {
+        setReplyingTo(null);
+        setEditingMessage(m);
+      },
+      onDelete: (m) => deleteMessage(m.id),
+      onPin: (m) => togglePin(m.id),
+      onCopy: (m) => {
+        navigator.clipboard
+          .writeText(m.content)
+          .then(() => toast.success("Copied to clipboard"))
+          .catch(() => toast.error("Couldn't copy"));
+      },
+      isPinned,
+    };
+  }, [backendUserId, toggleReaction, deleteMessage, togglePin, isPinned]);
 
   const handleLoadMore = useCallback(() => {
     const nextPage = Math.floor(messages.length / 30);
@@ -253,6 +307,9 @@ export default function ConversationPage() {
         </button>
       </div>
 
+      {/* Pinned messages */}
+      <PinnedMessageBar pins={pins} onJump={scrollToMessage} onUnpin={unpin} />
+
       {/* Messages */}
       <MessageThread
         conversationId={conversationId || ""}
@@ -265,6 +322,8 @@ export default function ConversationPage() {
         myLastReadAt={myLastReadAt}
         onLoadMore={handleLoadMore}
         onRetry={handleRetry}
+        actions={actions}
+        onJumpToReply={scrollToMessage}
       />
 
       {/* Input / Request banner */}
@@ -306,6 +365,11 @@ export default function ConversationPage() {
           conversationId={conversationId || ""}
           onSend={handleSend}
           rateLimitError={rateLimitError}
+          replyingTo={replyingTo}
+          onCancelReply={() => setReplyingTo(null)}
+          editing={editingMessage}
+          onSubmitEdit={handleSubmitEdit}
+          onCancelEdit={() => setEditingMessage(null)}
         />
       )}
     </div>

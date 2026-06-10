@@ -5,6 +5,7 @@ import { Message } from "@/types/chat";
 import { renderMessageContent } from "./messageRenderers";
 import { ReplyQuote } from "./ReplyQuote";
 import { MessageReactions } from "./MessageReactions";
+import { MessageActions, MessageActionHandlers } from "./MessageActions";
 
 const timeFormatter = new Intl.DateTimeFormat("en-US", {
   hour: "numeric",
@@ -18,7 +19,7 @@ interface MessageBubbleProps {
   isLastInGroup?: boolean;
   myUserId?: string;
   onRetry?: () => void;
-  onToggleEmoji?: (emoji: string) => void;
+  actions?: MessageActionHandlers;
   onJumpToReply?: (messageId: string) => void;
 }
 
@@ -29,7 +30,7 @@ export const MessageBubble = memo(function MessageBubble({
   isLastInGroup = true,
   myUserId,
   onRetry,
-  onToggleEmoji,
+  actions,
   onJumpToReply,
 }: MessageBubbleProps) {
   const time = timeFormatter.format(new Date(message.createdAt));
@@ -76,37 +77,49 @@ export const MessageBubble = memo(function MessageBubble({
           </div>
         )}
 
-        <motion.div
-          initial={justConfirmed ? { scale: 0.95, opacity: 0.7 } : false}
-          animate={isSending ? { opacity: [0.55, 0.85, 0.55], scale: 1 } : { scale: 1, opacity: 1 }}
-          transition={
-            isSending
-              ? { repeat: Infinity, duration: 1.4, ease: "easeInOut" }
-              : justConfirmed
-              ? { type: "spring", stiffness: 400, damping: 20 }
-              : { duration: 0.15 }
-          }
-          className={
-            bare
-              ? "w-fit max-w-full"
-              : `px-4 py-2.5 rounded-3xl w-fit max-w-full ${
-                  isMine
-                    ? isFailed
-                      ? "bg-error/90 text-on-error rounded-br-sm"
-                      : "bg-primary text-on-primary rounded-br-sm"
-                    : "bg-surface-container-high text-on-surface rounded-bl-sm shadow-sm"
-                }`
-          }
-        >
-          {node}
-        </motion.div>
+        <div className="relative w-fit max-w-full group/bubble">
+          <motion.div
+            initial={justConfirmed ? { scale: 0.95, opacity: 0.7 } : false}
+            animate={isSending ? { opacity: [0.55, 0.85, 0.55], scale: 1 } : { scale: 1, opacity: 1 }}
+            transition={
+              isSending
+                ? { repeat: Infinity, duration: 1.4, ease: "easeInOut" }
+                : justConfirmed
+                ? { type: "spring", stiffness: 400, damping: 20 }
+                : { duration: 0.15 }
+            }
+            className={
+              bare
+                ? "w-fit max-w-full"
+                : `px-4 py-2.5 rounded-3xl w-fit max-w-full ${
+                    isMine
+                      ? isFailed
+                        ? "bg-error/90 text-on-error rounded-br-sm"
+                        : "bg-primary text-on-primary rounded-br-sm"
+                      : "bg-surface-container-high text-on-surface rounded-bl-sm shadow-sm"
+                  }`
+            }
+          >
+            {node}
+          </motion.div>
+
+          {actions && !isSending && (
+            <div
+              className={`absolute top-1/2 -translate-y-1/2 z-10 opacity-0 group-hover/bubble:opacity-100 focus-within:opacity-100 transition-opacity ${
+                isMine ? "left-0 -translate-x-[calc(100%+6px)]" : "right-0 translate-x-[calc(100%+6px)]"
+              }`}
+            >
+              <MessageActions message={message} isMine={isMine} actions={actions} />
+            </div>
+          )}
+        </div>
 
         {message.reactions && message.reactions.length > 0 && (
           <MessageReactions
             reactions={message.reactions}
             myUserId={myUserId}
             isMine={isMine}
-            onToggleEmoji={onToggleEmoji}
+            onToggleEmoji={actions ? (emoji) => actions.onReactEmoji(message, emoji) : undefined}
           />
         )}
 
