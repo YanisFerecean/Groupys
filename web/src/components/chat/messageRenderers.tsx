@@ -2,6 +2,7 @@ import { ReactNode } from "react";
 import {
   Message,
   isAlbumPayload,
+  isBlindListenPayload,
   isDedicationPayload,
   isLyricPayload,
   isPlaylistPayload,
@@ -16,6 +17,7 @@ import { PlaylistCard } from "@/components/music/PlaylistCard";
 import { DedicationCard } from "@/components/music/DedicationCard";
 import { LyricCard } from "@/components/music/LyricCard";
 import { TimestampCard } from "@/components/music/TimestampCard";
+import { BlindListenCard } from "@/components/music/BlindListenCard";
 
 /**
  * Result of rendering a message's *content* (the bit inside the bubble column).
@@ -29,7 +31,13 @@ export interface RenderResult {
   bare: boolean;
 }
 
-interface RenderCtx {
+/** Callbacks interactive cards (blind-listen, collab playlist, …) can invoke. */
+export interface MessageCardHandlers {
+  onBlindGuess?: (messageId: string, guess: string) => void;
+  onCollabAdd?: (messageId: string) => void;
+}
+
+interface RenderCtx extends MessageCardHandlers {
   isMine: boolean;
 }
 
@@ -99,6 +107,22 @@ export function renderMessageContent(message: Message, ctx: RenderCtx): RenderRe
     case "TIMESTAMP":
       if (isTimestampPayload(message.payload)) {
         return { node: <TimestampCard payload={message.payload} />, bare: true };
+      }
+      break;
+
+    case "BLIND_LISTEN":
+      if (isBlindListenPayload(message.payload)) {
+        return {
+          node: (
+            <BlindListenCard
+              messageId={message.id}
+              payload={message.payload}
+              isMine={ctx.isMine}
+              onGuess={ctx.onBlindGuess}
+            />
+          ),
+          bare: true,
+        };
       }
       break;
   }

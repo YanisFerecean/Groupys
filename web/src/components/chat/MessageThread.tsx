@@ -5,6 +5,7 @@ import { TypingIndicator } from "./TypingIndicator";
 import { Message } from "@/types/chat";
 import { useMessageScroll } from "@/hooks/useMessageScroll";
 import { MessageActionHandlers } from "./MessageActions";
+import { MessageCardHandlers } from "./messageRenderers";
 import { scrollToMessage } from "@/lib/scrollToMessage";
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -21,6 +22,7 @@ interface MessageThreadProps {
   myLastReadAt?: string | null;
   onRetry?: (msg: Message) => void;
   actions?: MessageActionHandlers;
+  cardHandlers?: MessageCardHandlers;
   onJumpToReply?: (messageId: string) => void;
 }
 
@@ -36,6 +38,7 @@ export function MessageThread({
   myLastReadAt,
   onRetry,
   actions,
+  cardHandlers,
   onJumpToReply,
 }: MessageThreadProps) {
   const {
@@ -148,6 +151,7 @@ export function MessageThread({
                 isLastInGroup={isLastInGroup(idx)}
                 myUserId={backendUserId ?? undefined}
                 actions={actions}
+                cardHandlers={cardHandlers}
                 onJumpToReply={onJumpToReply ?? scrollToMessage}
                 onRetry={msg.status === "failed" && onRetry ? () => onRetry(msg) : undefined}
               />

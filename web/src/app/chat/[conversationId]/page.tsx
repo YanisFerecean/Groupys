@@ -400,6 +400,16 @@ export default function ConversationPage() {
     [backendUserId, backendUsername, sendStructured]
   );
 
+  // Interactive card callbacks (blind-listen guess, …). The server reveals the
+  // result via MESSAGE_UPDATED, which useMessages already reconciles.
+  const cardHandlers = useMemo(
+    () => ({
+      onBlindGuess: (messageId: string, guess: string) =>
+        chatWs.send({ type: "BLIND_GUESS", messageId, guess }),
+    }),
+    []
+  );
+
   const handlePickAlbum = useCallback(
     (album: AlbumPayload) => {
       if (!backendUserId) return;
@@ -631,6 +641,7 @@ export default function ConversationPage() {
         onLoadMore={handleLoadMore}
         onRetry={handleRetry}
         actions={actions}
+        cardHandlers={cardHandlers}
         onJumpToReply={scrollToMessage}
       />
 

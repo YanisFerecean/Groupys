@@ -2,7 +2,7 @@ import { memo, useState } from "react";
 import { motion } from "framer-motion";
 import { AlertCircle, Check } from "lucide-react";
 import { Message } from "@/types/chat";
-import { renderMessageContent } from "./messageRenderers";
+import { renderMessageContent, MessageCardHandlers } from "./messageRenderers";
 import { ReplyQuote } from "./ReplyQuote";
 import { MessageReactions } from "./MessageReactions";
 import { MessageActions, MessageActionHandlers } from "./MessageActions";
@@ -20,6 +20,7 @@ interface MessageBubbleProps {
   myUserId?: string;
   onRetry?: () => void;
   actions?: MessageActionHandlers;
+  cardHandlers?: MessageCardHandlers;
   onJumpToReply?: (messageId: string) => void;
 }
 
@@ -31,6 +32,7 @@ export const MessageBubble = memo(function MessageBubble({
   myUserId,
   onRetry,
   actions,
+  cardHandlers,
   onJumpToReply,
 }: MessageBubbleProps) {
   const time = timeFormatter.format(new Date(message.createdAt));
@@ -62,7 +64,7 @@ export const MessageBubble = memo(function MessageBubble({
   const hasPendingStatus = isMine && (isSending || isFailed);
   const showFooter = showTime || hasPendingStatus || (message.edited && isLastInGroup);
 
-  const { node, bare } = renderMessageContent(message, { isMine });
+  const { node, bare } = renderMessageContent(message, { isMine, ...cardHandlers });
 
   return (
     <div className={`flex w-full ${isMine ? "justify-end" : "justify-start"} ${isLastInGroup ? "mb-3" : "mb-0.5"}`}>
