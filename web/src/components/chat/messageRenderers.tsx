@@ -1,7 +1,10 @@
 import { ReactNode } from "react";
-import { Message } from "@/types/chat";
+import { Message, isAlbumPayload, isPlaylistPayload, isTrackPayload } from "@/types/chat";
 import { ImageMessage } from "./ImageMessage";
 import { VoiceMessage } from "./VoiceMessage";
+import { TrackCard } from "@/components/music/TrackCard";
+import { AlbumCard } from "@/components/music/AlbumCard";
+import { PlaylistCard } from "@/components/music/PlaylistCard";
 
 /**
  * Result of rendering a message's *content* (the bit inside the bubble column).
@@ -40,12 +43,38 @@ export function renderMessageContent(message: Message, ctx: RenderCtx): RenderRe
     case "VOICE":
       return { node: <VoiceMessage message={message} isMine={ctx.isMine} />, bare: true };
 
-    // Music card renderers are registered in their own phases.
+    case "TRACK":
+      if (isTrackPayload(message.payload)) {
+        return { node: <TrackCard track={message.payload} />, bare: true };
+      }
+      break;
 
-    default:
-      // Unknown / not-yet-supported type: fall back to the text label so the
-      // message is never blank (e.g. an IMAGE before its renderer ships shows
-      // its "Photo" label rather than an empty bubble).
-      return { node: <TextContent message={message} />, bare: false };
+    case "ALBUM":
+      if (isAlbumPayload(message.payload)) {
+        return { node: <AlbumCard album={message.payload} />, bare: true };
+      }
+      break;
+
+    case "PLAYLIST":
+      if (isPlaylistPayload(message.payload)) {
+        return {
+          node: (
+            <PlaylistCard
+              title={message.payload.title}
+              curator={message.payload.curator}
+              artworkUrl={message.payload.artworkUrl}
+              trackCount={message.payload.trackCount}
+              appleMusicUrl={message.payload.appleMusicUrl}
+              previews={message.payload.previews}
+            />
+          ),
+          bare: true,
+        };
+      }
+      break;
   }
+
+  // Unknown / not-yet-supported / malformed-payload type: fall back to the text
+  // label so the message is never blank.
+  return { node: <TextContent message={message} />, bare: false };
 }
