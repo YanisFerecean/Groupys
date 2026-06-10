@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
 import { Message } from "@/types/chat";
+import { ImageMessage } from "./ImageMessage";
 
 /**
  * Result of rendering a message's *content* (the bit inside the bubble column).
@@ -32,7 +33,10 @@ export function renderMessageContent(message: Message, _ctx: RenderCtx): RenderR
     case "SYSTEM":
       return { node: <TextContent message={message} />, bare: false };
 
-    // Image / voice / music card renderers are registered in their own phases.
+    case "IMAGE":
+      return { node: <ImageMessage message={message} />, bare: true };
+
+    // Voice / music card renderers are registered in their own phases.
 
     default:
       // Unknown / not-yet-supported type: fall back to the text label so the

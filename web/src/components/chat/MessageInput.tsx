@@ -1,19 +1,29 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, ReactNode } from "react";
 import dynamic from "next/dynamic";
-import { SendHorizonal, Smile, Check, X } from "lucide-react";
+import { SendHorizonal, Smile, Check, X, Plus } from "lucide-react";
 import { chatWs } from "@/lib/ws";
 import { Message } from "@/types/chat";
 import { messagePreview } from "@/lib/messagePreview";
 
 const EmojiPicker = dynamic(() => import("./EmojiPicker"), { ssr: false });
 
+/** An entry in the composer's "+" attachment menu (photo, voice, music, …). */
+export interface AttachmentAction {
+  key: string;
+  label: string;
+  icon: ReactNode;
+  onClick: () => void;
+}
+
 interface MessageInputProps {
   conversationId: string;
   onSend: (content: string) => void;
   disabled?: boolean;
   rateLimitError?: boolean;
+  /** Items shown in the "+" attachment menu. */
+  attachments?: AttachmentAction[];
   /** Message currently being replied to (shows a reply bar). */
   replyingTo?: Message | null;
   onCancelReply?: () => void;
@@ -28,6 +38,7 @@ export function MessageInput({
   onSend,
   disabled,
   rateLimitError,
+  attachments,
   replyingTo,
   onCancelReply,
   editing,
@@ -36,12 +47,15 @@ export function MessageInput({
 }: MessageInputProps) {
   const [content, setContent] = useState("");
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [attachOpen, setAttachOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const emojiRef = useRef<HTMLDivElement>(null);
+  const attachRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [isTyping, setIsTyping] = useState(false);
 
   const isEditing = !!editing;
+  const showAttach = !!attachments?.length && !isEditing;
 
   // Seed the editor with the message text when an edit begins (render-phase state
   // adjustment — the recommended alternative to setState-in-effect).
@@ -74,6 +88,18 @@ export function MessageInput({
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [emojiOpen]);
+
+  // Close attachment menu on outside click
+  useEffect(() => {
+    if (!attachOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (attachRef.current && !attachRef.current.contains(e.target as Node)) {
+        setAttachOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [attachOpen]);
 
   const insertEmoji = useCallback((emoji: string) => {
     const el = textareaRef.current;
@@ -200,6 +226,41 @@ export function MessageInput({
       )}
 
       <div className="flex items-center gap-2 max-w-4xl mx-auto">
+        {showAttach && (
+          <div ref={attachRef} className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => setAttachOpen((o) => !o)}
+              disabled={disabled}
+              className={`h-11 w-11 rounded-full flex items-center justify-center transition-colors disabled:opacity-50 ${
+                attachOpen
+                  ? "bg-primary/15 text-primary"
+                  : "bg-surface-container text-on-surface-variant hover:text-on-surface"
+              }`}
+              title="Attach"
+            >
+              <Plus className={`w-5 h-5 transition-transform ${attachOpen ? "rotate-45" : ""}`} />
+            </button>
+            {attachOpen && (
+              <div className="absolute bottom-full left-0 mb-2 min-w-48 rounded-2xl bg-surface-container-high border border-surface-container-highest shadow-lg py-1.5 z-20">
+                {attachments!.map((a) => (
+                  <button
+                    key={a.key}
+                    type="button"
+                    onClick={() => {
+                      setAttachOpen(false);
+                      a.onClick();
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-[14px] text-on-surface hover:bg-surface-container-highest transition-colors"
+                  >
+                    <span className="text-on-surface-variant">{a.icon}</span>
+                    {a.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <div
           ref={emojiRef}
           className={`flex-1 relative flex items-center bg-surface-container rounded-full px-4 py-1 gap-1 transition-all ${

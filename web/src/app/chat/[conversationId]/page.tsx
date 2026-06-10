@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { Bell, ChevronLeft, Info, Lock, Check, X, Search } from "lucide-react";
+import { Bell, ChevronLeft, Info, Lock, Check, X, Search, ImageIcon } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { toast } from "sonner";
 import { useUserStore } from "@/store/userStore";
@@ -13,14 +13,15 @@ import { Message } from "@/types/chat";
 import { useConversations } from "@/hooks/useConversations";
 import { usePins } from "@/hooks/usePins";
 import { MessageThread } from "@/components/chat/MessageThread";
-import { MessageInput } from "@/components/chat/MessageInput";
+import { MessageInput, AttachmentAction } from "@/components/chat/MessageInput";
 import { MessageSearch } from "@/components/chat/MessageSearch";
 import { PinnedMessageBar } from "@/components/chat/PinnedMessageBar";
 import { MessageActionHandlers } from "@/components/chat/MessageActions";
 import { usePresence } from "@/hooks/usePresence";
 import { useCrypto } from "@/hooks/useCrypto";
 import { chatWs } from "@/lib/ws";
-import { fetchPublicKey } from "@/lib/chat-api";
+import { fetchPublicKey, uploadMedia } from "@/lib/chat-api";
+import { resizeImage } from "@/lib/imageResize";
 import { messageToReplyStub } from "@/lib/messagePreview";
 import { scrollToMessage } from "@/lib/scrollToMessage";
 
@@ -75,6 +76,7 @@ export default function ConversationPage() {
     hasMore,
     loadMore,
     sendMessage,
+    sendStructured,
     resendMessage,
     editMessage,
     deleteMessage,
@@ -238,6 +240,49 @@ export default function ConversationPage() {
     };
   }, [backendUserId, toggleReaction, deleteMessage, togglePin, isPinned]);
 
+  // ── Photo sharing ──────────────────────────────────────────────────────────
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePhotoSelected = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = ""; // allow re-selecting the same file later
+      if (!file || !backendUserId) return;
+      if (!file.type.startsWith("image/")) {
+        toast.error("Please choose an image file");
+        return;
+      }
+      const send = (async () => {
+        const resized = await resizeImage(file, 1600, 1600, false);
+        const token = await getToken();
+        const { url } = await uploadMedia(resized, token);
+        await sendStructured(
+          { messageType: "IMAGE", contentLabel: "📷 Photo", mediaUrl: url },
+          backendUserId,
+          backendUsername ?? "me"
+        );
+      })();
+      toast.promise(send, {
+        loading: "Sending photo…",
+        success: "Photo sent",
+        error: "Couldn't send photo",
+      });
+    },
+    [backendUserId, backendUsername, getToken, sendStructured]
+  );
+
+  const attachments = useMemo<AttachmentAction[]>(
+    () => [
+      {
+        key: "photo",
+        label: "Photo",
+        icon: <ImageIcon className="w-5 h-5" />,
+        onClick: () => photoInputRef.current?.click(),
+      },
+    ],
+    []
+  );
+
   const handleLoadMore = useCallback(() => {
     const nextPage = Math.floor(messages.length / 30);
     loadMore(nextPage);
@@ -329,6 +374,15 @@ export default function ConversationPage() {
         />
       )}
 
+      {/* Hidden picker for photo attachments */}
+      <input
+        ref={photoInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handlePhotoSelected}
+      />
+
       {/* Pinned messages */}
       <PinnedMessageBar pins={pins} onJump={scrollToMessage} onUnpin={unpin} />
 
@@ -387,6 +441,7 @@ export default function ConversationPage() {
           conversationId={conversationId || ""}
           onSend={handleSend}
           rateLimitError={rateLimitError}
+          attachments={attachments}
           replyingTo={replyingTo}
           onCancelReply={() => setReplyingTo(null)}
           editing={editingMessage}
