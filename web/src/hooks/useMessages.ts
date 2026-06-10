@@ -171,7 +171,7 @@ export function useMessages(
       try {
         const token = await getToken();
         const toSend = encryptFn ? await encryptFn(content) : content;
-        const saved = await postMessage(conversationId, toSend, token);
+        const saved = await postMessage(conversationId, { content: toSend }, token);
         setMessages((prev) => {
           const idx = prev.findIndex((m) => m.tempId === tempId);
           if (idx === -1) return prev;
@@ -213,7 +213,7 @@ export function useMessages(
       try {
         const token = await getToken();
         const toSend = encryptFn ? await encryptFn(content) : content;
-        const saved = await postMessage(conversationId, toSend, token);
+        const saved = await postMessage(conversationId, { content: toSend }, token);
         setMessages((prev) => {
           const idx = prev.findIndex((m) => m.tempId === tempId);
           if (idx === -1) return prev;

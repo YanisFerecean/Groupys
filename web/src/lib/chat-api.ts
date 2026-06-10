@@ -84,12 +84,69 @@ export async function markRead(conversationId: string, token: string | null): Pr
   if (!res.ok) throw new Error("Failed to mark read");
 }
 
-export async function postMessage(conversationId: string, content: string, token: string | null): Promise<Message> {
+/** Body for sending a message. Text messages pass `content`; card/media messages
+ *  additionally pass `messageType`, structured `payload`, and/or `mediaUrl`. */
+export interface SendMessageBody {
+  content?: string;
+  messageType?: string;
+  payload?: Record<string, unknown> | null;
+  replyToId?: string | null;
+  mediaUrl?: string | null;
+}
+
+export async function postMessage(
+  conversationId: string,
+  body: SendMessageBody,
+  token: string | null
+): Promise<Message> {
   const res = await apiRequest(`/chat/conversations/${encodeURIComponent(conversationId)}/messages`, token, {
     method: "POST",
-    body: { content },
+    body,
   });
   if (!res.ok) throw new ApiError(res.status, "Failed to send message");
+  return res.json();
+}
+
+/** Uploaded media descriptor returned by the backend storage endpoint. */
+export interface UploadedMedia {
+  url: string;
+  type?: string;
+}
+
+/** Uploads a file (image / audio) to shared media storage and returns its URL. */
+export async function uploadMedia(file: File | Blob, token: string | null): Promise<UploadedMedia> {
+  const headers = new Headers();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const formData = new FormData();
+  // A Blob (e.g. a recorded voice note) has no filename; give it one so the
+  // backend can infer the extension/content category.
+  formData.append("file", file, file instanceof File ? file.name : "voice.webm");
+
+  const res = await fetch(`${API_URL}/posts/media/upload`, { method: "POST", headers, body: formData });
+  if (!res.ok) throw new ApiError(res.status, "Failed to upload media");
+  return res.json();
+}
+
+/** Fetches the pinned messages for a conversation. */
+export async function fetchPins(conversationId: string, token: string | null): Promise<Message[]> {
+  const res = await apiRequest(`/chat/conversations/${encodeURIComponent(conversationId)}/pins`, token);
+  if (!res.ok) throw new Error("Failed to fetch pinned messages");
+  return res.json();
+}
+
+/** Full-text search within a conversation's messages. */
+export async function searchMessages(
+  conversationId: string,
+  query: string,
+  token: string | null,
+  limit = 50
+): Promise<Message[]> {
+  const params = new URLSearchParams({ q: query, limit: limit.toString() });
+  const res = await apiRequest(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/search?${params}`,
+    token
+  );
+  if (!res.ok) throw new Error("Failed to search messages");
   return res.json();
 }
 

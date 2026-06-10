@@ -98,7 +98,7 @@ export function useMessagesQuery(
       if (!conversationId) throw new Error("No conversation");
       const token = await getToken();
       const toSend = encryptFn ? await encryptFn(content) : content;
-      return postMessage(conversationId, toSend, token);
+      return postMessage(conversationId, { content: toSend }, token);
     },
     onMutate: async (_variables) => {
       // Cancel any outgoing refetches
