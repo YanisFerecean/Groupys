@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { Bell, ChevronLeft, Info, Lock, Check, X } from "lucide-react";
+import { Bell, ChevronLeft, Info, Lock, Check, X, Search } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { toast } from "sonner";
 import { useUserStore } from "@/store/userStore";
@@ -14,6 +14,7 @@ import { useConversations } from "@/hooks/useConversations";
 import { usePins } from "@/hooks/usePins";
 import { MessageThread } from "@/components/chat/MessageThread";
 import { MessageInput } from "@/components/chat/MessageInput";
+import { MessageSearch } from "@/components/chat/MessageSearch";
 import { PinnedMessageBar } from "@/components/chat/PinnedMessageBar";
 import { MessageActionHandlers } from "@/components/chat/MessageActions";
 import { usePresence } from "@/hooks/usePresence";
@@ -87,6 +88,7 @@ export default function ConversationPage() {
   // Reply / edit composer state
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   useEffect(() => {
     if (!isLoading) isInitialLoadRef.current = false;
@@ -302,10 +304,30 @@ export default function ConversationPage() {
           </Link>
         </div>
 
-        <button className="p-2 rounded-full hover:bg-surface-container text-on-surface-variant transition-colors">
-          <Info className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setSearchOpen((o) => !o)}
+            className={`p-2 rounded-full hover:bg-surface-container transition-colors ${
+              searchOpen ? "text-primary bg-primary/10" : "text-on-surface-variant"
+            }`}
+            title="Search in conversation"
+          >
+            <Search className="w-5 h-5" />
+          </button>
+          <button className="p-2 rounded-full hover:bg-surface-container text-on-surface-variant transition-colors">
+            <Info className="w-5 h-5" />
+          </button>
+        </div>
       </div>
+
+      {searchOpen && conversationId && (
+        <MessageSearch
+          conversationId={conversationId}
+          decryptFn={decryptFn}
+          onClose={() => setSearchOpen(false)}
+          onJump={scrollToMessage}
+        />
+      )}
 
       {/* Pinned messages */}
       <PinnedMessageBar pins={pins} onJump={scrollToMessage} onUnpin={unpin} />
