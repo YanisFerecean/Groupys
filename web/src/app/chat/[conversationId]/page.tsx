@@ -19,7 +19,9 @@ import { VoiceRecorderModal } from "@/components/chat/VoiceRecorderModal";
 import { MusicPickerModal } from "@/components/music/MusicPickerModal";
 import { PinnedMessageBar } from "@/components/chat/PinnedMessageBar";
 import { MessageActionHandlers } from "@/components/chat/MessageActions";
+import { NowPlayingPill } from "@/components/chat/NowPlayingPill";
 import { usePresence } from "@/hooks/usePresence";
+import { useNowPlaying } from "@/hooks/useNowPlaying";
 import { useCrypto } from "@/hooks/useCrypto";
 import { chatWs } from "@/lib/ws";
 import { fetchPublicKey, uploadMedia } from "@/lib/chat-api";
@@ -185,6 +187,13 @@ export default function ConversationPage() {
 
     return { headerTitle, avatarUrl, isOtherOnline, otherUsername };
   }, [conversation, backendUserId, isOnline]);
+
+  const otherUserId = useMemo(() => {
+    if (!conversation || conversation.isGroup || !backendUserId) return null;
+    return conversation.participants.find((p) => p.userId !== backendUserId)?.userId ?? null;
+  }, [conversation, backendUserId]);
+
+  const { partnerNowPlaying } = useNowPlaying(otherUserId);
 
   // Compute "last seen X ago" outside render to avoid Date.now() purity violation
   const [lastSeenText, setLastSeenText] = useState<string | null>(null);
@@ -441,6 +450,11 @@ export default function ConversationPage() {
         </div>
 
         <div className="flex items-center gap-1">
+          {partnerNowPlaying?.track && (
+            <div className="hidden md:block mr-1">
+              <NowPlayingPill track={partnerNowPlaying.track} />
+            </div>
+          )}
           <button
             onClick={() => setSearchOpen((o) => !o)}
             className={`p-2 rounded-full hover:bg-surface-container transition-colors ${
