@@ -140,6 +140,7 @@ export function MessageThread({
                 isMine={isMine}
                 showTime={showTime}
                 isLastInGroup={isLastInGroup(idx)}
+                myUserId={backendUserId ?? undefined}
                 onRetry={msg.status === "failed" && onRetry ? () => onRetry(msg) : undefined}
               />
 
