@@ -1,4 +1,4 @@
-import FeedPostCard from '@/components/feed/FeedPostCard'
+import FeedPostCardCompact from '@/components/feed/FeedPostCardCompact'
 import ProfileHeader from '@/components/profile/ProfileHeader'
 import CurrentlyListeningWidget from '@/components/profile/widgets/CurrentlyListeningWidget'
 import TopAlbumsWidget from '@/components/profile/widgets/TopAlbumsWidget'
@@ -1030,7 +1030,7 @@ export default function ProfileScreen() {
                           ) : (
                             <View>
                               {filteredPosts.map((post) => (
-                                <FeedPostCard
+                                <FeedPostCardCompact
                                   key={post.id}
                                   post={post}
                                   onPostUpdated={(updated) =>

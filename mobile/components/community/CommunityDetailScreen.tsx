@@ -14,7 +14,7 @@ import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import { apiFetch, apiPost } from '@/lib/api'
 import { normalizeMediaUrl } from '@/lib/media'
 import { Colors } from '@/constants/colors'
-import FeedPostCard from '@/components/feed/FeedPostCard'
+import FeedPostCardCompact from '@/components/feed/FeedPostCardCompact'
 import { useAuthToken } from '@/hooks/useAuthToken'
 import EditCommunityModal from '@/components/community/EditCommunityModal'
 import { CommunityListeningRoster } from '@/components/community/CommunityListeningRoster'
@@ -320,7 +320,7 @@ export default function CommunityDetailScreen({ communityId, postRoute, communit
             </View>
           ) : (
             posts.map((post) => (
-              <FeedPostCard
+              <FeedPostCardCompact
                 key={post.id}
                 post={post}
                 onPostUpdated={handlePostUpdated}
