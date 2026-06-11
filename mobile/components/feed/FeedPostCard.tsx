@@ -6,17 +6,20 @@ import {
   Animated,
   Image,
   ScrollView,
+  StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
   type GestureResponderEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
 import { router, useSegments } from 'expo-router'
-import { SymbolView } from 'expo-symbols'
-import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
+import { SymbolView, type SymbolViewProps } from 'expo-symbols'
 import { apiPost } from '@/lib/api'
 import { lexicalContentToMarkdown, lexicalContentToPlainText } from '@/lib/lexicalContent'
 import { normalizeMediaUrl } from '@/lib/media'
@@ -34,10 +37,50 @@ interface FeedPostCardProps {
   onPostUpdated?: (updated: PostResDto) => void
   communityRoute?: string
   postRoute?: string
+  /** When set, the comment button + "Read more" open this comments sheet route instead of the detail screen. */
+  commentsRoute?: string
   isActive?: boolean
+  /** Height of the fullscreen page this card fills (measured viewport above the tab bar). */
+  height: number
 }
 
 const MEDIA_DOUBLE_TAP_WINDOW_MS = 280
+
+const TEXT_SHADOW = {
+  textShadowColor: 'rgba(0,0,0,0.55)',
+  textShadowOffset: { width: 0, height: 1 },
+  textShadowRadius: 4,
+} as const
+
+function RailButton({
+  icon,
+  label,
+  onPress,
+  count,
+  active = false,
+}: {
+  icon: SymbolViewProps['name']
+  label: string
+  onPress: () => void
+  count?: number
+  active?: boolean
+}) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.7}
+      accessibilityLabel={label}
+      className="items-center"
+    >
+      <View className="h-[52px] w-[52px] items-center justify-center rounded-full bg-black/35">
+        <SymbolView name={icon} size={25} tintColor={active ? Colors.primary : '#ffffff'} />
+      </View>
+      {typeof count === 'number' && count > 0 ? (
+        <Text className="mt-1 text-[12px] font-semibold text-white">{count}</Text>
+      ) : null}
+    </TouchableOpacity>
+  )
+}
 
 function decodeBasicEntities(content: string) {
   return content
@@ -109,9 +152,12 @@ export default function FeedPostCard({
   onPostUpdated,
   communityRoute = '/(home)/(discover)/community',
   postRoute = '/(home)/(feed)/post',
+  commentsRoute,
   isActive = true,
+  height,
 }: FeedPostCardProps) {
-  const useGlass = isLiquidGlassAvailable()
+  const insets = useSafeAreaInsets()
+  const { width: screenW } = useWindowDimensions()
   const segments = useSegments()
   const isScreenFocused = useIsFocused()
   const currentTab = resolveHomeTab(segments)
@@ -119,9 +165,8 @@ export default function FeedPostCard({
   const { user } = useUser()
   const [reacting, setReacting] = useState(false)
   const [activeMediaIndex, setActiveMediaIndex] = useState(0)
-  const [mediaViewportWidth, setMediaViewportWidth] = useState(0)
   const [mediaScrollEnabled, setMediaScrollEnabled] = useState(true)
-  const [pausedVideoIndices, setPausedVideoIndices] = useState<Set<number>>(() => new Set())
+  const [mutedVideoIndices, setMutedVideoIndices] = useState<Set<number>>(() => new Set())
   const lastMediaTapAtRef = useRef(0)
   const singleMediaTapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const activeMediaIndexRef = useRef(0)
@@ -138,13 +183,14 @@ export default function FeedPostCard({
   const excerpt = excerptData.text
   const showReadMore = Boolean(post.content?.trim()) && Boolean(excerpt)
   const mediaCount = post.media?.length ?? 0
+  const hasMedia = mediaCount > 0
   const isPlaybackActive = isActive && isScreenFocused
   const isAuthor = Boolean(user?.id && user.id === post.authorClerkId)
 
   useEffect(() => {
     setActiveMediaIndex(0)
     setMediaScrollEnabled(true)
-    setPausedVideoIndices(new Set())
+    setMutedVideoIndices(new Set())
     lastMediaTapAtRef.current = 0
     if (singleMediaTapTimeoutRef.current) {
       clearTimeout(singleMediaTapTimeoutRef.current)
@@ -159,7 +205,7 @@ export default function FeedPostCard({
   useEffect(() => {
     isCardActiveRef.current = isPlaybackActive
     if (!isPlaybackActive) {
-      setPausedVideoIndices(new Set())
+      setMutedVideoIndices(new Set())
       lastMediaTapAtRef.current = 0
       if (singleMediaTapTimeoutRef.current) {
         clearTimeout(singleMediaTapTimeoutRef.current)
@@ -301,6 +347,18 @@ export default function FeedPostCard({
     router.push(`${postRoute}/${post.id}` as any)
   }
 
+  const openComments = () => {
+    if (commentsRoute) {
+      router.push(`${commentsRoute}/${post.id}` as any)
+    } else {
+      navigateToPost()
+    }
+  }
+
+  const navigateToCommunity = () => {
+    router.push(`${communityRoute}/${post.communityId}` as any)
+  }
+
   const navigateToAuthor = () => {
     if (isAuthor) return
     router.push(publicProfilePath(post.authorId, currentTab) as any)
@@ -308,28 +366,29 @@ export default function FeedPostCard({
 
   const handleMediaMomentumEnd = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      if (mediaViewportWidth <= 0 || mediaCount <= 1) return
-      const nextIndex = Math.round(event.nativeEvent.contentOffset.x / mediaViewportWidth)
+      if (screenW <= 0 || mediaCount <= 1) return
+      const nextIndex = Math.round(event.nativeEvent.contentOffset.x / screenW)
       const bounded = Math.max(0, Math.min(nextIndex, mediaCount - 1))
       if (bounded !== activeMediaIndex) {
         setActiveMediaIndex(bounded)
       }
       revealCounter()
     },
-    [activeMediaIndex, mediaCount, mediaViewportWidth, revealCounter],
+    [activeMediaIndex, mediaCount, screenW, revealCounter],
   )
 
   const handleAudioScrubStateChange = useCallback((isScrubbing: boolean) => {
     setMediaScrollEnabled(!isScrubbing)
   }, [])
 
-  const toggleVideoPauseState = useCallback((index: number) => {
+  const toggleVideoMuteState = useCallback((index: number) => {
     const media = post.media?.[index]
     if (!media?.type.startsWith('video/')) return
     if (!isCardActiveRef.current) return
     if (activeMediaIndexRef.current !== index) return
 
-    setPausedVideoIndices((prev) => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    setMutedVideoIndices((prev) => {
       const next = new Set(prev)
       if (next.has(index)) {
         next.delete(index)
@@ -361,371 +420,261 @@ export default function FeedPostCard({
         lastMediaTapAtRef.current = 0
         singleMediaTapTimeoutRef.current = null
         if (mediaType.startsWith('video/')) {
-          toggleVideoPauseState(index)
+          toggleVideoMuteState(index)
         }
       }, MEDIA_DOUBLE_TAP_WINDOW_MS)
     },
-    [clearSingleMediaTapTimeout, handleReact, post.userReaction, toggleVideoPauseState, triggerHeartOverlay],
+    [clearSingleMediaTapTimeout, handleReact, post.userReaction, toggleVideoMuteState, triggerHeartOverlay],
   )
 
+  // Text-only posts have no media carousel — give them double-tap-to-like too.
+  const handleTextDoubleTap = useCallback(() => {
+    const now = Date.now()
+    if (now - lastMediaTapAtRef.current <= MEDIA_DOUBLE_TAP_WINDOW_MS) {
+      lastMediaTapAtRef.current = 0
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+      triggerHeartOverlay()
+      if (post.userReaction !== 'like') {
+        void handleReact('like', { withHaptic: false })
+      }
+      return
+    }
+    lastMediaTapAtRef.current = now
+  }, [handleReact, post.userReaction, triggerHeartOverlay])
+
   return (
-    <View className="overflow-hidden bg-surface-container-lowest shadow-sm shadow-on-surface-variant/5">
-      <TouchableOpacity
-        onPress={navigateToPost}
-        activeOpacity={0.9}
-        className="px-4 pb-3 pt-4"
-      >
-        <View className="flex-row items-center justify-between pb-3">
+    <View style={{ width: screenW, height }} className="bg-black">
+      {/* (a) MEDIA / TEXT LAYER — fills the viewport */}
+      {hasMedia ? (
+        <ScrollView
+          horizontal
+          pagingEnabled
+          scrollEnabled={mediaScrollEnabled}
+          decelerationRate="fast"
+          showsHorizontalScrollIndicator={false}
+          bounces={mediaCount > 1}
+          onScrollBeginDrag={revealCounter}
+          onMomentumScrollEnd={handleMediaMomentumEnd}
+          scrollEventThrottle={16}
+          style={StyleSheet.absoluteFill}
+        >
+          {(post.media ?? []).map((m, i) => (
+            <TouchableOpacity
+              key={i}
+              onPress={handleMediaPress(i, m.type)}
+              activeOpacity={1}
+              style={{ width: screenW, height }}
+            >
+              {m.type.startsWith('image/') ? (
+                <AuthImageWithToken
+                  uri={normalizeMediaUrl(m.url)!}
+                  className="h-full w-full"
+                  style={{ width: '100%', height: '100%' }}
+                  resizeMode="cover"
+                />
+              ) : m.type.startsWith('video/') ? (
+                <View className="relative h-full w-full bg-black">
+                  <VideoThumbnail
+                    url={normalizeMediaUrl(m.url)!}
+                    width="100%"
+                    height="100%"
+                    autoplay
+                    isActive={isPlaybackActive && i === activeMediaIndex}
+                    showPlaybackOverlay={false}
+                    muted={mutedVideoIndices.has(i)}
+                    loop
+                    adaptiveFitByOrientation
+                    contentFit="cover"
+                    rounded={false}
+                  />
+                  {mutedVideoIndices.has(i) && i === activeMediaIndex ? (
+                    <View
+                      pointerEvents="none"
+                      className="absolute inset-0 items-center justify-center"
+                    >
+                      <View className="h-14 w-14 items-center justify-center rounded-full border border-white/35 bg-black/45">
+                        <Ionicons name="volume-mute" size={26} color="white" />
+                      </View>
+                    </View>
+                  ) : null}
+                </View>
+              ) : m.type.startsWith('audio/') ? (
+                <AudioAutoplayPreview
+                  url={normalizeMediaUrl(m.url)!}
+                  isActive={isPlaybackActive && i === activeMediaIndex}
+                  width="100%"
+                  height="100%"
+                  onScrubStateChange={handleAudioScrubStateChange}
+                />
+              ) : (
+                <View className="h-full w-full items-center justify-center bg-surface-container-high">
+                  <Ionicons name="musical-notes" size={40} color={Colors.onSurfaceVariant} />
+                  <Text className="mt-2 text-xs font-medium text-on-surface-variant/60">Audio File</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      ) : (
+        <LinearGradient
+          colors={[Colors.primary, '#7a0020', '#1a0008']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        >
           <TouchableOpacity
-            activeOpacity={isAuthor ? 1 : 0.8}
-            className="flex-1 flex-row items-center gap-2.5"
-            onPress={isAuthor
-              ? undefined
-              : (event) => {
-                  event.stopPropagation()
-                  navigateToAuthor()
-                }}
+            activeOpacity={1}
+            onPress={handleTextDoubleTap}
+            className="flex-1 items-center justify-center px-8"
+            style={{ paddingTop: insets.top, paddingBottom: insets.bottom + 150 }}
           >
-            {post.authorProfileImage ? (
-              <Image
-                source={{ uri: post.authorProfileImage }}
-                className="h-9 w-9 rounded-full ring-2 ring-surface-container-low"
-                resizeMode="cover"
-              />
-            ) : (
-              <View className="h-9 w-9 items-center justify-center rounded-full bg-surface-container-high">
-                <Ionicons name="person" size={16} color={Colors.onSurfaceVariant} />
-              </View>
-            )}
-
-            <View className="flex-1">
-              <View className="flex-row items-center flex-wrap">
-                <Text className="text-[14px] font-bold tracking-tight text-on-surface" numberOfLines={1}>
-                  {authorName}
-                </Text>
-                <Text className="mx-1.5 text-[14px] text-on-surface-variant/40">in</Text>
-                <Text className="text-[14px] font-semibold text-primary" numberOfLines={1}>
-                  {post.communityName}
-                </Text>
-              </View>
-              <Text className="text-[11px] font-medium tracking-wide text-on-surface-variant/60 uppercase">
-                {timeAgo(post.createdAt)}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-
-        {(post.title || excerpt) ? (
-          <View className="pb-3 px-0.5">
             {post.title ? (
-              <Text className="text-[17px] font-bold leading-6 tracking-tight text-on-surface" numberOfLines={2}>
+              <Text className="text-center text-2xl font-bold text-white" numberOfLines={4}>
                 {post.title}
               </Text>
             ) : null}
-
             {excerpt ? (
-              <>
-                <Text
-                  className={`text-[15px] leading-snug tracking-normal ${
-                    post.title ? 'mt-2 text-on-surface-variant/80' : 'text-on-surface'
-                  }`}
-                  numberOfLines={post.title ? 2 : 4}
-                  ellipsizeMode="tail"
-                >
-                  {excerpt}
-                </Text>
-                {showReadMore ? (
-                  <TouchableOpacity
-                    activeOpacity={0.75}
-                    onPress={(event) => {
-                      event.stopPropagation()
-                      navigateToPost()
-                    }}
-                    className="self-start mt-1"
-                  >
-                    <Text className="text-[13px] font-semibold text-primary">Read more</Text>
-                  </TouchableOpacity>
-                ) : null}
-              </>
-            ) : null}
-          </View>
-        ) : null}
-
-        {post.media && post.media.length > 0 ? (
-          <View
-            className="mt-1"
-            onLayout={(event) => {
-              const measuredWidth = Math.floor(event.nativeEvent.layout.width)
-              if (measuredWidth > 0 && measuredWidth !== mediaViewportWidth) {
-                setMediaViewportWidth(measuredWidth)
-              }
-            }}
-          >
-            {mediaViewportWidth > 0 ? (
-              <>
-                <View
-                  className="overflow-hidden rounded-[24px] bg-surface-container-high"
-                  style={{ width: mediaViewportWidth, aspectRatio: 4 / 5 }}
-                >
-                  <ScrollView
-                    horizontal
-                    pagingEnabled
-                    scrollEnabled={mediaScrollEnabled}
-                    decelerationRate="fast"
-                    showsHorizontalScrollIndicator={false}
-                    bounces={mediaCount > 1}
-                    onScrollBeginDrag={revealCounter}
-                    onMomentumScrollEnd={handleMediaMomentumEnd}
-                    scrollEventThrottle={16}
-                    style={{ flex: 1 }}
-                  >
-                    {post.media.map((m, i) => (
-                      <TouchableOpacity
-                        key={i}
-                        onPress={handleMediaPress(i, m.type)}
-                        activeOpacity={1}
-                        style={{ width: mediaViewportWidth, height: '100%' }}
-                      >
-                        {m.type.startsWith('image/') ? (
-                          <AuthImageWithToken
-                            uri={normalizeMediaUrl(m.url)!}
-                            className="h-full w-full"
-                            style={{ width: '100%', height: '100%' }}
-                            resizeMode="contain"
-                          />
-                        ) : m.type.startsWith('video/') ? (
-                          <View className="relative h-full w-full bg-black">
-                            <VideoThumbnail
-                              url={normalizeMediaUrl(m.url)!}
-                              width="100%"
-                              height="100%"
-                              autoplay
-                              isActive={isPlaybackActive && i === activeMediaIndex && !pausedVideoIndices.has(i)}
-                              showPlaybackOverlay={false}
-                              muted={false}
-                              loop
-                              adaptiveFitByOrientation
-                              contentFit="cover"
-                              rounded={false}
-                            />
-                            {pausedVideoIndices.has(i) && i === activeMediaIndex ? (
-                              <View
-                                pointerEvents="none"
-                                className="absolute inset-0 items-center justify-center bg-black/20"
-                              >
-                                <View className="h-14 w-14 items-center justify-center rounded-full border border-white/35 bg-black/45">
-                                  <Ionicons name="play" size={28} color="white" style={{ marginLeft: 3 }} />
-                                </View>
-                              </View>
-                            ) : null}
-                          </View>
-                        ) : m.type.startsWith('audio/') ? (
-                          <AudioAutoplayPreview
-                            url={normalizeMediaUrl(m.url)!}
-                            isActive={isPlaybackActive && i === activeMediaIndex}
-                            width="100%"
-                            height="100%"
-                            onScrubStateChange={handleAudioScrubStateChange}
-                          />
-                        ) : (
-                          <View
-                            className="h-full w-full items-center justify-center bg-surface-container-high"
-                          >
-                            <Ionicons name="musical-notes" size={40} color={Colors.onSurfaceVariant} />
-                            <Text className="mt-2 text-xs font-medium text-on-surface-variant/60">Audio File</Text>
-                          </View>
-                        )}
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-
-                  {mediaCount > 1 ? (
-                    <Animated.View
-                      pointerEvents="none"
-                      className="absolute right-3 top-3 rounded-full bg-black/55 px-2 py-1"
-                      style={{ opacity: counterOpacity }}
-                    >
-                      <Text className="text-[11px] font-semibold text-white">
-                        {activeMediaIndex + 1}/{mediaCount}
-                      </Text>
-                    </Animated.View>
-                  ) : null}
-
-                  <Animated.View
-                    pointerEvents="none"
-                    className="absolute inset-0 items-center justify-center"
-                    style={{
-                      opacity: heartOverlayOpacity,
-                      transform: [{ scale: heartOverlayScale }],
-                    }}
-                  >
-                    <SymbolView name="heart.fill" size={96} tintColor={Colors.primary} />
-                  </Animated.View>
-                </View>
-
-                {mediaCount > 1 ? (
-                  <View className="mt-2 flex-row items-center justify-center gap-1.5">
-                    {post.media.map((_, i) => (
-                      <View
-                        key={`media-dot-${post.id}-${i}`}
-                        className="rounded-full"
-                        style={{
-                          width: i === activeMediaIndex ? 8 : 6,
-                          height: i === activeMediaIndex ? 8 : 6,
-                          backgroundColor: Colors.primary,
-                          opacity: i === activeMediaIndex ? 1 : 0.35,
-                        }}
-                      />
-                    ))}
-                  </View>
-                ) : null}
-              </>
-            ) : null}
-          </View>
-        ) : null}
-      </TouchableOpacity>
-
-      {/* Actions row — outside the card touchable to avoid nested touchable conflicts */}
-      <View className="px-4 pb-4 flex-row items-center gap-3">
-        {useGlass ? (
-          <GlassView isInteractive style={{ borderRadius: 999, overflow: 'hidden' }}>
-            <View className="flex-row">
-              <TouchableOpacity
-                onPress={() => handleReact('like')}
-                className={`flex-row items-center gap-2 px-4 py-2 ${
-                  post.userReaction === 'like' ? 'bg-primary/10' : ''
-                }`}
-                activeOpacity={0.7}
-              >
-                <SymbolView
-                  name={post.userReaction === 'like' ? 'heart.fill' : 'heart'}
-                  size={18}
-                  tintColor={Colors.primary}
-                />
-                {post.likeCount > 0 && (
-                  <Text
-                    className={`text-[13px] font-bold ${
-                      post.userReaction === 'like' ? 'text-primary' : 'text-on-surface-variant'
-                    }`}
-                  >
-                    {post.likeCount}
-                  </Text>
-                )}
-              </TouchableOpacity>
-
-              <View className="w-[1px] bg-on-surface-variant/10 my-2" />
-
-              <TouchableOpacity
-                onPress={() => handleReact('dislike')}
-                className={`flex-row items-center px-4 py-2 ${
-                  post.userReaction === 'dislike' ? 'bg-primary/10' : ''
-                }`}
-                activeOpacity={0.7}
-              >
-                <SymbolView
-                  name={post.userReaction === 'dislike' ? 'heart.slash.fill' : 'heart.slash'}
-                  size={18}
-                  tintColor={Colors.primary}
-                />
-              </TouchableOpacity>
-            </View>
-          </GlassView>
-        ) : (
-          <View className="flex-row overflow-hidden rounded-full bg-surface-container-low/50">
-            <TouchableOpacity
-              onPress={() => handleReact('like')}
-              className={`flex-row items-center gap-2 px-4 py-2 ${
-                post.userReaction === 'like' ? 'bg-primary/10' : ''
-              }`}
-              activeOpacity={0.7}
-            >
-              <SymbolView
-                name={post.userReaction === 'like' ? 'heart.fill' : 'heart'}
-                size={18}
-                tintColor={Colors.primary}
-              />
-              {post.likeCount > 0 && (
-                <Text
-                  className={`text-[13px] font-bold ${
-                    post.userReaction === 'like' ? 'text-primary' : 'text-on-surface-variant'
-                  }`}
-                >
-                  {post.likeCount}
-                </Text>
-              )}
-            </TouchableOpacity>
-
-            <View className="w-[1px] bg-on-surface-variant/10 my-2" />
-
-            <TouchableOpacity
-              onPress={() => handleReact('dislike')}
-              className={`flex-row items-center px-4 py-2 ${
-                post.userReaction === 'dislike' ? 'bg-primary/10' : ''
-              }`}
-              activeOpacity={0.7}
-            >
-              <SymbolView
-                name={post.userReaction === 'dislike' ? 'heart.slash.fill' : 'heart.slash'}
-                size={18}
-                tintColor={Colors.primary}
-              />
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {useGlass ? (
-          <GlassView isInteractive style={{ borderRadius: 999, overflow: 'hidden' }}>
-            <TouchableOpacity
-              onPress={navigateToPost}
-              className="flex-row items-center gap-2 px-4 py-2"
-              activeOpacity={0.7}
-            >
-              <SymbolView name="text.bubble" size={17} tintColor={Colors.primary} />
-              {post.commentCount > 0 && (
-                <Text className="text-[13px] font-bold text-on-surface-variant">
-                  {post.commentCount}
-                </Text>
-              )}
-            </TouchableOpacity>
-          </GlassView>
-        ) : (
-          <TouchableOpacity
-            onPress={navigateToPost}
-            className="flex-row items-center gap-2 rounded-full bg-surface-container-low/50 px-4 py-2"
-            activeOpacity={0.7}
-          >
-            <SymbolView name="text.bubble" size={17} tintColor={Colors.primary} />
-            {post.commentCount > 0 && (
-              <Text className="text-[13px] font-bold text-on-surface-variant">
-                {post.commentCount}
+              <Text className="mt-3 text-center text-base leading-relaxed text-white/85" numberOfLines={8}>
+                {excerpt}
               </Text>
-            )}
+            ) : null}
           </TouchableOpacity>
-        )}
+        </LinearGradient>
+      )}
 
-        <View className="flex-1" />
+      {/* (c) media counter badge */}
+      {hasMedia && mediaCount > 1 ? (
+        <Animated.View
+          pointerEvents="none"
+          className="absolute right-3 rounded-full bg-black/55 px-2 py-1"
+          style={{ top: insets.top + 12, opacity: counterOpacity }}
+        >
+          <Text className="text-[11px] font-semibold text-white">
+            {activeMediaIndex + 1}/{mediaCount}
+          </Text>
+        </Animated.View>
+      ) : null}
 
-        {useGlass ? (
-          <GlassView isInteractive style={{ borderRadius: 999, overflow: 'hidden' }}>
-            <TouchableOpacity
-              accessibilityLabel="Share post"
-              onPress={() => void sharePost({ postId: post.id, title: post.title, authorName })}
-              className="h-9 w-9 items-center justify-center rounded-full"
-              activeOpacity={0.7}
-            >
-              <SymbolView name="square.and.arrow.up" size={17} tintColor={Colors.primary} />
-            </TouchableOpacity>
-          </GlassView>
-        ) : (
-          <TouchableOpacity
-            accessibilityLabel="Share post"
-            onPress={() => void sharePost({ postId: post.id, title: post.title, authorName })}
-            className="h-9 w-9 items-center justify-center rounded-full bg-surface-container-low/50"
-            activeOpacity={0.7}
-          >
-            <SymbolView name="square.and.arrow.up" size={17} tintColor={Colors.primary} />
-          </TouchableOpacity>
-        )}
+      {/* (b) double-tap heart overlay */}
+      <Animated.View
+        pointerEvents="none"
+        className="absolute inset-0 items-center justify-center"
+        style={{
+          opacity: heartOverlayOpacity,
+          transform: [{ scale: heartOverlayScale }],
+        }}
+      >
+        <SymbolView name="heart.fill" size={110} tintColor={Colors.primary} />
+      </Animated.View>
+
+      {/* media indicator dots */}
+      {hasMedia && mediaCount > 1 ? (
+        <View
+          pointerEvents="none"
+          className="absolute left-0 right-0 flex-row items-center justify-center gap-1.5"
+          style={{ bottom: insets.bottom + 150 }}
+        >
+          {(post.media ?? []).map((_, i) => (
+            <View
+              key={`media-dot-${post.id}-${i}`}
+              className="rounded-full"
+              style={{
+                width: i === activeMediaIndex ? 7 : 6,
+                height: i === activeMediaIndex ? 7 : 6,
+                backgroundColor: '#ffffff',
+                opacity: i === activeMediaIndex ? 1 : 0.4,
+              }}
+            />
+          ))}
+        </View>
+      ) : null}
+
+      {/* (f) RIGHT ACTION RAIL */}
+      <View className="absolute right-3 items-center gap-5" style={{ bottom: insets.bottom + 28 }}>
+        <RailButton
+          label="Like post"
+          icon={post.userReaction === 'like' ? 'heart.fill' : 'heart'}
+          active={post.userReaction === 'like'}
+          count={post.likeCount}
+          onPress={() => handleReact('like')}
+        />
+        <RailButton
+          label="Dislike post"
+          icon={post.userReaction === 'dislike' ? 'heart.slash.fill' : 'heart.slash'}
+          active={post.userReaction === 'dislike'}
+          count={post.dislikeCount}
+          onPress={() => handleReact('dislike')}
+        />
+        <RailButton
+          label="Comments"
+          icon="text.bubble"
+          count={post.commentCount}
+          onPress={openComments}
+        />
+        <RailButton
+          label="Share post"
+          icon="square.and.arrow.up"
+          onPress={() => void sharePost({ postId: post.id, title: post.title, authorName })}
+        />
+      </View>
+
+      {/* (g) BOTTOM METADATA */}
+      <View className="absolute bottom-0 left-4" style={{ paddingBottom: insets.bottom + 16, right: 84 }}>
+        {/* 1. user + community info */}
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={navigateToCommunity}
+          className="flex-row items-center self-start"
+        >
+          <Text className="text-[13px] font-semibold text-white/90" numberOfLines={1} style={TEXT_SHADOW}>
+            # {post.communityName}
+          </Text>
+        </TouchableOpacity>
+
+        {/* 2. username with profile picture */}
+        <TouchableOpacity
+          activeOpacity={isAuthor ? 1 : 0.8}
+          onPress={isAuthor ? undefined : navigateToAuthor}
+          className="mt-2 flex-row items-center gap-2.5"
+        >
+          {post.authorProfileImage ? (
+            <Image
+              source={{ uri: post.authorProfileImage }}
+              className="h-9 w-9 rounded-full"
+              style={{ borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.7)' }}
+              resizeMode="cover"
+            />
+          ) : (
+            <View className="h-9 w-9 items-center justify-center rounded-full bg-white/20">
+              <Ionicons name="person" size={16} color="#ffffff" />
+            </View>
+          )}
+          <Text className="text-[15px] font-bold text-white" numberOfLines={1} style={TEXT_SHADOW}>
+            {authorName}
+          </Text>
+          <Text className="text-[12px] font-medium text-white/80" style={TEXT_SHADOW}>· {timeAgo(post.createdAt)}</Text>
+        </TouchableOpacity>
+
+        {/* 3. post bio / description (media posts; text-only posts show it centered above) */}
+        {hasMedia && (post.title || excerpt) ? (
+          <View className="mt-2">
+            {post.title ? (
+              <Text className="text-[15px] font-semibold text-white" numberOfLines={1} style={TEXT_SHADOW}>
+                {post.title}
+              </Text>
+            ) : null}
+            {excerpt ? (
+              <Text className="mt-0.5 text-[14px] leading-snug text-white/90" numberOfLines={2} style={TEXT_SHADOW}>
+                {excerpt}
+              </Text>
+            ) : null}
+            {showReadMore ? (
+              <TouchableOpacity activeOpacity={0.75} onPress={openComments} className="mt-1 self-start">
+                <Text className="text-[13px] font-semibold text-white" style={TEXT_SHADOW}>Read more</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        ) : null}
       </View>
     </View>
   )
