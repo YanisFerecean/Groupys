@@ -37,7 +37,7 @@ import { VoiceRecorderModal } from '@/components/chat/VoiceRecorderModal'
 import { TypingIndicator } from '@/components/chat/TypingIndicator'
 import { useListenTogether } from '@/hooks/useListenTogether'
 import { useMusicGate } from '@/hooks/useMusicGate'
-import { apiPostMultipart, fetchMusicCurrentlyPlaying } from '@/lib/api'
+import { apiPostMultipart } from '@/lib/api'
 import { resolveLinkPreview } from '@/lib/chat-api'
 import type { AlbumPayload, TrackPayload, VoiceBedPayload } from '@/models/ChatPayloads'
 import { Colors } from '@/constants/colors'
@@ -143,6 +143,35 @@ export default function ChatConversationScreen() {
       await sendMessage('Photo', { messageType: 'IMAGE', mediaUrl: uploaded.url })
     } catch {
       Alert.alert('Could not share photo', 'Try selecting the image again.')
+    }
+  }, [getToken, sendMessage])
+
+  const captureImage = useCallback(async () => {
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync()
+      if (!permission.granted) {
+        Alert.alert('Camera access needed', 'Enable camera access in Settings to take a photo.')
+        return
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        quality: 0.8,
+        allowsEditing: false,
+      })
+      if (result.canceled || !result.assets[0]) return
+
+      const asset = result.assets[0]
+      const formData = new FormData()
+      formData.append('file', {
+        uri: asset.uri,
+        type: asset.mimeType ?? 'image/jpeg',
+        name: asset.fileName ?? `chat-photo-${Date.now()}.jpg`,
+      } as unknown as Blob)
+      const token = await getToken()
+      const uploaded = await apiPostMultipart<{ url: string }>('/posts/media/upload', token, formData)
+      await sendMessage('Photo', { messageType: 'IMAGE', mediaUrl: uploaded.url })
+    } catch {
+      Alert.alert('Could not take photo', 'Try again.')
     }
   }, [getToken, sendMessage])
 
@@ -303,32 +332,6 @@ export default function ChatConversationScreen() {
       : undefined,
   }), [activeConversationId, otherUserId, router])
 
-  const handleMusicPress = useCallback(async () => {
-    setPickerMode('send')
-    // Not connected → prompt to connect (manual picker is still reachable from the upsell flow).
-    if (!musicGate.capability.connected) {
-      musicGate.requireMusic('Share what you’re listening to')
-      return
-    }
-    // Connected → share the current track instantly, else fall back to the manual picker.
-    try {
-      const token = await getToken()
-      const current = await fetchMusicCurrentlyPlaying(token)
-      if (current) {
-        sendTrack({
-          type: 'TRACK',
-          id: '',
-          title: current.title,
-          artist: current.artist,
-          artworkUrl: current.coverUrl ?? undefined,
-        })
-        return
-      }
-    } catch {
-      // fall through to the picker
-    }
-    setTrackPickerOpen(true)
-  }, [getToken, musicGate, sendTrack])
   const [typingUsers, setTypingUsers] = useState<Map<string, string>>(new Map())
   const [hasPartnerKey, setHasPartnerKey] = useState(false)
   const [isNearBottom, setIsNearBottom] = useState(true)
@@ -977,10 +980,10 @@ export default function ChatConversationScreen() {
               onSend={(content) => {
                 void handleComposerSend(content)
               }}
-              onMusicPress={() => {
-                void handleMusicPress()
-              }}
               onAttachPress={() => setAttachMenuOpen(true)}
+              onCameraPress={() => {
+                void captureImage()
+              }}
               onVoiceNote={() => {
                 setPendingVoiceBed(null)
                 setVoiceRecorderOpen(true)
@@ -1015,10 +1018,6 @@ export default function ChatConversationScreen() {
         onClose={() => setAttachMenuOpen(false)}
         onPickImage={() => {
           void pickImage()
-        }}
-        onVoiceNote={() => {
-          setPendingVoiceBed(null)
-          setVoiceRecorderOpen(true)
         }}
         onPickAlbum={() => setAlbumPickerOpen(true)}
         onDedicate={() => {

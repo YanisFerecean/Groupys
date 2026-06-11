@@ -14,7 +14,6 @@ interface MusicAttachSheetProps {
   visible: boolean
   onClose: () => void
   onPickImage?: () => void
-  onVoiceNote?: () => void
   onPickAlbum?: () => void
   onPickPlaylist?: () => void
   onDedicate?: () => void
@@ -34,7 +33,6 @@ export function MusicAttachSheet({
   visible,
   onClose,
   onPickImage,
-  onVoiceNote,
   onPickAlbum,
   onPickPlaylist,
   onDedicate,
@@ -48,7 +46,6 @@ export function MusicAttachSheet({
 }: MusicAttachSheetProps) {
   const rows: { icon: IconName; label: string; onPress?: () => void; disabled?: boolean; sublabel?: string }[] = [
     { icon: 'image' as IconName, label: 'Share a photo', onPress: onPickImage },
-    { icon: 'mic' as IconName, label: 'Record a voice note', onPress: onVoiceNote },
     { icon: 'albums' as IconName, label: 'Share an album', onPress: onPickAlbum },
     { icon: 'list' as IconName, label: 'Share a playlist', onPress: onPickPlaylist },
     { icon: 'heart' as IconName, label: 'Dedicate a song', onPress: onDedicate },

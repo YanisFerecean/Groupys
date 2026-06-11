@@ -12,13 +12,10 @@ interface MessageComposerProps {
   conversationId: string
   disabled?: boolean
   onSend: (content: string) => void | Promise<void>
-  /**
-   * Music-note button handler (tickets 2.1/1.3): shares the current track, opens the picker, or
-   * prompts to connect — the parent decides. Button is shown only when provided.
-   */
-  onMusicPress?: () => void
   /** Attach button handler for richer shares (album/playlist; tickets 2.2/2.3). */
   onAttachPress?: () => void
+  /** Camera button handler: captures a snapshot to share. Button shown only when provided. */
+  onCameraPress?: () => void
   /** Active reply target (ticket 3.1); renders a preview bar above the input. */
   replyTo?: ReplyStub | null
   onCancelReply?: () => void
@@ -31,8 +28,8 @@ export function MessageComposer({
   conversationId,
   disabled = false,
   onSend,
-  onMusicPress,
   onAttachPress,
+  onCameraPress,
   replyTo,
   onCancelReply,
   onVoiceNote,
@@ -140,10 +137,10 @@ export function MessageComposer({
                 </GlassView>
               </TouchableOpacity>
             ) : null}
-            {onMusicPress ? (
-              <TouchableOpacity disabled={disabled} onPress={onMusicPress} activeOpacity={0.7} style={{ opacity: disabled ? 0.5 : 1 }}>
+            {onCameraPress ? (
+              <TouchableOpacity disabled={disabled} onPress={onCameraPress} activeOpacity={0.7} style={{ opacity: disabled ? 0.5 : 1 }}>
                 <GlassView isInteractive style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }}>
-                  <Ionicons name="musical-notes" size={20} color={Colors.primary} />
+                  <Ionicons name="camera" size={22} color={Colors.primary} />
                 </GlassView>
               </TouchableOpacity>
             ) : null}
@@ -220,15 +217,15 @@ export function MessageComposer({
                 <Ionicons name="add" size={24} color={Colors.primary} />
               </TouchableOpacity>
             ) : null}
-            {onMusicPress ? (
+            {onCameraPress ? (
               <TouchableOpacity
                 className="h-12 w-12 items-center justify-center rounded-full bg-surface-container-high"
                 disabled={disabled}
-                onPress={onMusicPress}
-                accessibilityLabel="Share a track"
+                onPress={onCameraPress}
+                accessibilityLabel="Take a photo"
                 style={{ opacity: disabled ? 0.5 : 1 }}
               >
-                <Ionicons name="musical-notes" size={20} color={Colors.primary} />
+                <Ionicons name="camera" size={20} color={Colors.primary} />
               </TouchableOpacity>
             ) : null}
             <View className="flex-1 rounded-[28px] bg-surface-container px-4 py-2">
