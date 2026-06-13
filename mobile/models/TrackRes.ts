@@ -8,4 +8,6 @@ export interface TrackRes {
   duration: number
   artist: ArtistRes
   album: AlbumRes
+  /** Apple Music catalog song id (string) — present for Apple-sourced results. */
+  catalogId?: string
 }

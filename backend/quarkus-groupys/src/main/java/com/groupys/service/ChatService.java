@@ -3,6 +3,8 @@ package com.groupys.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.groupys.config.PerformanceFeatureFlags;
+import com.groupys.dto.CollabPlaylistResDto;
+import com.groupys.dto.CollabPlaylistTrackResDto;
 import com.groupys.dto.ConversationResDto;
 import com.groupys.dto.MessageResDto;
 import com.groupys.dto.ParticipantDto;
@@ -33,6 +35,7 @@ import jakarta.ws.rs.ForbiddenException;
 import jakarta.ws.rs.NotFoundException;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -266,6 +269,45 @@ public class ChatService {
         } catch (Exception e) {
             throw new BadRequestException("Could not build collaborative playlist");
         }
+    }
+
+    /**
+     * Full collaborative playlist for a conversation (ticket 6.1 read view): every added track with
+     * who added it. Unlike the pinned card (capped at 5 previews), this returns the whole list.
+     * Returns an empty playlist when none exists yet.
+     */
+    public CollabPlaylistResDto getCollabPlaylist(UUID conversationId, String clerkId) {
+        User user = requireUserByClerkId(clerkId);
+        requireParticipant(conversationId, user.id);
+
+        CollabPlaylist playlist = collabPlaylistRepository.findByConversation(conversationId);
+        if (playlist == null) {
+            return new CollabPlaylistResDto(null, "Our playlist", 0, List.of());
+        }
+
+        String groupName = playlist.conversation.groupName;
+        String title = groupName == null || groupName.isBlank() ? "Our playlist" : groupName + " playlist";
+
+        List<CollabPlaylistTrackResDto> tracks = new ArrayList<>();
+        for (CollabPlaylistTrack entry : collabPlaylistTrackRepository.findByPlaylist(playlist.id)) {
+            JsonNode track = parsePayload(entry.trackPayload);
+            User addedBy = entry.addedBy;
+            tracks.add(new CollabPlaylistTrackResDto(
+                    entry.trackKey,
+                    track == null ? "" : track.path("title").asText(""),
+                    track == null ? "" : track.path("artist").asText(""),
+                    track == null ? null : track.path("album").asText(null),
+                    track == null ? null : track.path("artworkUrl").asText(null),
+                    track == null ? null : track.path("previewUrl").asText(null),
+                    track == null ? null : track.path("appleMusicId").asText(null),
+                    addedBy == null ? null : addedBy.id,
+                    addedBy == null ? null : addedBy.username,
+                    addedBy == null ? null : addedBy.displayName,
+                    addedBy == null ? null : addedBy.profileImage,
+                    entry.createdAt
+            ));
+        }
+        return new CollabPlaylistResDto(playlist.id.toString(), title, tracks.size(), tracks);
     }
 
     /**
@@ -936,8 +978,7 @@ public class ChatService {
         if (!payload.path("guessed").asBoolean(false)) {
             JsonNode track = payload.path("track");
             String title = track.path("title").asText("");
-            String artist = track.path("artist").asText("");
-            boolean correct = fuzzyMatches(guess, title) || fuzzyMatches(guess, artist);
+            boolean correct = fuzzyMatches(guess, title);
             payload.put("hidden", false);
             payload.put("guessed", true);
             payload.put("guessCorrect", correct);

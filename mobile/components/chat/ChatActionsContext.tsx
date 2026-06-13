@@ -15,6 +15,8 @@ export interface ChatActions {
   revealBlindListen?: (messageId: string, guess: string) => void
   /** Append a public-preview track to the thread's collaborative playlist (ticket 6.1). */
   addToCollabPlaylist?: (track: TrackPayload) => void
+  /** Whether a track is already in the thread's collaborative playlist (ticket 6.1). */
+  isInCollabPlaylist?: (trackId: string) => boolean
 }
 
 export const ChatActionsContext = createContext<ChatActions>({})

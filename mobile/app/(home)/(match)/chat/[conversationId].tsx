@@ -4,6 +4,7 @@ import { Image } from 'expo-image'
 import * as ImagePicker from 'expo-image-picker'
 import { UIImagePickerPreferredAssetRepresentationMode } from 'expo-image-picker'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
+import { useQuery } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
@@ -28,7 +29,6 @@ import { ChatLoadingStatus } from '@/components/chat/ChatLoadingStatus'
 import { ChatActionsContext, type ChatActions } from '@/components/chat/ChatActionsContext'
 import { TextPromptModal } from '@/components/ui/TextPromptModal'
 import { ListenTogetherBar } from '@/components/chat/ListenTogetherBar'
-import { ListeningPartyBar } from '@/components/chat/ListeningPartyBar'
 import { MessageActionSheet, type MessageAction } from '@/components/chat/MessageActionSheet'
 import { PinnedMessageBar } from '@/components/chat/PinnedMessageBar'
 import { ChatSearchPanel } from '@/components/chat/ChatSearchPanel'
@@ -37,7 +37,7 @@ import { VoiceRecorderModal } from '@/components/chat/VoiceRecorderModal'
 import { TypingIndicator } from '@/components/chat/TypingIndicator'
 import { useListenTogether } from '@/hooks/useListenTogether'
 import { useMusicGate } from '@/hooks/useMusicGate'
-import { apiPostMultipart } from '@/lib/api'
+import { apiPostMultipart, getCollabPlaylist } from '@/lib/api'
 import { resolveLinkPreview } from '@/lib/chat-api'
 import type { AlbumPayload, TrackPayload, VoiceBedPayload } from '@/models/ChatPayloads'
 import { Colors } from '@/constants/colors'
@@ -98,11 +98,35 @@ export default function ChatConversationScreen() {
     togglePin,
   } = useChatMessages(activeConversationId, otherParticipant?.username ?? null)
 
+  // Which tracks are already in the conversation's collab playlist — used to flip the track-card
+  // "Add to playlist" button to "Already in the playlist". The pinned COLLAB_PLAYLIST card updates
+  // live over the socket, so we key the fetch off its track count to refetch when anyone adds.
+  const collabCardTrackCount = useMemo(() => {
+    const count = messages.find(m => m.messageType === 'COLLAB_PLAYLIST')?.payload?.trackCount
+    return typeof count === 'number' ? count : 0
+  }, [messages])
+  const { data: collabPlaylist } = useQuery({
+    queryKey: ['collab-playlist', activeConversationId, collabCardTrackCount],
+    queryFn: async () => {
+      const token = await getToken()
+      return getCollabPlaylist(activeConversationId!, token)
+    },
+    enabled: !!activeConversationId,
+    staleTime: 10_000,
+  })
+  const [optimisticPlaylistIds, setOptimisticPlaylistIds] = useState<Set<string>>(new Set())
+  useEffect(() => { setOptimisticPlaylistIds(new Set()) }, [activeConversationId])
+  const collabPlaylistIds = useMemo(() => {
+    const ids = new Set<string>(optimisticPlaylistIds)
+    collabPlaylist?.tracks.forEach(t => ids.add(t.trackId))
+    return ids
+  }, [collabPlaylist, optimisticPlaylistIds])
+
   // Track sharing (tickets 2.1 / 1.3 / 4.x).
   const [trackPickerOpen, setTrackPickerOpen] = useState(false)
   const [trackPickerQuery, setTrackPickerQuery] = useState('')
   // What the track picker selection feeds into.
-  const [pickerMode, setPickerMode] = useState<'send' | 'dedicate' | 'lyric' | 'timestamp' | 'blind' | 'listen' | 'reaction' | 'party'>('send')
+  const [pickerMode, setPickerMode] = useState<'send' | 'dedicate' | 'timestamp' | 'blind' | 'listen' | 'reaction'>('send')
   const listenTogether = useListenTogether(activeConversationId)
   // Long-press action menu + reply target (ticket 3.1).
   const [actionMessage, setActionMessage] = useState<Message | null>(null)
@@ -111,11 +135,8 @@ export default function ChatConversationScreen() {
   const [pendingTrackReactionMessageId, setPendingTrackReactionMessageId] = useState<string | null>(null)
   // Dedication note flow (ticket 4.3).
   const [pendingDedication, setPendingDedication] = useState<TrackPayload | null>(null)
-  // Lyric entry flow (ticket 4.1).
-  const [pendingLyricTrack, setPendingLyricTrack] = useState<TrackPayload | null>(null)
   // Timestamp entry flow (ticket 4.2).
   const [pendingTimestampTrack, setPendingTimestampTrack] = useState<TrackPayload | null>(null)
-  const [pendingPartyTrack, setPendingPartyTrack] = useState<TrackPayload | null>(null)
   // Richer music shares (tickets 2.2 / 2.3).
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
   const [albumPickerOpen, setAlbumPickerOpen] = useState(false)
@@ -249,16 +270,6 @@ export default function ChatConversationScreen() {
     })
   }, [sendMessage])
 
-  const sendLyric = useCallback((track: TrackPayload, raw: string) => {
-    const lines = raw.split('\n').map(l => l.trim()).filter(Boolean).slice(0, 4)
-    if (lines.length === 0) return
-    const { type: _t, ...trackRef } = track
-    void sendMessage(`🎤 “${lines[0]}”`, {
-      messageType: 'LYRIC',
-      payload: { type: 'LYRIC', track: trackRef, lines } as unknown as Record<string, unknown>,
-    })
-  }, [sendMessage])
-
   const sendTimestamp = useCallback((track: TrackPayload, raw: string) => {
     // Accept "m:ss", "mm:ss", or plain seconds.
     const parts = raw.split(':').map(p => parseInt(p.trim(), 10))
@@ -296,16 +307,12 @@ export default function ChatConversationScreen() {
       setPickerMode('send')
     } else if (pickerMode === 'dedicate') {
       setPendingDedication(track)
-    } else if (pickerMode === 'lyric') {
-      setPendingLyricTrack(track)
     } else if (pickerMode === 'timestamp') {
       setPendingTimestampTrack(track)
     } else if (pickerMode === 'blind') {
       sendBlindListen(track)
     } else if (pickerMode === 'listen') {
       listenTogether.startRoom(track)
-    } else if (pickerMode === 'party') {
-      setPendingPartyTrack(track)
     } else {
       sendTrack(track)
     }
@@ -328,9 +335,11 @@ export default function ChatConversationScreen() {
     addToCollabPlaylist: activeConversationId
       ? (track: TrackPayload) => {
           chatWs.send({ type: 'COLLAB_PLAYLIST_ADD', conversationId: activeConversationId, track })
+          if (track.id) setOptimisticPlaylistIds(prev => new Set(prev).add(track.id))
         }
       : undefined,
-  }), [activeConversationId, otherUserId, router])
+    isInCollabPlaylist: (trackId: string) => collabPlaylistIds.has(trackId),
+  }), [activeConversationId, collabPlaylistIds, otherUserId, router])
 
   const [typingUsers, setTypingUsers] = useState<Map<string, string>>(new Map())
   const [hasPartnerKey, setHasPartnerKey] = useState(false)
@@ -906,13 +915,6 @@ export default function ChatConversationScreen() {
               onReact={listenTogether.sendReaction}
             />
           ) : null}
-          {!listenTogether.room && listenTogether.party ? (
-            <ListeningPartyBar
-              party={listenTogether.party}
-              joined={listenTogether.joinedParty}
-              onJoin={listenTogether.joinParty}
-            />
-          ) : null}
 
           <FlatList
             ref={listRef}
@@ -1002,7 +1004,7 @@ export default function ChatConversationScreen() {
       <TrackPicker
         visible={trackPickerOpen}
         initialQuery={trackPickerQuery}
-        previewOnly={pickerMode === 'reaction' || pickerMode === 'listen' || pickerMode === 'party'}
+        previewOnly={pickerMode === 'reaction' || pickerMode === 'listen'}
         onClose={() => {
           setTrackPickerOpen(false)
           if (pickerMode === 'reaction') {
@@ -1019,14 +1021,17 @@ export default function ChatConversationScreen() {
         onPickImage={() => {
           void pickImage()
         }}
-        onPickAlbum={() => setAlbumPickerOpen(true)}
-        onDedicate={() => {
-          setPickerMode('dedicate')
+        onShareSong={() => {
+          setPickerMode('send')
           setTrackPickerQuery('')
           setTrackPickerOpen(true)
         }}
-        onShareLyric={() => {
-          setPickerMode('lyric')
+        onPickAlbum={() => setAlbumPickerOpen(true)}
+        onPickPlaylist={activeConversationId ? () => {
+          router.push({ pathname: '/(home)/(match)/chat/playlist', params: { conversationId: activeConversationId } })
+        } : undefined}
+        onDedicate={() => {
+          setPickerMode('dedicate')
           setTrackPickerQuery('')
           setTrackPickerOpen(true)
         }}
@@ -1047,11 +1052,6 @@ export default function ChatConversationScreen() {
         }}
         listenTogetherDisabled={listenTogetherDisabled}
         listenTogetherHint={listenTogetherHint}
-        onListeningParty={() => {
-          setPickerMode('party')
-          setTrackPickerQuery('')
-          setTrackPickerOpen(true)
-        }}
       />
 
       <VoiceRecorderModal
@@ -1079,41 +1079,6 @@ export default function ChatConversationScreen() {
         }}
       />
 
-      <TextPromptModal
-        visible={pendingPartyTrack !== null}
-        title="Party starts in how many minutes?"
-        placeholder="5"
-        initialValue="5"
-        submitLabel="Schedule party"
-        onClose={() => {
-          setPendingPartyTrack(null)
-          setPickerMode('send')
-        }}
-        onSubmit={(text) => {
-          const minutes = Number.parseInt(text, 10)
-          if (!pendingPartyTrack || !Number.isFinite(minutes) || minutes < 1 || minutes > 43200) {
-            Alert.alert('Listening party', 'Choose a start time between 1 minute and 30 days.')
-            return
-          }
-          listenTogether.scheduleParty(pendingPartyTrack, new Date(Date.now() + minutes * 60_000))
-          setPendingPartyTrack(null)
-          setPickerMode('send')
-        }}
-      />
-
-      <TextPromptModal
-        visible={pendingLyricTrack !== null}
-        title="Paste up to 4 lyric lines"
-        placeholder={'Line 1\nLine 2'}
-        multiline
-        submitLabel="Send lyric"
-        onClose={() => setPendingLyricTrack(null)}
-        onSubmit={(text) => {
-          if (pendingLyricTrack) sendLyric(pendingLyricTrack, text)
-          setPendingLyricTrack(null)
-          setPickerMode('send')
-        }}
-      />
 
       <TextPromptModal
         visible={pendingTimestampTrack !== null}
