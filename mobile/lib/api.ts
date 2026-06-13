@@ -898,6 +898,41 @@ export async function getMusicDeveloperToken(
   return apiFetch<MusicDeveloperTokenRes>('/music/developer-token', token, false)
 }
 
+/** One track in a conversation's collaborative playlist, with who added it (ticket 6.1). */
+export interface CollabPlaylistTrackRes {
+  trackId: string
+  title: string
+  artist: string
+  album?: string | null
+  artworkUrl?: string | null
+  previewUrl?: string | null
+  appleMusicId?: string | null
+  addedByUserId?: string | null
+  addedByUsername?: string | null
+  addedByDisplayName?: string | null
+  addedByProfileImage?: string | null
+  addedAt?: string | null
+}
+
+export interface CollabPlaylistRes {
+  id: string | null
+  title: string
+  trackCount: number
+  tracks: CollabPlaylistTrackRes[]
+}
+
+/** Full collaborative playlist for a conversation — every added song, not the capped card preview. */
+export async function getCollabPlaylist(
+  conversationId: string,
+  token: string | null,
+): Promise<CollabPlaylistRes> {
+  return apiFetch<CollabPlaylistRes>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/collab-playlist`,
+    token,
+    false,
+  )
+}
+
 export interface MusicCapabilityRes {
   connected: boolean
   subscriptionActive: boolean

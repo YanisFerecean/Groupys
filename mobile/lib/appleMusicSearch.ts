@@ -71,10 +71,11 @@ export async function searchAppleMusic(
   developerToken: string,
   storefront: string = 'us',
   signal?: AbortSignal,
+  limit: number = 5,
 ): Promise<SearchResult> {
   const url =
     `${AM_CATALOG_BASE}/${encodeURIComponent(storefront)}/search` +
-    `?term=${encodeURIComponent(query)}&types=artists,albums,songs&limit=5`
+    `?term=${encodeURIComponent(query)}&types=artists,albums,songs&limit=${Math.min(Math.max(limit, 1), 25)}`
 
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${developerToken}` },
@@ -137,6 +138,7 @@ export async function searchAppleMusic(
     }
     return {
       id: parseInt(item.id, 10) || 0,
+      catalogId: item.id,
       title: a.name,
       preview: a.previews?.[0]?.url ?? '',
       duration: a.durationInMillis ? Math.round(a.durationInMillis / 1000) : 0,

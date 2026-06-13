@@ -1,12 +1,21 @@
-import { useUser } from '@clerk/expo'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Platform } from 'react-native'
 
 import { chatWs } from '@/lib/chat-ws'
 import { usePreviewPlayer } from '@/hooks/usePreviewPlayer'
+import { useMusicKitPlayer } from '@/hooks/useMusicKitPlayer'
 import type { TrackPayload, TrackRef } from '@/models/ChatPayloads'
 
 const DRIFT_THRESHOLD_SEC = 1.5
 const HEARTBEAT_MS = 2000
+
+/**
+ * A track plays in full (MusicKit JS) when it carries an Apple catalog id and we're on iOS — the
+ * only place full playback is wired. Otherwise it degrades to the synced 30s preview.
+ */
+function usesFullPlayback(track: TrackRef | null | undefined): boolean {
+  return Platform.OS === 'ios' && !!track?.appleMusicId
+}
 
 export interface FloatingReaction {
   id: string
@@ -20,16 +29,6 @@ export interface ListenTogetherRoom {
   isPlaying: boolean
 }
 
-export interface ListeningParty {
-  id: string
-  conversationId: string
-  hostUserId: string
-  hostClerkId: string
-  startAt: string
-  track: TrackPayload
-  status: 'SCHEDULED' | 'STARTED'
-}
-
 interface RoomStateEvent {
   conversationId: string
   hostUserId: string
@@ -40,30 +39,31 @@ interface RoomStateEvent {
 
 /**
  * Listen-Together sync engine (ticket 7.1). Honors Apple ToS: no audio crosses the wire — only
- * track ref + position + play/pause. This app plays the free 30s preview in sync ("lite room"),
- * which is permitted for everyone; followers correct drift toward the host position.
+ * track ref + position + play/pause. When both listeners have Apple Music and the track carries a
+ * catalog id, it plays the FULL song in sync via MusicKit JS (iOS); otherwise it falls back to the
+ * free 30s preview ("lite room"). Followers correct drift toward the host position either way.
  */
 export function useListenTogether(conversationId: string | null) {
-  const { user } = useUser()
   const preview = usePreviewPlayer()
+  const full = useMusicKitPlayer()
   const [room, setRoom] = useState<ListenTogetherRoom | null>(null)
   const [reactions, setReactions] = useState<FloatingReaction[]>([])
-  const [party, setParty] = useState<ListeningParty | null>(null)
-  const [joinedPartyId, setJoinedPartyId] = useState<string | null>(null)
 
   const previewRef = useRef(preview)
   previewRef.current = preview
+  const fullRef = useRef(full)
+  fullRef.current = full
   const roomRef = useRef(room)
   roomRef.current = room
-  const partyRef = useRef(party)
-  partyRef.current = party
-  const wasRoomActiveRef = useRef(false)
   const lastSeekRef = useRef(0)
-  const joinedPartyIdRef = useRef(joinedPartyId)
-  joinedPartyIdRef.current = joinedPartyId
-  const startRoomRef = useRef<(track: TrackPayload) => void>(() => {})
 
   const roomTrackId = conversationId ? `room:${conversationId}` : 'room'
+
+  // Start (or resume) playback of the room track on whichever engine fits it.
+  const startPlayback = useCallback((track: TrackRef) => {
+    if (usesFullPlayback(track)) fullRef.current.play(roomTrackId, track.appleMusicId!)
+    else if (track.previewUrl) previewRef.current.play(roomTrackId, track.previewUrl)
+  }, [roomTrackId])
 
   // Inbound room + reaction events.
   useEffect(() => {
@@ -71,27 +71,35 @@ export function useListenTogether(conversationId: string | null) {
 
     const unsubs = [
       chatWs.on<RoomStateEvent>('ROOM_STATE', (payload) => {
-        if (payload.conversationId !== conversationId || !payload.track?.previewUrl) return
+        const track = payload.track
+        if (payload.conversationId !== conversationId) return
+        if (!track || (!track.previewUrl && !track.appleMusicId)) return
         // Host ignores echoes (the server doesn't echo to the sender anyway).
         if (roomRef.current?.isHost) return
 
         setRoom({
           isHost: false,
           hostUserId: payload.hostUserId,
-          track: payload.track,
+          track,
           isPlaying: payload.isPlaying,
         })
 
-        const p = previewRef.current
+        const useFull = usesFullPlayback(track)
+        const p = useFull ? fullRef.current : previewRef.current
         const hostPosSec = (payload.positionMs ?? 0) / 1000
-        const url = payload.track.previewUrl!
 
         if (!payload.isPlaying) {
           if (p.isActive(roomTrackId) && p.isPlaying) p.pause()
           return
         }
-        if (!p.isActive(roomTrackId) || !p.isPlaying) {
-          p.play(roomTrackId, url)
+        if (!p.isActive(roomTrackId)) {
+          startPlayback(track)
+          return
+        }
+        if (!p.isPlaying) {
+          // Resume the already-loaded track without re-queuing.
+          if (useFull) fullRef.current.resume()
+          else previewRef.current.play(roomTrackId, track.previewUrl!)
           return
         }
         const drift = Math.abs(p.positionSec - hostPosSec)
@@ -105,7 +113,8 @@ export function useListenTogether(conversationId: string | null) {
         if (payload.conversationId !== conversationId) return
         const current = roomRef.current
         if (current && !current.isHost && payload.userId === current.hostUserId) {
-          previewRef.current.stop()
+          if (usesFullPlayback(current.track)) fullRef.current.stop()
+          else previewRef.current.stop()
           setRoom(null)
         }
       }),
@@ -115,40 +124,10 @@ export function useListenTogether(conversationId: string | null) {
         setReactions(prev => [...prev, { id, emoji: payload.emoji }])
         setTimeout(() => setReactions(prev => prev.filter(r => r.id !== id)), 2500)
       }),
-      chatWs.on<ListeningParty>('PARTY_UPDATE', (payload) => {
-        if (payload.conversationId !== conversationId) return
-        setParty(payload)
-        if (payload.hostClerkId === user?.id) {
-          setJoinedPartyId(payload.id)
-        }
-      }),
-      chatWs.on<ListeningParty>('PARTY_START', (payload) => {
-        if (payload.conversationId !== conversationId) return
-        setParty({ ...payload, status: 'STARTED' })
-        const isHost = payload.hostClerkId === user?.id
-        if (!isHost && joinedPartyIdRef.current !== payload.id) return
-        if (isHost) {
-          startRoomRef.current(payload.track)
-        } else {
-          chatWs.send({ type: 'ROOM_JOIN', conversationId })
-        }
-      }),
-      chatWs.on<{ conversationId: string }>('PARTY_END', (payload) => {
-        if (payload.conversationId !== conversationId) return
-        // Song finished → tear the party down everywhere. Followers also stop their room playback.
-        setParty(null)
-        setJoinedPartyId(null)
-        joinedPartyIdRef.current = null
-        if (!roomRef.current?.isHost) {
-          previewRef.current.stop()
-          setRoom(null)
-        }
-      }),
     ]
 
-    chatWs.send({ type: 'PARTY_REQUEST', conversationId })
     return () => unsubs.forEach(u => u())
-  }, [conversationId, roomTrackId, user?.id])
+  }, [conversationId, roomTrackId, startPlayback])
 
   // Host heartbeat: broadcast position + play state (~2s) while hosting.
   useEffect(() => {
@@ -157,12 +136,13 @@ export function useListenTogether(conversationId: string | null) {
     const send = () => {
       const t = roomRef.current?.track
       if (!t) return
+      const p = usesFullPlayback(t) ? fullRef.current : previewRef.current
       chatWs.send({
         type: 'ROOM_STATE',
         conversationId,
         track: t as unknown as Record<string, unknown>,
-        positionMs: Math.round(previewRef.current.positionSec * 1000),
-        isPlaying: previewRef.current.isPlaying,
+        positionMs: Math.round(p.positionSec * 1000),
+        isPlaying: p.isPlaying,
       })
     }
 
@@ -171,56 +151,22 @@ export function useListenTogether(conversationId: string | null) {
     return () => clearInterval(timer)
   }, [conversationId, room?.isHost, room?.track])
 
-  // Host: when the room song finishes (preview auto-stops at the cap, or the host leaves), end an
-  // active party so the "Live now" bar clears for everyone instead of lingering.
-  useEffect(() => {
-    if (!room?.isHost) {
-      wasRoomActiveRef.current = false
-      return
-    }
-    if (preview.isActive(roomTrackId)) {
-      wasRoomActiveRef.current = true
-      return
-    }
-    if (wasRoomActiveRef.current) {
-      wasRoomActiveRef.current = false
-      if (conversationId && partyRef.current?.status === 'STARTED') {
-        chatWs.send({ type: 'PARTY_END', conversationId })
-      }
-    }
-  }, [room?.isHost, preview.activeId, conversationId, roomTrackId, preview])
-
   const startRoom = useCallback((track: TrackPayload) => {
-    if (!conversationId || !track.previewUrl) return
+    if (!conversationId) return
+    if (!usesFullPlayback(track) && !track.previewUrl) return
     const { type: _t, ...trackRef } = track
     setRoom({ isHost: true, hostUserId: null, track: trackRef, isPlaying: true })
     chatWs.send({ type: 'ROOM_JOIN', conversationId })
-    preview.play(roomTrackId, track.previewUrl)
-  }, [conversationId, preview, roomTrackId])
-  startRoomRef.current = startRoom
-
-  const scheduleParty = useCallback((track: TrackPayload, startAt: Date) => {
-    if (!conversationId || !track.previewUrl) return
-    chatWs.send({
-      type: 'PARTY_SCHEDULE',
-      conversationId,
-      startAt: startAt.toISOString(),
-      track,
-    })
-  }, [conversationId])
-
-  const joinParty = useCallback(() => {
-    if (!party) return
-    setJoinedPartyId(party.id)
-    joinedPartyIdRef.current = party.id
-    chatWs.send({ type: 'PARTY_JOIN', partyId: party.id })
-  }, [party])
+    startPlayback(trackRef)
+  }, [conversationId, startPlayback])
 
   const leaveRoom = useCallback(() => {
     if (conversationId) chatWs.send({ type: 'ROOM_LEAVE', conversationId })
-    preview.stop()
+    const t = roomRef.current?.track
+    if (t && usesFullPlayback(t)) fullRef.current.stop()
+    else previewRef.current.stop()
     setRoom(null)
-  }, [conversationId, preview])
+  }, [conversationId])
 
   const sendReaction = useCallback((emoji: string) => {
     if (conversationId) chatWs.send({ type: 'REACTION_FLOAT', conversationId, emoji })
@@ -230,20 +176,17 @@ export function useListenTogether(conversationId: string | null) {
     setTimeout(() => setReactions(prev => prev.filter(r => r.id !== id)), 2500)
   }, [conversationId])
 
-  const isActive = room ? preview.isActive(roomTrackId) : false
-  const progress = isActive && preview.durationSec > 0 ? preview.positionSec / preview.durationSec : 0
+  const engine = usesFullPlayback(room?.track) ? full : preview
+  const isActive = room ? engine.isActive(roomTrackId) : false
+  const progress = isActive && engine.durationSec > 0 ? engine.positionSec / engine.durationSec : 0
 
   return {
     room,
     reactions,
-    party,
-    joinedParty: party != null && joinedPartyId === party.id,
     startRoom,
-    scheduleParty,
-    joinParty,
     leaveRoom,
     sendReaction,
-    isPlaying: isActive && preview.isPlaying,
+    isPlaying: isActive && engine.isPlaying,
     progress,
   }
 }

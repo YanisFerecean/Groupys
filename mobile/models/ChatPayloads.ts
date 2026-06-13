@@ -19,6 +19,8 @@ export interface TrackPayload {
   previewUrl?: string
   /** `music://` or https Apple Music deep link. */
   appleMusicUrl?: string
+  /** Apple Music catalog song id (string) — required for full MusicKit JS playback. */
+  appleMusicId?: string
   durationMs?: number
 }
 

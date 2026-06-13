@@ -14,14 +14,13 @@ interface MusicAttachSheetProps {
   visible: boolean
   onClose: () => void
   onPickImage?: () => void
+  onShareSong?: () => void
   onPickAlbum?: () => void
   onPickPlaylist?: () => void
   onDedicate?: () => void
-  onShareLyric?: () => void
   onDropTimestamp?: () => void
   onBlindListen?: () => void
   onListenTogether?: () => void
-  onListeningParty?: () => void
   /** Disable the Listen Together row (e.g. a participant has no Apple Music subscription). */
   listenTogetherDisabled?: boolean
   /** Hint shown under the Listen Together row when disabled. */
@@ -33,23 +32,22 @@ export function MusicAttachSheet({
   visible,
   onClose,
   onPickImage,
+  onShareSong,
   onPickAlbum,
   onPickPlaylist,
   onDedicate,
-  onShareLyric,
   onDropTimestamp,
   onBlindListen,
   onListenTogether,
-  onListeningParty,
   listenTogetherDisabled = false,
   listenTogetherHint,
 }: MusicAttachSheetProps) {
   const rows: { icon: IconName; label: string; onPress?: () => void; disabled?: boolean; sublabel?: string }[] = [
     { icon: 'image' as IconName, label: 'Share a photo', onPress: onPickImage },
+    { icon: 'musical-note' as IconName, label: 'Share a song', onPress: onShareSong },
     { icon: 'albums' as IconName, label: 'Share an album', onPress: onPickAlbum },
-    { icon: 'list' as IconName, label: 'Share a playlist', onPress: onPickPlaylist },
+    { icon: 'musical-notes' as IconName, label: 'View added songs', onPress: onPickPlaylist },
     { icon: 'heart' as IconName, label: 'Dedicate a song', onPress: onDedicate },
-    { icon: 'text' as IconName, label: 'Share a lyric', onPress: onShareLyric },
     { icon: 'time' as IconName, label: 'Drop a timestamp', onPress: onDropTimestamp },
     { icon: 'eye-off' as IconName, label: 'Blind listen', onPress: onBlindListen },
     {
@@ -59,7 +57,6 @@ export function MusicAttachSheet({
       disabled: listenTogetherDisabled,
       sublabel: listenTogetherDisabled ? listenTogetherHint : undefined,
     },
-    { icon: 'calendar' as IconName, label: 'Schedule a listening party', onPress: onListeningParty },
   ].filter(row => !!row.onPress)
 
   // Actions that present a native view controller (image picker, etc.) cannot be launched while

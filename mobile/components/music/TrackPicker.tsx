@@ -26,12 +26,13 @@ interface TrackPickerProps {
 function toTrackPayload(result: TrackSearchResult): TrackPayload {
   return {
     type: 'TRACK',
-    id: String(result.id),
+    id: result.catalogId ?? String(result.id),
     title: result.title,
     artist: result.artist,
     album: result.album,
     artworkUrl: result.coverUrl,
     previewUrl: result.preview,
+    appleMusicId: result.catalogId,
   }
 }
 
