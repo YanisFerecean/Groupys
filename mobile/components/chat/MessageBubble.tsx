@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons'
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
+import * as Haptics from 'expo-haptics'
 import { Pressable, Text, TouchableOpacity, View } from 'react-native'
 import { Colors } from '@/constants/colors'
 import type { Message } from '@/models/Chat'
@@ -195,7 +196,13 @@ export function MessageBubble({
         </TouchableOpacity>
       ) : null}
 
-      <Pressable onLongPress={onLongPress} delayLongPress={300}>
+      <Pressable
+        onLongPress={onLongPress ? () => {
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+          onLongPress()
+        } : undefined}
+        delayLongPress={300}
+      >
         {renderBubble()}
       </Pressable>
 

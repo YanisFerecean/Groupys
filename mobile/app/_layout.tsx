@@ -9,7 +9,6 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { AuthTokenProvider } from '@/hooks/AuthTokenContext'
 import { QueryProvider } from '@/components/QueryProvider'
-import { MusicKitProvider } from '@/components/music/MusicKitProvider'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import { useFonts, DMSans_400Regular, DMSans_500Medium, DMSans_700Bold } from '@expo-google-fonts/dm-sans'
 
@@ -44,9 +43,7 @@ export default function RootLayout() {
           <AuthTokenProvider>
             <QueryProvider>
               <ErrorBoundary>
-                <MusicKitProvider>
-                  <Slot />
-                </MusicKitProvider>
+                <Slot />
               </ErrorBoundary>
             </QueryProvider>
           </AuthTokenProvider>

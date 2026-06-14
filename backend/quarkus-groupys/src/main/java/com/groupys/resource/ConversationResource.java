@@ -125,12 +125,6 @@ public class ConversationResource {
     }
 
     @GET
-    @Path("/conversations/{id}/pins")
-    public List<MessageResDto> getPins(@PathParam("id") UUID id) {
-        return chatService.getPins(id, jwt.getSubject());
-    }
-
-    @GET
     @Path("/conversations/{id}/collab-playlist")
     public CollabPlaylistResDto getCollabPlaylist(@PathParam("id") UUID id) {
         return chatService.getCollabPlaylist(id, jwt.getSubject());

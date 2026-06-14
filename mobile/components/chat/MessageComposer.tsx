@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons'
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
+import * as Haptics from 'expo-haptics'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Keyboard, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { Colors } from '@/constants/colors'
@@ -96,6 +97,7 @@ export function MessageComposer({
       return
     }
 
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     stopTyping()
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current)
@@ -103,6 +105,18 @@ export function MessageComposer({
     onSend(trimmed)
     setContent('')
   }
+
+  // Light tap feedback on the composer's icon buttons before firing the provided handler.
+  const withTap = (handler?: () => void) =>
+    handler
+      ? () => {
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+          handler()
+        }
+      : undefined
+  const handleAttach = withTap(onAttachPress)
+  const handleCamera = withTap(onCameraPress)
+  const handleVoiceNote = withTap(onVoiceNote)
 
   const remaining = MAX_LENGTH - content.length
 
@@ -131,14 +145,14 @@ export function MessageComposer({
           ) : null}
           <View className="flex-row items-end gap-3">
             {onAttachPress ? (
-              <TouchableOpacity disabled={disabled} onPress={onAttachPress} activeOpacity={0.7} style={{ opacity: disabled ? 0.5 : 1 }}>
+              <TouchableOpacity disabled={disabled} onPress={handleAttach} activeOpacity={0.7} style={{ opacity: disabled ? 0.5 : 1 }}>
                 <GlassView isInteractive style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }}>
                   <Ionicons name="add" size={24} color={Colors.primary} />
                 </GlassView>
               </TouchableOpacity>
             ) : null}
             {onCameraPress ? (
-              <TouchableOpacity disabled={disabled} onPress={onCameraPress} activeOpacity={0.7} style={{ opacity: disabled ? 0.5 : 1 }}>
+              <TouchableOpacity disabled={disabled} onPress={handleCamera} activeOpacity={0.7} style={{ opacity: disabled ? 0.5 : 1 }}>
                 <GlassView isInteractive style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }}>
                   <Ionicons name="camera" size={22} color={Colors.primary} />
                 </GlassView>
@@ -178,7 +192,7 @@ export function MessageComposer({
                 </GlassView>
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity disabled={disabled} onPress={onVoiceNote} activeOpacity={0.7}>
+              <TouchableOpacity disabled={disabled} onPress={handleVoiceNote} activeOpacity={0.7}>
                 <GlassView
                   glassEffectStyle="clear"
                   isInteractive
@@ -210,7 +224,7 @@ export function MessageComposer({
               <TouchableOpacity
                 className="h-12 w-12 items-center justify-center rounded-full bg-surface-container-high"
                 disabled={disabled}
-                onPress={onAttachPress}
+                onPress={handleAttach}
                 accessibilityLabel="Share music"
                 style={{ opacity: disabled ? 0.5 : 1 }}
               >
@@ -221,7 +235,7 @@ export function MessageComposer({
               <TouchableOpacity
                 className="h-12 w-12 items-center justify-center rounded-full bg-surface-container-high"
                 disabled={disabled}
-                onPress={onCameraPress}
+                onPress={handleCamera}
                 accessibilityLabel="Take a photo"
                 style={{ opacity: disabled ? 0.5 : 1 }}
               >
@@ -257,7 +271,7 @@ export function MessageComposer({
               <TouchableOpacity
                 className="h-12 w-12 items-center justify-center rounded-full bg-surface-container-high"
                 disabled={disabled}
-                onPress={onVoiceNote}
+                onPress={handleVoiceNote}
               >
                 <Ionicons name="mic" size={20} color={Colors.onSurfaceVariant} />
               </TouchableOpacity>

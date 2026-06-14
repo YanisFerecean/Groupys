@@ -1,37 +1,37 @@
 import { useSyncExternalStore } from 'react'
 
 import {
-  getMusicKitSnapshot,
+  getAppleMusicSnapshot,
   pauseFull,
   playFull,
   resumeFull,
   seekFull,
   stopFull,
-  subscribeMusicKit,
-} from '@/lib/musicKit'
+  subscribeAppleMusic,
+} from '@/lib/appleMusicPlayer'
 
 /**
- * Full-song player backed by the MusicKit-JS WebView (see `MusicKitProvider`). Mirrors the
- * `PreviewPlayer` interface so `useListenTogether` can swap engines, except `play`/`toggle` take the
- * Apple Music **catalog id** (not a preview URL) since MusicKit plays catalog songs by id.
+ * Native Apple Music full-song player (see `lib/appleMusicPlayer`). Mirrors the `PreviewPlayer`
+ * interface so `useListenTogether` can swap engines, except `play`/`toggle` take the Apple Music
+ * **catalog store id** (not a preview URL) since playback is by catalog id.
  */
-export interface MusicKitPlayer {
+export interface AppleMusicPlayer {
   activeId: string | null
   isPlaying: boolean
   positionSec: number
   durationSec: number
   ready: boolean
   isActive: (id: string) => boolean
-  play: (id: string, catalogId: string) => void
-  toggle: (id: string, catalogId: string) => void
+  play: (id: string, storeId: string) => void
+  toggle: (id: string, storeId: string) => void
   pause: () => void
   resume: () => void
   stop: () => void
   seek: (seconds: number) => void
 }
 
-export function useMusicKitPlayer(): MusicKitPlayer {
-  const state = useSyncExternalStore(subscribeMusicKit, getMusicKitSnapshot, getMusicKitSnapshot)
+export function useAppleMusicPlayer(): AppleMusicPlayer {
+  const state = useSyncExternalStore(subscribeAppleMusic, getAppleMusicSnapshot, getAppleMusicSnapshot)
 
   const isActive = (id: string) => state.activeId === id
 
@@ -42,11 +42,11 @@ export function useMusicKitPlayer(): MusicKitPlayer {
     durationSec: state.durationSec,
     ready: state.ready,
     isActive,
-    play: (id: string, catalogId: string) => playFull(id, catalogId),
-    toggle: (id: string, catalogId: string) => {
+    play: (id: string, storeId: string) => playFull(id, storeId),
+    toggle: (id: string, storeId: string) => {
       if (state.activeId === id && state.isPlaying) pauseFull()
       else if (state.activeId === id) resumeFull()
-      else playFull(id, catalogId)
+      else playFull(id, storeId)
     },
     pause: pauseFull,
     resume: resumeFull,

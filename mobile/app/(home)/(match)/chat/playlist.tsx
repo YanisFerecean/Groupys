@@ -3,6 +3,7 @@ import { useAuth } from '@clerk/expo'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import { useQuery } from '@tanstack/react-query'
+import * as Haptics from 'expo-haptics'
 import { ActivityIndicator, FlatList, Image, Text, TouchableOpacity, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
@@ -42,7 +43,11 @@ export default function CollabPlaylistScreen() {
     return (
       <TouchableOpacity
         activeOpacity={hasPreview ? 0.7 : 1}
-        onPress={() => hasPreview && preview.toggle(item.trackId, item.previewUrl!)}
+        onPress={() => {
+          if (!hasPreview) return
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+          preview.toggle(item.trackId, item.previewUrl!)
+        }}
         className="flex-row items-center gap-3 px-5 py-2.5"
       >
         {item.artworkUrl ? (

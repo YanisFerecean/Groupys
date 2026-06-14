@@ -1,5 +1,6 @@
 import { BlurView } from 'expo-blur'
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
+import * as Haptics from 'expo-haptics'
 import { Ionicons } from '@expo/vector-icons'
 import { useRef } from 'react'
 import { Alert, Modal, Platform, ScrollView, Text, TouchableOpacity, View } from 'react-native'
@@ -67,9 +68,11 @@ export function MusicAttachSheet({
 
   const handleRowPress = (row: { onPress?: () => void; disabled?: boolean; sublabel?: string; label: string }) => {
     if (row.disabled) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning)
       Alert.alert(row.label, row.sublabel ?? 'This is not available right now.')
       return
     }
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     if (Platform.OS === 'ios') {
       pendingAction.current = row.onPress ?? null
       onClose()

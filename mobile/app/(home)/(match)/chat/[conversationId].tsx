@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth, useUser } from '@clerk/expo'
 import { Image } from 'expo-image'
+import * as Haptics from 'expo-haptics'
 import * as ImagePicker from 'expo-image-picker'
 import { UIImagePickerPreferredAssetRepresentationMode } from 'expo-image-picker'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
@@ -20,7 +21,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MessageBubble } from '@/components/chat/MessageBubble'
 import { MessageComposer } from '@/components/chat/MessageComposer'
 import { NowPlayingPill } from '@/components/chat/NowPlayingPill'
-import { NowPlayingTrackSheet } from '@/components/music/NowPlayingTrackSheet'
 import { TrackPicker } from '@/components/music/TrackPicker'
 import { AlbumPicker } from '@/components/music/AlbumPicker'
 import { MusicUpsellSheet } from '@/components/music/MusicUpsellSheet'
@@ -30,7 +30,6 @@ import { ChatActionsContext, type ChatActions } from '@/components/chat/ChatActi
 import { TextPromptModal } from '@/components/ui/TextPromptModal'
 import { ListenTogetherBar } from '@/components/chat/ListenTogetherBar'
 import { MessageActionSheet, type MessageAction } from '@/components/chat/MessageActionSheet'
-import { PinnedMessageBar } from '@/components/chat/PinnedMessageBar'
 import { ChatSearchPanel } from '@/components/chat/ChatSearchPanel'
 import { ConversationOptionsSheet } from '@/components/chat/ConversationOptionsSheet'
 import { VoiceRecorderModal } from '@/components/chat/VoiceRecorderModal'
@@ -87,7 +86,6 @@ export default function ChatConversationScreen() {
     loadMore,
     loadUntilMessage,
     messages,
-    pins,
     resendMessage,
     searchConversationMessages,
     sendMessage,
@@ -95,11 +93,10 @@ export default function ChatConversationScreen() {
     toggleTrackReaction,
     editMessage,
     deleteMessage,
-    togglePin,
   } = useChatMessages(activeConversationId, otherParticipant?.username ?? null)
 
   // Which tracks are already in the conversation's collab playlist — used to flip the track-card
-  // "Add to playlist" button to "Already in the playlist". The pinned COLLAB_PLAYLIST card updates
+  // "Add to playlist" button to "Already in the playlist". The COLLAB_PLAYLIST card updates
   // live over the socket, so we key the fetch off its track count to refetch when anyone adds.
   const collabCardTrackCount = useMemo(() => {
     const count = messages.find(m => m.messageType === 'COLLAB_PLAYLIST')?.payload?.trackCount
@@ -356,7 +353,7 @@ export default function ChatConversationScreen() {
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null)
   const [conversationOptionsOpen, setConversationOptionsOpen] = useState(false)
 
-  // Scroll to a message by id (reply quote or pinned-bar tap). Load older pages when needed.
+  // Scroll to a message by id (reply quote tap). Load older pages when needed.
   const scrollToMessage = useCallback((messageId: string) => {
     const index = messages.findIndex(m => m.id === messageId)
     if (index >= 0) {
@@ -456,12 +453,6 @@ export default function ChatConversationScreen() {
           setTrackPickerOpen(true)
         },
       })
-      const isPinned = pins.some(pin => pin.id === actionMessage.id)
-      actions.push({
-        icon: isPinned ? 'pin-outline' : 'pin',
-        label: isPinned ? 'Unpin' : 'Pin',
-        onPress: () => togglePin(actionMessage),
-      })
     }
     if (mine && isTextMsg && !actionMessage.isDeleted) {
       actions.push({ icon: 'create', label: 'Edit', onPress: () => setPendingEdit(actionMessage) })
@@ -480,7 +471,7 @@ export default function ChatConversationScreen() {
       })
     }
     return actions
-  }, [actionMessage, buildReplyStub, deleteMessage, pins, togglePin, user?.username])
+  }, [actionMessage, buildReplyStub, deleteMessage, user?.username])
 
   useEffect(() => {
     return () => {
@@ -607,7 +598,6 @@ export default function ChatConversationScreen() {
   const partnerTrack = partnerNowPlaying?.track && partnerNowPlaying.isPlaying
     ? partnerNowPlaying.track
     : null
-  const [nowPlayingSheetOpen, setNowPlayingSheetOpen] = useState(false)
   const lastSeenText = useMemo(() => {
     if (!otherParticipant?.lastSeenAt || isUserOnline(otherParticipant.userId)) {
       return null
@@ -775,7 +765,7 @@ export default function ChatConversationScreen() {
             ) : null
           ) : null}
           {partnerTrack ? (
-            <NowPlayingPill track={partnerTrack} onPress={() => setNowPlayingSheetOpen(true)} />
+            <NowPlayingPill track={partnerTrack} />
           ) : null}
         </TouchableOpacity>
 
@@ -783,7 +773,10 @@ export default function ChatConversationScreen() {
           <TouchableOpacity
             className="h-11 w-11 items-center justify-center rounded-full bg-surface-container"
             accessibilityLabel="Search conversation"
-            onPress={() => setSearchOpen(true)}
+            onPress={() => {
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+              setSearchOpen(true)
+            }}
           >
             <Ionicons name="search" size={20} color={Colors.onSurface} />
           </TouchableOpacity>
@@ -793,14 +786,15 @@ export default function ChatConversationScreen() {
           <TouchableOpacity
             className="h-11 w-11 items-center justify-center rounded-full bg-surface-container"
             accessibilityLabel="Conversation options"
-            onPress={() => setConversationOptionsOpen(true)}
+            onPress={() => {
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+              setConversationOptionsOpen(true)
+            }}
           >
             <Ionicons name="ellipsis-horizontal" size={22} color={Colors.onSurface} />
           </TouchableOpacity>
         ) : null}
       </View>
-
-      <PinnedMessageBar pins={pins} onPress={scrollToMessage} />
 
       {searchOpen && conversation ? (
         <ChatSearchPanel
@@ -851,6 +845,7 @@ export default function ChatConversationScreen() {
                   className="flex-1 items-center justify-center rounded-2xl bg-surface px-4 py-3"
                   disabled={requestAction !== null}
                   onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
                     setRequestAction('deny')
                     void denyDirectRequest(conversation.id)
                       .then(() => {
@@ -874,6 +869,7 @@ export default function ChatConversationScreen() {
                   className="flex-1 items-center justify-center rounded-2xl bg-primary px-4 py-3"
                   disabled={requestAction !== null}
                   onPress={() => {
+                    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
                     setRequestAction('accept')
                     void acceptDirectRequest(conversation.id)
                       .catch(error => {
@@ -994,12 +990,6 @@ export default function ChatConversationScreen() {
           </View>
         </>
       )}
-
-      <NowPlayingTrackSheet
-        visible={nowPlayingSheetOpen}
-        track={partnerTrack}
-        onClose={() => setNowPlayingSheetOpen(false)}
-      />
 
       <TrackPicker
         visible={trackPickerOpen}

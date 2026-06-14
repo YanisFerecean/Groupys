@@ -49,7 +49,7 @@ export async function searchTracks(
   limit = 5,
 ): Promise<TrackSearchResult[]> {
   // Apple Music catalog search — carries a string `catalogId` so shared tracks can be played in
-  // full via MusicKit JS (Listen Together). Falls back to the backend (Deezer) catalog if the
+  // full via native Apple Music (Listen Together). Falls back to the backend (Deezer) catalog if the
   // developer token / Apple search is unavailable, so search still works without an Apple token.
   try {
     const developerToken = await getDeveloperToken(token)
