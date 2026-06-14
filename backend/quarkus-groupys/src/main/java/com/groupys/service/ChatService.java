@@ -10,7 +10,6 @@ import com.groupys.dto.MessageResDto;
 import com.groupys.dto.ParticipantDto;
 import com.groupys.model.Conversation;
 import com.groupys.model.ConversationParticipant;
-import com.groupys.model.ConversationPin;
 import com.groupys.model.CollabPlaylist;
 import com.groupys.model.CollabPlaylistTrack;
 import com.groupys.model.Message;
@@ -20,7 +19,6 @@ import com.groupys.model.Friendship;
 import com.groupys.repository.CommunityMemberRepository;
 import com.groupys.repository.CollabPlaylistRepository;
 import com.groupys.repository.CollabPlaylistTrackRepository;
-import com.groupys.repository.ConversationPinRepository;
 import com.groupys.repository.ConversationRepository;
 import com.groupys.repository.FriendshipRepository;
 import com.groupys.repository.MessageRepository;
@@ -66,7 +64,6 @@ public class ChatService {
     private final ObjectMapper objectMapper;
     private final CommunityMemberRepository communityMemberRepository;
     private final MessageReactionRepository messageReactionRepository;
-    private final ConversationPinRepository conversationPinRepository;
     private final CollabPlaylistRepository collabPlaylistRepository;
     private final CollabPlaylistTrackRepository collabPlaylistTrackRepository;
     private final StickerCatalogService stickerCatalogService;
@@ -85,7 +82,6 @@ public class ChatService {
             ObjectMapper objectMapper,
             CommunityMemberRepository communityMemberRepository,
             MessageReactionRepository messageReactionRepository,
-            ConversationPinRepository conversationPinRepository,
             CollabPlaylistRepository collabPlaylistRepository,
             CollabPlaylistTrackRepository collabPlaylistTrackRepository,
             StickerCatalogService stickerCatalogService) {
@@ -101,56 +97,11 @@ public class ChatService {
         this.objectMapper = objectMapper;
         this.communityMemberRepository = communityMemberRepository;
         this.messageReactionRepository = messageReactionRepository;
-        this.conversationPinRepository = conversationPinRepository;
         this.collabPlaylistRepository = collabPlaylistRepository;
         this.collabPlaylistTrackRepository = collabPlaylistTrackRepository;
         this.stickerCatalogService = stickerCatalogService;
     }
 
-    // ── Pins (ticket 3.4) ───────────────────────────────────────────────────────
-
-    public List<MessageResDto> getPins(UUID conversationId, String clerkId) {
-        User user = requireUserByClerkId(clerkId);
-        requireParticipant(conversationId, user.id);
-        return conversationPinRepository.findByConversation(conversationId).stream()
-                .map(pin -> messageRepository.findByIdOptional(pin.messageId).orElse(null))
-                .filter(java.util.Objects::nonNull)
-                .filter(m -> !m.isDeleted)
-                .map(this::toMessageDto)
-                .collect(Collectors.toList());
-    }
-
-    @Transactional
-    public MessageResDto pinMessage(UUID messageId, String clerkId) {
-        User user = requireUserByClerkId(clerkId);
-        Message msg = messageRepository.findByIdOptional(messageId)
-                .orElseThrow(() -> new NotFoundException("Message not found"));
-        requireParticipant(msg.conversation.id, user.id);
-        if (msg.isDeleted) {
-            throw new BadRequestException("Deleted messages cannot be pinned");
-        }
-        if (conversationPinRepository.findOne(msg.conversation.id, messageId) == null) {
-            ConversationPin pin = new ConversationPin();
-            pin.conversationId = msg.conversation.id;
-            pin.messageId = messageId;
-            pin.pinnedBy = user;
-            conversationPinRepository.persist(pin);
-        }
-        return toMessageDto(msg);
-    }
-
-    @Transactional
-    public UUID unpinMessage(UUID messageId, String clerkId) {
-        User user = requireUserByClerkId(clerkId);
-        Message msg = messageRepository.findByIdOptional(messageId)
-                .orElseThrow(() -> new NotFoundException("Message not found"));
-        requireParticipant(msg.conversation.id, user.id);
-        ConversationPin pin = conversationPinRepository.findOne(msg.conversation.id, messageId);
-        if (pin != null) {
-            conversationPinRepository.delete(pin);
-        }
-        return msg.conversation.id;
-    }
 
     // ── Collaborative playlist (ticket 6.1) ───────────────────────────────────
 
@@ -231,13 +182,6 @@ public class ChatService {
             card.updatedAt = Instant.now();
         }
 
-        if (conversationPinRepository.findOne(conversationId, card.id) == null) {
-            ConversationPin pin = new ConversationPin();
-            pin.conversationId = conversationId;
-            pin.messageId = card.id;
-            pin.pinnedBy = user;
-            conversationPinRepository.persist(pin);
-        }
         return toMessageDto(card);
     }
 

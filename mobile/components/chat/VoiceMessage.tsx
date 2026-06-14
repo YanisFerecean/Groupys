@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons'
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
+import * as Haptics from 'expo-haptics'
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio'
 import { useEffect, useState } from 'react'
 import { Pressable, Text, TouchableOpacity, View } from 'react-native'
@@ -58,6 +59,7 @@ export function VoiceMessage({ message, isMine }: MessageRendererProps) {
     <>
       <TouchableOpacity
         onPress={() => {
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
           if (status.playing) {
             player.pause()
             if (voicePayload.bed) bedPlayer.pause()

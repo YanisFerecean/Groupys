@@ -1,5 +1,6 @@
 import { Image, Text, TouchableOpacity, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import * as Haptics from 'expo-haptics'
 
 import { Colors } from '@/constants/colors'
 import type { FloatingReaction, ListenTogetherRoom } from '@/hooks/useListenTogether'
@@ -35,7 +36,7 @@ export function ListenTogetherBar({ room, reactions, isPlaying, progress, onLeav
             {room.track.title}{room.track.artist ? ` — ${room.track.artist}` : ''}
           </Text>
         </View>
-        <TouchableOpacity onPress={onLeave} className="h-9 w-9 items-center justify-center rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
+        <TouchableOpacity onPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onLeave() }} className="h-9 w-9 items-center justify-center rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
           <Ionicons name="exit-outline" size={18} color={Colors.onPrimary} />
         </TouchableOpacity>
       </View>
@@ -46,7 +47,7 @@ export function ListenTogetherBar({ room, reactions, isPlaying, progress, onLeav
 
       <View className="flex-row items-center gap-2 px-3 py-2">
         {QUICK_REACTIONS.map(emoji => (
-          <TouchableOpacity key={emoji} onPress={() => onReact(emoji)} className="h-8 w-8 items-center justify-center rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}>
+          <TouchableOpacity key={emoji} onPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onReact(emoji) }} className="h-8 w-8 items-center justify-center rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}>
             <Text style={{ fontSize: 16 }}>{emoji}</Text>
           </TouchableOpacity>
         ))}

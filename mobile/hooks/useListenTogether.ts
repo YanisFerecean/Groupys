@@ -3,15 +3,15 @@ import { Platform } from 'react-native'
 
 import { chatWs } from '@/lib/chat-ws'
 import { usePreviewPlayer } from '@/hooks/usePreviewPlayer'
-import { useMusicKitPlayer } from '@/hooks/useMusicKitPlayer'
+import { useAppleMusicPlayer } from '@/hooks/useAppleMusicPlayer'
 import type { TrackPayload, TrackRef } from '@/models/ChatPayloads'
 
 const DRIFT_THRESHOLD_SEC = 1.5
 const HEARTBEAT_MS = 2000
 
 /**
- * A track plays in full (MusicKit JS) when it carries an Apple catalog id and we're on iOS — the
- * only place full playback is wired. Otherwise it degrades to the synced 30s preview.
+ * A track plays in full (native Apple Music) when it carries an Apple catalog id and we're on iOS —
+ * the only place full playback is wired. Otherwise it degrades to the synced 30s preview.
  */
 function usesFullPlayback(track: TrackRef | null | undefined): boolean {
   return Platform.OS === 'ios' && !!track?.appleMusicId
@@ -40,12 +40,12 @@ interface RoomStateEvent {
 /**
  * Listen-Together sync engine (ticket 7.1). Honors Apple ToS: no audio crosses the wire — only
  * track ref + position + play/pause. When both listeners have Apple Music and the track carries a
- * catalog id, it plays the FULL song in sync via MusicKit JS (iOS); otherwise it falls back to the
+ * catalog id, it plays the FULL song in sync via native Apple Music (iOS); otherwise it falls back to the
  * free 30s preview ("lite room"). Followers correct drift toward the host position either way.
  */
 export function useListenTogether(conversationId: string | null) {
   const preview = usePreviewPlayer()
-  const full = useMusicKitPlayer()
+  const full = useAppleMusicPlayer()
   const [room, setRoom] = useState<ListenTogetherRoom | null>(null)
   const [reactions, setReactions] = useState<FloatingReaction[]>([])
 

@@ -1,6 +1,6 @@
 import { useAuth, useUser } from '@clerk/expo'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { postMessage, fetchMessages, fetchPins, searchMessages } from '@/lib/chat-api'
+import { postMessage, fetchMessages, searchMessages } from '@/lib/chat-api'
 import { isEncrypted } from '@/lib/chat-crypto'
 import { chatWs } from '@/lib/chat-ws'
 import type { Message, MessageReaction } from '@/models/Chat'
@@ -17,7 +17,9 @@ export function useChatMessages(
   const { user } = useUser()
   const { applyOutgoingMessage, cryptoReady, decryptForUsername, encryptForUsername } = useChat()
   const [messages, setMessages] = useState<Message[]>([])
-  const [pins, setPins] = useState<Message[]>([])
+  // Bumped to re-run the decryption pass while the crypto session / partner key are still settling
+  // (e.g. a cold start from a push notification), so messages don't stay shown as ciphertext.
+  const [decryptRetry, setDecryptRetry] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(true)
@@ -41,6 +43,7 @@ export function useChatMessages(
 
   useEffect(() => {
     decryptedCacheRef.current.clear()
+    setDecryptRetry(0)
   }, [conversationId])
 
   useEffect(() => {
@@ -57,6 +60,7 @@ export function useChatMessages(
     }
 
     let cancelled = false
+    let retryTimer: ReturnType<typeof setTimeout> | null = null
 
     void Promise.all(
       unprocessed.map(async (message) => {
@@ -72,25 +76,38 @@ export function useChatMessages(
       }),
     ).then((results) => {
       if (cancelled) return
-      const byId = new Map(results.map(r => [r.id, r]))
-      results.forEach(r => decryptedCacheRef.current.set(r.id, r.content))
-      setMessages(prev => prev.map((m) => {
-        const r = byId.get(m.id)
-        if (!r) return m
-        return {
-          ...m,
-          content: r.content,
-          replyTo: m.replyTo && r.snippet != null
-            ? { ...m.replyTo, snippet: r.snippet.length <= 80 ? r.snippet : `${r.snippet.slice(0, 80)}…` }
-            : m.replyTo,
-        }
-      }))
+      // Only treat a message as decrypted when nothing is still ciphertext. If the keys weren't
+      // ready yet, `decryptForUsername` returns the original ciphertext — don't cache that (it would
+      // freeze the message as encrypted until an app reload); leave it for a bounded retry instead.
+      const resolved = results.filter(
+        r => !isEncrypted(r.content) && (r.snippet == null || !isEncrypted(r.snippet)),
+      )
+      if (resolved.length > 0) {
+        const byId = new Map(resolved.map(r => [r.id, r]))
+        resolved.forEach(r => decryptedCacheRef.current.set(r.id, r.content))
+        setMessages(prev => prev.map((m) => {
+          const r = byId.get(m.id)
+          if (!r) return m
+          return {
+            ...m,
+            content: r.content,
+            replyTo: m.replyTo && r.snippet != null
+              ? { ...m.replyTo, snippet: r.snippet.length <= 80 ? r.snippet : `${r.snippet.slice(0, 80)}…` }
+              : m.replyTo,
+          }
+        }))
+      }
+      // Some still couldn't be decrypted (keys settling on cold start) — retry a few times.
+      if (resolved.length < results.length && decryptRetry < 8) {
+        retryTimer = setTimeout(() => setDecryptRetry(n => n + 1), 600)
+      }
     })
 
     return () => {
       cancelled = true
+      if (retryTimer) clearTimeout(retryTimer)
     }
-  }, [cryptoReady, decryptForUsername, messages, otherUsername])
+  }, [cryptoReady, decryptForUsername, messages, otherUsername, decryptRetry])
 
   const decryptPayload = useCallback(async (message: Message) => {
     const username = otherUsernameRef.current
@@ -121,7 +138,6 @@ export function useChatMessages(
   useEffect(() => {
     if (!conversationId) {
       setMessages([])
-      setPins([])
       setHasMore(true)
       setLoadedConversationId(null)
       return
@@ -130,7 +146,6 @@ export function useChatMessages(
     let cancelled = false
     const activeConversationId = conversationId
     setMessages([])
-    setPins([])
     setHasMore(true)
     setLoadedConversationId(null)
 
@@ -138,17 +153,10 @@ export function useChatMessages(
       setIsLoading(true)
       try {
         const token = await getTokenRef.current()
-        const [loaded, loadedPins] = await Promise.all([
-          fetchMessages(activeConversationId, 0, PAGE_SIZE, token),
-          fetchPins(activeConversationId, token),
-        ])
-        const [decrypted, decryptedPins] = await Promise.all([
-          Promise.all(loaded.map(decryptPayload)),
-          Promise.all(loadedPins.map(decryptPayload)),
-        ])
+        const loaded = await fetchMessages(activeConversationId, 0, PAGE_SIZE, token)
+        const decrypted = await Promise.all(loaded.map(decryptPayload))
         if (!cancelled) {
           setMessages(decrypted)
-          setPins(decryptedPins)
           setHasMore(loaded.length === PAGE_SIZE)
           setLoadedConversationId(activeConversationId)
         }
@@ -225,18 +233,6 @@ export function useChatMessages(
               : message
           ))
         })
-        if (payload.isDeleted) {
-          setPins(prev => prev.filter(pin => pin.id !== payload.id))
-        } else {
-          setPins(prev => prev.map(pin => (pin.id === payload.id ? { ...pin, ...payload } : pin)))
-        }
-      }),
-      chatWs.on('PIN_UPDATE', async (payload: { conversationId: string; pins: Message[] }) => {
-        if (payload.conversationId !== conversationId) {
-          return
-        }
-        const decrypted = await Promise.all((payload.pins ?? []).map(decryptPayload))
-        setPins(decrypted)
       }),
       chatWs.on('MESSAGE_ACK', (payload: { tempId: string; messageId: string; createdAt: string }) => {
         setMessages(prev => prev.map(message => (
@@ -309,7 +305,7 @@ export function useChatMessages(
       setHasMore(accumulated.length % PAGE_SIZE === 0)
       return accumulated.some(message => message.id === messageId)
     } catch (error) {
-      console.error('[chat] failed to load pinned message', error)
+      console.error('[chat] failed to load message', error)
       return false
     }
   }, [conversationId, decryptPayload, messages])
@@ -500,19 +496,8 @@ export function useChatMessages(
     chatWs.send({ type: 'MESSAGE_DELETE', messageId })
   }, [])
 
-  const togglePin = useCallback((message: Message) => {
-    const isPinned = pins.some(pin => pin.id === message.id)
-    setPins(prev => (
-      isPinned
-        ? prev.filter(pin => pin.id !== message.id)
-        : [message, ...prev]
-    ))
-    chatWs.send({ type: isPinned ? 'PIN_REMOVE' : 'PIN_ADD', messageId: message.id })
-  }, [pins])
-
   return {
     messages,
-    pins,
     isLoading,
     isInitialLoadPending: Boolean(conversationId) && loadedConversationId !== conversationId,
     isLoadingMore,
@@ -526,6 +511,5 @@ export function useChatMessages(
     toggleTrackReaction,
     editMessage,
     deleteMessage,
-    togglePin,
   }
 }
