@@ -130,12 +130,6 @@ public class ConversationResource {
         return chatService.getCollabPlaylist(id, jwt.getSubject());
     }
 
-    @GET
-    @Path("/conversations/{id}/collab-playlist")
-    public CollabPlaylistResDto getCollabPlaylist(@PathParam("id") UUID id) {
-        return chatService.getCollabPlaylist(id, jwt.getSubject());
-    }
-
     @POST
     @Path("/conversations/{id}/messages")
     public Response sendMessage(@PathParam("id") UUID id, SendMessageRequest req) {

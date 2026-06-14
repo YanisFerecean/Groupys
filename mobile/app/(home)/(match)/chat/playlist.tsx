@@ -2,14 +2,15 @@ import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '@clerk/expo'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import * as Haptics from 'expo-haptics'
-import { ActivityIndicator, FlatList, Image, Text, TouchableOpacity, View } from 'react-native'
+import { ActivityIndicator, Alert, FlatList, Image, Text, TouchableOpacity, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { Colors } from '@/constants/colors'
 import { usePreviewPlayer } from '@/hooks/usePreviewPlayer'
-import { getCollabPlaylist, type CollabPlaylistTrackRes } from '@/lib/api'
+import { chatWs } from '@/lib/chat-ws'
+import { getCollabPlaylist, type CollabPlaylistRes, type CollabPlaylistTrackRes } from '@/lib/api'
 
 const GLASS = isLiquidGlassAvailable()
 
@@ -23,6 +24,7 @@ export default function CollabPlaylistScreen() {
   const insets = useSafeAreaInsets()
   const { getToken } = useAuth()
   const preview = usePreviewPlayer()
+  const queryClient = useQueryClient()
 
   const { data, isLoading } = useQuery({
     queryKey: ['collab-playlist', conversationId],
@@ -35,6 +37,31 @@ export default function CollabPlaylistScreen() {
   })
 
   const tracks = data?.tracks ?? []
+
+  const handleDelete = (track: CollabPlaylistTrackRes) => {
+    Alert.alert('Remove song?', `Remove "${track.title}" from the playlist?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: () => {
+          if (!conversationId) return
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+          // Optimistically drop the row; the server broadcasts the refreshed card to both members.
+          queryClient.setQueryData<CollabPlaylistRes>(['collab-playlist', conversationId], old =>
+            old
+              ? {
+                  ...old,
+                  tracks: old.tracks.filter(t => t.trackId !== track.trackId),
+                  trackCount: Math.max(0, old.trackCount - 1),
+                }
+              : old,
+          )
+          chatWs.send({ type: 'COLLAB_PLAYLIST_REMOVE', conversationId, trackId: track.trackId })
+        },
+      },
+    ])
+  }
 
   const renderItem = ({ item }: { item: CollabPlaylistTrackRes }) => {
     const hasPreview = !!item.previewUrl
@@ -81,6 +108,14 @@ export default function CollabPlaylistScreen() {
             color={Colors.primary}
           />
         ) : null}
+        <TouchableOpacity
+          onPress={() => handleDelete(item)}
+          hitSlop={8}
+          accessibilityLabel={`Remove ${item.title}`}
+          className="ml-1 h-9 w-9 items-center justify-center rounded-full"
+        >
+          <Ionicons name="trash-outline" size={18} color={Colors.onSurfaceVariant} />
+        </TouchableOpacity>
       </TouchableOpacity>
     )
   }

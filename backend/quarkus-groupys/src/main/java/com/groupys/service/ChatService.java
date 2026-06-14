@@ -185,6 +185,36 @@ public class ChatService {
         return toMessageDto(card);
     }
 
+    /** Remove a track from the conversation's collaborative playlist and refresh its pinned card. */
+    @Transactional
+    public MessageResDto removeTrackFromCollabPlaylist(UUID conversationId, String clerkId, String trackId) {
+        User user = requireUserByClerkId(clerkId);
+        requireParticipant(conversationId, user.id);
+        if (trackId == null || trackId.isBlank()) {
+            throw new BadRequestException("trackId required");
+        }
+
+        CollabPlaylist playlist = collabPlaylistRepository.findByConversation(conversationId);
+        if (playlist == null) {
+            throw new NotFoundException("No collaborative playlist for this conversation");
+        }
+
+        CollabPlaylistTrack entry = collabPlaylistTrackRepository.findOne(playlist.id, trackId);
+        if (entry != null) {
+            collabPlaylistTrackRepository.delete(entry);
+            collabPlaylistTrackRepository.flush();
+        }
+
+        List<CollabPlaylistTrack> tracks = collabPlaylistTrackRepository.findByPlaylist(playlist.id);
+        Message card = playlist.message;
+        if (card == null) {
+            throw new NotFoundException("Collaborative playlist card missing");
+        }
+        card.payload = buildCollabPlaylistPayload(playlist, tracks);
+        card.updatedAt = Instant.now();
+        return toMessageDto(card);
+    }
+
     private String buildCollabPlaylistPayload(CollabPlaylist playlist, List<CollabPlaylistTrack> tracks) {
         var payload = objectMapper.createObjectNode();
         payload.put("type", MessageType.COLLAB_PLAYLIST);

@@ -155,6 +155,7 @@ public class ChatWebSocket {
             case "MESSAGE_EDIT"        -> handleMessageEdit(connection, user, msg);
             case "MESSAGE_DELETE"      -> handleMessageDelete(connection, user, msg);
             case "COLLAB_PLAYLIST_ADD" -> handleCollabPlaylistAdd(connection, user, msg);
+            case "COLLAB_PLAYLIST_REMOVE" -> handleCollabPlaylistRemove(connection, user, msg);
             case "ROOM_JOIN"           -> handleRoomJoin(connection, user, msg);
             case "ROOM_STATE"          -> handleRoomState(user, msg);
             case "ROOM_LEAVE"          -> handleRoomLeave(user, msg);
@@ -488,6 +489,29 @@ public class ChatWebSocket {
         try {
             updated = chatService.addTrackToCollabPlaylist(
                     conversationId, user.clerkId, mapper.writeValueAsString(track));
+        } catch (jakarta.ws.rs.WebApplicationException e) {
+            sendJson(connection, WebSocketMessage.error(e.getMessage()));
+            return;
+        } catch (Exception e) {
+            LOG.errorf(e, "Failed to update collaborative playlist");
+            sendJson(connection, WebSocketMessage.error("Internal error"));
+            return;
+        }
+
+        broadcastMessageUpdated(updated);
+    }
+
+    private void handleCollabPlaylistRemove(WebSocketConnection connection, User user, Map<String, Object> msg) {
+        UUID conversationId = parseConversationId(connection, msg);
+        String trackId = (String) msg.get("trackId");
+        if (conversationId == null || trackId == null) {
+            sendJson(connection, WebSocketMessage.error("conversationId and trackId required"));
+            return;
+        }
+
+        MessageResDto updated;
+        try {
+            updated = chatService.removeTrackFromCollabPlaylist(conversationId, user.clerkId, trackId);
         } catch (jakarta.ws.rs.WebApplicationException e) {
             sendJson(connection, WebSocketMessage.error(e.getMessage()));
             return;
