@@ -11,7 +11,7 @@ import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import { Colors } from '@/constants/colors'
 
 const BROWSER_SSO_CALLBACK_PATH = 'sso-callback'
-const BROWSER_SSO_CALLBACK_SCHEME = 'mobile'
+const BROWSER_SSO_CALLBACK_SCHEME = 'groupys'
 const TEMP_USERNAME_PREFIX = 'groupys'
 const TEMP_USERNAME_RETRY_LIMIT = 6
 
