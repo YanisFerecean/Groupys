@@ -18,6 +18,7 @@ import {
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { AppCamera } from '@/components/camera/AppCamera'
 import { MessageBubble } from '@/components/chat/MessageBubble'
 import { MessageComposer } from '@/components/chat/MessageComposer'
 import { NowPlayingPill } from '@/components/chat/NowPlayingPill'
@@ -38,7 +39,8 @@ import { useListenTogether } from '@/hooks/useListenTogether'
 import { useMusicGate } from '@/hooks/useMusicGate'
 import { apiPostMultipart, getCollabPlaylist } from '@/lib/api'
 import { resolveLinkPreview } from '@/lib/chat-api'
-import type { AlbumPayload, TrackPayload, VoiceBedPayload } from '@/models/ChatPayloads'
+import type { AlbumPayload, MediaMusicAttachment, TrackPayload, VoiceBedPayload } from '@/models/ChatPayloads'
+import type { CapturedMedia } from '@/types/camera'
 import { Colors } from '@/constants/colors'
 import { useChat } from '@/hooks/useChat'
 import { useChatMessages } from '@/hooks/useChatMessages'
@@ -124,7 +126,7 @@ export default function ChatConversationScreen() {
   const [trackPickerQuery, setTrackPickerQuery] = useState('')
   // What the track picker selection feeds into.
   const [pickerMode, setPickerMode] = useState<'send' | 'dedicate' | 'timestamp' | 'blind' | 'listen' | 'reaction'>('send')
-  const listenTogether = useListenTogether(activeConversationId)
+  const listenTogether = useListenTogether(activeConversationId, musicGate.capability.canPlayFull)
   // Long-press action menu + reply target (ticket 3.1).
   const [actionMessage, setActionMessage] = useState<Message | null>(null)
   const [replyTarget, setReplyTarget] = useState<ReplyStub | null>(null)
@@ -139,59 +141,83 @@ export default function ChatConversationScreen() {
   const [albumPickerOpen, setAlbumPickerOpen] = useState(false)
   const [voiceRecorderOpen, setVoiceRecorderOpen] = useState(false)
   const [pendingVoiceBed, setPendingVoiceBed] = useState<VoiceBedPayload | null>(null)
+  // Full-screen in-app camera (replaces the OS camera sheet) for richer capture + music attach.
+  const [cameraOpen, setCameraOpen] = useState(false)
+
+  // Upload an image/video and send it as an IMAGE or VIDEO message, carrying the natural dimensions
+  // (so the bubble renders at the right aspect ratio) and any attached music overlay.
+  const uploadAndSend = useCallback(async (input: {
+    uri: string
+    isVideo: boolean
+    mime: string
+    width?: number
+    height?: number
+    fileName?: string
+    music?: MediaMusicAttachment
+  }) => {
+    const ext = input.isVideo ? 'mp4' : 'jpg'
+    const formData = new FormData()
+    formData.append('file', {
+      uri: input.uri,
+      type: input.mime,
+      name: input.fileName ?? `chat-media-${Date.now()}.${ext}`,
+    } as unknown as Blob)
+    const token = await getToken()
+    const uploaded = await apiPostMultipart<{ url: string; type?: string }>('/posts/media/upload', token, formData)
+    await sendMessage(input.isVideo ? 'Video' : 'Photo', {
+      messageType: input.isVideo ? 'VIDEO' : 'IMAGE',
+      mediaUrl: uploaded.url,
+      payload: {
+        width: input.width,
+        height: input.height,
+        mime: uploaded.type ?? input.mime,
+        ...(input.music ? { music: input.music } : {}),
+      },
+    })
+  }, [getToken, sendMessage])
+
+  const uploadAndSendAsset = useCallback((asset: ImagePicker.ImagePickerAsset) => {
+    const isVideo = asset.type === 'video'
+    return uploadAndSend({
+      uri: asset.uri,
+      isVideo,
+      mime: asset.mimeType ?? (isVideo ? 'video/mp4' : 'image/jpeg'),
+      width: asset.width,
+      height: asset.height,
+      fileName: asset.fileName ?? undefined,
+    })
+  }, [uploadAndSend])
+
+  const handleCameraCapture = useCallback(async (media: CapturedMedia) => {
+    setCameraOpen(false)
+    try {
+      await uploadAndSend({
+        uri: media.uri,
+        isVideo: media.type === 'video',
+        mime: media.mime ?? (media.type === 'video' ? 'video/mp4' : 'image/jpeg'),
+        width: media.width,
+        height: media.height,
+        music: media.music,
+      })
+    } catch {
+      Alert.alert('Could not send media', 'Try again.')
+    }
+  }, [uploadAndSend])
+
   const pickImage = useCallback(async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
+        mediaTypes: ['images', 'videos'],
         quality: 0.8,
         allowsEditing: false,
         preferredAssetRepresentationMode: UIImagePickerPreferredAssetRepresentationMode.Compatible,
       })
       if (result.canceled || !result.assets[0]) return
-
-      const asset = result.assets[0]
-      const formData = new FormData()
-      formData.append('file', {
-        uri: asset.uri,
-        type: asset.mimeType ?? 'image/jpeg',
-        name: asset.fileName ?? `chat-image-${Date.now()}.jpg`,
-      } as unknown as Blob)
-      const token = await getToken()
-      const uploaded = await apiPostMultipart<{ url: string }>('/posts/media/upload', token, formData)
-      await sendMessage('Photo', { messageType: 'IMAGE', mediaUrl: uploaded.url })
+      await uploadAndSendAsset(result.assets[0])
     } catch {
-      Alert.alert('Could not share photo', 'Try selecting the image again.')
+      Alert.alert('Could not share media', 'Try selecting the photo or video again.')
     }
-  }, [getToken, sendMessage])
-
-  const captureImage = useCallback(async () => {
-    try {
-      const permission = await ImagePicker.requestCameraPermissionsAsync()
-      if (!permission.granted) {
-        Alert.alert('Camera access needed', 'Enable camera access in Settings to take a photo.')
-        return
-      }
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ['images'],
-        quality: 0.8,
-        allowsEditing: false,
-      })
-      if (result.canceled || !result.assets[0]) return
-
-      const asset = result.assets[0]
-      const formData = new FormData()
-      formData.append('file', {
-        uri: asset.uri,
-        type: asset.mimeType ?? 'image/jpeg',
-        name: asset.fileName ?? `chat-photo-${Date.now()}.jpg`,
-      } as unknown as Blob)
-      const token = await getToken()
-      const uploaded = await apiPostMultipart<{ url: string }>('/posts/media/upload', token, formData)
-      await sendMessage('Photo', { messageType: 'IMAGE', mediaUrl: uploaded.url })
-    } catch {
-      Alert.alert('Could not take photo', 'Try again.')
-    }
-  }, [getToken, sendMessage])
+  }, [uploadAndSendAsset])
 
   const handleComposerSend = useCallback(async (content: string) => {
     const replyTo = replyTarget
@@ -643,17 +669,9 @@ export default function ChatConversationScreen() {
   const canMessage = conversation?.requestStatus === 'ACCEPTED'
   const showMessageListLoader = isLoading || isInitialLoadPending
 
-  // Listen Together syncs full-song playback, so both people need an active Apple Music
-  // subscription — the current user via canPlayFull, the partner via their cached subscription flag.
-  const selfCanPlayFull = musicGate.capability.canPlayFull
-  const peerHasSubscription = otherParticipant?.musicSubscriptionActive ?? false
-  const listenTogetherDisabled = !selfCanPlayFull || !peerHasSubscription
-  const partnerName = otherParticipant?.displayName ?? otherParticipant?.username ?? 'They'
-  const listenTogetherHint = !selfCanPlayFull
-    ? 'Listen Together needs an active Apple Music subscription to sync full songs.'
-    : !peerHasSubscription
-      ? `${partnerName} doesn’t have an active Apple Music subscription, so full songs can’t play in sync.`
-      : undefined
+  // Listen Together is always available: a subscriber picking the song drives a full-song room
+  // (each listener gets full or the 30s preview per their own subscription), and a non-subscriber
+  // can still drive a synced-preview "lite room". Engine/fallback is decided inside useListenTogether.
   const renderEmptyState = () => (
     <View
       className="flex-1 items-center justify-center px-10 py-10"
@@ -945,7 +963,7 @@ export default function ChatConversationScreen() {
             ListHeaderComponent={typingUsername ? <TypingIndicator username={typingUsername} /> : null}
             ListFooterComponent={(
               <View className="pb-3 pt-2">
-                {isLoadingMore ? (
+                {isLoadingMore && messages.length > 0 ? (
                   <ActivityIndicator color={Colors.primary} />
                 ) : null}
                 {!hasMore && messages.length > 0 ? (
@@ -957,7 +975,9 @@ export default function ChatConversationScreen() {
             )}
             maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
             onEndReached={() => {
-              if (hasMore && !isLoadingMore) {
+              // Guard against the empty initial list firing onEndReached (which would show a second
+              // loader at the top, on top of the centered "Loading your chat").
+              if (hasMore && !isLoadingMore && messages.length > 0) {
                 void loadMore()
               }
             }}
@@ -979,9 +999,7 @@ export default function ChatConversationScreen() {
                 void handleComposerSend(content)
               }}
               onAttachPress={() => setAttachMenuOpen(true)}
-              onCameraPress={() => {
-                void captureImage()
-              }}
+              onCameraPress={() => setCameraOpen(true)}
               onVoiceNote={() => {
                 setPendingVoiceBed(null)
                 setVoiceRecorderOpen(true)
@@ -990,6 +1008,18 @@ export default function ChatConversationScreen() {
           </View>
         </>
       )}
+
+      <AppCamera
+        visible={cameraOpen}
+        enableMusic
+        allowPhoto
+        allowVideo
+        saveToLibrary
+        onCancel={() => setCameraOpen(false)}
+        onMediaCaptured={(media) => {
+          void handleCameraCapture(media)
+        }}
+      />
 
       <TrackPicker
         visible={trackPickerOpen}
@@ -1040,8 +1070,6 @@ export default function ChatConversationScreen() {
           setTrackPickerQuery('')
           setTrackPickerOpen(true)
         }}
-        listenTogetherDisabled={listenTogetherDisabled}
-        listenTogetherHint={listenTogetherHint}
       />
 
       <VoiceRecorderModal

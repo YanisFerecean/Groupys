@@ -44,7 +44,7 @@ export function MusicAttachSheet({
   listenTogetherHint,
 }: MusicAttachSheetProps) {
   const rows: { icon: IconName; label: string; onPress?: () => void; disabled?: boolean; sublabel?: string }[] = [
-    { icon: 'image' as IconName, label: 'Share a photo', onPress: onPickImage },
+    { icon: 'image' as IconName, label: 'Share a photo or video', onPress: onPickImage },
     { icon: 'musical-note' as IconName, label: 'Share a song', onPress: onShareSong },
     { icon: 'albums' as IconName, label: 'Share an album', onPress: onPickAlbum },
     { icon: 'musical-notes' as IconName, label: 'View added songs', onPress: onPickPlaylist },

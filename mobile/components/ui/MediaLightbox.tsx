@@ -19,7 +19,9 @@ import { Colors } from '@/constants/colors'
 import { useAuthToken } from '@/hooks/useAuthToken'
 import GlassModalBackdrop from '@/components/ui/GlassModalBackdrop'
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window')
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
+// Full-screen media area; `contentFit="contain"` then shows the WHOLE 4:3/16:9/portrait item.
+const MEDIA_AREA_HEIGHT = Math.round(SCREEN_HEIGHT * 0.82)
 
 interface MediaItem {
   url: string
@@ -200,7 +202,7 @@ const MediaSlide = React.memo(({ item, isActive, token }: MediaSlideProps) => {
         className="w-full items-center justify-center"
       >
         {isImage && (
-          <View className="w-full aspect-square rounded-2xl overflow-hidden bg-black/20">
+          <View className="w-full rounded-2xl overflow-hidden" style={{ height: MEDIA_AREA_HEIGHT }}>
             <Image
               source={{ uri: item.url, headers: token ? { Authorization: `Bearer ${token}` } : {} }}
               style={{ width: '100%', height: '100%' }}
@@ -212,9 +214,9 @@ const MediaSlide = React.memo(({ item, isActive, token }: MediaSlideProps) => {
         )}
 
         {isVideo && player && (
-          <View 
-            className="w-full rounded-2xl overflow-hidden bg-black/20 items-center justify-center"
-            style={{ width: '100%', height: 300 }}
+          <View
+            className="w-full rounded-2xl overflow-hidden items-center justify-center"
+            style={{ width: '100%', height: MEDIA_AREA_HEIGHT }}
           >
             <VideoView
               player={player}

@@ -10,11 +10,12 @@ const DRIFT_THRESHOLD_SEC = 1.5
 const HEARTBEAT_MS = 2000
 
 /**
- * A track plays in full (native Apple Music) when it carries an Apple catalog id and we're on iOS —
- * the only place full playback is wired. Otherwise it degrades to the synced 30s preview.
+ * Whether THIS device can play a track in full: iOS, the track carries an Apple catalog id, and the
+ * local user has an active Apple Music subscription. Otherwise it falls back to the synced 30s
+ * preview — decided per-user, so a subscriber and a non-subscriber in the same room differ.
  */
-function usesFullPlayback(track: TrackRef | null | undefined): boolean {
-  return Platform.OS === 'ios' && !!track?.appleMusicId
+function deviceCanPlayFull(track: TrackRef | null | undefined, canPlayFull: boolean): boolean {
+  return Platform.OS === 'ios' && !!track?.appleMusicId && canPlayFull
 }
 
 export interface FloatingReaction {
@@ -27,6 +28,8 @@ export interface ListenTogetherRoom {
   hostUserId: string | null
   track: TrackRef
   isPlaying: boolean
+  /** Host is driving a full-song timeline (host has Apple Music); else a synced 30s-preview room. */
+  full: boolean
 }
 
 interface RoomStateEvent {
@@ -35,15 +38,17 @@ interface RoomStateEvent {
   track: TrackRef | null
   positionMs: number
   isPlaying: boolean
+  full?: boolean
 }
 
 /**
  * Listen-Together sync engine (ticket 7.1). Honors Apple ToS: no audio crosses the wire — only
- * track ref + position + play/pause. When both listeners have Apple Music and the track carries a
- * catalog id, it plays the FULL song in sync via native Apple Music (iOS); otherwise it falls back to the
- * free 30s preview ("lite room"). Followers correct drift toward the host position either way.
+ * track ref + position + play/pause + a `full` flag. The host drives the timeline: if the host has
+ * Apple Music it's a FULL-song room (each listener plays the full song if subscribed, else the 30s
+ * preview); otherwise it's a synced-preview "lite room" for everyone. Followers correct drift toward
+ * the host only while in the same mode the host is driving.
  */
-export function useListenTogether(conversationId: string | null) {
+export function useListenTogether(conversationId: string | null, canPlayFull: boolean) {
   const preview = usePreviewPlayer()
   const full = useAppleMusicPlayer()
   const [room, setRoom] = useState<ListenTogetherRoom | null>(null)
@@ -55,15 +60,23 @@ export function useListenTogether(conversationId: string | null) {
   fullRef.current = full
   const roomRef = useRef(room)
   roomRef.current = room
+  const canPlayFullRef = useRef(canPlayFull)
+  canPlayFullRef.current = canPlayFull
   const lastSeekRef = useRef(0)
 
   const roomTrackId = conversationId ? `room:${conversationId}` : 'room'
 
-  // Start (or resume) playback of the room track on whichever engine fits it.
-  const startPlayback = useCallback((track: TrackRef) => {
-    if (usesFullPlayback(track)) fullRef.current.play(roomTrackId, track.appleMusicId!)
+  // Whether this device should use the full engine for a track (subject to the room being full mode).
+  const localFull = useCallback(
+    (track: TrackRef | null | undefined) => deviceCanPlayFull(track, canPlayFullRef.current),
+    [],
+  )
+
+  // Start playback on the engine that fits this device, given whether the room is a full-song room.
+  const startPlayback = useCallback((track: TrackRef, roomIsFull: boolean) => {
+    if (roomIsFull && localFull(track)) fullRef.current.play(roomTrackId, track.appleMusicId!)
     else if (track.previewUrl) previewRef.current.play(roomTrackId, track.previewUrl)
-  }, [roomTrackId])
+  }, [localFull, roomTrackId])
 
   // Inbound room + reaction events.
   useEffect(() => {
@@ -77,14 +90,16 @@ export function useListenTogether(conversationId: string | null) {
         // Host ignores echoes (the server doesn't echo to the sender anyway).
         if (roomRef.current?.isHost) return
 
+        const roomIsFull = !!payload.full
         setRoom({
           isHost: false,
           hostUserId: payload.hostUserId,
           track,
           isPlaying: payload.isPlaying,
+          full: roomIsFull,
         })
 
-        const useFull = usesFullPlayback(track)
+        const useFull = roomIsFull && localFull(track)
         const p = useFull ? fullRef.current : previewRef.current
         const hostPosSec = (payload.positionMs ?? 0) / 1000
 
@@ -93,7 +108,7 @@ export function useListenTogether(conversationId: string | null) {
           return
         }
         if (!p.isActive(roomTrackId)) {
-          startPlayback(track)
+          startPlayback(track, roomIsFull)
           return
         }
         if (!p.isPlaying) {
@@ -102,6 +117,9 @@ export function useListenTogether(conversationId: string | null) {
           else previewRef.current.play(roomTrackId, track.previewUrl!)
           return
         }
+        // Only sync position when this device is in the same mode the host is driving — a 30s preview
+        // clip can't track a full-song clock, so a preview follower in a full room just plays freely.
+        if (useFull !== roomIsFull) return
         const drift = Math.abs(p.positionSec - hostPosSec)
         const now = Date.now()
         if (drift > DRIFT_THRESHOLD_SEC && now - lastSeekRef.current > 1000) {
@@ -113,7 +131,7 @@ export function useListenTogether(conversationId: string | null) {
         if (payload.conversationId !== conversationId) return
         const current = roomRef.current
         if (current && !current.isHost && payload.userId === current.hostUserId) {
-          if (usesFullPlayback(current.track)) fullRef.current.stop()
+          if (current.full && localFull(current.track)) fullRef.current.stop()
           else previewRef.current.stop()
           setRoom(null)
         }
@@ -127,46 +145,50 @@ export function useListenTogether(conversationId: string | null) {
     ]
 
     return () => unsubs.forEach(u => u())
-  }, [conversationId, roomTrackId, startPlayback])
+  }, [conversationId, roomTrackId, startPlayback, localFull])
 
-  // Host heartbeat: broadcast position + play state (~2s) while hosting.
+  // Host heartbeat: broadcast position + play state + mode (~2s) while hosting.
   useEffect(() => {
     if (!conversationId || !room?.isHost) return
 
     const send = () => {
       const t = roomRef.current?.track
       if (!t) return
-      const p = usesFullPlayback(t) ? fullRef.current : previewRef.current
+      const roomIsFull = roomRef.current?.full ?? false
+      const p = roomIsFull && localFull(t) ? fullRef.current : previewRef.current
       chatWs.send({
         type: 'ROOM_STATE',
         conversationId,
         track: t as unknown as Record<string, unknown>,
         positionMs: Math.round(p.positionSec * 1000),
         isPlaying: p.isPlaying,
+        full: roomIsFull,
       })
     }
 
     send()
     const timer = setInterval(send, HEARTBEAT_MS)
     return () => clearInterval(timer)
-  }, [conversationId, room?.isHost, room?.track])
+  }, [conversationId, room?.isHost, room?.track, room?.full, localFull])
 
   const startRoom = useCallback((track: TrackPayload) => {
     if (!conversationId) return
-    if (!usesFullPlayback(track) && !track.previewUrl) return
     const { type: _t, ...trackRef } = track
-    setRoom({ isHost: true, hostUserId: null, track: trackRef, isPlaying: true })
+    // A full-song room needs the host (picker) to have Apple Music; otherwise it's a preview room.
+    const hostFull = localFull(trackRef)
+    if (!hostFull && !trackRef.previewUrl) return
+    setRoom({ isHost: true, hostUserId: null, track: trackRef, isPlaying: true, full: hostFull })
     chatWs.send({ type: 'ROOM_JOIN', conversationId })
-    startPlayback(trackRef)
-  }, [conversationId, startPlayback])
+    startPlayback(trackRef, hostFull)
+  }, [conversationId, localFull, startPlayback])
 
   const leaveRoom = useCallback(() => {
     if (conversationId) chatWs.send({ type: 'ROOM_LEAVE', conversationId })
-    const t = roomRef.current?.track
-    if (t && usesFullPlayback(t)) fullRef.current.stop()
+    const current = roomRef.current
+    if (current && current.full && localFull(current.track)) fullRef.current.stop()
     else previewRef.current.stop()
     setRoom(null)
-  }, [conversationId])
+  }, [conversationId, localFull])
 
   const sendReaction = useCallback((emoji: string) => {
     if (conversationId) chatWs.send({ type: 'REACTION_FLOAT', conversationId, emoji })
@@ -176,7 +198,7 @@ export function useListenTogether(conversationId: string | null) {
     setTimeout(() => setReactions(prev => prev.filter(r => r.id !== id)), 2500)
   }, [conversationId])
 
-  const engine = usesFullPlayback(room?.track) ? full : preview
+  const engine = room && room.full && localFull(room.track) ? full : preview
   const isActive = room ? engine.isActive(roomTrackId) : false
   const progress = isActive && engine.durationSec > 0 ? engine.positionSec / engine.durationSec : 0
 

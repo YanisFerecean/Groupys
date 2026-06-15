@@ -872,10 +872,11 @@ public class ChatService {
             } catch (Exception e) {
                 throw new jakarta.ws.rs.BadRequestException("Invalid message payload JSON");
             }
-        } else if (structured && !MessageType.IMAGE.equals(type)) {
+        } else if (structured && !MessageType.IMAGE.equals(type) && !MessageType.VIDEO.equals(type)) {
             throw new jakarta.ws.rs.BadRequestException("Structured message requires a payload");
         }
-        boolean carriesUploadedMedia = MessageType.IMAGE.equals(type) || MessageType.VOICE.equals(type);
+        boolean carriesUploadedMedia = MessageType.IMAGE.equals(type) || MessageType.VOICE.equals(type)
+                || MessageType.VIDEO.equals(type);
         if (carriesUploadedMedia
                 && (mediaUrl == null || !mediaUrl.startsWith("/api/posts/media/"))) {
             throw new jakarta.ws.rs.BadRequestException(type + " message requires uploaded media");

@@ -118,6 +118,21 @@
         }
       ],
       [
+        "expo-camera",
+        {
+          "cameraPermission": "Groupys uses your camera so you can take photos and videos to share.",
+          "microphonePermission": "Groupys uses your microphone to record audio for your videos.",
+          "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "savePhotosPermission": "Groupys saves photos and videos to your library when you choose to download them.",
+          "isAccessMediaLocationEnabled": false
+        }
+      ],
+      [
         "expo-notifications",
         {
           "color": "#ba002b",

@@ -93,7 +93,7 @@ export function MessageBubble({
 
   const renderBubble = () => {
     if (CardRenderer) {
-      return <CardRenderer message={message} isMine={isMine} />
+      return <CardRenderer message={message} isMine={isMine} onLongPress={onLongPress} />
     }
     if (isUnsupported) {
       if (GLASS) {

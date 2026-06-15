@@ -656,9 +656,10 @@ public class ChatWebSocket {
         Map<String, Object> track = (msg.get("track") instanceof Map<?, ?> raw) ? sanitizeRoomTrack(raw) : null;
         long positionMs = toLong(msg.get("positionMs"));
         boolean isPlaying = Boolean.TRUE.equals(msg.get("isPlaying"));
+        boolean full = Boolean.TRUE.equals(msg.get("full"));
 
         listeningRoomService.updateState(conversationId.toString(), user.clerkId, user.id.toString(),
-                track, positionMs, isPlaying);
+                track, positionMs, isPlaying, full);
 
         ListeningRoomService.Room room = listeningRoomService.get(conversationId.toString());
         String json = toJson(new WebSocketMessage("ROOM_STATE", roomStatePayload(conversationId, room)));
@@ -694,6 +695,7 @@ public class ChatWebSocket {
         payload.put("track", room.track);
         payload.put("positionMs", room.positionMs);
         payload.put("isPlaying", room.isPlaying);
+        payload.put("full", room.full);
         payload.put("updatedAt", room.updatedAt);
         return payload;
     }
@@ -909,6 +911,9 @@ public class ChatWebSocket {
         Map<String, Object> track = sanitizeTrack(raw);
         if (track == null) return null;
         track.put("previewUrl", asString(raw.get("previewUrl")));
+        // The Apple Music catalog id lets subscribed followers play the FULL song, not just the
+        // preview. Dropping it (as now-playing does) is what limited everyone but the host to 30s.
+        track.put("appleMusicId", asString(raw.get("appleMusicId")));
         return track;
     }
 

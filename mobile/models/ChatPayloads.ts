@@ -143,6 +143,28 @@ export interface StickerPayload {
   name?: string
 }
 
+/**
+ * Instagram-story-style music attached to a captured IMAGE/VIDEO. Rides inside the freeform
+ * IMAGE/VIDEO message `payload` (no dedicated messageType). The snippet is a 30s window of the
+ * **full** song, so playback needs Apple Music (`track.appleMusicId`); recipients without a
+ * subscription fall back to the 30s `track.previewUrl`.
+ */
+export interface MediaMusicAttachment {
+  track: TrackRef
+  /** Start of the 30s window within the full song, in ms. */
+  snippetStartMs: number
+  /** Window length in ms (default 30000). */
+  snippetDurationMs: number
+  /** How the overlay is drawn over the media. */
+  style: 'badge' | 'sticker' | 'lyric'
+  /** Lyric line typed by the sender (only when `style === 'lyric'`). */
+  lyric?: string
+  /** Normalized 0..1 overlay position (draggable in the editor). */
+  position: { x: number; y: number }
+  /** For videos: mute the clip so the snippet is the soundtrack. */
+  muteVideo?: boolean
+}
+
 export type MessagePayload =
   | TrackPayload
   | AlbumPayload
@@ -240,4 +262,19 @@ export function isStickerPayload(
     && payload.type === 'STICKER'
     && typeof payload.stickerId === 'string'
     && typeof payload.url === 'string'
+}
+
+/** Narrow the optional `music` field embedded in an IMAGE/VIDEO message payload. */
+export function isMediaMusicAttachment(
+  value: unknown,
+): value is MediaMusicAttachment {
+  if (!value || typeof value !== 'object') return false
+  const m = value as Record<string, unknown>
+  return (
+    typeof m.track === 'object'
+    && m.track !== null
+    && typeof m.snippetStartMs === 'number'
+    && typeof m.snippetDurationMs === 'number'
+    && (m.style === 'badge' || m.style === 'sticker' || m.style === 'lyric')
+  )
 }
