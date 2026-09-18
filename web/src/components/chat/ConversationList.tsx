@@ -70,13 +70,16 @@ const ConversationItem = memo(function ConversationItem({
       (convo.lastMessage ? messagePreview({ messageType: "TEXT", content: convo.lastMessage }) : "Start a conversation...");
 
   return (
-    <Link
-      href={`/chat/${convo.id}`}
-      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors ${
+    <div
+      className={`flex items-center gap-2 pr-2 rounded-xl transition-colors ${
         isActive
           ? "bg-primary/10 font-medium"
           : "hover:bg-surface-container/70"
       }`}
+    >
+    <Link
+      href={`/chat/${convo.id}`}
+      className="flex flex-1 min-w-0 items-center gap-3 px-3 py-2.5"
     >
       {/* Avatar */}
       <div className="flex-shrink-0 relative">
@@ -95,7 +98,7 @@ const ConversationItem = memo(function ConversationItem({
             {displayName.charAt(0)}
           </div>
         )}
-        {convo.unreadCount > 0 && !muted && (
+        {convo.unreadCount > 0 && (
           <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-on-primary border-2 border-surface">
             {convo.unreadCount > 99 ? "99+" : convo.unreadCount}
           </span>
@@ -105,7 +108,7 @@ const ConversationItem = memo(function ConversationItem({
       {/* Details */}
       <div className="flex-1 min-w-0 flex flex-col justify-center">
         <div className="flex justify-between items-baseline mb-0.5">
-          <h3 className={`truncate text-on-surface text-sm flex items-center gap-1 ${convo.unreadCount > 0 && !muted ? "font-bold" : "font-semibold"}`}>
+          <h3 className={`truncate text-on-surface text-sm flex items-center gap-1 ${convo.unreadCount > 0 ? "font-bold" : "font-semibold"}`}>
             <span className="truncate">{displayName}</span>
             {muted && <BellOff className="w-3 h-3 text-on-surface-variant shrink-0" aria-label="Muted" />}
           </h3>
@@ -119,10 +122,11 @@ const ConversationItem = memo(function ConversationItem({
             </span>
           ) : null}
         </div>
-        <p className={`truncate text-sm ${convo.unreadCount > 0 && !muted ? "text-on-surface font-medium" : "text-on-surface-variant"}`}>
+        <p className={`truncate text-sm ${convo.unreadCount > 0 ? "text-on-surface font-medium" : "text-on-surface-variant"}`}>
           {preview}
         </p>
       </div>
+    </Link>
 
       {/* Inline accept / decline for incoming requests */}
       {isIncomingRequest && onAccept && onDeny && (
@@ -130,10 +134,7 @@ const ConversationItem = memo(function ConversationItem({
           <button
             type="button"
             disabled={busy}
-            onClick={(e) => {
-              e.preventDefault();
-              onDeny(convo.id);
-            }}
+            onClick={() => onDeny(convo.id)}
             title="Decline"
             className="h-8 w-8 rounded-full flex items-center justify-center bg-surface-container-high text-on-surface-variant hover:text-error disabled:opacity-50"
           >
@@ -142,10 +143,7 @@ const ConversationItem = memo(function ConversationItem({
           <button
             type="button"
             disabled={busy}
-            onClick={(e) => {
-              e.preventDefault();
-              onAccept(convo.id);
-            }}
+            onClick={() => onAccept(convo.id)}
             title="Accept"
             className="h-8 w-8 rounded-full flex items-center justify-center bg-primary text-on-primary hover:opacity-90 disabled:opacity-50"
           >
@@ -153,7 +151,7 @@ const ConversationItem = memo(function ConversationItem({
           </button>
         </div>
       )}
-    </Link>
+    </div>
   );
 });
 

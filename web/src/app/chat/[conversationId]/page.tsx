@@ -274,6 +274,24 @@ export default function ConversationPage() {
   const { party, schedule: scheduleParty, join: joinParty, end: endParty } = useListeningParty(conversationId);
   const [partyTrack, setPartyTrack] = useState<TrackPayload | null>(null);
 
+  // When a scheduled party goes live, the host's client opens the Listen Together room with the
+  // party track (the server only announces the start); guests join that room from the banner.
+  const startedPartyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!party || party.status !== "live" || !party.partyId || !party.track) return;
+    if (party.hostUserId !== backendUserId || startedPartyRef.current === party.partyId) return;
+    startedPartyRef.current = party.partyId;
+    if (party.track.previewUrl) startRoom(party.track);
+  }, [party, backendUserId, startRoom]);
+
+  const handlePartyJoin = useCallback(() => {
+    if (party?.status === "live" && room.active && !room.isHost) {
+      joinRoom();
+      return;
+    }
+    joinParty();
+  }, [party?.status, room.active, room.isHost, joinRoom, joinParty]);
+
   // Compute "last seen X ago" outside render to avoid Date.now() purity violation
   const [lastSeenText, setLastSeenText] = useState<string | null>(null);
 
@@ -839,7 +857,7 @@ export default function ConversationPage() {
       )}
 
       {/* Scheduled listening party */}
-      <PartyBanner party={party} onJoin={joinParty} onDismiss={endParty} />
+      <PartyBanner party={party} onJoin={handlePartyJoin} onDismiss={endParty} />
 
       {/* Listen Together session */}
       <ListenTogetherBar

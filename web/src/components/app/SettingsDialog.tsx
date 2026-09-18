@@ -14,6 +14,7 @@ import {
 import { connectAppleMusicWeb, disconnectMusic, isAppleMusicWebMockEnabled } from "@/lib/appleMusic";
 import { fetchUserByClerkId, setShareNowPlaying, updateUserPrivacy, type BackendUser } from "@/lib/api";
 import NotificationPreferencesSection from "@/components/app/NotificationPreferencesSection";
+import { resetConversationsCache } from "@/hooks/useConversations";
 import { useUserStore } from "@/store/userStore";
 import DeleteAccountModal from "@/components/app/DeleteAccountModal";
 
@@ -144,6 +145,7 @@ export default function SettingsDialog({
   const handleSignOut = async () => {
     setSigningOut(true);
     try {
+      resetConversationsCache();
       await signOut();
       router.replace("/");
     } catch {

@@ -11,8 +11,7 @@ import SearchOverlay from "@/components/discover/SearchOverlay";
 import SettingsDialog from "@/components/app/SettingsDialog";
 import CreatePostModal from "@/components/ui/CreatePostModal";
 import { fetchUserByClerkId } from "@/lib/api";
-import { fetchConversations } from "@/lib/chat-api";
-import { useConversationStore } from "@/store/conversationStore";
+import { ensureConversationsLoaded } from "@/hooks/useConversations";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useNowPlayingPresence } from "@/hooks/useNowPlaying";
 
@@ -83,15 +82,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     });
   }, [isLoaded, isAuthLoaded, isSignedIn, user, pathname, router]);
 
-  // Load conversations once on auth so the sidebar badge is always populated
+  // Load conversations once on auth so the sidebar badge is always populated (deduped with the
+  // chat screens, which share the same session cache).
   useEffect(() => {
     if (!isAuthLoaded || !isSignedIn) return;
-    getTokenRef.current().then(async (token) => {
-      try {
-        const convos = await fetchConversations(token, undefined, 50);
-        useConversationStore.getState().setConversations(convos);
-      } catch { /* non-critical */ }
-    });
+    getTokenRef.current().then((token) => ensureConversationsLoaded(token).catch(() => {/* non-critical */}));
   }, [isAuthLoaded, isSignedIn]);
 
   const handleMusicConnected = useCallback(() => {
