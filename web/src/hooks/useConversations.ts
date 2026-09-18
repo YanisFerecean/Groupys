@@ -1,17 +1,31 @@
 import { useEffect, useCallback, useRef, useState } from "react";
-import { fetchConversations, markRead, acceptConversationRequest, denyConversationRequest } from "@/lib/chat-api";
+import {
+  fetchConversations,
+  fetchConversation,
+  markRead,
+  acceptConversationRequest,
+  denyConversationRequest,
+  setConversationMute,
+  ApiError,
+} from "@/lib/chat-api";
 import { chatWs } from "@/lib/ws";
 import { useAuth } from "@clerk/nextjs";
 import { useConversationStore } from "@/store/conversationStore";
+import type { Conversation } from "@/types/chat";
 
 const PAGE_SIZE = 20;
+
+/** The backend pages by activity time — mirror the mobile client's cursor derivation. */
+function conversationCursor(c: Conversation): string | undefined {
+  return c.lastMessageAt ?? c.updatedAt ?? c.createdAt ?? undefined;
+}
 
 export function useConversations() {
   const { getToken } = useAuth();
   const getTokenRef = useRef(getToken);
   useEffect(() => { getTokenRef.current = getToken; }, [getToken]);
   const store = useConversationStore();
-  const { conversations, setConversations, appendConversations, updateConversation, removeConversation } = store;
+  const { conversations, setConversations, appendConversations, updateConversation, removeConversation, upsertConversation } = store;
 
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -31,7 +45,7 @@ export function useConversations() {
           setConversations(convos);
           setHasMore(convos.length === PAGE_SIZE);
           if (convos.length > 0) {
-            cursorRef.current = convos[convos.length - 1].updatedAt ?? undefined;
+            cursorRef.current = conversationCursor(convos[convos.length - 1]);
           }
         }
       } catch (e) {
@@ -56,7 +70,7 @@ export function useConversations() {
       appendConversations(convos);
       setHasMore(convos.length === PAGE_SIZE);
       if (convos.length > 0) {
-        cursorRef.current = convos[convos.length - 1].updatedAt ?? undefined;
+        cursorRef.current = conversationCursor(convos[convos.length - 1]);
       }
     } catch (e) {
       console.error("Failed to load more conversations:", e);
@@ -64,6 +78,27 @@ export function useConversations() {
       setIsLoadingMore(false);
     }
   }, [isLoadingMore, hasMore, appendConversations]);
+
+  /**
+   * Hydrates a conversation that isn't in the loaded pages (deep link, brand-new match…).
+   * Returns null — and drops it from the list — when the server says we can't access it.
+   */
+  const fetchConversationById = useCallback(async (conversationId: string): Promise<Conversation | null> => {
+    try {
+      const token = await getTokenRef.current();
+      if (!token) return null;
+      const convo = await fetchConversation(conversationId, token);
+      upsertConversation(convo);
+      return convo;
+    } catch (e) {
+      if (e instanceof ApiError && (e.status === 403 || e.status === 404)) {
+        removeConversation(conversationId);
+        return null;
+      }
+      console.error("Failed to hydrate conversation:", e);
+      return null;
+    }
+  }, [upsertConversation, removeConversation]);
 
   const markAsRead = useCallback(async (conversationId: string) => {
     try {
@@ -78,15 +113,21 @@ export function useConversations() {
 
   const acceptRequest = useCallback(async (conversationId: string) => {
     const token = await getTokenRef.current();
-    await acceptConversationRequest(conversationId, token);
-    updateConversation(conversationId, { requestStatus: "ACCEPTED" });
-  }, [updateConversation]);
+    const updated = await acceptConversationRequest(conversationId, token);
+    upsertConversation({ ...updated, requestStatus: "ACCEPTED" });
+  }, [upsertConversation]);
 
   const denyRequest = useCallback(async (conversationId: string) => {
     const token = await getTokenRef.current();
     await denyConversationRequest(conversationId, token);
     removeConversation(conversationId);
   }, [removeConversation]);
+
+  const setMute = useCallback(async (conversationId: string, until: string | null) => {
+    const token = await getTokenRef.current();
+    const updated = await setConversationMute(conversationId, until, token);
+    upsertConversation(updated);
+  }, [upsertConversation]);
 
   return {
     conversations,
@@ -98,5 +139,7 @@ export function useConversations() {
     setConversations,
     acceptRequest,
     denyRequest,
+    setMute,
+    fetchConversationById,
   };
 }

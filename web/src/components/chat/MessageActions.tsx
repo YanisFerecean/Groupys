@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Copy, Music, Pin, PinOff, Reply, SmilePlus, SquarePen, Trash2 } from "lucide-react";
+import { Copy, Music, Reply, SmilePlus, SquarePen, Trash2 } from "lucide-react";
 import { Message } from "@/types/chat";
+import { isTextType } from "./messageRenderers";
 
 /** Callbacks the chat surface provides for per-message actions. */
 export interface MessageActionHandlers {
@@ -8,14 +9,13 @@ export interface MessageActionHandlers {
   onReactEmoji: (m: Message, emoji: string) => void;
   onEdit: (m: Message) => void;
   onDelete: (m: Message) => void;
-  onPin: (m: Message) => void;
   onCopy: (m: Message) => void;
   /** Opens the music picker to react with a song (wired with music features). */
   onTrackReact?: (m: Message) => void;
-  isPinned?: (messageId: string) => boolean;
 }
 
-const QUICK_EMOJIS = ["❤️", "😂", "👍", "😮", "😢", "🔥"];
+/** Same quick set as the mobile long-press sheet. */
+const QUICK_EMOJIS = ["👍", "❤️", "😂", "🔥", "😮", "🎵"];
 
 interface MessageActionsProps {
   message: Message;
@@ -37,11 +37,9 @@ export function MessageActions({ message, isMine, actions }: MessageActionsProps
     return () => document.removeEventListener("mousedown", handler);
   }, [emojiOpen]);
 
-  const type = (message.messageType || "TEXT").toUpperCase();
-  const isText = type === "TEXT";
+  const isText = isTextType(message.messageType);
   const canEdit = isMine && isText;
   const canCopy = isText && !!message.content;
-  const pinned = actions.isPinned?.(message.id) ?? false;
 
   const btn =
     "h-7 w-7 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface transition-colors";
@@ -88,10 +86,6 @@ export function MessageActions({ message, isMine, actions }: MessageActionsProps
 
       <button type="button" className={btn} title="Reply" onClick={() => actions.onReply(message)}>
         <Reply className="w-4 h-4" />
-      </button>
-
-      <button type="button" className={btn} title={pinned ? "Unpin" : "Pin"} onClick={() => actions.onPin(message)}>
-        {pinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />}
       </button>
 
       {canCopy && (

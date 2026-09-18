@@ -2,6 +2,12 @@ import { WsInbound, WsOutbound } from "@/types/chat";
 
 type GetToken = () => Promise<string | null>;
 
+// Socket chatter is noisy and leaks event flow into production consoles — dev only.
+const DEBUG = process.env.NODE_ENV === "development";
+const log = (...args: unknown[]) => {
+  if (DEBUG) console.log(...args);
+};
+
 export class ChatWebSocketClient {
   private ws: WebSocket | null = null;
   private getToken: GetToken | null = null;
@@ -9,6 +15,7 @@ export class ChatWebSocketClient {
   private maxBackoff = 30000;
   private isConnecting = false;
   private isIntentionalClose = false;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   private messageQueue: WsOutbound[] = [];
   private hasConnectedBefore = false;
@@ -21,6 +28,10 @@ export class ChatWebSocketClient {
 
   public connect(getToken: GetToken) {
     this.getToken = getToken;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
 
     if (this.ws?.readyState === WebSocket.OPEN || this.isConnecting) {
       return;
@@ -39,13 +50,13 @@ export class ChatWebSocketClient {
     // Ensure we don't duplicate the wss:// if it's already in this.url
     const wsUrl = baseUrl.startsWith("ws") ? baseUrl : `${wsProtocol}${baseUrl.replace(/^https?:\/\//, "")}`;
 
-    console.log("[WS] Connecting to:", wsUrl);
+    log("[WS] Connecting to:", wsUrl);
 
     try {
       this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = async () => {
-        console.log("[WS] Connected");
+        log("[WS] Connected");
         this.isConnecting = false;
         this.isAuthenticated = false;
         this.backoff = 1000;
@@ -70,7 +81,7 @@ export class ChatWebSocketClient {
       this.ws.onmessage = (event) => {
         try {
           const msg: WsInbound = JSON.parse(event.data);
-          console.log("[WS Inbound]", msg.type);
+          log("[WS Inbound]", msg.type);
 
           if (msg.type === "AUTH_OK") {
             // Server confirmed auth — now safe to send SYNC and flush queued messages
@@ -90,7 +101,7 @@ export class ChatWebSocketClient {
       };
 
       this.ws.onclose = (event) => {
-        console.log(`[WS] Closed. Code: ${event.code}, Reason: ${event.reason}`);
+        log(`[WS] Closed. Code: ${event.code}, Reason: ${event.reason}`);
         this.ws = null;
         this.isConnecting = false;
         this.isAuthenticated = false;
@@ -113,7 +124,12 @@ export class ChatWebSocketClient {
   public disconnect() {
     this.isIntentionalClose = true;
     this.isAuthenticated = false;
+    this.isConnecting = false;
     this.hasConnectedBefore = false;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     if (this.ws) {
       this.ws.close();
       this.ws = null;
@@ -124,11 +140,11 @@ export class ChatWebSocketClient {
 
   public send(msg: WsOutbound) {
     if (this.ws?.readyState === WebSocket.OPEN && this.isAuthenticated) {
-      console.log("[WS Outbound]", msg.type);
+      log("[WS Outbound]", msg.type);
       this.ws.send(JSON.stringify(msg));
     } else if (!ChatWebSocketClient.EPHEMERAL_TYPES.has(msg.type)) {
       if (this.messageQueue.length < 100) {
-        console.log("[WS] Queueing message (not connected or not yet authed)");
+        log("[WS] Queueing message (not connected or not yet authed)");
         this.messageQueue.push(msg);
       }
     }
@@ -166,8 +182,10 @@ export class ChatWebSocketClient {
   private scheduleReconnect() {
     if (this.isIntentionalClose || !this.getToken) return;
 
-    console.log(`[WS] Reconnecting in ${this.backoff}ms...`);
-    setTimeout(() => {
+    log(`[WS] Reconnecting in ${this.backoff}ms...`);
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
       if (this.getToken) this.connect(this.getToken);
     }, this.backoff);
 

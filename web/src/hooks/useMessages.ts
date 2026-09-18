@@ -5,12 +5,16 @@ import { Message, MessageReaction, ReplyStub, TrackPayload } from "@/types/chat"
 import { fetchMessages, postMessage, ApiError } from "@/lib/chat-api";
 import { chatWs } from "@/lib/ws";
 import { useAuth } from "@clerk/nextjs";
-import { isEncrypted } from "@/lib/crypto";
 import { useMessageCrypto } from "./useMessageCrypto";
 
 const MAX_MESSAGES = 300;
+const PAGE_SIZE = 30;
 
 type CryptFn = (content: string) => Promise<string>;
+
+function trim(list: Message[]): Message[] {
+  return list.length > MAX_MESSAGES ? list.slice(0, MAX_MESSAGES) : list;
+}
 
 export function useMessages(
   conversationId: string | null,
@@ -24,7 +28,7 @@ export function useMessages(
   const rateLimitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Use extracted crypto hook
-  const { messages, setMessages, decryptBatch, isDecrypting } = useMessageCrypto([], decryptFn);
+  const { messages, setMessages, decryptBatch, decryptSingle, isDecrypting } = useMessageCrypto([], decryptFn);
 
   // Encrypt function ref
   const encryptFnRef = useRef(encryptFn);
@@ -40,23 +44,39 @@ export function useMessages(
     messagesRef.current = messages;
   }, [messages]);
 
+  const flagRateLimit = useCallback(() => {
+    if (rateLimitTimerRef.current) clearTimeout(rateLimitTimerRef.current);
+    setRateLimitError(true);
+    rateLimitTimerRef.current = setTimeout(() => setRateLimitError(false), 4000);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (rateLimitTimerRef.current) clearTimeout(rateLimitTimerRef.current);
+    },
+    []
+  );
+
   // Initial load
   useEffect(() => {
     if (!conversationId) {
       setMessages([]);
+      setHasMore(true);
       return;
     }
 
     let isMounted = true;
+    setMessages([]);
+    setHasMore(true);
     async function load() {
       setIsLoading(true);
       try {
         const token = await getToken();
-        const msgs = await fetchMessages(conversationId!, 0, 30, token);
+        const msgs = await fetchMessages(conversationId!, 0, PAGE_SIZE, token);
         const decrypted = await decryptBatch(msgs);
         if (isMounted) {
           setMessages(decrypted);
-          setHasMore(msgs.length === 30);
+          setHasMore(msgs.length === PAGE_SIZE);
         }
       } catch (err) {
         console.error("Failed to load msgs:", err);
@@ -78,29 +98,20 @@ export function useMessages(
     const unsubs = [
       chatWs.on("MESSAGE_NEW", async (payload: Message) => {
         if (payload.conversationId !== conversationId) return;
-
-        // Decrypt incoming message
-        let content = payload.content;
-        const fn = decryptFn;
-        if (fn && isEncrypted(content)) {
-          content = await fn(content).catch(
-            () => "[Encrypted message — decryption failed]"
-          );
-        }
-        const msg = { ...payload, content };
+        const msg = await decryptSingle(payload);
 
         setMessages((prev) => {
+          if (prev.some((m) => m.id === payload.id)) return prev;
           if (payload.tempId) {
             const idx = prev.findIndex((m) => m.tempId === payload.tempId);
             if (idx !== -1) {
               const updated = [...prev];
-              updated[idx] = { ...msg, status: "sent" };
+              // Keep the locally-known plaintext for our own optimistic message.
+              updated[idx] = { ...msg, content: updated[idx].content, status: "sent" };
               return updated;
             }
           }
-          if (prev.some((m) => m.id === payload.id)) return prev;
-          const next = [msg, ...prev];
-          return next.length > MAX_MESSAGES ? next.slice(0, MAX_MESSAGES) : next;
+          return trim([msg, ...prev]);
         });
       }),
 
@@ -121,17 +132,19 @@ export function useMessages(
         });
       }),
 
-      // Edit / delete / blind-listen reveal — server sends the authoritative message.
+      // Edit / delete / blind-listen reveal / collab playlist — server sends the authoritative message.
       chatWs.on("MESSAGE_UPDATED", async (payload: Message) => {
         if (payload.conversationId !== conversationId) return;
-        let content = payload.content;
-        const fn = decryptFn;
-        if (fn && isEncrypted(content)) {
-          content = await fn(content).catch(() => "[Encrypted message — decryption failed]");
-        }
-        setMessages((prev) =>
-          prev.map((m) => (m.id === payload.id ? { ...payload, content, status: "sent" } : m))
-        );
+        const msg = await decryptSingle(payload);
+        setMessages((prev) => {
+          const exists = prev.some((m) => m.id === payload.id);
+          // The first "add to playlist" creates the COLLAB_PLAYLIST card and broadcasts it as an
+          // update, not a new message — insert it so both members see the card appear live.
+          if (!exists && (payload.messageType ?? "").toUpperCase() === "COLLAB_PLAYLIST") {
+            return trim([{ ...msg, status: "sent" }, ...prev]);
+          }
+          return prev.map((m) => (m.id === payload.id ? { ...m, ...msg, status: m.status ?? "sent" } : m));
+        });
       }),
 
       // Emoji / track reactions — server broadcasts the full reaction list.
@@ -140,14 +153,14 @@ export function useMessages(
         (payload: { messageId: string; conversationId?: string; reactions: MessageReaction[] }) => {
           if (payload.conversationId && payload.conversationId !== conversationId) return;
           setMessages((prev) =>
-            prev.map((m) => (m.id === payload.messageId ? { ...m, reactions: payload.reactions } : m))
+            prev.map((m) => (m.id === payload.messageId ? { ...m, reactions: payload.reactions ?? [] } : m))
           );
         }
       ),
     ];
 
     return () => unsubs.forEach((u) => u());
-  }, [conversationId, decryptFn, setMessages]);
+  }, [conversationId, decryptSingle, setMessages]);
 
   const loadMore = useCallback(
     async (page: number) => {
@@ -155,18 +168,15 @@ export function useMessages(
       setIsLoading(true);
       try {
         const token = await getToken();
-        const msgs = await fetchMessages(conversationId, page, 30, token);
-        if (msgs.length < 30) setHasMore(false);
+        const msgs = await fetchMessages(conversationId, page, PAGE_SIZE, token);
+        if (msgs.length < PAGE_SIZE) setHasMore(false);
 
         const decrypted = await decryptBatch(msgs);
 
         setMessages((prev) => {
           const existingIds = new Set(prev.map((m) => m.id));
           const fresh = decrypted.filter((m) => !existingIds.has(m.id));
-          const combined = [...prev, ...fresh];
-          return combined.length > MAX_MESSAGES
-            ? combined.slice(0, MAX_MESSAGES)
-            : combined;
+          return trim([...prev, ...fresh]);
         });
       } catch (e) {
         console.error("loadMore failed", e);
@@ -208,7 +218,8 @@ export function useMessages(
 
       try {
         const token = await getToken();
-        const toSend = encryptFn ? await encryptFn(content) : content;
+        const fn = encryptFnRef.current;
+        const toSend = fn ? await fn(content) : content;
         const saved = await postMessage(
           conversationId,
           { content: toSend, replyToId: reply?.replyToId },
@@ -218,62 +229,57 @@ export function useMessages(
           const idx = prev.findIndex((m) => m.tempId === tempId);
           if (idx === -1) return prev;
           const updated = [...prev];
-          updated[idx] = { ...saved, status: "sent", content };
+          updated[idx] = { ...saved, status: "sent", content, replyTo: prev[idx].replyTo ?? saved.replyTo };
           return updated;
         });
       } catch (err) {
         if (err instanceof ApiError && err.status === 429) {
-          if (rateLimitTimerRef.current) clearTimeout(rateLimitTimerRef.current);
-          setRateLimitError(true);
-          rateLimitTimerRef.current = setTimeout(() => setRateLimitError(false), 4000);
+          flagRateLimit();
           setMessages((prev) => prev.filter((m) => m.tempId !== tempId));
         } else {
           console.error("Failed to send message:", err);
-          setMessages((prev) => {
-            const idx = prev.findIndex((m) => m.tempId === tempId);
-            if (idx === -1) return prev;
-            const updated = [...prev];
-            updated[idx] = { ...updated[idx], status: "failed" };
-            return updated;
-          });
+          setMessages((prev) => prev.map((m) => (m.tempId === tempId ? { ...m, status: "failed" } : m)));
         }
       }
     },
-    [conversationId, getToken, encryptFn, setMessages]
+    [conversationId, getToken, setMessages, flagRateLimit]
   );
 
   const resendMessage = useCallback(
     async (tempId: string, content: string) => {
       if (!conversationId) return;
-      setMessages((prev) => {
-        const idx = prev.findIndex((m) => m.tempId === tempId);
-        if (idx === -1) return prev;
-        const updated = [...prev];
-        updated[idx] = { ...updated[idx], status: "sending" };
-        return updated;
-      });
+      const failed = messagesRef.current.find((m) => m.tempId === tempId);
+      setMessages((prev) => prev.map((m) => (m.tempId === tempId ? { ...m, status: "sending" } : m)));
       try {
         const token = await getToken();
-        const toSend = encryptFn ? await encryptFn(content) : content;
-        const saved = await postMessage(conversationId, { content: toSend }, token);
+        const type = (failed?.messageType ?? "text").toLowerCase();
+        const isStructured = type !== "text";
+        const fn = encryptFnRef.current;
+        const toSend = !isStructured && fn ? await fn(content) : content;
+        const saved = await postMessage(
+          conversationId,
+          {
+            content: toSend,
+            messageType: isStructured ? failed?.messageType : undefined,
+            payload: isStructured ? failed?.payload ?? undefined : undefined,
+            mediaUrl: isStructured ? failed?.mediaUrl ?? undefined : undefined,
+            replyToId: failed?.replyToId ?? undefined,
+          },
+          token
+        );
         setMessages((prev) => {
           const idx = prev.findIndex((m) => m.tempId === tempId);
           if (idx === -1) return prev;
           const updated = [...prev];
-          updated[idx] = { ...saved, status: "sent", content };
+          updated[idx] = { ...saved, status: "sent", content, replyTo: prev[idx].replyTo ?? saved.replyTo };
           return updated;
         });
-      } catch {
-        setMessages((prev) => {
-          const idx = prev.findIndex((m) => m.tempId === tempId);
-          if (idx === -1) return prev;
-          const updated = [...prev];
-          updated[idx] = { ...updated[idx], status: "failed" };
-          return updated;
-        });
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 429) flagRateLimit();
+        setMessages((prev) => prev.map((m) => (m.tempId === tempId ? { ...m, status: "failed" } : m)));
       }
     },
-    [conversationId, getToken, encryptFn, setMessages]
+    [conversationId, getToken, setMessages, flagRateLimit]
   );
 
   /**
@@ -335,15 +341,13 @@ export function useMessages(
           const idx = prev.findIndex((m) => m.tempId === tempId);
           if (idx === -1) return prev;
           const updated = [...prev];
-          updated[idx] = { ...saved, status: "sent" };
+          updated[idx] = { ...saved, status: "sent", replyTo: prev[idx].replyTo ?? saved.replyTo };
           return updated;
         });
         return saved;
       } catch (err) {
         if (err instanceof ApiError && err.status === 429) {
-          if (rateLimitTimerRef.current) clearTimeout(rateLimitTimerRef.current);
-          setRateLimitError(true);
-          rateLimitTimerRef.current = setTimeout(() => setRateLimitError(false), 4000);
+          flagRateLimit();
           setMessages((prev) => prev.filter((m) => m.tempId !== tempId));
         } else {
           console.error("Failed to send message:", err);
@@ -352,7 +356,7 @@ export function useMessages(
         return undefined;
       }
     },
-    [conversationId, getToken, setMessages]
+    [conversationId, getToken, setMessages, flagRateLimit]
   );
 
   /** Edit own text message: optimistic update locally, encrypt, broadcast over WS. */
@@ -407,6 +411,7 @@ export function useMessages(
   /** Toggle a track (music) reaction. Server reconciles via REACTION_UPDATE. */
   const toggleTrackReaction = useCallback(
     (messageId: string, track: TrackPayload, myUserId: string) => {
+      if (!track.id || !track.previewUrl) return;
       const msg = messagesRef.current.find((m) => m.id === messageId);
       const has = !!msg?.reactions?.some(
         (r) => r.userId === myUserId && r.type === "track" && r.track?.id === track.id

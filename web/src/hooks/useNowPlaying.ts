@@ -1,101 +1,122 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useAuth, useUser } from "@clerk/nextjs";
-import { NowPlayingMessage } from "@/types/chat";
+import { useEffect, useRef } from "react";
+import { useAuth } from "@clerk/nextjs";
+import { toast } from "sonner";
+import { NowPlayingMessage, NowPlayingState, PresenceStatus } from "@/types/chat";
 import { chatWs } from "@/lib/ws";
 import { fetchMusicCurrentlyPlaying } from "@/lib/appleMusic";
-import { fetchUserByClerkId } from "@/lib/api";
+import { useNowPlayingStore } from "@/store/nowPlayingStore";
 
-const POLL_MS = 20_000;
-const MIN_BROADCAST_GAP_MS = 5_000;
+const POLL_MS = 25_000;
 
 /**
- * Now-playing presence for a conversation.
+ * App-wide now-playing presence (mount once, e.g. in the app shell).
  *
- * Broadcasting: if the signed-in user has a connected music account (same gate
- * the profile widget uses), poll their currently-playing track and broadcast it
- * over the chat socket — throttled, and withdrawn when nothing is playing.
+ * Receiving: keeps the store's per-user map live from NOW_PLAYING / PRESENCE events and asks
+ * the server for partners' last-known state on connect (NOW_PLAYING_REQUEST — queued until
+ * authenticated).
  *
- * Receiving: track the other participant's broadcast and return it for the pill.
+ * Broadcasting: when the signed-in user has a connected music account, polls their
+ * currently-playing track (~25s) and pushes a NOW_PLAYING_UPDATE only when it changes. The
+ * server enforces the privacy opt-in, so this is a best-effort publisher — never audio, only
+ * metadata.
+ *
+ * Ambient match: when our live track matches a partner's, surfaces a one-shot toast per
+ * listening streak (mirrors the mobile banner).
  */
-export function useNowPlaying(otherUserId?: string | null) {
-  const { getToken } = useAuth();
-  const { user } = useUser();
-  const [musicConnected, setMusicConnected] = useState(false);
-  const [partner, setPartner] = useState<NowPlayingMessage | null>(null);
-
-  // Resolve whether this user has a connected music account.
+export function useNowPlayingPresence(musicConnected: boolean) {
+  const { getToken, isSignedIn } = useAuth();
+  const getTokenRef = useRef(getToken);
   useEffect(() => {
-    if (!user) return;
-    let mounted = true;
-    (async () => {
-      try {
-        const token = await getToken();
-        const bu = await fetchUserByClerkId(user.id, token);
-        if (mounted) setMusicConnected(bu?.musicConnected === true);
-      } catch {
-        // leave disabled
-      }
-    })();
+    getTokenRef.current = getToken;
+  }, [getToken]);
+
+  // Inbound presence.
+  useEffect(() => {
+    if (!isSignedIn) {
+      useNowPlayingStore.getState().reset();
+      return;
+    }
+    const { setForUser } = useNowPlayingStore.getState();
+    const offNowPlaying = chatWs.on("NOW_PLAYING", (p: NowPlayingMessage) => {
+      setForUser(p.userId, p.track ? { track: p.track, isPlaying: p.isPlaying } : null);
+    });
+    // A user going offline implies their now-playing is no longer current.
+    const offPresence = chatWs.on("PRESENCE", (p: { userId: string; status: PresenceStatus }) => {
+      if (p.status === "offline") setForUser(p.userId, null);
+    });
+    chatWs.send({ type: "NOW_PLAYING_REQUEST" });
     return () => {
-      mounted = false;
+      offNowPlaying();
+      offPresence();
     };
-  }, [user, getToken]);
+  }, [isSignedIn]);
 
-  // Broadcast our currently-playing track.
+  // Outbound broadcast.
   useEffect(() => {
-    if (!musicConnected) return;
+    if (!isSignedIn || !musicConnected) {
+      useNowPlayingStore.getState().setMine(null);
+      return;
+    }
     let cancelled = false;
-    let lastKey = "";
-    let lastSentAt = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let lastKey: string | null = null;
 
-    const poll = async () => {
+    const tick = async () => {
       try {
-        const token = await getToken();
-        if (!token) return;
-        const track = await fetchMusicCurrentlyPlaying(token);
+        const token = await getTokenRef.current();
+        if (!token || cancelled) return;
+        const current = await fetchMusicCurrentlyPlaying(token);
         if (cancelled) return;
-        const key = track ? `${track.title}|${track.artist}` : "";
-        const now = Date.now();
-        if (key === lastKey || now - lastSentAt < MIN_BROADCAST_GAP_MS) return;
-        lastKey = key;
-        lastSentAt = now;
-        chatWs.send({
-          type: "NOW_PLAYING_UPDATE",
-          track: track
-            ? { title: track.title, artist: track.artist, artworkUrl: track.coverUrl }
-            : null,
-          isPlaying: !!track,
-        });
+        const state: NowPlayingState = current
+          ? { track: { id: null, title: current.title, artist: current.artist, artworkUrl: current.coverUrl ?? null }, isPlaying: true }
+          : { track: null, isPlaying: false };
+        const key = state.track ? `${state.track.title}|${state.track.artist}|${state.isPlaying}` : "null";
+        if (key !== lastKey) {
+          lastKey = key;
+          chatWs.send({ type: "NOW_PLAYING_UPDATE", track: state.track, isPlaying: state.isPlaying });
+          useNowPlayingStore.getState().setMine(state);
+        }
       } catch {
-        // ignore transient failures
+        // Offline / token expired — skip this tick.
+      } finally {
+        if (!cancelled) timer = setTimeout(() => void tick(), POLL_MS);
       }
     };
 
-    poll();
-    const id = setInterval(poll, POLL_MS);
+    void tick();
     return () => {
       cancelled = true;
-      clearInterval(id);
+      if (timer) clearTimeout(timer);
     };
-  }, [musicConnected, getToken]);
+  }, [isSignedIn, musicConnected]);
 
-  // Clear stale presence when switching conversations (render-phase reset).
-  const [prevOther, setPrevOther] = useState<string | null>(otherUserId ?? null);
-  if ((otherUserId ?? null) !== prevOther) {
-    setPrevOther(otherUserId ?? null);
-    setPartner(null);
-  }
-
-  // Receive the other participant's now-playing.
+  // Ambient match toast: once per shared listening streak.
+  const announcedRef = useRef<Set<string>>(new Set());
+  const mine = useNowPlayingStore((s) => s.mine);
+  const byUser = useNowPlayingStore((s) => s.byUser);
   useEffect(() => {
-    if (!otherUserId) return;
-    return chatWs.on("NOW_PLAYING", (p: NowPlayingMessage) => {
-      if (p.userId !== otherUserId) return;
-      setPartner(p.track ? p : null);
-    });
-  }, [otherUserId]);
+    const norm = (v?: string | null) => (v ?? "").trim().toLowerCase();
+    const myTrack = mine?.isPlaying ? mine.track : null;
+    const myKey = myTrack ? `${norm(myTrack.title)}|${norm(myTrack.artist)}` : null;
+    const current = new Set<string>();
+    if (myKey) {
+      for (const [userId, state] of Object.entries(byUser)) {
+        if (!state.isPlaying || !state.track) continue;
+        if (`${norm(state.track.title)}|${norm(state.track.artist)}` !== myKey) continue;
+        const matchKey = `${userId}::${myKey}`;
+        current.add(matchKey);
+        if (!announcedRef.current.has(matchKey)) {
+          toast("You're both vibing 🎶", { description: `You're both listening to ${myTrack!.title} right now` });
+        }
+      }
+    }
+    announcedRef.current = current;
+  }, [mine, byUser]);
+}
 
-  return { partnerNowPlaying: partner };
+/** Last-known now-playing state for a single user (null when unknown / stopped). */
+export function useUserNowPlaying(userId: string | null | undefined): NowPlayingState | null {
+  return useNowPlayingStore((s) => (userId ? s.byUser[userId] ?? null : null));
 }
