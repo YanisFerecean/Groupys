@@ -15,6 +15,8 @@ export interface TrackPayload {
   previewUrl?: string;
   /** `music://` or https Apple Music deep link. */
   appleMusicUrl?: string;
+  /** Apple Music catalog song id — lets subscribed native clients play the full song. */
+  appleMusicId?: string;
   durationMs?: number;
 }
 
@@ -136,6 +138,36 @@ export interface StickerPayload {
   name?: string;
 }
 
+/**
+ * Instagram-story-style music attached to a captured IMAGE/VIDEO (authored in the mobile
+ * camera). Rides inside the freeform IMAGE/VIDEO message `payload` — no dedicated messageType.
+ * The snippet is a 30s window of the *full* song, which only Apple Music subscribers on the
+ * native app can play; web falls back to the free 30s `track.previewUrl`.
+ */
+export interface MediaMusicAttachment {
+  track: TrackRef;
+  /** Start of the 30s window within the full song, in ms. */
+  snippetStartMs: number;
+  /** Window length in ms (default 30000). */
+  snippetDurationMs: number;
+  /** How the overlay is drawn over the media. */
+  style: "badge" | "sticker" | "lyric";
+  /** Lyric line typed by the sender (only when `style === "lyric"`). */
+  lyric?: string;
+  /** Normalized 0..1 overlay position. */
+  position: { x: number; y: number };
+  /** For videos: the clip is muted so the snippet is the soundtrack. */
+  muteVideo?: boolean;
+}
+
+/** Freeform payload carried by IMAGE / VIDEO messages (all fields optional for legacy sends). */
+export interface MediaPayload {
+  width?: number;
+  height?: number;
+  mime?: string;
+  music?: MediaMusicAttachment;
+}
+
 export type MessagePayload =
   | TrackPayload
   | AlbumPayload
@@ -152,6 +184,31 @@ export type MessagePayload =
 
 /** Raw JSON payload shape as it arrives on a Message (untyped until narrowed). */
 export type RawPayload = Record<string, unknown> | null;
+
+/** Narrows the optional `music` field embedded in an IMAGE/VIDEO message payload. */
+export function isMediaMusicAttachment(value: unknown): value is MediaMusicAttachment {
+  if (!value || typeof value !== "object") return false;
+  const m = value as Record<string, unknown>;
+  const track = m.track as Record<string, unknown> | undefined;
+  const position = m.position as Record<string, unknown> | undefined;
+  return (
+    !!track &&
+    typeof track === "object" &&
+    typeof track.title === "string" &&
+    typeof m.snippetStartMs === "number" &&
+    typeof m.snippetDurationMs === "number" &&
+    (m.style === "badge" || m.style === "sticker" || m.style === "lyric") &&
+    !!position &&
+    typeof position.x === "number" &&
+    typeof position.y === "number"
+  );
+}
+
+/** Reads a positive numeric field off a raw payload (e.g. media width/height). */
+export function payloadNumber(payload: RawPayload | undefined, key: string): number | undefined {
+  const value = payload?.[key];
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
+}
 
 // ── Payload type guards ──────────────────────────────────────────────────────
 

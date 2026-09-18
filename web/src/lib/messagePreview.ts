@@ -3,6 +3,7 @@ import { Message, ReplyStub } from "@/types/chat";
 /** Short emoji marker for a non-text message type (used in previews/quotes). */
 const TYPE_ICON: Record<string, string> = {
   IMAGE: "📷",
+  VIDEO: "🎬",
   VOICE: "🎙",
   TRACK: "🎵",
   ALBUM: "💿",
@@ -21,6 +22,7 @@ const TYPE_ICON: Record<string, string> = {
 /** Default human label for a non-text message type when no better text exists. */
 const TYPE_LABEL: Record<string, string> = {
   IMAGE: "Photo",
+  VIDEO: "Video",
   VOICE: "Voice message",
   TRACK: "Shared a song",
   ALBUM: "Shared an album",

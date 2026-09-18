@@ -1,16 +1,19 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { ListMusic } from "lucide-react";
 import { CollabPlaylistPayload } from "@/types/chat";
 import { PlaylistCard } from "./PlaylistCard";
 
-/** A conversation's shared, server-maintained playlist with an "add a track" control. */
+/**
+ * A conversation's shared, server-maintained playlist. Tracks are added from any song card's
+ * "Add to playlist" button; the footer opens the full list (view / remove songs).
+ */
 export function CollabPlaylistCard({
   payload,
-  onAdd,
+  onOpen,
 }: {
   payload: CollabPlaylistPayload;
-  onAdd?: () => void;
+  onOpen?: () => void;
 }) {
   return (
     <PlaylistCard
@@ -21,14 +24,14 @@ export function CollabPlaylistCard({
       previews={payload.previews}
       label="Collaborative playlist"
       footer={
-        onAdd && (
+        onOpen && (
           <button
             type="button"
-            onClick={onAdd}
+            onClick={onOpen}
             className="mt-2 w-full flex items-center justify-center gap-1.5 rounded-full bg-primary/10 text-primary py-1.5 text-[13px] font-semibold hover:bg-primary/15 transition-colors"
           >
-            <Plus className="w-4 h-4" />
-            Add a track
+            <ListMusic className="w-4 h-4" />
+            View added songs
           </button>
         )
       }
