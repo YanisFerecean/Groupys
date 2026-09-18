@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { useParams } from "next/navigation";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { Plus, MessageCircle } from "lucide-react";
+import { toast } from "sonner";
 import { useUserStore } from "@/store/userStore";
 import { useConversations } from "@/hooks/useConversations";
 import { useCrypto } from "@/hooks/useCrypto";
 import { ConversationList } from "@/components/chat/ConversationList";
+import { DailySongTray } from "@/components/chat/DailySongTray";
 import dynamic from "next/dynamic";
 import AppShell from "@/components/app/AppShell";
 import { isEncrypted } from "@/lib/crypto";
@@ -25,7 +27,8 @@ export default function ChatLayoutShell({
   children: React.ReactNode;
 }) {
   const currentUserId = useUserStore((s) => s.backendUserId);
-  const { conversations, isLoading, hasMore, isLoadingMore, loadMore } =
+  const router = useRouter();
+  const { conversations, isLoading, hasMore, isLoadingMore, loadMore, acceptRequest, denyRequest } =
     useConversations();
   const { decryptForPartner } = useCrypto();
 
@@ -71,6 +74,30 @@ export default function ChatLayoutShell({
 
   const [isNewConvoOpen, setIsNewConvoOpen] = useState(false);
 
+  const handleAccept = useCallback(
+    async (id: string) => {
+      try {
+        await acceptRequest(id);
+        router.push(`/chat/${id}`);
+      } catch {
+        toast.error("Couldn't accept the request");
+      }
+    },
+    [acceptRequest, router]
+  );
+
+  const handleDeny = useCallback(
+    async (id: string) => {
+      try {
+        await denyRequest(id);
+        if (activeId === id) router.push("/chat");
+      } catch {
+        toast.error("Couldn't decline the request");
+      }
+    },
+    [denyRequest, router, activeId]
+  );
+
   return (
     <AppShell>
       <div className="flex h-[calc(100vh-64px)] lg:h-[calc(100vh-80px)] w-full overflow-hidden bg-surface">
@@ -88,10 +115,13 @@ export default function ChatLayoutShell({
             <button
               onClick={() => setIsNewConvoOpen(true)}
               className="p-2 rounded-full bg-primary/10 hover:bg-primary/20 text-primary transition-colors"
+              title="New message"
             >
               <Plus className="w-5 h-5" />
             </button>
           </div>
+
+          <DailySongTray />
 
           {isLoading ? (
             <div className="flex-1 overflow-y-auto w-full px-2 py-2 space-y-1">
@@ -113,6 +143,8 @@ export default function ChatLayoutShell({
               isLoadingMore={isLoadingMore}
               onLoadMore={loadMore}
               decryptedPreviews={decryptedPreviews}
+              onAcceptRequest={handleAccept}
+              onDenyRequest={handleDeny}
             />
           )}
         </div>

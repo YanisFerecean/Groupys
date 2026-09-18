@@ -24,7 +24,6 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.jboss.logging.Logger;
-import org.owasp.encoder.Encode;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -888,18 +887,35 @@ public class ChatWebSocket {
                 .forEach(clerkId -> presenceService.sendTo(clerkId, json));
     }
 
+    private static final int MAX_TRACK_FIELD_LENGTH = 300;
+
+    /** Whitelists now-playing track fields and bounds their length; values stay plain text. */
     private Map<String, Object> sanitizeTrack(Map<?, ?> raw) {
-        String title = sanitizeForHtml(asString(raw.get("title")));
+        String title = truncate(asString(raw.get("title")));
         if (title == null || title.isBlank()) {
             return null; // a track with no title is meaningless
         }
         Map<String, Object> track = new LinkedHashMap<>();
-        track.put("id", asString(raw.get("id")));
+        track.put("id", truncate(asString(raw.get("id"))));
         track.put("title", title);
-        track.put("artist", sanitizeForHtml(asString(raw.get("artist"))));
-        track.put("album", sanitizeForHtml(asString(raw.get("album"))));
-        track.put("artworkUrl", asString(raw.get("artworkUrl")));
+        track.put("artist", truncate(asString(raw.get("artist"))));
+        track.put("album", truncate(asString(raw.get("album"))));
+        track.put("artworkUrl", safeHttpUrl(asString(raw.get("artworkUrl"))));
         return track;
+    }
+
+    private static String truncate(String value) {
+        if (value == null) return null;
+        return value.length() > MAX_TRACK_FIELD_LENGTH ? value.substring(0, MAX_TRACK_FIELD_LENGTH) : value;
+    }
+
+    /** Only http(s) URLs are relayed to other clients' <img>/<a> tags. */
+    private static String safeHttpUrl(String value) {
+        if (value == null) return null;
+        String v = value.trim();
+        if (v.length() > 2000) return null;
+        String lower = v.toLowerCase(Locale.ROOT);
+        return (lower.startsWith("http://") || lower.startsWith("https://")) ? v : null;
     }
 
     /**
@@ -910,10 +926,10 @@ public class ChatWebSocket {
     private Map<String, Object> sanitizeRoomTrack(Map<?, ?> raw) {
         Map<String, Object> track = sanitizeTrack(raw);
         if (track == null) return null;
-        track.put("previewUrl", asString(raw.get("previewUrl")));
+        track.put("previewUrl", safeHttpUrl(asString(raw.get("previewUrl"))));
         // The Apple Music catalog id lets subscribed followers play the FULL song, not just the
         // preview. Dropping it (as now-playing does) is what limited everyone but the host to 30s.
-        track.put("appleMusicId", asString(raw.get("appleMusicId")));
+        track.put("appleMusicId", truncate(asString(raw.get("appleMusicId"))));
         return track;
     }
 
@@ -962,11 +978,13 @@ public class ChatWebSocket {
         data.put("id", m.id().toString());
         data.put("conversationId", m.conversationId().toString());
         data.put("senderId", m.senderId().toString());
-        data.put("senderUsername", sanitizeForHtml(m.senderUsername()));
-        data.put("senderDisplayName", sanitizeForHtml(m.senderDisplayName()));
+        data.put("senderUsername", m.senderUsername());
+        data.put("senderDisplayName", m.senderDisplayName());
         data.put("senderProfileImage", m.senderProfileImage());
-        // Sanitize message content to prevent XSS
-        data.put("content", sanitizeForHtml(m.content()));
+        // Content is relayed verbatim (never HTML-encoded): both clients render it as plain text
+        // nodes, and E2E ciphertext is a JSON string whose quotes must survive intact — encoding
+        // them broke decryption of edited messages and SYNC'd missed messages.
+        data.put("content", m.content());
         data.put("messageType", m.messageType());
         data.put("isDeleted", m.isDeleted());
         data.put("edited", m.edited());
@@ -990,17 +1008,5 @@ public class ChatWebSocket {
             data.put("tempId", tempId);
         }
         return data;
-    }
-
-    /**
-     * Sanitizes a string for safe HTML output by escaping special characters.
-     * This prevents XSS attacks by encoding HTML entities.
-     */
-    private String sanitizeForHtml(String input) {
-        if (input == null) {
-            return null;
-        }
-        // Use OWASP Encoder to HTML-encode the content
-        return Encode.forHtml(input);
     }
 }

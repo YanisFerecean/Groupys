@@ -8,6 +8,8 @@ import MarkdownContent from "@/components/ui/MarkdownContent";
 import AuthMedia from "@/components/ui/AuthMedia";
 import MediaLightbox, { LightboxItem } from "@/components/ui/MediaLightbox";
 import { toast } from "sonner";
+import { CommunitySongOfWeek } from "./CommunitySongOfWeek";
+import { CommunityListeningRoster } from "./CommunityListeningRoster";
 import {
   Dialog,
   DialogContent,
@@ -930,6 +932,12 @@ export default function CommunityDetail({ id }: { id: string }) {
                   )}
                 </div>
               </div>
+
+              {/* Song of the week poll */}
+              <CommunitySongOfWeek communityId={id} isMember={joined} />
+
+              {/* Members listening right now */}
+              <CommunityListeningRoster members={members} />
 
               {/* Members card */}
               <div className="bg-surface-container-lowest/65 border border-white/80 rounded-2xl shadow-sm overflow-hidden">

@@ -4,6 +4,9 @@ import { MessageBubble } from "./MessageBubble";
 import { TypingIndicator } from "./TypingIndicator";
 import { Message } from "@/types/chat";
 import { useMessageScroll } from "@/hooks/useMessageScroll";
+import { MessageActionHandlers } from "./MessageActions";
+import { MessageCardHandlers } from "./messageRenderers";
+import { scrollToMessage } from "@/lib/scrollToMessage";
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -18,6 +21,9 @@ interface MessageThreadProps {
   otherLastReadAt?: string | null;
   myLastReadAt?: string | null;
   onRetry?: (msg: Message) => void;
+  actions?: MessageActionHandlers;
+  cardHandlers?: MessageCardHandlers;
+  onJumpToReply?: (messageId: string) => void;
 }
 
 export function MessageThread({
@@ -31,6 +37,9 @@ export function MessageThread({
   otherLastReadAt,
   myLastReadAt,
   onRetry,
+  actions,
+  cardHandlers,
+  onJumpToReply,
 }: MessageThreadProps) {
   const {
     containerRef,
@@ -115,7 +124,7 @@ export function MessageThread({
           const showDateSeparator = shouldShowDateSeparator(idx);
 
           return (
-            <div key={msg.id || msg.tempId}>
+            <div key={msg.id || msg.tempId} id={`msg-${msg.id || msg.tempId}`}>
               {/* New messages separator */}
               {idx === newMessagesStartIdx && (
                 <div ref={newMessagesSeparatorRef} className="flex items-center gap-3 my-4">
@@ -140,6 +149,10 @@ export function MessageThread({
                 isMine={isMine}
                 showTime={showTime}
                 isLastInGroup={isLastInGroup(idx)}
+                myUserId={backendUserId ?? undefined}
+                actions={actions}
+                cardHandlers={cardHandlers}
+                onJumpToReply={onJumpToReply ?? scrollToMessage}
                 onRetry={msg.status === "failed" && onRetry ? () => onRetry(msg) : undefined}
               />
 

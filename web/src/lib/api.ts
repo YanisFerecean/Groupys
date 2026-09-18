@@ -30,6 +30,8 @@ export interface BackendUser {
   musicConnected?: boolean;
   recommendationOptOut?: boolean;
   discoveryVisible?: boolean;
+  /** Opted in to broadcasting the currently-playing track to chat partners. */
+  shareNowPlaying?: boolean;
 }
 
 // ── Widget ↔ ProfileCustomization conversion ───────────────────────────────
@@ -595,4 +597,142 @@ export async function transferCommunityOwner(
 export async function deleteCommunity(communityId: string, token: string | null): Promise<void> {
   const res = await apiRequest(`/communities/${encodeURIComponent(communityId)}`, token, { method: "DELETE" });
   if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to delete community"));
+}
+
+// ── Notification preferences (shared with the mobile app's push settings) ─────
+
+export interface NotificationPreferences {
+  matchesEnabled: boolean;
+  messagesEnabled: boolean;
+  communityEnabled: boolean;
+  hotTakesEnabled: boolean;
+  retentionEnabled: boolean;
+  quietStartMinute: number | null;
+  quietEndMinute: number | null;
+  timezone: string | null;
+}
+
+export async function fetchNotificationPreferences(token: string | null): Promise<NotificationPreferences> {
+  const res = await apiRequest("/notifications/preferences", token);
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to fetch notification preferences"));
+  return res.json();
+}
+
+export async function updateNotificationPreferences(
+  prefs: NotificationPreferences,
+  token: string | null,
+): Promise<NotificationPreferences> {
+  const res = await apiRequest("/notifications/preferences", token, { method: "PUT", body: prefs });
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to save notification preferences"));
+  return res.json();
+}
+
+// ── Now-playing sharing ────────────────────────────────────────────────────
+
+/** Opt in/out of broadcasting your currently-playing track to chat partners. */
+export async function setShareNowPlaying(enabled: boolean, token: string | null): Promise<BackendUser> {
+  const res = await apiRequest("/users/me/now-playing-sharing", token, { method: "PUT", body: { enabled } });
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to update now-playing sharing"));
+  return res.json();
+}
+
+export interface MusicCapability {
+  connected: boolean;
+  subscriptionActive: boolean;
+}
+
+export async function fetchMusicCapability(token: string | null): Promise<MusicCapability> {
+  const res = await apiRequest("/music/capability", token);
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to fetch music capability"));
+  return res.json();
+}
+
+// ── Profile views ──────────────────────────────────────────────────────────
+
+/** Records that the current user viewed someone's profile (best-effort; feeds discovery). */
+export async function recordProfileView(userId: string, token: string | null): Promise<void> {
+  try {
+    await apiRequest(`/users/${encodeURIComponent(userId)}/view`, token, { method: "POST" });
+  } catch {
+    // non-critical
+  }
+}
+
+// ── Community members / song of the week ───────────────────────────────────
+
+export interface CommunityMember {
+  id: string;
+  userId: string;
+  username: string;
+  displayName: string | null;
+  profileImage: string | null;
+  role: string;
+  joinedAt: string;
+}
+
+export async function fetchCommunityMembers(communityId: string, token: string | null): Promise<CommunityMember[]> {
+  const res = await apiRequest(`/communities/${encodeURIComponent(communityId)}/members`, token);
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to fetch members"));
+  return res.json();
+}
+
+export interface SongOfWeekTrack {
+  id?: string;
+  title: string;
+  artist?: string;
+  album?: string;
+  artworkUrl?: string;
+  previewUrl?: string;
+  appleMusicUrl?: string;
+}
+
+export interface SongOfWeekCandidate {
+  id: string;
+  track: SongOfWeekTrack;
+  voteCount: number;
+  votedByMe: boolean;
+  submittedByUserId: string;
+}
+
+export interface SongOfWeekPoll {
+  id: string;
+  communityId: string;
+  weekStart: string;
+  endsAt: string;
+  candidates: SongOfWeekCandidate[];
+  pinnedWinner: SongOfWeekCandidate | null;
+  recap: string | null;
+}
+
+export async function fetchSongOfWeek(communityId: string, token: string | null): Promise<SongOfWeekPoll> {
+  const res = await apiRequest(`/communities/${encodeURIComponent(communityId)}/song-of-week`, token);
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to fetch song of the week"));
+  return res.json();
+}
+
+export async function submitSongOfWeekCandidate(
+  communityId: string,
+  track: Record<string, unknown>,
+  token: string | null,
+): Promise<SongOfWeekPoll> {
+  const res = await apiRequest(`/communities/${encodeURIComponent(communityId)}/song-of-week/candidates`, token, {
+    method: "POST",
+    body: track,
+  });
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to nominate track"));
+  return res.json();
+}
+
+export async function toggleSongOfWeekVote(
+  communityId: string,
+  candidateId: string,
+  token: string | null,
+): Promise<SongOfWeekPoll> {
+  const res = await apiRequest(
+    `/communities/${encodeURIComponent(communityId)}/song-of-week/candidates/${encodeURIComponent(candidateId)}/vote`,
+    token,
+    { method: "POST", body: {} },
+  );
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to update vote"));
+  return res.json();
 }
