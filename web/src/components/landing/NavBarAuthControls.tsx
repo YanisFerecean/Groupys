@@ -1,6 +1,6 @@
 "use client";
 
-import { Show, SignInButton, UserButton } from "@clerk/nextjs";
+import { Show, UserButton } from "@clerk/nextjs";
 
 interface NavBarAuthControlsProps {
   mobile: boolean;
@@ -9,6 +9,11 @@ interface NavBarAuthControlsProps {
   iconOnly?: boolean;
 }
 
+/**
+ * Nav-bar account controls. Only already-signed-in users get anything here: the public
+ * login entry point is intentionally absent while the web app isn't production ready
+ * (visitors are pointed at the waitlist instead).
+ */
 export default function NavBarAuthControls({
   mobile,
   onGoToProfile,
@@ -25,47 +30,29 @@ export default function NavBarAuthControls({
 
   if (mobile) {
     return (
-      <>
-        <Show when="signed-out">
-          <SignInButton>
-            <button className="w-full py-3 text-slate-700 font-medium border border-slate-200 rounded-full hover:bg-slate-100 transition-colors">
-              Login
-            </button>
-          </SignInButton>
-        </Show>
-        <Show when="signed-in">
-          <button
-            onClick={() => {
-              onCloseMobileMenu?.();
-              onGoToProfile();
-            }}
-            className="w-full py-3 bg-primary text-on-primary rounded-full font-bold text-center hover:opacity-90 transition-opacity"
-          >
-            My Profile
-          </button>
-        </Show>
-      </>
+      <Show when="signed-in">
+        <button
+          onClick={() => {
+            onCloseMobileMenu?.();
+            onGoToProfile();
+          }}
+          className="w-full py-3 bg-primary text-on-primary rounded-full font-bold text-center hover:opacity-90 transition-opacity"
+        >
+          My Profile
+        </button>
+      </Show>
     );
   }
 
   return (
-    <>
-      <Show when="signed-out">
-        <SignInButton>
-          <button className="px-5 py-2 text-slate-600 font-medium hover:text-slate-900 transition-all">
-            Login
-          </button>
-        </SignInButton>
-      </Show>
-      <Show when="signed-in">
-        <button
-          onClick={onGoToProfile}
-          className="px-6 py-2 bg-primary text-on-primary rounded-full font-bold scale-95 duration-200 ease-in-out hover:scale-100 transition-transform"
-        >
-          My Profile
-        </button>
-        <UserButton />
-      </Show>
-    </>
+    <Show when="signed-in">
+      <button
+        onClick={onGoToProfile}
+        className="px-6 py-2 bg-primary text-on-primary rounded-full font-bold scale-95 duration-200 ease-in-out hover:scale-100 transition-transform"
+      >
+        My Profile
+      </button>
+      <UserButton />
+    </Show>
   );
 }
