@@ -12,7 +12,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { connectAppleMusicWeb, disconnectMusic, isAppleMusicWebMockEnabled } from "@/lib/appleMusic";
-import { fetchUserByClerkId, updateUserPrivacy, type BackendUser } from "@/lib/api";
+import { fetchUserByClerkId, setShareNowPlaying, updateUserPrivacy, type BackendUser } from "@/lib/api";
+import NotificationPreferencesSection from "@/components/app/NotificationPreferencesSection";
 import { useUserStore } from "@/store/userStore";
 import DeleteAccountModal from "@/components/app/DeleteAccountModal";
 
@@ -86,6 +87,7 @@ export default function SettingsDialog({
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [backendUser, setBackendUser] = useState<BackendUser | null>(null);
   const [privacySaving, setPrivacySaving] = useState(false);
+  const [shareSaving, setShareSaving] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const mockEnabled = isAppleMusicWebMockEnabled();
 
@@ -101,6 +103,25 @@ export default function SettingsDialog({
 
   const discoveryVisible = backendUser?.discoveryVisible ?? true;
   const recommendationOptOut = backendUser?.recommendationOptOut ?? false;
+  const shareNowPlaying = backendUser?.shareNowPlaying ?? false;
+
+  // Now-playing presence is gated server-side on this opt-in (and a connected account).
+  const saveShareNowPlaying = async (enabled: boolean) => {
+    if (!backendUser || shareSaving) return;
+    const previous = backendUser;
+    setBackendUser({ ...backendUser, shareNowPlaying: enabled });
+    setShareSaving(true);
+    try {
+      const token = await getToken();
+      const updated = await setShareNowPlaying(enabled, token);
+      setBackendUser({ ...backendUser, ...updated, shareNowPlaying: updated.shareNowPlaying ?? enabled });
+    } catch (err) {
+      console.error("Failed to update now-playing sharing:", err);
+      setBackendUser(previous);
+    } finally {
+      setShareSaving(false);
+    }
+  };
 
   const savePrivacy = async (changes: { discoveryVisible?: boolean; recommendationOptOut?: boolean }) => {
     if (!backendUser || privacySaving) return;
@@ -260,7 +281,33 @@ export default function SettingsDialog({
                 )}
               </div>
             </div>
+
+            {/* Now-playing presence opt-in */}
+            <div className="mt-3 rounded-2xl bg-surface-container-lowest">
+              <div className="flex items-center gap-3 p-4">
+                <div className="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-primary" style={{ fontSize: 20 }}>graphic_eq</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-on-surface">Share what I&apos;m listening to</p>
+                  <p className="text-xs text-on-surface-variant">
+                    {musicConnected
+                      ? "Chat partners and community members see your live track"
+                      : "Connect Apple Music to share your live track"}
+                  </p>
+                </div>
+                <Toggle
+                  label="Share what I'm listening to"
+                  enabled={shareNowPlaying}
+                  disabled={!backendUser || !musicConnected || shareSaving}
+                  onChange={(on) => void saveShareNowPlaying(on)}
+                />
+              </div>
+            </div>
           </div>
+
+          {/* Notifications section */}
+          <NotificationPreferencesSection active={open} />
 
           {/* Discoverability section */}
           <div>

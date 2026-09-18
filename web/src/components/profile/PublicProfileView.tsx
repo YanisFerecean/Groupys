@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth, useUser } from "@clerk/nextjs";
@@ -18,6 +18,7 @@ import {
   type BackendUser,
   backendUserToProfile,
   fetchUserAlbumRatings,
+  recordProfileView,
 } from "@/lib/api";
 import { countryFlag } from "@/lib/countries";
 import { getContrastColor } from "@/lib/utils";
@@ -61,6 +62,9 @@ export default function PublicProfileView({
   const [friendshipId, setFriendshipId] = useState<string | null>(null);
   const [friendLoading, setFriendLoading] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
+  // Read inside the load effect without re-running it when the Clerk user settles.
+  const viewerUsernameRef = useRef(clerkUser?.username);
+  viewerUsernameRef.current = clerkUser?.username;
 
   async function handleFriend() {
     if (!backendUser || friendLoading) return;
@@ -139,6 +143,8 @@ export default function PublicProfileView({
           setBackendUser(data);
           setProfile(backendUserToProfile(data));
         }
+        // Profile views feed discovery ("people who viewed you") — best-effort, like mobile.
+        if (token && viewerUsernameRef.current !== username) void recordProfileView(data.id, token);
         const [ratings, statusRes, postCountRes] = await Promise.all([
           fetchUserAlbumRatings(username, token).catch(() => []),
           token ? fetchFriendStatus(data.id, token).catch(() => null) : Promise.resolve(null),
