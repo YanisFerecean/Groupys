@@ -7,6 +7,7 @@ import com.groupys.notification.ExpoPushMessage;
 import com.groupys.notification.ExpoPushResponse;
 import com.groupys.repository.DeviceTokenRepository;
 import com.groupys.repository.NotificationPrefRepository;
+import com.groupys.repository.UserRepository;
 import io.quarkus.logging.Log;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import jakarta.annotation.PostConstruct;
@@ -32,8 +33,9 @@ import java.util.concurrent.Executors;
  * tokens + preferences (category toggle, quiet hours) on the caller's thread, then dispatches
  * the HTTP send asynchronously so request latency and DB transactions are never blocked.
  *
- * <p>Mirrors {@link PresenceService}'s per-user routing: WebSocket pushes go to online users;
- * push notifications reach everyone (offline included).
+ * <p>Mirrors {@link PresenceService}'s per-user routing: WebSocket pushes go to online users,
+ * and push notifications are suppressed for anyone currently online (a live WebSocket means the
+ * app is in the foreground). Only backgrounded/closed (offline) users receive a push.
  */
 @ApplicationScoped
 public class NotificationService {
@@ -49,6 +51,12 @@ public class NotificationService {
 
     @Inject
     NotificationPrefRepository notificationPrefRepository;
+
+    @Inject
+    UserRepository userRepository;
+
+    @Inject
+    PresenceService presenceService;
 
     private ExecutorService dispatcher;
 
@@ -106,6 +114,7 @@ public class NotificationService {
     /** Send to a single user (respects their toggle + quiet hours). Safe to call inside a transaction. */
     public void notify(UUID userId, Type type, Content content) {
         if (userId == null) return;
+        if (isActivelyOnline(userId)) return; // foreground app → no push (in-app UI handles it)
         NotificationPref pref = notificationPrefRepository.findByUser(userId).orElse(null);
         if (!isEnabled(pref, type) || isSuppressedByQuietHours(pref, type)) return;
 
@@ -133,6 +142,16 @@ public class NotificationService {
                 .toList();
         if (eligible.isEmpty()) return;
 
+        // Drop users actively using the app (foreground); only offline users get a push.
+        Map<UUID, String> clerkIds = userRepository.findClerkIdsByUserIds(eligible);
+        eligible = eligible.stream()
+                .filter(id -> {
+                    String clerkId = clerkIds.get(id);
+                    return clerkId == null || !presenceService.isOnline(clerkId);
+                })
+                .toList();
+        if (eligible.isEmpty()) return;
+
         List<DeviceToken> tokens = deviceTokenRepository.findByUsers(eligible);
         if (tokens.isEmpty()) return;
 
@@ -156,6 +175,12 @@ public class NotificationService {
     }
 
     // ── Preference / quiet-hour gates ─────────────────────────────────────────────
+
+    /** True when the user has a live WebSocket — i.e. the app is open in the foreground. */
+    private boolean isActivelyOnline(UUID userId) {
+        String clerkId = userRepository.findClerkIdsByUserIds(List.of(userId)).get(userId);
+        return clerkId != null && presenceService.isOnline(clerkId);
+    }
 
     private boolean isEnabled(NotificationPref pref, Type type) {
         if (pref == null) return true; // default: everything on

@@ -49,7 +49,10 @@ export default function VideoThumbnail({
   const player = useVideoPlayer(
     autoplay ? { uri: url, headers: token ? { Authorization: `Bearer ${token}` } : undefined } : null,
     (player) => {
-      player.loop = loop
+      // Looping is handled manually via the `playToEnd` listener below. Native
+      // `loop` is unreliable for auth-header / streamed sources and, when enabled,
+      // suppresses the `playToEnd` event our fallback depends on.
+      player.loop = false
       player.muted = muted
       player.pause()
     },
@@ -96,7 +99,7 @@ export default function VideoThumbnail({
         uri: url,
         headers: { Authorization: `Bearer ${refreshed}` },
       })
-      player.loop = loop
+      player.loop = false
       player.muted = muted
       if (isActive) {
         player.play()
@@ -108,7 +111,7 @@ export default function VideoThumbnail({
     } finally {
       authRetryInFlightRef.current = false
     }
-  }, [autoplay, isActive, loop, muted, player, refreshToken, url])
+  }, [autoplay, isActive, muted, player, refreshToken, url])
 
   useEffect(() => {
     if (!player) return
@@ -117,19 +120,24 @@ export default function VideoThumbnail({
 
   useEffect(() => {
     if (!player) return
-    player.loop = loop
-  }, [loop, player])
+    // Always disabled — looping is handled manually (see `playToEnd` listener).
+    player.loop = false
+  }, [player])
 
   useEffect(() => {
     if (!autoplay || !player) return
     if (isActive) {
-      const duration = Number.isFinite(player.duration) ? player.duration : 0
-      if (duration > 0 && player.currentTime >= duration - 0.05) {
+      // Becoming active: always start from the beginning (Reels-style).
+      try {
         player.currentTime = 0
-      }
+      } catch {}
       player.play()
     } else {
+      // Scrolled away: pause and rewind so the post is not "remembered".
       player.pause()
+      try {
+        player.currentTime = 0
+      } catch {}
     }
   }, [autoplay, isActive, player])
 
@@ -137,16 +145,13 @@ export default function VideoThumbnail({
     if (!autoplay || !player) return
 
     const restartPlayback = () => {
+      if (!isActive) return
+      // Atomic "seek to start + play". More reliable at end-of-stream than
+      // writing currentTime = 0 and scheduling play(), which stalls after a
+      // few loops on streamed sources.
       try {
-        player.currentTime = 0
+        player.replay()
       } catch {}
-      setTimeout(() => {
-        try {
-          if (isActive) {
-            player.play()
-          }
-        } catch {}
-      }, 0)
     }
 
     const statusSub = player.addListener('statusChange', ({ status, error }) => {
@@ -159,7 +164,7 @@ export default function VideoThumbnail({
       if (!player.playing) {
         const duration = Number.isFinite(player.duration) ? player.duration : 0
         if (duration > 0 && player.currentTime >= duration - 0.05) {
-          restartPlayback()
+          if (loop) restartPlayback()
           return
         }
         player.play()

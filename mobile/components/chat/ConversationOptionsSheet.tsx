@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons'
 import { BlurView } from 'expo-blur'
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
+import * as Haptics from 'expo-haptics'
 import { Modal, Text, TouchableOpacity, View } from 'react-native'
 
 import { Colors } from '@/constants/colors'
@@ -28,6 +29,7 @@ export function ConversationOptionsSheet({
   onSafety,
 }: ConversationOptionsSheetProps) {
   const action = (until: string | null) => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     onClose()
     onMuteUntil(until)
   }
@@ -61,6 +63,7 @@ export function ConversationOptionsSheet({
       ))}
       <TouchableOpacity
         onPress={() => {
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
           onClose()
           onSafety()
         }}

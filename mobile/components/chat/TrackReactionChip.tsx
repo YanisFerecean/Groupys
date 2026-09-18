@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
+import * as Haptics from 'expo-haptics'
 import { Text, TouchableOpacity, View } from 'react-native'
 
 import { Colors } from '@/constants/colors'
@@ -22,7 +23,11 @@ export function TrackReactionChip({ track, count, mine }: TrackReactionChipProps
     <TouchableOpacity
       activeOpacity={0.78}
       disabled={!track.previewUrl}
-      onPress={() => track.previewUrl && preview.toggle(previewId, track.previewUrl)}
+      onPress={() => {
+        if (!track.previewUrl) return
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+        preview.toggle(previewId, track.previewUrl)
+      }}
       className="max-w-[250px] flex-row items-center gap-1.5 rounded-full px-2 py-1"
       style={{ backgroundColor: mine ? Colors.primaryContainer : Colors.surfaceContainerHigh }}
     >

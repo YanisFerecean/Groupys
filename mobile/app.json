@@ -104,6 +104,7 @@
         }
       ],
       "@clerk/expo",
+      "./plugins/withModularHeaders",
       "expo-apple-authentication",
       "expo-secure-store",
       "expo-video",
@@ -117,6 +118,21 @@
         }
       ],
       [
+        "expo-camera",
+        {
+          "cameraPermission": "Groupys uses your camera so you can take photos and videos to share.",
+          "microphonePermission": "Groupys uses your microphone to record audio for your videos.",
+          "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "savePhotosPermission": "Groupys saves photos and videos to your library when you choose to download them.",
+          "isAccessMediaLocationEnabled": false
+        }
+      ],
+      [
         "expo-notifications",
         {
           "color": "#ba002b",
@@ -126,7 +142,6 @@
       "expo-asset"
     ],
     "extra": {
-      "EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME": "${EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME}",
       "router": {},
       "eas": {
         "projectId": "d61681d3-8b06-410d-a42b-f0ef80feba5b"

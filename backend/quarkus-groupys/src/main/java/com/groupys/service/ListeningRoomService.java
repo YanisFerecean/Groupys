@@ -21,6 +21,8 @@ public class ListeningRoomService {
         public volatile Map<String, Object> track;
         public volatile long positionMs;
         public volatile boolean isPlaying;
+        /** Host is driving a full-song timeline (host has Apple Music); else a 30s-preview lite room. */
+        public volatile boolean full;
         public volatile long updatedAt;
         public final Set<String> members = ConcurrentHashMap.newKeySet();
     }
@@ -54,13 +56,14 @@ public class ListeningRoomService {
     }
 
     public void updateState(String conversationId, String hostClerkId, String hostUserId,
-                            Map<String, Object> track, long positionMs, boolean isPlaying) {
+                            Map<String, Object> track, long positionMs, boolean isPlaying, boolean full) {
         Room room = getOrCreate(conversationId);
         room.hostClerkId = hostClerkId;
         room.hostUserId = hostUserId;
         room.track = track;
         room.positionMs = positionMs;
         room.isPlaying = isPlaying;
+        room.full = full;
         room.updatedAt = System.currentTimeMillis();
         room.members.add(hostClerkId);
     }

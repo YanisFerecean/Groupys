@@ -3,12 +3,13 @@ package com.groupys.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.groupys.config.PerformanceFeatureFlags;
+import com.groupys.dto.CollabPlaylistResDto;
+import com.groupys.dto.CollabPlaylistTrackResDto;
 import com.groupys.dto.ConversationResDto;
 import com.groupys.dto.MessageResDto;
 import com.groupys.dto.ParticipantDto;
 import com.groupys.model.Conversation;
 import com.groupys.model.ConversationParticipant;
-import com.groupys.model.ConversationPin;
 import com.groupys.model.CollabPlaylist;
 import com.groupys.model.CollabPlaylistTrack;
 import com.groupys.model.Message;
@@ -18,7 +19,6 @@ import com.groupys.model.Friendship;
 import com.groupys.repository.CommunityMemberRepository;
 import com.groupys.repository.CollabPlaylistRepository;
 import com.groupys.repository.CollabPlaylistTrackRepository;
-import com.groupys.repository.ConversationPinRepository;
 import com.groupys.repository.ConversationRepository;
 import com.groupys.repository.FriendshipRepository;
 import com.groupys.repository.MessageRepository;
@@ -33,6 +33,7 @@ import jakarta.ws.rs.ForbiddenException;
 import jakarta.ws.rs.NotFoundException;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -63,7 +64,6 @@ public class ChatService {
     private final ObjectMapper objectMapper;
     private final CommunityMemberRepository communityMemberRepository;
     private final MessageReactionRepository messageReactionRepository;
-    private final ConversationPinRepository conversationPinRepository;
     private final CollabPlaylistRepository collabPlaylistRepository;
     private final CollabPlaylistTrackRepository collabPlaylistTrackRepository;
     private final StickerCatalogService stickerCatalogService;
@@ -82,7 +82,6 @@ public class ChatService {
             ObjectMapper objectMapper,
             CommunityMemberRepository communityMemberRepository,
             MessageReactionRepository messageReactionRepository,
-            ConversationPinRepository conversationPinRepository,
             CollabPlaylistRepository collabPlaylistRepository,
             CollabPlaylistTrackRepository collabPlaylistTrackRepository,
             StickerCatalogService stickerCatalogService) {
@@ -98,56 +97,11 @@ public class ChatService {
         this.objectMapper = objectMapper;
         this.communityMemberRepository = communityMemberRepository;
         this.messageReactionRepository = messageReactionRepository;
-        this.conversationPinRepository = conversationPinRepository;
         this.collabPlaylistRepository = collabPlaylistRepository;
         this.collabPlaylistTrackRepository = collabPlaylistTrackRepository;
         this.stickerCatalogService = stickerCatalogService;
     }
 
-    // ── Pins (ticket 3.4) ───────────────────────────────────────────────────────
-
-    public List<MessageResDto> getPins(UUID conversationId, String clerkId) {
-        User user = requireUserByClerkId(clerkId);
-        requireParticipant(conversationId, user.id);
-        return conversationPinRepository.findByConversation(conversationId).stream()
-                .map(pin -> messageRepository.findByIdOptional(pin.messageId).orElse(null))
-                .filter(java.util.Objects::nonNull)
-                .filter(m -> !m.isDeleted)
-                .map(this::toMessageDto)
-                .collect(Collectors.toList());
-    }
-
-    @Transactional
-    public MessageResDto pinMessage(UUID messageId, String clerkId) {
-        User user = requireUserByClerkId(clerkId);
-        Message msg = messageRepository.findByIdOptional(messageId)
-                .orElseThrow(() -> new NotFoundException("Message not found"));
-        requireParticipant(msg.conversation.id, user.id);
-        if (msg.isDeleted) {
-            throw new BadRequestException("Deleted messages cannot be pinned");
-        }
-        if (conversationPinRepository.findOne(msg.conversation.id, messageId) == null) {
-            ConversationPin pin = new ConversationPin();
-            pin.conversationId = msg.conversation.id;
-            pin.messageId = messageId;
-            pin.pinnedBy = user;
-            conversationPinRepository.persist(pin);
-        }
-        return toMessageDto(msg);
-    }
-
-    @Transactional
-    public UUID unpinMessage(UUID messageId, String clerkId) {
-        User user = requireUserByClerkId(clerkId);
-        Message msg = messageRepository.findByIdOptional(messageId)
-                .orElseThrow(() -> new NotFoundException("Message not found"));
-        requireParticipant(msg.conversation.id, user.id);
-        ConversationPin pin = conversationPinRepository.findOne(msg.conversation.id, messageId);
-        if (pin != null) {
-            conversationPinRepository.delete(pin);
-        }
-        return msg.conversation.id;
-    }
 
     // ── Collaborative playlist (ticket 6.1) ───────────────────────────────────
 
@@ -228,13 +182,36 @@ public class ChatService {
             card.updatedAt = Instant.now();
         }
 
-        if (conversationPinRepository.findOne(conversationId, card.id) == null) {
-            ConversationPin pin = new ConversationPin();
-            pin.conversationId = conversationId;
-            pin.messageId = card.id;
-            pin.pinnedBy = user;
-            conversationPinRepository.persist(pin);
+        return toMessageDto(card);
+    }
+
+    /** Remove a track from the conversation's collaborative playlist and refresh its pinned card. */
+    @Transactional
+    public MessageResDto removeTrackFromCollabPlaylist(UUID conversationId, String clerkId, String trackId) {
+        User user = requireUserByClerkId(clerkId);
+        requireParticipant(conversationId, user.id);
+        if (trackId == null || trackId.isBlank()) {
+            throw new BadRequestException("trackId required");
         }
+
+        CollabPlaylist playlist = collabPlaylistRepository.findByConversation(conversationId);
+        if (playlist == null) {
+            throw new NotFoundException("No collaborative playlist for this conversation");
+        }
+
+        CollabPlaylistTrack entry = collabPlaylistTrackRepository.findOne(playlist.id, trackId);
+        if (entry != null) {
+            collabPlaylistTrackRepository.delete(entry);
+            collabPlaylistTrackRepository.flush();
+        }
+
+        List<CollabPlaylistTrack> tracks = collabPlaylistTrackRepository.findByPlaylist(playlist.id);
+        Message card = playlist.message;
+        if (card == null) {
+            throw new NotFoundException("Collaborative playlist card missing");
+        }
+        card.payload = buildCollabPlaylistPayload(playlist, tracks);
+        card.updatedAt = Instant.now();
         return toMessageDto(card);
     }
 
@@ -266,6 +243,45 @@ public class ChatService {
         } catch (Exception e) {
             throw new BadRequestException("Could not build collaborative playlist");
         }
+    }
+
+    /**
+     * Full collaborative playlist for a conversation (ticket 6.1 read view): every added track with
+     * who added it. Unlike the pinned card (capped at 5 previews), this returns the whole list.
+     * Returns an empty playlist when none exists yet.
+     */
+    public CollabPlaylistResDto getCollabPlaylist(UUID conversationId, String clerkId) {
+        User user = requireUserByClerkId(clerkId);
+        requireParticipant(conversationId, user.id);
+
+        CollabPlaylist playlist = collabPlaylistRepository.findByConversation(conversationId);
+        if (playlist == null) {
+            return new CollabPlaylistResDto(null, "Our playlist", 0, List.of());
+        }
+
+        String groupName = playlist.conversation.groupName;
+        String title = groupName == null || groupName.isBlank() ? "Our playlist" : groupName + " playlist";
+
+        List<CollabPlaylistTrackResDto> tracks = new ArrayList<>();
+        for (CollabPlaylistTrack entry : collabPlaylistTrackRepository.findByPlaylist(playlist.id)) {
+            JsonNode track = parsePayload(entry.trackPayload);
+            User addedBy = entry.addedBy;
+            tracks.add(new CollabPlaylistTrackResDto(
+                    entry.trackKey,
+                    track == null ? "" : track.path("title").asText(""),
+                    track == null ? "" : track.path("artist").asText(""),
+                    track == null ? null : track.path("album").asText(null),
+                    track == null ? null : track.path("artworkUrl").asText(null),
+                    track == null ? null : track.path("previewUrl").asText(null),
+                    track == null ? null : track.path("appleMusicId").asText(null),
+                    addedBy == null ? null : addedBy.id,
+                    addedBy == null ? null : addedBy.username,
+                    addedBy == null ? null : addedBy.displayName,
+                    addedBy == null ? null : addedBy.profileImage,
+                    entry.createdAt
+            ));
+        }
+        return new CollabPlaylistResDto(playlist.id.toString(), title, tracks.size(), tracks);
     }
 
     /**
@@ -856,10 +872,11 @@ public class ChatService {
             } catch (Exception e) {
                 throw new jakarta.ws.rs.BadRequestException("Invalid message payload JSON");
             }
-        } else if (structured && !MessageType.IMAGE.equals(type)) {
+        } else if (structured && !MessageType.IMAGE.equals(type) && !MessageType.VIDEO.equals(type)) {
             throw new jakarta.ws.rs.BadRequestException("Structured message requires a payload");
         }
-        boolean carriesUploadedMedia = MessageType.IMAGE.equals(type) || MessageType.VOICE.equals(type);
+        boolean carriesUploadedMedia = MessageType.IMAGE.equals(type) || MessageType.VOICE.equals(type)
+                || MessageType.VIDEO.equals(type);
         if (carriesUploadedMedia
                 && (mediaUrl == null || !mediaUrl.startsWith("/api/posts/media/"))) {
             throw new jakarta.ws.rs.BadRequestException(type + " message requires uploaded media");
@@ -936,8 +953,7 @@ public class ChatService {
         if (!payload.path("guessed").asBoolean(false)) {
             JsonNode track = payload.path("track");
             String title = track.path("title").asText("");
-            String artist = track.path("artist").asText("");
-            boolean correct = fuzzyMatches(guess, title) || fuzzyMatches(guess, artist);
+            boolean correct = fuzzyMatches(guess, title);
             payload.put("hidden", false);
             payload.put("guessed", true);
             payload.put("guessCorrect", correct);

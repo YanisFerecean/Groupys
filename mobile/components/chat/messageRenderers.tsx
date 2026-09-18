@@ -10,6 +10,7 @@ import { LyricCardMessage } from '@/components/music/LyricCardMessage'
 import { TimestampCardMessage } from '@/components/music/TimestampCardMessage'
 import { BlindListenCardMessage } from '@/components/music/BlindListenCardMessage'
 import { ImageMessage } from '@/components/chat/ImageMessage'
+import { VideoMessage } from '@/components/chat/VideoMessage'
 import { LinkPreviewMessage } from '@/components/chat/LinkPreviewMessage'
 import { VoiceMessage } from '@/components/chat/VoiceMessage'
 import { StickerMessage } from '@/components/chat/StickerMessage'
@@ -18,6 +19,9 @@ import { CollabPlaylistCardMessage } from '@/components/music/CollabPlaylistCard
 export interface MessageRendererProps {
   message: Message
   isMine: boolean
+  /** Forwarded long-press (opens the message action sheet) for renderers that wrap their own
+   *  Pressable for tap interactions (e.g. media bubbles) and would otherwise swallow it. */
+  onLongPress?: () => void
 }
 
 /**
@@ -36,6 +40,7 @@ export const messageRenderers: Record<string, ComponentType<MessageRendererProps
   TIMESTAMP: TimestampCardMessage,
   BLIND_LISTEN: BlindListenCardMessage,
   IMAGE: ImageMessage,
+  VIDEO: VideoMessage,
   LINK_PREVIEW: LinkPreviewMessage,
   VOICE: VoiceMessage,
   STICKER: StickerMessage,

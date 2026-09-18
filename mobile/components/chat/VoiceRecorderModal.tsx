@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons'
 import { BlurView } from 'expo-blur'
+import * as Haptics from 'expo-haptics'
 import {
   RecordingPresets,
   requestRecordingPermissionsAsync,
@@ -100,6 +101,7 @@ export function VoiceRecorderModal({ visible, bed, onClose, onSend }: VoiceRecor
         Alert.alert('Microphone permission required', 'Enable microphone access to record a voice note.')
         return
       }
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
       setRecordedUri(null)
       setDurationMs(0)
       setPeaks([])
@@ -117,6 +119,7 @@ export function VoiceRecorderModal({ visible, bed, onClose, onSend }: VoiceRecor
   }
 
   const stopRecording = async () => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     const finalDuration = Math.min(recorderState.durationMillis, MAX_DURATION_MS)
     try {
       await recorder.stop()
@@ -177,6 +180,7 @@ export function VoiceRecorderModal({ visible, bed, onClose, onSend }: VoiceRecor
             {recordedUri && durationMs > 0 ? (
               <TouchableOpacity
                 onPress={() => {
+                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                   void onSend(recordedUri, Math.max(1, durationMs), waveform, bed ?? undefined)
                   onClose()
                 }}

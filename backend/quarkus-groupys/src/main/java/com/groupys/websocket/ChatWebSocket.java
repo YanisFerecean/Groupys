@@ -154,9 +154,8 @@ public class ChatWebSocket {
             case "REACTION_TRACK_REMOVE" -> handleTrackReaction(connection, user, msg, false);
             case "MESSAGE_EDIT"        -> handleMessageEdit(connection, user, msg);
             case "MESSAGE_DELETE"      -> handleMessageDelete(connection, user, msg);
-            case "PIN_ADD"             -> handlePin(connection, user, msg, true);
-            case "PIN_REMOVE"          -> handlePin(connection, user, msg, false);
             case "COLLAB_PLAYLIST_ADD" -> handleCollabPlaylistAdd(connection, user, msg);
+            case "COLLAB_PLAYLIST_REMOVE" -> handleCollabPlaylistRemove(connection, user, msg);
             case "ROOM_JOIN"           -> handleRoomJoin(connection, user, msg);
             case "ROOM_STATE"          -> handleRoomState(user, msg);
             case "ROOM_LEAVE"          -> handleRoomLeave(user, msg);
@@ -476,41 +475,6 @@ public class ChatWebSocket {
                 .forEach((pid, clerkId) -> presenceService.sendTo(clerkId, json));
     }
 
-    // -- Pins (ticket 3.4) -----------------------------------------------------
-
-    private void handlePin(WebSocketConnection connection, User user, Map<String, Object> msg, boolean add) {
-        UUID messageId = parseMessageId(connection, msg);
-        if (messageId == null) return;
-
-        UUID conversationId;
-        try {
-            conversationId = add
-                    ? chatService.pinMessage(messageId, user.clerkId).conversationId()
-                    : chatService.unpinMessage(messageId, user.clerkId);
-        } catch (jakarta.ws.rs.WebApplicationException e) {
-            sendJson(connection, WebSocketMessage.error(e.getMessage()));
-            return;
-        } catch (Exception e) {
-            LOG.errorf(e, "Failed to update pin");
-            sendJson(connection, WebSocketMessage.error("Internal error"));
-            return;
-        }
-
-        broadcastPins(conversationId, user.clerkId);
-    }
-
-    private void broadcastPins(UUID conversationId, String requestingClerkId) {
-        List<Map<String, Object>> pins = chatService.getPins(conversationId, requestingClerkId).stream()
-                .map(pin -> buildMessageData(pin, null))
-                .toList();
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("conversationId", conversationId.toString());
-        payload.put("pins", pins);
-        String json = toJson(new WebSocketMessage("PIN_UPDATE", payload));
-        chatService.getParticipantClerkIds(conversationId)
-                .forEach((pid, clerkId) -> presenceService.sendTo(clerkId, json));
-    }
-
     // -- Collaborative playlist (ticket 6.1) -----------------------------------
 
     private void handleCollabPlaylistAdd(WebSocketConnection connection, User user, Map<String, Object> msg) {
@@ -535,7 +499,29 @@ public class ChatWebSocket {
         }
 
         broadcastMessageUpdated(updated);
-        broadcastPins(conversationId, user.clerkId);
+    }
+
+    private void handleCollabPlaylistRemove(WebSocketConnection connection, User user, Map<String, Object> msg) {
+        UUID conversationId = parseConversationId(connection, msg);
+        String trackId = (String) msg.get("trackId");
+        if (conversationId == null || trackId == null) {
+            sendJson(connection, WebSocketMessage.error("conversationId and trackId required"));
+            return;
+        }
+
+        MessageResDto updated;
+        try {
+            updated = chatService.removeTrackFromCollabPlaylist(conversationId, user.clerkId, trackId);
+        } catch (jakarta.ws.rs.WebApplicationException e) {
+            sendJson(connection, WebSocketMessage.error(e.getMessage()));
+            return;
+        } catch (Exception e) {
+            LOG.errorf(e, "Failed to update collaborative playlist");
+            sendJson(connection, WebSocketMessage.error("Internal error"));
+            return;
+        }
+
+        broadcastMessageUpdated(updated);
     }
 
     // -- Reactions (ticket 3.2) ------------------------------------------------
@@ -670,9 +656,10 @@ public class ChatWebSocket {
         Map<String, Object> track = (msg.get("track") instanceof Map<?, ?> raw) ? sanitizeRoomTrack(raw) : null;
         long positionMs = toLong(msg.get("positionMs"));
         boolean isPlaying = Boolean.TRUE.equals(msg.get("isPlaying"));
+        boolean full = Boolean.TRUE.equals(msg.get("full"));
 
         listeningRoomService.updateState(conversationId.toString(), user.clerkId, user.id.toString(),
-                track, positionMs, isPlaying);
+                track, positionMs, isPlaying, full);
 
         ListeningRoomService.Room room = listeningRoomService.get(conversationId.toString());
         String json = toJson(new WebSocketMessage("ROOM_STATE", roomStatePayload(conversationId, room)));
@@ -708,6 +695,7 @@ public class ChatWebSocket {
         payload.put("track", room.track);
         payload.put("positionMs", room.positionMs);
         payload.put("isPlaying", room.isPlaying);
+        payload.put("full", room.full);
         payload.put("updatedAt", room.updatedAt);
         return payload;
     }
@@ -923,6 +911,9 @@ public class ChatWebSocket {
         Map<String, Object> track = sanitizeTrack(raw);
         if (track == null) return null;
         track.put("previewUrl", asString(raw.get("previewUrl")));
+        // The Apple Music catalog id lets subscribed followers play the FULL song, not just the
+        // preview. Dropping it (as now-playing does) is what limited everyone but the host to 30s.
+        track.put("appleMusicId", asString(raw.get("appleMusicId")));
         return track;
     }
 

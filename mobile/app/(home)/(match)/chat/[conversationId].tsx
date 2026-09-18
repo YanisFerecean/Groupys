@@ -1,9 +1,11 @@
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth, useUser } from '@clerk/expo'
 import { Image } from 'expo-image'
+import * as Haptics from 'expo-haptics'
 import * as ImagePicker from 'expo-image-picker'
 import { UIImagePickerPreferredAssetRepresentationMode } from 'expo-image-picker'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
+import { useQuery } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
@@ -16,10 +18,10 @@ import {
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { AppCamera } from '@/components/camera/AppCamera'
 import { MessageBubble } from '@/components/chat/MessageBubble'
 import { MessageComposer } from '@/components/chat/MessageComposer'
 import { NowPlayingPill } from '@/components/chat/NowPlayingPill'
-import { NowPlayingTrackSheet } from '@/components/music/NowPlayingTrackSheet'
 import { TrackPicker } from '@/components/music/TrackPicker'
 import { AlbumPicker } from '@/components/music/AlbumPicker'
 import { MusicUpsellSheet } from '@/components/music/MusicUpsellSheet'
@@ -28,18 +30,17 @@ import { ChatLoadingStatus } from '@/components/chat/ChatLoadingStatus'
 import { ChatActionsContext, type ChatActions } from '@/components/chat/ChatActionsContext'
 import { TextPromptModal } from '@/components/ui/TextPromptModal'
 import { ListenTogetherBar } from '@/components/chat/ListenTogetherBar'
-import { ListeningPartyBar } from '@/components/chat/ListeningPartyBar'
 import { MessageActionSheet, type MessageAction } from '@/components/chat/MessageActionSheet'
-import { PinnedMessageBar } from '@/components/chat/PinnedMessageBar'
 import { ChatSearchPanel } from '@/components/chat/ChatSearchPanel'
 import { ConversationOptionsSheet } from '@/components/chat/ConversationOptionsSheet'
 import { VoiceRecorderModal } from '@/components/chat/VoiceRecorderModal'
 import { TypingIndicator } from '@/components/chat/TypingIndicator'
 import { useListenTogether } from '@/hooks/useListenTogether'
 import { useMusicGate } from '@/hooks/useMusicGate'
-import { apiPostMultipart, fetchMusicCurrentlyPlaying } from '@/lib/api'
+import { apiPostMultipart, getCollabPlaylist } from '@/lib/api'
 import { resolveLinkPreview } from '@/lib/chat-api'
-import type { AlbumPayload, TrackPayload, VoiceBedPayload } from '@/models/ChatPayloads'
+import type { AlbumPayload, MediaMusicAttachment, TrackPayload, VoiceBedPayload } from '@/models/ChatPayloads'
+import type { CapturedMedia } from '@/types/camera'
 import { Colors } from '@/constants/colors'
 import { useChat } from '@/hooks/useChat'
 import { useChatMessages } from '@/hooks/useChatMessages'
@@ -87,7 +88,6 @@ export default function ChatConversationScreen() {
     loadMore,
     loadUntilMessage,
     messages,
-    pins,
     resendMessage,
     searchConversationMessages,
     sendMessage,
@@ -95,15 +95,38 @@ export default function ChatConversationScreen() {
     toggleTrackReaction,
     editMessage,
     deleteMessage,
-    togglePin,
   } = useChatMessages(activeConversationId, otherParticipant?.username ?? null)
+
+  // Which tracks are already in the conversation's collab playlist — used to flip the track-card
+  // "Add to playlist" button to "Already in the playlist". The COLLAB_PLAYLIST card updates
+  // live over the socket, so we key the fetch off its track count to refetch when anyone adds.
+  const collabCardTrackCount = useMemo(() => {
+    const count = messages.find(m => m.messageType === 'COLLAB_PLAYLIST')?.payload?.trackCount
+    return typeof count === 'number' ? count : 0
+  }, [messages])
+  const { data: collabPlaylist } = useQuery({
+    queryKey: ['collab-playlist', activeConversationId, collabCardTrackCount],
+    queryFn: async () => {
+      const token = await getToken()
+      return getCollabPlaylist(activeConversationId!, token)
+    },
+    enabled: !!activeConversationId,
+    staleTime: 10_000,
+  })
+  const [optimisticPlaylistIds, setOptimisticPlaylistIds] = useState<Set<string>>(new Set())
+  useEffect(() => { setOptimisticPlaylistIds(new Set()) }, [activeConversationId])
+  const collabPlaylistIds = useMemo(() => {
+    const ids = new Set<string>(optimisticPlaylistIds)
+    collabPlaylist?.tracks.forEach(t => ids.add(t.trackId))
+    return ids
+  }, [collabPlaylist, optimisticPlaylistIds])
 
   // Track sharing (tickets 2.1 / 1.3 / 4.x).
   const [trackPickerOpen, setTrackPickerOpen] = useState(false)
   const [trackPickerQuery, setTrackPickerQuery] = useState('')
   // What the track picker selection feeds into.
-  const [pickerMode, setPickerMode] = useState<'send' | 'dedicate' | 'lyric' | 'timestamp' | 'blind' | 'listen' | 'reaction' | 'party'>('send')
-  const listenTogether = useListenTogether(activeConversationId)
+  const [pickerMode, setPickerMode] = useState<'send' | 'dedicate' | 'timestamp' | 'blind' | 'listen' | 'reaction'>('send')
+  const listenTogether = useListenTogether(activeConversationId, musicGate.capability.canPlayFull)
   // Long-press action menu + reply target (ticket 3.1).
   const [actionMessage, setActionMessage] = useState<Message | null>(null)
   const [replyTarget, setReplyTarget] = useState<ReplyStub | null>(null)
@@ -111,40 +134,90 @@ export default function ChatConversationScreen() {
   const [pendingTrackReactionMessageId, setPendingTrackReactionMessageId] = useState<string | null>(null)
   // Dedication note flow (ticket 4.3).
   const [pendingDedication, setPendingDedication] = useState<TrackPayload | null>(null)
-  // Lyric entry flow (ticket 4.1).
-  const [pendingLyricTrack, setPendingLyricTrack] = useState<TrackPayload | null>(null)
   // Timestamp entry flow (ticket 4.2).
   const [pendingTimestampTrack, setPendingTimestampTrack] = useState<TrackPayload | null>(null)
-  const [pendingPartyTrack, setPendingPartyTrack] = useState<TrackPayload | null>(null)
   // Richer music shares (tickets 2.2 / 2.3).
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
   const [albumPickerOpen, setAlbumPickerOpen] = useState(false)
   const [voiceRecorderOpen, setVoiceRecorderOpen] = useState(false)
   const [pendingVoiceBed, setPendingVoiceBed] = useState<VoiceBedPayload | null>(null)
+  // Full-screen in-app camera (replaces the OS camera sheet) for richer capture + music attach.
+  const [cameraOpen, setCameraOpen] = useState(false)
+
+  // Upload an image/video and send it as an IMAGE or VIDEO message, carrying the natural dimensions
+  // (so the bubble renders at the right aspect ratio) and any attached music overlay.
+  const uploadAndSend = useCallback(async (input: {
+    uri: string
+    isVideo: boolean
+    mime: string
+    width?: number
+    height?: number
+    fileName?: string
+    music?: MediaMusicAttachment
+  }) => {
+    const ext = input.isVideo ? 'mp4' : 'jpg'
+    const formData = new FormData()
+    formData.append('file', {
+      uri: input.uri,
+      type: input.mime,
+      name: input.fileName ?? `chat-media-${Date.now()}.${ext}`,
+    } as unknown as Blob)
+    const token = await getToken()
+    const uploaded = await apiPostMultipart<{ url: string; type?: string }>('/posts/media/upload', token, formData)
+    await sendMessage(input.isVideo ? 'Video' : 'Photo', {
+      messageType: input.isVideo ? 'VIDEO' : 'IMAGE',
+      mediaUrl: uploaded.url,
+      payload: {
+        width: input.width,
+        height: input.height,
+        mime: uploaded.type ?? input.mime,
+        ...(input.music ? { music: input.music } : {}),
+      },
+    })
+  }, [getToken, sendMessage])
+
+  const uploadAndSendAsset = useCallback((asset: ImagePicker.ImagePickerAsset) => {
+    const isVideo = asset.type === 'video'
+    return uploadAndSend({
+      uri: asset.uri,
+      isVideo,
+      mime: asset.mimeType ?? (isVideo ? 'video/mp4' : 'image/jpeg'),
+      width: asset.width,
+      height: asset.height,
+      fileName: asset.fileName ?? undefined,
+    })
+  }, [uploadAndSend])
+
+  const handleCameraCapture = useCallback(async (media: CapturedMedia) => {
+    setCameraOpen(false)
+    try {
+      await uploadAndSend({
+        uri: media.uri,
+        isVideo: media.type === 'video',
+        mime: media.mime ?? (media.type === 'video' ? 'video/mp4' : 'image/jpeg'),
+        width: media.width,
+        height: media.height,
+        music: media.music,
+      })
+    } catch {
+      Alert.alert('Could not send media', 'Try again.')
+    }
+  }, [uploadAndSend])
+
   const pickImage = useCallback(async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
+        mediaTypes: ['images', 'videos'],
         quality: 0.8,
         allowsEditing: false,
         preferredAssetRepresentationMode: UIImagePickerPreferredAssetRepresentationMode.Compatible,
       })
       if (result.canceled || !result.assets[0]) return
-
-      const asset = result.assets[0]
-      const formData = new FormData()
-      formData.append('file', {
-        uri: asset.uri,
-        type: asset.mimeType ?? 'image/jpeg',
-        name: asset.fileName ?? `chat-image-${Date.now()}.jpg`,
-      } as unknown as Blob)
-      const token = await getToken()
-      const uploaded = await apiPostMultipart<{ url: string }>('/posts/media/upload', token, formData)
-      await sendMessage('Photo', { messageType: 'IMAGE', mediaUrl: uploaded.url })
+      await uploadAndSendAsset(result.assets[0])
     } catch {
-      Alert.alert('Could not share photo', 'Try selecting the image again.')
+      Alert.alert('Could not share media', 'Try selecting the photo or video again.')
     }
-  }, [getToken, sendMessage])
+  }, [uploadAndSendAsset])
 
   const handleComposerSend = useCallback(async (content: string) => {
     const replyTo = replyTarget
@@ -220,16 +293,6 @@ export default function ChatConversationScreen() {
     })
   }, [sendMessage])
 
-  const sendLyric = useCallback((track: TrackPayload, raw: string) => {
-    const lines = raw.split('\n').map(l => l.trim()).filter(Boolean).slice(0, 4)
-    if (lines.length === 0) return
-    const { type: _t, ...trackRef } = track
-    void sendMessage(`🎤 “${lines[0]}”`, {
-      messageType: 'LYRIC',
-      payload: { type: 'LYRIC', track: trackRef, lines } as unknown as Record<string, unknown>,
-    })
-  }, [sendMessage])
-
   const sendTimestamp = useCallback((track: TrackPayload, raw: string) => {
     // Accept "m:ss", "mm:ss", or plain seconds.
     const parts = raw.split(':').map(p => parseInt(p.trim(), 10))
@@ -267,16 +330,12 @@ export default function ChatConversationScreen() {
       setPickerMode('send')
     } else if (pickerMode === 'dedicate') {
       setPendingDedication(track)
-    } else if (pickerMode === 'lyric') {
-      setPendingLyricTrack(track)
     } else if (pickerMode === 'timestamp') {
       setPendingTimestampTrack(track)
     } else if (pickerMode === 'blind') {
       sendBlindListen(track)
     } else if (pickerMode === 'listen') {
       listenTogether.startRoom(track)
-    } else if (pickerMode === 'party') {
-      setPendingPartyTrack(track)
     } else {
       sendTrack(track)
     }
@@ -299,36 +358,12 @@ export default function ChatConversationScreen() {
     addToCollabPlaylist: activeConversationId
       ? (track: TrackPayload) => {
           chatWs.send({ type: 'COLLAB_PLAYLIST_ADD', conversationId: activeConversationId, track })
+          if (track.id) setOptimisticPlaylistIds(prev => new Set(prev).add(track.id))
         }
       : undefined,
-  }), [activeConversationId, otherUserId, router])
+    isInCollabPlaylist: (trackId: string) => collabPlaylistIds.has(trackId),
+  }), [activeConversationId, collabPlaylistIds, otherUserId, router])
 
-  const handleMusicPress = useCallback(async () => {
-    setPickerMode('send')
-    // Not connected → prompt to connect (manual picker is still reachable from the upsell flow).
-    if (!musicGate.capability.connected) {
-      musicGate.requireMusic('Share what you’re listening to')
-      return
-    }
-    // Connected → share the current track instantly, else fall back to the manual picker.
-    try {
-      const token = await getToken()
-      const current = await fetchMusicCurrentlyPlaying(token)
-      if (current) {
-        sendTrack({
-          type: 'TRACK',
-          id: '',
-          title: current.title,
-          artist: current.artist,
-          artworkUrl: current.coverUrl ?? undefined,
-        })
-        return
-      }
-    } catch {
-      // fall through to the picker
-    }
-    setTrackPickerOpen(true)
-  }, [getToken, musicGate, sendTrack])
   const [typingUsers, setTypingUsers] = useState<Map<string, string>>(new Map())
   const [hasPartnerKey, setHasPartnerKey] = useState(false)
   const [isNearBottom, setIsNearBottom] = useState(true)
@@ -344,7 +379,7 @@ export default function ChatConversationScreen() {
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null)
   const [conversationOptionsOpen, setConversationOptionsOpen] = useState(false)
 
-  // Scroll to a message by id (reply quote or pinned-bar tap). Load older pages when needed.
+  // Scroll to a message by id (reply quote tap). Load older pages when needed.
   const scrollToMessage = useCallback((messageId: string) => {
     const index = messages.findIndex(m => m.id === messageId)
     if (index >= 0) {
@@ -444,12 +479,6 @@ export default function ChatConversationScreen() {
           setTrackPickerOpen(true)
         },
       })
-      const isPinned = pins.some(pin => pin.id === actionMessage.id)
-      actions.push({
-        icon: isPinned ? 'pin-outline' : 'pin',
-        label: isPinned ? 'Unpin' : 'Pin',
-        onPress: () => togglePin(actionMessage),
-      })
     }
     if (mine && isTextMsg && !actionMessage.isDeleted) {
       actions.push({ icon: 'create', label: 'Edit', onPress: () => setPendingEdit(actionMessage) })
@@ -468,7 +497,7 @@ export default function ChatConversationScreen() {
       })
     }
     return actions
-  }, [actionMessage, buildReplyStub, deleteMessage, pins, togglePin, user?.username])
+  }, [actionMessage, buildReplyStub, deleteMessage, user?.username])
 
   useEffect(() => {
     return () => {
@@ -595,7 +624,6 @@ export default function ChatConversationScreen() {
   const partnerTrack = partnerNowPlaying?.track && partnerNowPlaying.isPlaying
     ? partnerNowPlaying.track
     : null
-  const [nowPlayingSheetOpen, setNowPlayingSheetOpen] = useState(false)
   const lastSeenText = useMemo(() => {
     if (!otherParticipant?.lastSeenAt || isUserOnline(otherParticipant.userId)) {
       return null
@@ -641,17 +669,9 @@ export default function ChatConversationScreen() {
   const canMessage = conversation?.requestStatus === 'ACCEPTED'
   const showMessageListLoader = isLoading || isInitialLoadPending
 
-  // Listen Together syncs full-song playback, so both people need an active Apple Music
-  // subscription — the current user via canPlayFull, the partner via their cached subscription flag.
-  const selfCanPlayFull = musicGate.capability.canPlayFull
-  const peerHasSubscription = otherParticipant?.musicSubscriptionActive ?? false
-  const listenTogetherDisabled = !selfCanPlayFull || !peerHasSubscription
-  const partnerName = otherParticipant?.displayName ?? otherParticipant?.username ?? 'They'
-  const listenTogetherHint = !selfCanPlayFull
-    ? 'Listen Together needs an active Apple Music subscription to sync full songs.'
-    : !peerHasSubscription
-      ? `${partnerName} doesn’t have an active Apple Music subscription, so full songs can’t play in sync.`
-      : undefined
+  // Listen Together is always available: a subscriber picking the song drives a full-song room
+  // (each listener gets full or the 30s preview per their own subscription), and a non-subscriber
+  // can still drive a synced-preview "lite room". Engine/fallback is decided inside useListenTogether.
   const renderEmptyState = () => (
     <View
       className="flex-1 items-center justify-center px-10 py-10"
@@ -763,7 +783,7 @@ export default function ChatConversationScreen() {
             ) : null
           ) : null}
           {partnerTrack ? (
-            <NowPlayingPill track={partnerTrack} onPress={() => setNowPlayingSheetOpen(true)} />
+            <NowPlayingPill track={partnerTrack} />
           ) : null}
         </TouchableOpacity>
 
@@ -771,7 +791,10 @@ export default function ChatConversationScreen() {
           <TouchableOpacity
             className="h-11 w-11 items-center justify-center rounded-full bg-surface-container"
             accessibilityLabel="Search conversation"
-            onPress={() => setSearchOpen(true)}
+            onPress={() => {
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+              setSearchOpen(true)
+            }}
           >
             <Ionicons name="search" size={20} color={Colors.onSurface} />
           </TouchableOpacity>
@@ -781,14 +804,15 @@ export default function ChatConversationScreen() {
           <TouchableOpacity
             className="h-11 w-11 items-center justify-center rounded-full bg-surface-container"
             accessibilityLabel="Conversation options"
-            onPress={() => setConversationOptionsOpen(true)}
+            onPress={() => {
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+              setConversationOptionsOpen(true)
+            }}
           >
             <Ionicons name="ellipsis-horizontal" size={22} color={Colors.onSurface} />
           </TouchableOpacity>
         ) : null}
       </View>
-
-      <PinnedMessageBar pins={pins} onPress={scrollToMessage} />
 
       {searchOpen && conversation ? (
         <ChatSearchPanel
@@ -839,6 +863,7 @@ export default function ChatConversationScreen() {
                   className="flex-1 items-center justify-center rounded-2xl bg-surface px-4 py-3"
                   disabled={requestAction !== null}
                   onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
                     setRequestAction('deny')
                     void denyDirectRequest(conversation.id)
                       .then(() => {
@@ -862,6 +887,7 @@ export default function ChatConversationScreen() {
                   className="flex-1 items-center justify-center rounded-2xl bg-primary px-4 py-3"
                   disabled={requestAction !== null}
                   onPress={() => {
+                    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
                     setRequestAction('accept')
                     void acceptDirectRequest(conversation.id)
                       .catch(error => {
@@ -903,13 +929,6 @@ export default function ChatConversationScreen() {
               onReact={listenTogether.sendReaction}
             />
           ) : null}
-          {!listenTogether.room && listenTogether.party ? (
-            <ListeningPartyBar
-              party={listenTogether.party}
-              joined={listenTogether.joinedParty}
-              onJoin={listenTogether.joinParty}
-            />
-          ) : null}
 
           <FlatList
             ref={listRef}
@@ -944,7 +963,7 @@ export default function ChatConversationScreen() {
             ListHeaderComponent={typingUsername ? <TypingIndicator username={typingUsername} /> : null}
             ListFooterComponent={(
               <View className="pb-3 pt-2">
-                {isLoadingMore ? (
+                {isLoadingMore && messages.length > 0 ? (
                   <ActivityIndicator color={Colors.primary} />
                 ) : null}
                 {!hasMore && messages.length > 0 ? (
@@ -956,7 +975,9 @@ export default function ChatConversationScreen() {
             )}
             maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
             onEndReached={() => {
-              if (hasMore && !isLoadingMore) {
+              // Guard against the empty initial list firing onEndReached (which would show a second
+              // loader at the top, on top of the centered "Loading your chat").
+              if (hasMore && !isLoadingMore && messages.length > 0) {
                 void loadMore()
               }
             }}
@@ -977,10 +998,8 @@ export default function ChatConversationScreen() {
               onSend={(content) => {
                 void handleComposerSend(content)
               }}
-              onMusicPress={() => {
-                void handleMusicPress()
-              }}
               onAttachPress={() => setAttachMenuOpen(true)}
+              onCameraPress={() => setCameraOpen(true)}
               onVoiceNote={() => {
                 setPendingVoiceBed(null)
                 setVoiceRecorderOpen(true)
@@ -990,16 +1009,22 @@ export default function ChatConversationScreen() {
         </>
       )}
 
-      <NowPlayingTrackSheet
-        visible={nowPlayingSheetOpen}
-        track={partnerTrack}
-        onClose={() => setNowPlayingSheetOpen(false)}
+      <AppCamera
+        visible={cameraOpen}
+        enableMusic
+        allowPhoto
+        allowVideo
+        saveToLibrary
+        onCancel={() => setCameraOpen(false)}
+        onMediaCaptured={(media) => {
+          void handleCameraCapture(media)
+        }}
       />
 
       <TrackPicker
         visible={trackPickerOpen}
         initialQuery={trackPickerQuery}
-        previewOnly={pickerMode === 'reaction' || pickerMode === 'listen' || pickerMode === 'party'}
+        previewOnly={pickerMode === 'reaction' || pickerMode === 'listen'}
         onClose={() => {
           setTrackPickerOpen(false)
           if (pickerMode === 'reaction') {
@@ -1016,18 +1041,17 @@ export default function ChatConversationScreen() {
         onPickImage={() => {
           void pickImage()
         }}
-        onVoiceNote={() => {
-          setPendingVoiceBed(null)
-          setVoiceRecorderOpen(true)
-        }}
-        onPickAlbum={() => setAlbumPickerOpen(true)}
-        onDedicate={() => {
-          setPickerMode('dedicate')
+        onShareSong={() => {
+          setPickerMode('send')
           setTrackPickerQuery('')
           setTrackPickerOpen(true)
         }}
-        onShareLyric={() => {
-          setPickerMode('lyric')
+        onPickAlbum={() => setAlbumPickerOpen(true)}
+        onPickPlaylist={activeConversationId ? () => {
+          router.push({ pathname: '/(home)/(match)/chat/playlist', params: { conversationId: activeConversationId } })
+        } : undefined}
+        onDedicate={() => {
+          setPickerMode('dedicate')
           setTrackPickerQuery('')
           setTrackPickerOpen(true)
         }}
@@ -1043,13 +1067,6 @@ export default function ChatConversationScreen() {
         }}
         onListenTogether={() => {
           setPickerMode('listen')
-          setTrackPickerQuery('')
-          setTrackPickerOpen(true)
-        }}
-        listenTogetherDisabled={listenTogetherDisabled}
-        listenTogetherHint={listenTogetherHint}
-        onListeningParty={() => {
-          setPickerMode('party')
           setTrackPickerQuery('')
           setTrackPickerOpen(true)
         }}
@@ -1080,41 +1097,6 @@ export default function ChatConversationScreen() {
         }}
       />
 
-      <TextPromptModal
-        visible={pendingPartyTrack !== null}
-        title="Party starts in how many minutes?"
-        placeholder="5"
-        initialValue="5"
-        submitLabel="Schedule party"
-        onClose={() => {
-          setPendingPartyTrack(null)
-          setPickerMode('send')
-        }}
-        onSubmit={(text) => {
-          const minutes = Number.parseInt(text, 10)
-          if (!pendingPartyTrack || !Number.isFinite(minutes) || minutes < 1 || minutes > 43200) {
-            Alert.alert('Listening party', 'Choose a start time between 1 minute and 30 days.')
-            return
-          }
-          listenTogether.scheduleParty(pendingPartyTrack, new Date(Date.now() + minutes * 60_000))
-          setPendingPartyTrack(null)
-          setPickerMode('send')
-        }}
-      />
-
-      <TextPromptModal
-        visible={pendingLyricTrack !== null}
-        title="Paste up to 4 lyric lines"
-        placeholder={'Line 1\nLine 2'}
-        multiline
-        submitLabel="Send lyric"
-        onClose={() => setPendingLyricTrack(null)}
-        onSubmit={(text) => {
-          if (pendingLyricTrack) sendLyric(pendingLyricTrack, text)
-          setPendingLyricTrack(null)
-          setPickerMode('send')
-        }}
-      />
 
       <TextPromptModal
         visible={pendingTimestampTrack !== null}

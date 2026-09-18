@@ -11,7 +11,20 @@ export type CapabilityStatus = {
   addToCloudMusicLibrary: boolean
 }
 
-export type AppleMusicAuthModuleEvents = Record<string, never>
+/** Emitted by the native player (~1s while playing + on state/item changes). */
+export type PlaybackStatusEvent = {
+  /** Apple Music catalog store id of the loaded song ('' when stopped). */
+  storeId: string
+  positionSec: number
+  durationSec: number
+  isPlaying: boolean
+  /** Song finished or playback was stopped. */
+  ended: boolean
+}
+
+export type AppleMusicAuthModuleEvents = {
+  onPlaybackStatus: (event: PlaybackStatusEvent) => void
+}
 
 export type OnLoadEventPayload = {
   url: string

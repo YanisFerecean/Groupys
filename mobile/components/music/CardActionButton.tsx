@@ -1,5 +1,6 @@
 import { Text, TouchableOpacity } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import * as Haptics from 'expo-haptics'
 
 import { Colors } from '@/constants/colors'
 
@@ -17,7 +18,10 @@ export function CardActionButton({ icon, label, onPress, disabled = false, isMin
   const tint = isMine ? Colors.onPrimary : Colors.onSurface
   return (
     <TouchableOpacity
-      onPress={onPress}
+      onPress={() => {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+        onPress()
+      }}
       className="flex-row items-center gap-1.5 rounded-full px-3 py-1.5"
       style={{
         backgroundColor: isMine ? 'rgba(255,255,255,0.18)' : Colors.surfaceContainerHighest,

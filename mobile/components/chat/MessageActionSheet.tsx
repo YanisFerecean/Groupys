@@ -1,5 +1,6 @@
 import { BlurView } from 'expo-blur'
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
+import * as Haptics from 'expo-haptics'
 import { Ionicons } from '@expo/vector-icons'
 import { Modal, Text, TouchableOpacity, View } from 'react-native'
 
@@ -39,6 +40,7 @@ export function MessageActionSheet({ visible, actions, onClose, onReact }: Messa
               <TouchableOpacity
                 key={emoji}
                 onPress={() => {
+                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                   onClose()
                   onReact(emoji)
                 }}
@@ -54,6 +56,7 @@ export function MessageActionSheet({ visible, actions, onClose, onReact }: Messa
               <TouchableOpacity
                 key={emoji}
                 onPress={() => {
+                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                   onClose()
                   onReact(emoji)
                 }}
@@ -69,6 +72,9 @@ export function MessageActionSheet({ visible, actions, onClose, onReact }: Messa
         <TouchableOpacity
           key={action.label}
           onPress={() => {
+            void Haptics.impactAsync(
+              action.destructive ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light,
+            )
             onClose()
             action.onPress()
           }}

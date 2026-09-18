@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons'
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
+import * as Haptics from 'expo-haptics'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Keyboard, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { Colors } from '@/constants/colors'
@@ -12,13 +13,10 @@ interface MessageComposerProps {
   conversationId: string
   disabled?: boolean
   onSend: (content: string) => void | Promise<void>
-  /**
-   * Music-note button handler (tickets 2.1/1.3): shares the current track, opens the picker, or
-   * prompts to connect — the parent decides. Button is shown only when provided.
-   */
-  onMusicPress?: () => void
   /** Attach button handler for richer shares (album/playlist; tickets 2.2/2.3). */
   onAttachPress?: () => void
+  /** Camera button handler: captures a snapshot to share. Button shown only when provided. */
+  onCameraPress?: () => void
   /** Active reply target (ticket 3.1); renders a preview bar above the input. */
   replyTo?: ReplyStub | null
   onCancelReply?: () => void
@@ -31,8 +29,8 @@ export function MessageComposer({
   conversationId,
   disabled = false,
   onSend,
-  onMusicPress,
   onAttachPress,
+  onCameraPress,
   replyTo,
   onCancelReply,
   onVoiceNote,
@@ -99,6 +97,7 @@ export function MessageComposer({
       return
     }
 
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     stopTyping()
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current)
@@ -106,6 +105,18 @@ export function MessageComposer({
     onSend(trimmed)
     setContent('')
   }
+
+  // Light tap feedback on the composer's icon buttons before firing the provided handler.
+  const withTap = (handler?: () => void) =>
+    handler
+      ? () => {
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+          handler()
+        }
+      : undefined
+  const handleAttach = withTap(onAttachPress)
+  const handleCamera = withTap(onCameraPress)
+  const handleVoiceNote = withTap(onVoiceNote)
 
   const remaining = MAX_LENGTH - content.length
 
@@ -134,16 +145,16 @@ export function MessageComposer({
           ) : null}
           <View className="flex-row items-end gap-3">
             {onAttachPress ? (
-              <TouchableOpacity disabled={disabled} onPress={onAttachPress} activeOpacity={0.7} style={{ opacity: disabled ? 0.5 : 1 }}>
+              <TouchableOpacity disabled={disabled} onPress={handleAttach} activeOpacity={0.7} style={{ opacity: disabled ? 0.5 : 1 }}>
                 <GlassView isInteractive style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }}>
                   <Ionicons name="add" size={24} color={Colors.primary} />
                 </GlassView>
               </TouchableOpacity>
             ) : null}
-            {onMusicPress ? (
-              <TouchableOpacity disabled={disabled} onPress={onMusicPress} activeOpacity={0.7} style={{ opacity: disabled ? 0.5 : 1 }}>
+            {onCameraPress ? (
+              <TouchableOpacity disabled={disabled} onPress={handleCamera} activeOpacity={0.7} style={{ opacity: disabled ? 0.5 : 1 }}>
                 <GlassView isInteractive style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }}>
-                  <Ionicons name="musical-notes" size={20} color={Colors.primary} />
+                  <Ionicons name="camera" size={22} color={Colors.primary} />
                 </GlassView>
               </TouchableOpacity>
             ) : null}
@@ -181,7 +192,7 @@ export function MessageComposer({
                 </GlassView>
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity disabled={disabled} onPress={onVoiceNote} activeOpacity={0.7}>
+              <TouchableOpacity disabled={disabled} onPress={handleVoiceNote} activeOpacity={0.7}>
                 <GlassView
                   glassEffectStyle="clear"
                   isInteractive
@@ -213,22 +224,22 @@ export function MessageComposer({
               <TouchableOpacity
                 className="h-12 w-12 items-center justify-center rounded-full bg-surface-container-high"
                 disabled={disabled}
-                onPress={onAttachPress}
+                onPress={handleAttach}
                 accessibilityLabel="Share music"
                 style={{ opacity: disabled ? 0.5 : 1 }}
               >
                 <Ionicons name="add" size={24} color={Colors.primary} />
               </TouchableOpacity>
             ) : null}
-            {onMusicPress ? (
+            {onCameraPress ? (
               <TouchableOpacity
                 className="h-12 w-12 items-center justify-center rounded-full bg-surface-container-high"
                 disabled={disabled}
-                onPress={onMusicPress}
-                accessibilityLabel="Share a track"
+                onPress={handleCamera}
+                accessibilityLabel="Take a photo"
                 style={{ opacity: disabled ? 0.5 : 1 }}
               >
-                <Ionicons name="musical-notes" size={20} color={Colors.primary} />
+                <Ionicons name="camera" size={20} color={Colors.primary} />
               </TouchableOpacity>
             ) : null}
             <View className="flex-1 rounded-[28px] bg-surface-container px-4 py-2">
@@ -260,7 +271,7 @@ export function MessageComposer({
               <TouchableOpacity
                 className="h-12 w-12 items-center justify-center rounded-full bg-surface-container-high"
                 disabled={disabled}
-                onPress={onVoiceNote}
+                onPress={handleVoiceNote}
               >
                 <Ionicons name="mic" size={20} color={Colors.onSurfaceVariant} />
               </TouchableOpacity>

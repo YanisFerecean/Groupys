@@ -6,6 +6,7 @@ export default function ChatLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="requests" />
       <Stack.Screen name="[conversationId]" />
+      <Stack.Screen name="playlist" />
       <Stack.Screen
         name="new"
         options={{

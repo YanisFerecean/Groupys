@@ -1,5 +1,6 @@
 import { BlurView } from 'expo-blur'
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
+import * as Haptics from 'expo-haptics'
 import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, FlatList, Image, Modal, Text, TouchableOpacity, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
@@ -26,12 +27,13 @@ interface TrackPickerProps {
 function toTrackPayload(result: TrackSearchResult): TrackPayload {
   return {
     type: 'TRACK',
-    id: String(result.id),
+    id: result.catalogId ?? String(result.id),
     title: result.title,
     artist: result.artist,
     album: result.album,
     artworkUrl: result.coverUrl,
     previewUrl: result.preview,
+    appleMusicId: result.catalogId,
   }
 }
 
@@ -115,7 +117,10 @@ export function TrackPicker({ visible, onClose, onSelect, initialQuery, previewO
           className="mt-3"
           renderItem={({ item }) => (
             <TouchableOpacity
-              onPress={() => onSelect(toTrackPayload(item))}
+              onPress={() => {
+                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                onSelect(toTrackPayload(item))
+              }}
               className="flex-row items-center gap-3 py-2.5"
             >
               {item.coverUrl ? (

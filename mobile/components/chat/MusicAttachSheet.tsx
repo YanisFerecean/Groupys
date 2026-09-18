@@ -1,5 +1,6 @@
 import { BlurView } from 'expo-blur'
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
+import * as Haptics from 'expo-haptics'
 import { Ionicons } from '@expo/vector-icons'
 import { useRef } from 'react'
 import { Alert, Modal, Platform, ScrollView, Text, TouchableOpacity, View } from 'react-native'
@@ -14,15 +15,13 @@ interface MusicAttachSheetProps {
   visible: boolean
   onClose: () => void
   onPickImage?: () => void
-  onVoiceNote?: () => void
+  onShareSong?: () => void
   onPickAlbum?: () => void
   onPickPlaylist?: () => void
   onDedicate?: () => void
-  onShareLyric?: () => void
   onDropTimestamp?: () => void
   onBlindListen?: () => void
   onListenTogether?: () => void
-  onListeningParty?: () => void
   /** Disable the Listen Together row (e.g. a participant has no Apple Music subscription). */
   listenTogetherDisabled?: boolean
   /** Hint shown under the Listen Together row when disabled. */
@@ -34,25 +33,22 @@ export function MusicAttachSheet({
   visible,
   onClose,
   onPickImage,
-  onVoiceNote,
+  onShareSong,
   onPickAlbum,
   onPickPlaylist,
   onDedicate,
-  onShareLyric,
   onDropTimestamp,
   onBlindListen,
   onListenTogether,
-  onListeningParty,
   listenTogetherDisabled = false,
   listenTogetherHint,
 }: MusicAttachSheetProps) {
   const rows: { icon: IconName; label: string; onPress?: () => void; disabled?: boolean; sublabel?: string }[] = [
-    { icon: 'image' as IconName, label: 'Share a photo', onPress: onPickImage },
-    { icon: 'mic' as IconName, label: 'Record a voice note', onPress: onVoiceNote },
+    { icon: 'image' as IconName, label: 'Share a photo or video', onPress: onPickImage },
+    { icon: 'musical-note' as IconName, label: 'Share a song', onPress: onShareSong },
     { icon: 'albums' as IconName, label: 'Share an album', onPress: onPickAlbum },
-    { icon: 'list' as IconName, label: 'Share a playlist', onPress: onPickPlaylist },
+    { icon: 'musical-notes' as IconName, label: 'View added songs', onPress: onPickPlaylist },
     { icon: 'heart' as IconName, label: 'Dedicate a song', onPress: onDedicate },
-    { icon: 'text' as IconName, label: 'Share a lyric', onPress: onShareLyric },
     { icon: 'time' as IconName, label: 'Drop a timestamp', onPress: onDropTimestamp },
     { icon: 'eye-off' as IconName, label: 'Blind listen', onPress: onBlindListen },
     {
@@ -62,7 +58,6 @@ export function MusicAttachSheet({
       disabled: listenTogetherDisabled,
       sublabel: listenTogetherDisabled ? listenTogetherHint : undefined,
     },
-    { icon: 'calendar' as IconName, label: 'Schedule a listening party', onPress: onListeningParty },
   ].filter(row => !!row.onPress)
 
   // Actions that present a native view controller (image picker, etc.) cannot be launched while
@@ -73,9 +68,11 @@ export function MusicAttachSheet({
 
   const handleRowPress = (row: { onPress?: () => void; disabled?: boolean; sublabel?: string; label: string }) => {
     if (row.disabled) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning)
       Alert.alert(row.label, row.sublabel ?? 'This is not available right now.')
       return
     }
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     if (Platform.OS === 'ios') {
       pendingAction.current = row.onPress ?? null
       onClose()

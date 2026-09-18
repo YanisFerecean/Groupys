@@ -10,6 +10,12 @@ declare class AppleMusicAuthModule extends NativeModule<AppleMusicAuthModuleEven
   requestAuthorization(): Promise<AuthorizationStatus>
   getMusicUserToken(developerToken: string): Promise<string>
   getCapabilityStatus(): Promise<CapabilityStatus>
+  // Full-song playback (catalog store id = the track's appleMusicId).
+  playCatalogId(storeId: string): void
+  pausePlayback(): void
+  resumePlayback(): void
+  stopPlayback(): void
+  seekTo(seconds: number): void
 }
 
 // This call loads the native module object from the JSI.

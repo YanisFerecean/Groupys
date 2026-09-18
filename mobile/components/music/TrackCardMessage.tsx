@@ -24,7 +24,7 @@ export function TrackCardMessage({ message, isMine }: MessageRendererProps) {
   const payload = message.payload
   const preview = usePreviewPlayer()
   const { requireMusic, upsell, closeUpsell, capability } = useMusicGate()
-  const { addToCollabPlaylist } = useChatActions()
+  const { addToCollabPlaylist, isInCollabPlaylist } = useChatActions()
 
   if (!isTrackPayload(payload)) {
     return null
@@ -70,12 +70,22 @@ export function TrackCardMessage({ message, isMine }: MessageRendererProps) {
               isMine={isMine}
             />
             {hasPreview && addToCollabPlaylist ? (
-              <CardActionButton
-                icon="list"
-                label="Add to playlist"
-                onPress={() => addToCollabPlaylist(payload)}
-                isMine={isMine}
-              />
+              isInCollabPlaylist?.(payload.id) ? (
+                <CardActionButton
+                  icon="checkmark"
+                  label="Already in the playlist"
+                  onPress={() => {}}
+                  disabled
+                  isMine={isMine}
+                />
+              ) : (
+                <CardActionButton
+                  icon="list"
+                  label="Add to playlist"
+                  onPress={() => addToCollabPlaylist(payload)}
+                  isMine={isMine}
+                />
+              )
             ) : null}
             <CardActionButton icon="open-outline" label="Open" onPress={handleOpen} isMine={isMine} />
           </>

@@ -113,7 +113,6 @@ export interface WsOutbound {
   /** Listen-together room fields (ticket 7.1). */
   positionMs?: number
   emoji?: string
-  /** Scheduled listening-party fields (ticket 6.2). */
-  startAt?: string
-  partyId?: string
+  /** Host is driving a full-song timeline (vs a synced 30s preview). */
+  full?: boolean
 }

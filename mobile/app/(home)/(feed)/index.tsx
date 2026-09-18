@@ -12,7 +12,6 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import FeedPostCard from '@/components/feed/FeedPostCard'
-import HotTakeCard from '@/components/hottake/HotTakeCard'
 import SwipeableTabScreen from '@/components/navigation/SwipeableTabScreen'
 import { apiFetch } from '@/lib/api'
 import { Colors } from '@/constants/colors'
@@ -27,6 +26,7 @@ export default function FeedScreen() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [visiblePostIds, setVisiblePostIds] = useState<Record<string, true>>({})
+  const [viewportH, setViewportH] = useState(0)
 
   const onViewableItemsChanged = useRef(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
@@ -70,11 +70,10 @@ export default function FeedScreen() {
     fetchFeed()
   }, [isAuthLoaded, fetchFeed])
 
-  useEffect(() => {
-    if (!isScreenFocused) {
-      setVisiblePostIds({})
-    }
-  }, [isScreenFocused])
+  // NOTE: do not clear `visiblePostIds` on blur. Playback is already gated by
+  // `isScreenFocused` (so video pauses when the comments sheet / another screen
+  // opens). Clearing here left the set empty on return — and since the
+  // viewability callback only fires on scroll, the video never resumed.
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true)
@@ -94,18 +93,20 @@ export default function FeedScreen() {
         onPostUpdated={handlePostUpdated}
         communityRoute="/(home)/(feed)/community"
         postRoute="/(home)/(feed)/post"
+        commentsRoute="/(home)/(feed)/comments"
+        height={viewportH}
         isActive={isScreenFocused && Boolean(visiblePostIds[item.id])}
       />
     ),
-    [handlePostUpdated, isScreenFocused, visiblePostIds],
+    [handlePostUpdated, isScreenFocused, visiblePostIds, viewportH],
   )
 
   const renderEmptyState = useCallback(
     () => (
       <View className="items-center justify-center px-10">
-        <Ionicons name="people-outline" size={48} color={Colors.onSurfaceVariant} />
-        <Text className="text-on-surface font-bold text-lg mt-3">No posts yet</Text>
-        <Text className="text-on-surface-variant text-sm text-center mt-1">
+        <Ionicons name="people-outline" size={48} color="#ffffff" />
+        <Text className="text-white font-bold text-lg mt-3">No posts yet</Text>
+        <Text className="text-white/70 text-sm text-center mt-1">
           Join some communities to see their posts in your feed.
         </Text>
       </View>
@@ -115,18 +116,16 @@ export default function FeedScreen() {
 
   return (
     <SwipeableTabScreen tab="(feed)">
-      <View className="flex-1 bg-surface">
-        {/* Header */}
-        <View
-          className="flex-row items-center px-5"
-          style={{ paddingTop: insets.top + 8, paddingBottom: 12 }}
-        >
-          <Text className="text-4xl font-extrabold tracking-tighter text-primary">
-            Groupys
-          </Text>
-        </View>
-
-        {loading ? (
+      <View
+        className="flex-1 bg-black"
+        onLayout={(event) => {
+          const measured = Math.round(event.nativeEvent.layout.height)
+          if (measured > 0 && measured !== viewportH) {
+            setViewportH(measured)
+          }
+        }}
+      >
+        {loading || viewportH === 0 ? (
           <View className="flex-1 items-center justify-center">
             <ActivityIndicator size="large" color={Colors.primary} />
           </View>
@@ -135,16 +134,19 @@ export default function FeedScreen() {
             data={posts}
             keyExtractor={(item) => item.id}
             renderItem={renderPost}
-            contentContainerStyle={{
-              flexGrow: 1,
-              paddingTop: isEmpty ? 0 : 16,
-              paddingBottom: 100,
-              justifyContent: isEmpty ? 'center' : 'flex-start',
-            }}
-            ListHeaderComponent={<HotTakeCard />}
+            pagingEnabled
+            decelerationRate="fast"
+            snapToInterval={viewportH}
+            snapToAlignment="start"
+            disableIntervalMomentum
+            getItemLayout={(_, index) => ({
+              length: viewportH,
+              offset: viewportH * index,
+              index,
+            })}
+            contentContainerStyle={isEmpty ? { flexGrow: 1, justifyContent: 'center' } : undefined}
             ListEmptyComponent={renderEmptyState}
             showsVerticalScrollIndicator={false}
-            alwaysBounceVertical
             maxToRenderPerBatch={5}
             updateCellsBatchingPeriod={50}
             windowSize={10}
@@ -161,6 +163,20 @@ export default function FeedScreen() {
             )}
           />
         )}
+
+        {/* Brand wordmark — overlaid, does not steal layout height */}
+        <View
+          pointerEvents="none"
+          className="absolute left-5 right-5 flex-row items-center"
+          style={{ top: insets.top + 8 }}
+        >
+          <Text
+            className="text-3xl font-extrabold tracking-tighter text-white"
+            style={{ textShadowColor: 'rgba(0,0,0,0.35)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 }}
+          >
+            Groupys
+          </Text>
+        </View>
       </View>
     </SwipeableTabScreen>
   )

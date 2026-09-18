@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { BlurView } from 'expo-blur'
+import * as Haptics from 'expo-haptics'
 import { KeyboardAvoidingView, Modal, Platform, Text, TextInput, TouchableOpacity, View } from 'react-native'
 
 import { Colors } from '@/constants/colors'
@@ -63,7 +64,11 @@ export function TextPromptModal({
             autoFocus
           />
           <TouchableOpacity
-            onPress={() => canSubmit && onSubmit(value.trim())}
+            onPress={() => {
+              if (!canSubmit) return
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+              onSubmit(value.trim())
+            }}
             disabled={!canSubmit}
             className="mt-4 rounded-full bg-primary py-3.5 items-center"
             style={{ opacity: canSubmit ? 1 : 0.5 }}
