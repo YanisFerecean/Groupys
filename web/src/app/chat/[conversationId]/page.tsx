@@ -7,7 +7,6 @@ import Image from "next/image";
 import {
   Bell,
   ChevronLeft,
-  Info,
   Lock,
   Check,
   X,
@@ -28,9 +27,8 @@ import { useAuth } from "@clerk/nextjs";
 import { toast } from "sonner";
 import { useUserStore } from "@/store/userStore";
 import { useMessages } from "@/hooks/useMessages";
-import { Message, TrackPayload, AlbumPayload } from "@/types/chat";
+import { Message, TrackPayload, AlbumPayload, isCollabPlaylistPayload } from "@/types/chat";
 import { useConversations } from "@/hooks/useConversations";
-import { usePins } from "@/hooks/usePins";
 import { MessageThread } from "@/components/chat/MessageThread";
 import { MessageInput, AttachmentAction } from "@/components/chat/MessageInput";
 import { MessageSearch } from "@/components/chat/MessageSearch";
@@ -39,54 +37,109 @@ import { MusicPickerModal } from "@/components/music/MusicPickerModal";
 import { MusicAttachSheet } from "@/components/music/MusicAttachSheet";
 import { MusicDetailModal, ComposeKind, ComposeResult } from "@/components/music/MusicDetailModal";
 import { toTrackRef } from "@/lib/trackRef";
-import { PinnedMessageBar } from "@/components/chat/PinnedMessageBar";
 import { MessageActionHandlers } from "@/components/chat/MessageActions";
+import { MessageCardHandlers } from "@/components/chat/messageRenderers";
 import { NowPlayingPill } from "@/components/chat/NowPlayingPill";
 import { ListenTogetherBar } from "@/components/chat/ListenTogetherBar";
 import { PartyBanner } from "@/components/chat/PartyBanner";
 import { PartyScheduleModal } from "@/components/music/PartyScheduleModal";
+import { CollabPlaylistPanel } from "@/components/chat/CollabPlaylistPanel";
+import { ConversationOptionsMenu } from "@/components/chat/ConversationOptionsMenu";
 import { usePresence } from "@/hooks/usePresence";
-import { useNowPlaying } from "@/hooks/useNowPlaying";
+import { useUserNowPlaying } from "@/hooks/useNowPlaying";
 import { useListenTogether } from "@/hooks/useListenTogether";
 import { useListeningParty } from "@/hooks/useListeningParty";
 import { useCrypto } from "@/hooks/useCrypto";
 import { chatWs } from "@/lib/ws";
-import { fetchPublicKey, uploadMedia } from "@/lib/chat-api";
+import { fetchPublicKey, resolveLinkPreview, uploadMedia, type StickerCatalogItem } from "@/lib/chat-api";
 import { resizeImage } from "@/lib/imageResize";
 import { messageToReplyStub } from "@/lib/messagePreview";
 import { scrollToMessage } from "@/lib/scrollToMessage";
+import { stopPreview } from "@/lib/previewPlayer";
+import { audioPlayer } from "@/lib/audioPlayer";
+
+const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
+
+/** A message that is exactly one http(s) URL gets upgraded to a link-preview / music card. */
+const SINGLE_URL = /^https?:\/\/\S+$/i;
+
+/** Reads the natural size of an image/video file so the bubble renders at the true ratio. */
+function probeMediaSize(file: File): Promise<{ width: number; height: number } | null> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const done = (v: { width: number; height: number } | null) => {
+      URL.revokeObjectURL(url);
+      resolve(v);
+    };
+    if (file.type.startsWith("video/")) {
+      const video = document.createElement("video");
+      video.preload = "metadata";
+      video.onloadedmetadata = () => done({ width: video.videoWidth, height: video.videoHeight });
+      video.onerror = () => done(null);
+      video.src = url;
+    } else {
+      const img = new window.Image();
+      img.onload = () => done({ width: img.naturalWidth, height: img.naturalHeight });
+      img.onerror = () => done(null);
+      img.src = url;
+    }
+  });
+}
 
 export default function ConversationPage() {
   const params = useParams();
   const router = useRouter();
   const { backendUserId, backendUsername } = useUserStore();
-  const conversationIdValue = Array.isArray(params.conversationId) 
-    ? params.conversationId[0] 
+  const conversationIdValue = Array.isArray(params.conversationId)
+    ? params.conversationId[0]
     : params.conversationId;
-    
+
   const conversationId = conversationIdValue ?? null;
 
   const { getToken } = useAuth();
-  const { conversations, markAsRead, acceptRequest, denyRequest } = useConversations();
+  const { conversations, markAsRead, acceptRequest, denyRequest, setMute, fetchConversationById } = useConversations();
   const [requestBusy, setRequestBusy] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
+  const [conversationUnavailable, setConversationUnavailable] = useState(false);
   const { isOnline } = usePresence();
   const { ready: cryptoReady, makeEncrypt, makeDecrypt } = useCrypto();
 
-  // Fetch the other participant's public key for E2E (direct chats only)
-  const [otherPublicKey, setOtherPublicKey] = useState<string | null>(null);
   const conversation = conversations.find(c => c.id === conversationId);
 
+  // Deep links / brand-new matches may point at a conversation that isn't in the loaded pages:
+  // hydrate it, otherwise we'd never learn the partner (and would send unencrypted).
   useEffect(() => {
+    setConversationUnavailable(false);
+    if (!conversationId || conversation) return;
+    let cancelled = false;
+    void fetchConversationById(conversationId).then((loaded) => {
+      if (!cancelled && !loaded) setConversationUnavailable(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId, !!conversation]);
+
+  // Fetch the other participant's public key for E2E (direct chats only)
+  const [otherPublicKey, setOtherPublicKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setOtherPublicKey(null);
     async function fetchKey() {
       if (!conversation || conversation.isGroup || !backendUserId) return;
       const other = conversation.participants.find(p => p.userId !== backendUserId);
       if (!other) return;
       const token = await getToken();
       const key = await fetchPublicKey(other.username, token);
-      setOtherPublicKey(key);
+      if (!cancelled) setOtherPublicKey(key);
     }
     fetchKey();
+    return () => {
+      cancelled = true;
+    };
   }, [conversation?.id, backendUserId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const encryptFn = useMemo(
@@ -117,8 +170,6 @@ export default function ConversationPage() {
     isDecrypting,
   } = useMessages(conversationId, decryptFn, encryptFn);
 
-  const { pins, togglePin, unpin, isPinned } = usePins(conversationId, decryptFn);
-
   // Reply / edit composer state
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
@@ -128,37 +179,32 @@ export default function ConversationPage() {
     if (!isLoading) isInitialLoadRef.current = false;
   }, [isLoading]);
 
-  // Other participant's last read timestamp — seeded from conversation data, kept live via READ events
-  const [otherLastReadAt, setOtherLastReadAt] = useState<string | null>(null);
+  // Leaving the chat stops every player (previews, voice notes, listen-together).
+  useEffect(
+    () => () => {
+      stopPreview();
+      audioPlayer.stop();
+    },
+    [conversationId]
+  );
 
-  useEffect(() => {
-    async function seed() {
-      if (!conversation || !backendUserId) return;
-      const other = conversation.participants.find(p => p.userId !== backendUserId);
-      setOtherLastReadAt(other?.lastReadAt ?? null);
-    }
-    seed();
-  }, [conversation?.id, backendUserId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Other participant's last read timestamp — from conversation data, kept live via READ events.
+  const otherLastReadAt = useMemo(() => {
+    if (!conversation || !backendUserId) return null;
+    return conversation.participants.find(p => p.userId !== backendUserId)?.lastReadAt ?? null;
+  }, [conversation, backendUserId]);
 
   // Current user's last read timestamp — captured once on open, before markAsRead clears it
   const [myLastReadAt, setMyLastReadAt] = useState<string | null>(null);
-  const myLastReadAtSeededRef = useRef(false);
+  const myLastReadAtSeededRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (myLastReadAtSeededRef.current || !conversation || !backendUserId) return;
+    if (!conversation || !backendUserId) return;
+    if (myLastReadAtSeededRef.current === conversation.id) return;
     const me = conversation.participants.find(p => p.userId === backendUserId);
     setMyLastReadAt(me?.lastReadAt ?? null);
-    myLastReadAtSeededRef.current = true;
+    myLastReadAtSeededRef.current = conversation.id;
   }, [conversation, backendUserId]);
-
-  useEffect(() => {
-    if (!conversationId) return;
-    return chatWs.on("READ", (payload: { conversationId: string; readAt: string }) => {
-      if (payload.conversationId === conversationId) {
-        setOtherLastReadAt(payload.readAt);
-      }
-    });
-  }, [conversationId]);
 
   // Set read status whenever we view it or when new msgs arrive
   useEffect(() => {
@@ -174,6 +220,7 @@ export default function ConversationPage() {
       await acceptRequest(conversationId);
     } catch (e) {
       console.error("Failed to accept request", e);
+      toast.error("Couldn't accept the request");
     } finally {
       setRequestBusy(false);
     }
@@ -187,16 +234,18 @@ export default function ConversationPage() {
       router.push("/chat");
     } catch (e) {
       console.error("Failed to deny request", e);
+      toast.error("Couldn't decline the request");
       setRequestBusy(false);
     }
   }, [conversationId, requestBusy, denyRequest, router]);
 
   // Derive header info (no impure calls — Date.now handled separately below)
-  const { headerTitle, avatarUrl, isOtherOnline, otherUsername } = useMemo(() => {
+  const { headerTitle, avatarUrl, isOtherOnline, otherUsername, otherUserId } = useMemo(() => {
     let headerTitle = "Chat";
     let avatarUrl: string | null = null;
     let isOtherOnline = false;
     let otherUsername: string | null = null;
+    let otherUserId: string | null = null;
 
     if (conversation && backendUserId) {
       if (conversation.isGroup) {
@@ -208,20 +257,17 @@ export default function ConversationPage() {
           avatarUrl = other.profileImage;
           isOtherOnline = isOnline(other.userId);
           otherUsername = other.username;
+          otherUserId = other.userId;
         }
       }
     }
 
-    return { headerTitle, avatarUrl, isOtherOnline, otherUsername };
+    return { headerTitle, avatarUrl, isOtherOnline, otherUsername, otherUserId };
   }, [conversation, backendUserId, isOnline]);
 
-  const otherUserId = useMemo(() => {
-    if (!conversation || conversation.isGroup || !backendUserId) return null;
-    return conversation.participants.find((p) => p.userId !== backendUserId)?.userId ?? null;
-  }, [conversation, backendUserId]);
-
-  const { partnerNowPlaying } = useNowPlaying(otherUserId);
-  const { room, startRoom, togglePlay, joinRoom, leaveRoom } = useListenTogether(
+  const partnerNowPlaying = useUserNowPlaying(otherUserId);
+  const partnerTrack = partnerNowPlaying?.track && partnerNowPlaying.isPlaying ? partnerNowPlaying.track : null;
+  const { room, reactions: roomReactions, startRoom, togglePlay, joinRoom, leaveRoom, sendReaction } = useListenTogether(
     conversationId,
     backendUserId
   );
@@ -232,33 +278,72 @@ export default function ConversationPage() {
   const [lastSeenText, setLastSeenText] = useState<string | null>(null);
 
   useEffect(() => {
-    async function update() {
-      if (!conversation || !backendUserId || conversation.isGroup) { setLastSeenText(null); return; }
-      const other = conversation.participants.find(p => p.userId !== backendUserId);
-      if (!other || isOnline(other.userId) || !other.lastSeenAt) { setLastSeenText(null); return; }
-      const diff = Date.now() - new Date(other.lastSeenAt).getTime();
-      const minutes = Math.floor(diff / 60000);
-      if (minutes < 1) setLastSeenText("last seen just now");
-      else if (minutes < 60) setLastSeenText(`last seen ${minutes}m ago`);
-      else if (minutes < 1440) setLastSeenText(`last seen ${Math.floor(minutes / 60)}h ago`);
-      else setLastSeenText(`last seen ${Math.floor(minutes / 1440)}d ago`);
-    }
-    update();
+    if (!conversation || !backendUserId || conversation.isGroup) { setLastSeenText(null); return; }
+    const other = conversation.participants.find(p => p.userId !== backendUserId);
+    if (!other || isOnline(other.userId) || !other.lastSeenAt) { setLastSeenText(null); return; }
+    const diff = Date.now() - new Date(other.lastSeenAt).getTime();
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 1) setLastSeenText("last seen just now");
+    else if (minutes < 60) setLastSeenText(`last seen ${minutes}m ago`);
+    else if (minutes < 1440) setLastSeenText(`last seen ${Math.floor(minutes / 60)}h ago`);
+    else setLastSeenText(`last seen ${Math.floor(minutes / 1440)}d ago`);
   }, [conversation, backendUserId, isOnline]);
 
-  const handleSend = useCallback((content: string) => {
-    if (!backendUserId) return;
-    const reply = replyingTo
-      ? { replyToId: replyingTo.id, replyTo: messageToReplyStub(replyingTo) }
-      : undefined;
-    sendMessage(content, backendUserId, backendUsername ?? "me", reply);
-    setReplyingTo(null);
-  }, [backendUserId, backendUsername, sendMessage, replyingTo]);
+  const handleSend = useCallback(
+    async (content: string) => {
+      if (!backendUserId) return;
+      const reply = replyingTo
+        ? { replyToId: replyingTo.id, replyTo: messageToReplyStub(replyingTo) }
+        : undefined;
+      setReplyingTo(null);
+
+      // A bare URL becomes a link-preview (or Apple Music track/album) card — same as mobile.
+      const trimmed = content.trim();
+      if (SINGLE_URL.test(trimmed)) {
+        try {
+          const token = await getToken();
+          const resolved = await resolveLinkPreview(trimmed, token);
+          await sendStructured(
+            {
+              messageType: resolved.messageType,
+              contentLabel: resolved.fallbackText,
+              payload: resolved.payload,
+              replyToId: reply?.replyToId,
+              replyTo: reply?.replyTo,
+            },
+            backendUserId,
+            backendUsername ?? "me"
+          );
+          return;
+        } catch {
+          // No previewable metadata — send it as a normal (encrypted) text message.
+        }
+      }
+      sendMessage(content, backendUserId, backendUsername ?? "me", reply);
+    },
+    [backendUserId, backendUsername, sendMessage, sendStructured, replyingTo, getToken]
+  );
 
   const handleSubmitEdit = useCallback((content: string) => {
     if (editingMessage) editMessage(editingMessage.id, content);
     setEditingMessage(null);
   }, [editingMessage, editMessage]);
+
+  const handleSendSticker = useCallback(
+    (sticker: StickerCatalogItem) => {
+      if (!backendUserId) return;
+      sendStructured(
+        {
+          messageType: "STICKER",
+          contentLabel: sticker.name ? `🌟 ${sticker.name}` : "🌟 Sticker",
+          payload: { type: "STICKER", stickerId: sticker.id, url: sticker.url, name: sticker.name },
+        },
+        backendUserId,
+        backendUsername ?? "me"
+      );
+    },
+    [backendUserId, backendUsername, sendStructured]
+  );
 
   // Per-message actions surfaced by the hover toolbar.
   const actions = useMemo<MessageActionHandlers | undefined>(() => {
@@ -273,8 +358,9 @@ export default function ConversationPage() {
         setReplyingTo(null);
         setEditingMessage(m);
       },
-      onDelete: (m) => deleteMessage(m.id),
-      onPin: (m) => togglePin(m.id),
+      onDelete: (m) => {
+        if (window.confirm("Delete this message? This cannot be undone.")) deleteMessage(m.id);
+      },
       onCopy: (m) => {
         navigator.clipboard
           .writeText(m.content)
@@ -282,36 +368,50 @@ export default function ConversationPage() {
           .catch(() => toast.error("Couldn't copy"));
       },
       onTrackReact: (m) => setMusicPicker({ mode: "reaction", message: m }),
-      isPinned,
     };
-  }, [backendUserId, toggleReaction, deleteMessage, togglePin, isPinned]);
+  }, [backendUserId, toggleReaction, deleteMessage]);
 
-  // ── Photo sharing ──────────────────────────────────────────────────────────
-  const photoInputRef = useRef<HTMLInputElement>(null);
+  // ── Photo / video sharing ─────────────────────────────────────────────────
+  const mediaInputRef = useRef<HTMLInputElement>(null);
 
-  const handlePhotoSelected = useCallback(
+  const handleMediaSelected = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       e.target.value = ""; // allow re-selecting the same file later
       if (!file || !backendUserId) return;
-      if (!file.type.startsWith("image/")) {
-        toast.error("Please choose an image file");
+      const isVideo = file.type.startsWith("video/");
+      const isImage = file.type.startsWith("image/");
+      if (!isVideo && !isImage) {
+        toast.error("Please choose a photo or video");
+        return;
+      }
+      if (file.size > (isVideo ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES)) {
+        toast.error(isVideo ? "Videos must be under 100 MB" : "Photos must be under 25 MB");
         return;
       }
       const send = (async () => {
-        const resized = await resizeImage(file, 1600, 1600, false);
+        const upload = isVideo ? file : await resizeImage(file, 1600, 1600, false);
+        const size = await probeMediaSize(upload instanceof File ? upload : file);
         const token = await getToken();
-        const { url } = await uploadMedia(resized, token);
+        const { url, type } = await uploadMedia(upload, token, isVideo ? "video.mp4" : "photo.jpg");
         await sendStructured(
-          { messageType: "IMAGE", contentLabel: "📷 Photo", mediaUrl: url },
+          {
+            messageType: isVideo ? "VIDEO" : "IMAGE",
+            contentLabel: isVideo ? "🎬 Video" : "📷 Photo",
+            mediaUrl: url,
+            payload: {
+              ...(size ? { width: size.width, height: size.height } : {}),
+              mime: type ?? file.type,
+            },
+          },
           backendUserId,
           backendUsername ?? "me"
         );
       })();
       toast.promise(send, {
-        loading: "Sending photo…",
-        success: "Photo sent",
-        error: "Couldn't send photo",
+        loading: isVideo ? "Sending video…" : "Sending photo…",
+        success: isVideo ? "Video sent" : "Photo sent",
+        error: isVideo ? "Couldn't send video" : "Couldn't send photo",
       });
     },
     [backendUserId, backendUsername, getToken, sendStructured]
@@ -320,8 +420,8 @@ export default function ConversationPage() {
   // ── Voice memos ────────────────────────────────────────────────────────────
   const [voiceOpen, setVoiceOpen] = useState(false);
 
-  const handleSendVoice = useCallback(
-    (blob: Blob, durationMs: number, peaks: number[]) => {
+  const handleSendVoice = useCallback<Parameters<typeof VoiceRecorderModal>[0]["onSend"]>(
+    (blob, durationMs, peaks, bed) => {
       if (!backendUserId) return;
       const send = (async () => {
         const token = await getToken();
@@ -332,7 +432,7 @@ export default function ConversationPage() {
             messageType: "VOICE",
             contentLabel: "🎙 Voice message",
             mediaUrl: url,
-            payload: { type: "VOICE", durationMs, peaks },
+            payload: { type: "VOICE", durationMs, peaks, ...(bed ? { bed } : {}) },
           },
           backendUserId,
           backendUsername ?? "me"
@@ -345,6 +445,35 @@ export default function ConversationPage() {
       });
     },
     [backendUserId, backendUsername, getToken, sendStructured]
+  );
+
+  // ── Collaborative playlist ─────────────────────────────────────────────────
+  const [collabOpen, setCollabOpen] = useState(false);
+  const [optimisticPlaylistIds, setOptimisticPlaylistIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    setOptimisticPlaylistIds(new Set());
+  }, [conversationId]);
+
+  // The live COLLAB_PLAYLIST card carries the preview ids and count; the count doubles as a
+  // version so the panel refetches whenever anyone adds/removes a song.
+  const collabCard = useMemo(() => messages.find((m) => (m.messageType ?? "").toUpperCase() === "COLLAB_PLAYLIST"), [messages]);
+  const collabVersion = isCollabPlaylistPayload(collabCard?.payload) ? collabCard.payload.trackCount : 0;
+  const collabIds = useMemo(() => {
+    const ids = new Set(optimisticPlaylistIds);
+    if (isCollabPlaylistPayload(collabCard?.payload)) {
+      for (const p of collabCard.payload.previews ?? []) ids.add(p.id);
+    }
+    return ids;
+  }, [collabCard, optimisticPlaylistIds]);
+
+  const addToCollab = useCallback(
+    (track: TrackPayload) => {
+      if (!conversationId) return;
+      chatWs.send({ type: "COLLAB_PLAYLIST_ADD", conversationId, track });
+      if (track.id) setOptimisticPlaylistIds((prev) => new Set(prev).add(track.id));
+      toast.success(`Added “${track.title}” to the playlist`);
+    },
+    [conversationId]
   );
 
   // ── Music sharing / reactions / composition ────────────────────────────────
@@ -371,7 +500,7 @@ export default function ConversationPage() {
       if (picker.mode === "reaction") {
         toggleTrackReaction(picker.message.id, track, backendUserId);
       } else if (picker.mode === "collab") {
-        if (conversationId) chatWs.send({ type: "COLLAB_PLAYLIST_ADD", conversationId, track });
+        addToCollab(track);
       } else if (picker.mode === "listen") {
         if (track.previewUrl) startRoom(track);
         else toast.error("This track has no preview to listen together");
@@ -408,7 +537,7 @@ export default function ConversationPage() {
         );
       }
     },
-    [backendUserId, backendUsername, conversationId, musicPicker, sendStructured, toggleTrackReaction, startRoom]
+    [backendUserId, backendUsername, musicPicker, sendStructured, toggleTrackReaction, startRoom, addToCollab]
   );
 
   const handleComposeSubmit = useCallback(
@@ -424,15 +553,17 @@ export default function ConversationPage() {
     [backendUserId, backendUsername, sendStructured]
   );
 
-  // Interactive card callbacks (blind-listen guess, …). The server reveals the
+  // Interactive card callbacks (blind-listen guess, collab playlist…). The server reveals the
   // result via MESSAGE_UPDATED, which useMessages already reconciles.
-  const cardHandlers = useMemo(
+  const cardHandlers = useMemo<MessageCardHandlers>(
     () => ({
       onBlindGuess: (messageId: string, guess: string) =>
         chatWs.send({ type: "BLIND_GUESS", messageId, guess }),
-      onCollabAdd: () => setMusicPicker({ mode: "collab" }),
+      onCollabOpen: () => setCollabOpen(true),
+      onCollabAddTrack: addToCollab,
+      isInCollabPlaylist: (trackId: string) => collabIds.has(trackId),
     }),
-    []
+    [addToCollab, collabIds]
   );
 
   const handlePickAlbum = useCallback(
@@ -455,10 +586,10 @@ export default function ConversationPage() {
   const attachments = useMemo<AttachmentAction[]>(
     () => [
       {
-        key: "photo",
-        label: "Photo",
+        key: "media",
+        label: "Photo or video",
         icon: <ImageIcon className="w-5 h-5" />,
-        onClick: () => photoInputRef.current?.click(),
+        onClick: () => mediaInputRef.current?.click(),
       },
       {
         key: "voice",
@@ -510,9 +641,9 @@ export default function ConversationPage() {
       },
       {
         key: "collab",
-        label: "Collab playlist",
+        label: collabVersion > 0 ? "View added songs" : "Collab playlist",
         icon: <ListMusic className="w-6 h-6" />,
-        onClick: () => setMusicPicker({ mode: "collab" }),
+        onClick: () => (collabVersion > 0 ? setCollabOpen(true) : setMusicPicker({ mode: "collab" })),
       },
       {
         key: "listen",
@@ -527,7 +658,7 @@ export default function ConversationPage() {
         onClick: () => setMusicPicker({ mode: "party" }),
       },
     ],
-    []
+    [collabVersion]
   );
 
   const handleLoadMore = useCallback(() => {
@@ -539,38 +670,51 @@ export default function ConversationPage() {
     if (msg.tempId) resendMessage(msg.tempId, msg.content);
   }, [resendMessage]);
 
+  if (conversationUnavailable) {
+    return (
+      <div className="flex flex-col h-full bg-surface items-center justify-center text-center px-8">
+        <h2 className="text-lg font-bold text-on-surface">Conversation unavailable</h2>
+        <p className="mt-2 text-sm text-on-surface-variant">This chat could not be opened from your account.</p>
+        <Link href="/chat" className="mt-6 rounded-full bg-primary px-6 py-3 text-sm font-bold text-on-primary">
+          Back to chats
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full bg-surface">
       {/* Header */}
-      <div className="h-16 border-b border-surface-container-high/50 shadow-sm flex items-center px-4 justify-between flex-shrink-0 bg-surface/95 backdrop-blur z-10">
-        <div className="flex items-center gap-3">
-          <button 
+      <div className="min-h-16 border-b border-surface-container-high/50 shadow-sm flex items-center px-4 py-2 justify-between flex-shrink-0 bg-surface/95 backdrop-blur z-10 gap-2">
+        <div className="flex items-center gap-3 min-w-0">
+          <button
             onClick={() => router.push('/chat')}
-            className="md:hidden p-2 -ml-2 rounded-full hover:bg-surface-container text-on-surface transition-colors"
+            className="md:hidden p-2 -ml-2 rounded-full hover:bg-surface-container text-on-surface transition-colors shrink-0"
+            title="Back"
           >
             <ChevronLeft className="w-6 h-6" />
           </button>
 
           <Link
             href={otherUsername ? `/profile/${otherUsername}` : "#"}
-            className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+            className="flex items-center gap-3 hover:opacity-80 transition-opacity min-w-0"
           >
             {avatarUrl && !avatarError ? (
               <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0">
                 <Image src={avatarUrl} alt={headerTitle} width={48} height={48} className="w-full h-full object-cover" onError={() => setAvatarError(true)} />
               </div>
             ) : (
-              <div className="w-12 h-12 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-lg uppercase">
+              <div className="w-12 h-12 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-lg uppercase shrink-0">
                 {headerTitle.charAt(0)}
               </div>
             )}
 
-            <div className="flex flex-col">
+            <div className="flex flex-col min-w-0">
               <div className="flex items-center gap-1.5">
-                <h2 className="font-semibold text-[15px]">{headerTitle}</h2>
+                <h2 className="font-semibold text-[15px] truncate">{headerTitle}</h2>
                 {encryptFn && (
                   <span
-                    className="relative group/lock"
+                    className="relative group/lock shrink-0"
                     onClick={(e) => e.preventDefault()}
                   >
                     <Lock className="w-3 h-3 text-primary opacity-70 cursor-default" />
@@ -592,16 +736,16 @@ export default function ConversationPage() {
               ) : lastSeenText ? (
                 <span className="text-xs text-on-surface-variant">{lastSeenText}</span>
               ) : null}
+              {partnerTrack && (
+                <div className="mt-0.5">
+                  <NowPlayingPill track={partnerTrack} />
+                </div>
+              )}
             </div>
           </Link>
         </div>
 
-        <div className="flex items-center gap-1">
-          {partnerNowPlaying?.track && (
-            <div className="hidden md:block mr-1">
-              <NowPlayingPill track={partnerNowPlaying.track} />
-            </div>
-          )}
+        <div className="flex items-center gap-1 shrink-0">
           <button
             onClick={() => setSearchOpen((o) => !o)}
             className={`p-2 rounded-full hover:bg-surface-container transition-colors ${
@@ -611,9 +755,14 @@ export default function ConversationPage() {
           >
             <Search className="w-5 h-5" />
           </button>
-          <button className="p-2 rounded-full hover:bg-surface-container text-on-surface-variant transition-colors">
-            <Info className="w-5 h-5" />
-          </button>
+          {conversation && (
+            <ConversationOptionsMenu
+              mutedUntil={conversation.mutedUntil}
+              onMuteUntil={(until) => setMute(conversation.id, until)}
+              partner={otherUserId ? { userId: otherUserId, label: headerTitle } : null}
+              onBlocked={() => router.replace("/chat")}
+            />
+          )}
         </div>
       </div>
 
@@ -626,13 +775,13 @@ export default function ConversationPage() {
         />
       )}
 
-      {/* Hidden picker for photo attachments */}
+      {/* Hidden picker for photo / video attachments */}
       <input
-        ref={photoInputRef}
+        ref={mediaInputRef}
         type="file"
-        accept="image/*"
+        accept="image/*,video/*"
         className="hidden"
-        onChange={handlePhotoSelected}
+        onChange={handleMediaSelected}
       />
 
       {voiceOpen && (
@@ -658,7 +807,7 @@ export default function ConversationPage() {
               ? "Pick a song"
               : "Share music"
           }
-          previewOnly={musicPicker.mode === "reaction" || musicPicker.mode === "listen"}
+          previewOnly={musicPicker.mode === "reaction" || musicPicker.mode === "listen" || musicPicker.mode === "collab"}
           onClose={() => setMusicPicker(null)}
           onPickTrack={handlePickTrack}
           onPickAlbum={musicPicker.mode === "share" ? handlePickAlbum : undefined}
@@ -685,14 +834,22 @@ export default function ConversationPage() {
         />
       )}
 
+      {collabOpen && conversationId && (
+        <CollabPlaylistPanel conversationId={conversationId} version={collabVersion} onClose={() => setCollabOpen(false)} />
+      )}
+
       {/* Scheduled listening party */}
       <PartyBanner party={party} onJoin={joinParty} onDismiss={endParty} />
 
       {/* Listen Together session */}
-      <ListenTogetherBar room={room} onToggle={togglePlay} onJoin={joinRoom} onLeave={leaveRoom} />
-
-      {/* Pinned messages */}
-      <PinnedMessageBar pins={pins} onJump={scrollToMessage} onUnpin={unpin} />
+      <ListenTogetherBar
+        room={room}
+        reactions={roomReactions}
+        onToggle={togglePlay}
+        onJoin={joinRoom}
+        onLeave={leaveRoom}
+        onReact={sendReaction}
+      />
 
       {/* Messages */}
       <MessageThread
@@ -748,7 +905,8 @@ export default function ConversationPage() {
       ) : (
         <MessageInput
           conversationId={conversationId || ""}
-          onSend={handleSend}
+          onSend={(content) => void handleSend(content)}
+          disabled={!conversation}
           rateLimitError={rateLimitError}
           attachments={attachments}
           replyingTo={replyingTo}
@@ -756,6 +914,7 @@ export default function ConversationPage() {
           editing={editingMessage}
           onSubmitEdit={handleSubmitEdit}
           onCancelEdit={() => setEditingMessage(null)}
+          onSendSticker={handleSendSticker}
         />
       )}
     </div>

@@ -220,3 +220,18 @@
     height: 20px;
   }
 }
+/* Listen Together floating reactions */
+@keyframes float-up {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.8);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(0) scale(1.1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-28px) scale(1);
+  }
+}

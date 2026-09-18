@@ -14,6 +14,7 @@ import { fetchUserByClerkId } from "@/lib/api";
 import { fetchConversations } from "@/lib/chat-api";
 import { useConversationStore } from "@/store/conversationStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { useNowPlayingPresence } from "@/hooks/useNowPlaying";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -26,6 +27,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   useWebSocket();
+  // Now-playing presence (receive + broadcast + ambient-match toast) lives app-wide, like mobile.
+  useNowPlayingPresence(musicConnected);
 
   // Extract community ID if on a community detail page
   const communityMatch = pathname?.match(/^\/discover\/community\/([^/]+)$/);

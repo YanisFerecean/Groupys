@@ -2,12 +2,16 @@
 
 import { useState, useRef, useEffect, useCallback, ReactNode } from "react";
 import dynamic from "next/dynamic";
-import { SendHorizonal, Smile, Check, X, Plus } from "lucide-react";
+import { SendHorizonal, Smile, Check, X, Plus, Sticker } from "lucide-react";
 import { chatWs } from "@/lib/ws";
 import { Message } from "@/types/chat";
 import { messagePreview } from "@/lib/messagePreview";
+import type { StickerCatalogItem } from "@/lib/chat-api";
 
 const EmojiPicker = dynamic(() => import("./EmojiPicker"), { ssr: false });
+const StickerPicker = dynamic(() => import("./StickerPicker").then((m) => ({ default: m.StickerPicker })), {
+  ssr: false,
+});
 
 /** An entry in the composer's "+" attachment menu (photo, voice, music, …). */
 export interface AttachmentAction {
@@ -31,7 +35,11 @@ interface MessageInputProps {
   editing?: Message | null;
   onSubmitEdit?: (content: string) => void;
   onCancelEdit?: () => void;
+  /** Sends a catalog sticker (shows the sticker button when provided). */
+  onSendSticker?: (sticker: StickerCatalogItem) => void;
 }
+
+const MAX_LENGTH = 2000;
 
 export function MessageInput({
   conversationId,
@@ -44,18 +52,22 @@ export function MessageInput({
   editing,
   onSubmitEdit,
   onCancelEdit,
+  onSendSticker,
 }: MessageInputProps) {
   const [content, setContent] = useState("");
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [stickerOpen, setStickerOpen] = useState(false);
   const [attachOpen, setAttachOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const emojiRef = useRef<HTMLDivElement>(null);
+  const stickerRef = useRef<HTMLDivElement>(null);
   const attachRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [isTyping, setIsTyping] = useState(false);
 
   const isEditing = !!editing;
   const showAttach = !!attachments?.length && !isEditing;
+  const showSticker = !!onSendSticker && !isEditing;
 
   // Seed the editor with the message text when an edit begins (render-phase state
   // adjustment — the recommended alternative to setState-in-effect).
@@ -77,29 +89,26 @@ export function MessageInput({
     });
   }, [editing]);
 
-  // Close picker on outside click
+  // Close popovers on outside click.
   useEffect(() => {
-    if (!emojiOpen) return;
+    if (!emojiOpen && !attachOpen && !stickerOpen) return;
     const handler = (e: MouseEvent) => {
-      if (emojiRef.current && !emojiRef.current.contains(e.target as Node)) {
-        setEmojiOpen(false);
-      }
+      const target = e.target as Node;
+      if (emojiOpen && emojiRef.current && !emojiRef.current.contains(target)) setEmojiOpen(false);
+      if (attachOpen && attachRef.current && !attachRef.current.contains(target)) setAttachOpen(false);
+      if (stickerOpen && stickerRef.current && !stickerRef.current.contains(target)) setStickerOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [emojiOpen]);
+  }, [emojiOpen, attachOpen, stickerOpen]);
 
-  // Close attachment menu on outside click
-  useEffect(() => {
-    if (!attachOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (attachRef.current && !attachRef.current.contains(e.target as Node)) {
-        setAttachOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [attachOpen]);
+  // Make sure a pending typing indicator is withdrawn if the composer unmounts mid-typing.
+  useEffect(
+    () => () => {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    },
+    []
+  );
 
   const insertEmoji = useCallback((emoji: string) => {
     const el = textareaRef.current;
@@ -142,6 +151,12 @@ export function MessageInput({
     // Typing indicators only apply to composing new messages, not editing.
     if (isEditing) return;
 
+    if (!e.target.value.trim()) {
+      stopTyping();
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      return;
+    }
+
     if (!isTyping) {
       chatWs.send({ type: "TYPING_START", conversationId });
       setIsTyping(true);
@@ -150,7 +165,6 @@ export function MessageInput({
     typingTimeoutRef.current = setTimeout(stopTyping, 2000);
   };
 
-  const MAX_LENGTH = 2000;
   const remaining = MAX_LENGTH - content.length;
   const nearLimit = remaining <= 200;
 
@@ -262,7 +276,6 @@ export function MessageInput({
           </div>
         )}
         <div
-          ref={emojiRef}
           className={`flex-1 relative flex items-center bg-surface-container rounded-full px-4 py-1 gap-1 transition-all ${
             remaining < 0 ? "ring-2 ring-error/30" : "focus-within:ring-2 focus-within:ring-primary/20"
           }`}
@@ -287,17 +300,49 @@ export function MessageInput({
               {remaining}
             </span>
           )}
-          <button
-            type="button"
-            onClick={() => setEmojiOpen((o) => !o)}
-            disabled={disabled}
-            className={`flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-              emojiOpen ? "bg-primary/15 text-primary" : "text-on-surface-variant hover:text-on-surface"
-            }`}
-          >
-            <Smile className="w-5 h-5" />
-          </button>
-          {emojiOpen && <EmojiPicker onSelectAction={insertEmoji} />}
+          {showSticker && (
+            <div ref={stickerRef} className="relative flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setStickerOpen((o) => !o);
+                  setEmojiOpen(false);
+                }}
+                disabled={disabled}
+                title="Stickers"
+                className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                  stickerOpen ? "bg-primary/15 text-primary" : "text-on-surface-variant hover:text-on-surface"
+                }`}
+              >
+                <Sticker className="w-5 h-5" />
+              </button>
+              {stickerOpen && (
+                <StickerPicker
+                  onSelect={(s) => {
+                    setStickerOpen(false);
+                    onSendSticker?.(s);
+                  }}
+                />
+              )}
+            </div>
+          )}
+          <div ref={emojiRef} className="relative flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                setEmojiOpen((o) => !o);
+                setStickerOpen(false);
+              }}
+              disabled={disabled}
+              title="Emoji"
+              className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                emojiOpen ? "bg-primary/15 text-primary" : "text-on-surface-variant hover:text-on-surface"
+              }`}
+            >
+              <Smile className="w-5 h-5" />
+            </button>
+            {emojiOpen && <EmojiPicker onSelectAction={insertEmoji} />}
+          </div>
         </div>
         <button
           onClick={handleSend}

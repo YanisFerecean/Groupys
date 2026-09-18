@@ -5,6 +5,7 @@ import { Pause, Play } from "lucide-react";
 import { Message, isVoicePayload } from "@/types/chat";
 import { resolveMediaUrl } from "@/lib/mediaUrl";
 import { audioPlayer } from "@/lib/audioPlayer";
+import { VOICE_BED_LOOP_SEC, VOICE_BED_VOLUME, getVoiceBedSrc } from "@/lib/voiceBeds";
 import { Waveform } from "./Waveform";
 
 function fmt(sec: number): string {
@@ -12,22 +13,36 @@ function fmt(sec: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
-/** Renders a VOICE message: play/pause, scrubbable waveform and duration. */
+/**
+ * Renders a VOICE message: play/pause, scrubbable waveform and duration. When the note was
+ * recorded over a bundled beat, the same loop is mixed in quietly on playback (local asset —
+ * no audio is ever relayed), exactly like the mobile app.
+ */
 export function VoiceMessage({ message, isMine }: { message: Message; isMine: boolean }) {
   const src = resolveMediaUrl(message.mediaUrl);
   const payload = isVoicePayload(message.payload) ? message.payload : null;
   const peaks = payload?.peaks ?? [];
   const durationSec = (payload?.durationMs ?? 0) / 1000;
   const bedTitle = payload?.bed?.title;
+  const bedSrc = getVoiceBedSrc(payload?.bed?.id);
 
   const [playing, setPlaying] = useState(false);
   const [posSec, setPosSec] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const bedRef = useRef<HTMLAudioElement | null>(null);
   const seekRatioRef = useRef(0);
+
+  const stopBed = () => {
+    if (bedRef.current) {
+      bedRef.current.pause();
+      bedRef.current = null;
+    }
+  };
 
   useEffect(
     () => () => {
       if (audioRef.current && audioPlayer.isPlaying(audioRef.current)) audioPlayer.stop();
+      stopBed();
     },
     []
   );
@@ -38,10 +53,22 @@ export function VoiceMessage({ message, isMine }: { message: Message; isMine: bo
 
   const progress = durationSec ? Math.min(1, posSec / durationSec) : 0;
 
+  const startBed = (atSec: number) => {
+    if (!bedSrc) return;
+    stopBed();
+    const bed = new Audio(bedSrc);
+    bed.loop = true;
+    bed.volume = VOICE_BED_VOLUME;
+    bed.currentTime = atSec % VOICE_BED_LOOP_SEC;
+    bedRef.current = bed;
+    bed.play().catch(() => {});
+  };
+
   const startPlayback = (fromRatio: number) => {
     const audio = audioPlayer.play(src, () => {
       setPlaying(false);
       audioRef.current = null;
+      stopBed();
     });
     audioRef.current = audio;
     const seekTo = fromRatio * durationSec;
@@ -57,10 +84,14 @@ export function VoiceMessage({ message, isMine }: { message: Message; isMine: bo
     audio.addEventListener("timeupdate", () => setPosSec(audio.currentTime));
     audio
       .play()
-      .then(() => setPlaying(true))
+      .then(() => {
+        setPlaying(true);
+        startBed(seekTo);
+      })
       .catch(() => {
         setPlaying(false);
         audioRef.current = null;
+        stopBed();
       });
   };
 
@@ -79,6 +110,7 @@ export function VoiceMessage({ message, isMine }: { message: Message; isMine: bo
     setPosSec(sec);
     if (audioRef.current && audioPlayer.isPlaying(audioRef.current)) {
       audioRef.current.currentTime = sec;
+      if (bedRef.current) bedRef.current.currentTime = sec % VOICE_BED_LOOP_SEC;
     } else {
       seekRatioRef.current = ratio;
     }
@@ -113,7 +145,11 @@ export function VoiceMessage({ message, isMine }: { message: Message; isMine: bo
         />
         <div className="flex items-center justify-between mt-1">
           <span className="text-[10px] tabular-nums opacity-80">{timeLabel}</span>
-          {bedTitle && <span className="text-[10px] opacity-70 truncate ml-2">🎚 {bedTitle}</span>}
+          {bedTitle && (
+            <span className="text-[10px] opacity-70 truncate ml-2" title="Recorded over a bundled beat">
+              🎚 Backing: {bedTitle}
+            </span>
+          )}
         </div>
       </div>
     </div>
